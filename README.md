@@ -14,3 +14,6 @@ Artemis is a command-line tool for automated testing of REST APIs, built with Go
 
 To install Artemis, make sure you have Go installed and then run:
 
+```bash
+source ./install.sh
+```

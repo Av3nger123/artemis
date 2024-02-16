@@ -2,20 +2,25 @@ package shared
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"text/template"
 )
 
-func CallAPI(api API, config map[string]interface{}) (map[string]interface{}, error) {
-	req, err := http.NewRequest(api.Method, api.Url, bytes.NewBuffer([]byte(api.Body)))
+func CallAPI(api API, config *map[string]interface{}) (*http.Response, error) {
+
+	method, _ := renderTemplate(api.Method, *config)
+	url, _ := renderTemplate(api.Url, *config)
+	body, _ := renderTemplate(api.Body, *config)
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer([]byte(body)))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
 	for key, value := range api.Headers {
-		req.Header.Set(key, value)
+		val, _ := renderTemplate(value, *config)
+		req.Header.Set(key, val)
 	}
 
 	client := &http.Client{}
@@ -23,15 +28,17 @@ func CallAPI(api API, config map[string]interface{}) (map[string]interface{}, er
 	if err != nil {
 		return nil, fmt.Errorf("error performing request: %v", err)
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
 
-	responseBody, err := io.ReadAll(resp.Body)
+func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
+	tmpl, err := template.New("template").Parse(templateStr)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %v", err)
+		return "", err
 	}
-	var response map[string]interface{}
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("error parsing response body: %v", err)
+	var buffer bytes.Buffer
+	if err := tmpl.Execute(&buffer, config); err != nil {
+		return "", err
 	}
-	return response, nil
+	return buffer.String(), nil
 }

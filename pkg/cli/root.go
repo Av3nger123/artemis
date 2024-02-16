@@ -2,9 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/slog"
 )
 
 func Init() {
@@ -13,14 +13,14 @@ func Init() {
 	RootCmd.AddCommand(parseCmd)
 	parseCmd.Flags().StringP("file", "f", "", "Path to YAML file")
 	if err := parseCmd.MarkFlagRequired("file"); err != nil {
-		log.Fatalf("Error marking flag as required: %v", err)
+		slog.Error("Error marking flag as required", "error", err)
 	}
 
 	// Test command to actually test all apis
 	RootCmd.AddCommand(testCmd)
 	testCmd.Flags().StringP("file", "f", "", "Path to YAML file")
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
-		log.Fatalf("Error marking flag as required: %v", err)
+		slog.Error("Error marking flag as required", "error", err)
 	}
 }
 
