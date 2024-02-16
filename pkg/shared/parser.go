@@ -1,9 +1,11 @@
 package shared
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v2"
 )
@@ -60,4 +62,16 @@ func ExtractValue(data map[string]interface{}, path string) (interface{}, error)
 	}
 	return nil, fmt.Errorf("path %s not found in response", path)
 
+}
+
+func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
+	tmpl, err := template.New("template").Parse(templateStr)
+	if err != nil {
+		return "", err
+	}
+	var buffer bytes.Buffer
+	if err := tmpl.Execute(&buffer, config); err != nil {
+		return "", err
+	}
+	return buffer.String(), nil
 }

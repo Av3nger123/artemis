@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"text/template"
 )
 
 func CallAPI(api API, config *map[string]interface{}) (*http.Response, error) {
@@ -29,16 +28,4 @@ func CallAPI(api API, config *map[string]interface{}) (*http.Response, error) {
 		return nil, fmt.Errorf("error performing request: %v", err)
 	}
 	return resp, nil
-}
-
-func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
-	tmpl, err := template.New("template").Parse(templateStr)
-	if err != nil {
-		return "", err
-	}
-	var buffer bytes.Buffer
-	if err := tmpl.Execute(&buffer, config); err != nil {
-		return "", err
-	}
-	return buffer.String(), nil
 }
