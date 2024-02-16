@@ -1,0 +1,28 @@
+# Example API Configuration File
+configuration:
+  string: "a"
+  number: 1
+
+# List of API endpoints to test
+apis:
+  - name: "API 1"
+    url: "https://api.example.com/endpoint1"  
+    method: "GET"  
+    headers:  
+      Content-Type: "application/json"
+    body: {}  
+    expected_response:  
+      status_code: 200  
+      body: {}
+
+  - name: "API 2"
+    url: "https://api.example.com/endpoint2"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"
+    body:
+      key: "value"
+    expected_response:
+      status_code: 201
+      body:
+        message: "Success"
