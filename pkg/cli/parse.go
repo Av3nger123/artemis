@@ -11,13 +11,23 @@ import (
 var parseCmd = &cobra.Command{
 	Use:   "parse",
 	Short: "Parse YAML file",
-	Long:  "Parse YAML file",
+	Long:  "Parse YAML file and display the parsed configuration",
 	Run: func(cmd *cobra.Command, args []string) {
-		filePath, _ := cmd.Flags().GetString("file")
-		config, err := shared.ParseYAMLFile(filePath)
-		if err != nil {
-			log.Fatalf("error parsing YAML file: %v", err)
-		}
+		config := parseYAMLFile(cmd)
 		fmt.Println(config)
 	},
+}
+
+func parseYAMLFile(cmd *cobra.Command) shared.APIConfig {
+	filePath, err := cmd.Flags().GetString("file")
+	if err != nil {
+		log.Fatalf("error getting file path: %v", err)
+	}
+
+	config, err := shared.ParseYAMLFile(filePath)
+	if err != nil {
+		log.Fatalf("error parsing YAML file: %v", err)
+	}
+
+	return config
 }

@@ -6,15 +6,16 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type API struct {
+	Name    string            `yaml:"name"`
+	Url     string            `yaml:"url"`
+	Method  string            `yaml:"method"`
+	Headers map[string]string `yaml:"headers"`
+	Body    string            `yaml:"body"`
+}
 type APIConfig struct {
 	Configuration map[string]interface{} `yaml:"configuration"`
-	Apis          []struct {
-		Name    string            `yaml:"name"`
-		Url     string            `yaml:"url"`
-		Method  string            `yaml:"method"`
-		Headers map[string]string `yaml:"headers"`
-		Body    interface{}       `yaml:"body"`
-	} `yaml:"apis"`
+	Apis          []API                  `yaml:"apis"`
 }
 
 func ParseYAMLFile(filePath string) (APIConfig, error) {
