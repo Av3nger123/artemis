@@ -16,6 +16,12 @@ type Variable struct {
 	Type string `yaml:"type"`
 }
 
+type MetaData struct {
+	Type     string `yaml:"type"`
+	Max      int    `yaml:"max"`
+	Interval int    `yaml:"interval"`
+}
+
 type API struct {
 	Name      string            `yaml:"name"`
 	Url       string            `yaml:"url"`
@@ -23,6 +29,7 @@ type API struct {
 	Headers   map[string]string `yaml:"headers"`
 	Body      string            `yaml:"body"`
 	Variables []Variable        `yaml:"variables"`
+	Meta      MetaData          `yaml:"meta"`
 }
 type APIConfig struct {
 	Configuration map[string]interface{} `yaml:"configuration"`

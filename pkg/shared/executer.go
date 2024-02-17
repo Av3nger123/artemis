@@ -2,11 +2,88 @@ package shared
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
+	"time"
 )
 
-func CallAPI(api API, config *map[string]interface{}) (*http.Response, error) {
+func ExecuteAPI(api API, config *map[string]interface{}) {
+	if api.Meta.Type == "multiple" {
+		executeMultipleAPI(api, config)
+	} else {
+		executeSingleAPI(api, config)
+	}
+}
+
+func executeMultipleAPI(api API, config *map[string]interface{}) {
+	i := 0
+	var resp *http.Response
+	var err error
+	for i < api.Meta.Max || (resp != nil && resp.StatusCode == 200) {
+		i++
+		resp, err = executeAndDecorateAPI(api, config)
+		time.Sleep(time.Second * time.Duration(api.Meta.Interval))
+	}
+	handleAPIResponse(api, config, resp, err)
+}
+
+func executeSingleAPI(api API, config *map[string]interface{}) {
+	resp, err := executeAndDecorateAPI(api, config)
+	handleAPIResponse(api, config, resp, err)
+}
+
+func executeAndDecorateAPI(api API, config *map[string]interface{}) (*http.Response, error) {
+	return apiDecorator(callAPI)(api, config)
+}
+
+func handleAPIResponse(api API, config *map[string]interface{}, resp *http.Response, err error) {
+	if err != nil {
+		slog.Warn("Error while executing API", "name", api.Name, "error", err.Error())
+		return
+	}
+	response := analyzeResponse(resp)
+	if response != nil {
+		if err := postScript(response, api, config); err != nil {
+			fmt.Printf("%v: %s\n", err, response)
+		}
+	}
+}
+
+func analyzeResponse(resp *http.Response) map[string]interface{} {
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("error reading response body: %v", err)
+	}
+	var response map[string]interface{}
+
+	if resp.StatusCode == 200 {
+		if err := json.Unmarshal(responseBody, &response); err != nil {
+			fmt.Printf("error parsing response body: %v", err)
+		}
+	} else {
+		fmt.Printf("Error occurred %s", string(responseBody))
+	}
+	return response
+}
+
+func postScript(data map[string]interface{}, api API, config *map[string]interface{}) error {
+	configMap := *config
+	for i := range api.Variables {
+		val, err := ExtractValue(data, api.Variables[i].Path)
+		if err != nil {
+			return fmt.Errorf("path %s not found in the response ", api.Variables[i].Path)
+
+		}
+		configMap[api.Variables[i].Name] = val
+	}
+	*config = configMap
+	return nil
+}
+
+func callAPI(api API, config *map[string]interface{}) (*http.Response, error) {
 
 	method, _ := renderTemplate(api.Method, *config)
 	url, _ := renderTemplate(api.Url, *config)
@@ -28,4 +105,17 @@ func CallAPI(api API, config *map[string]interface{}) (*http.Response, error) {
 		return nil, fmt.Errorf("error performing request: %v", err)
 	}
 	return resp, nil
+}
+
+func apiDecorator(f func(API, *map[string]interface{}) (*http.Response, error)) func(API, *map[string]interface{}) (*http.Response, error) {
+	return func(api API, config *map[string]interface{}) (*http.Response, error) {
+		startTime := time.Now()
+		resp, err := f(api, config)
+		duration := time.Since(startTime)
+		if err != nil {
+			return nil, err
+		}
+		slog.Info("result:", "name", api.Name, "time", duration, "status", resp.StatusCode)
+		return resp, err
+	}
 }
