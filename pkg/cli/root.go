@@ -22,6 +22,12 @@ func Init() {
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
+
+	RootCmd.AddCommand(generateCmd)
+	generateCmd.Flags().StringP("file", "f", "", "Path to YAML file")
+	if err := testCmd.MarkFlagRequired("file"); err != nil {
+		slog.Error("Error marking flag as required", "error", err)
+	}
 }
 
 var RootCmd = &cobra.Command{

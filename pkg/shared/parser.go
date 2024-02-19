@@ -2,6 +2,7 @@ package shared
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,32 +11,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type Variable struct {
-	Name string `yaml:"name"`
-	Path string `yaml:"path"`
-	Type string `yaml:"type"`
-}
-
-type MetaData struct {
-	Type     string `yaml:"type"`
-	Max      int    `yaml:"max"`
-	Interval int    `yaml:"interval"`
-}
-
-type API struct {
-	Name      string            `yaml:"name"`
-	Url       string            `yaml:"url"`
-	Method    string            `yaml:"method"`
-	Headers   map[string]string `yaml:"headers"`
-	Body      string            `yaml:"body"`
-	Variables []Variable        `yaml:"variables"`
-	Meta      MetaData          `yaml:"meta"`
-}
-type APIConfig struct {
-	Configuration map[string]interface{} `yaml:"configuration"`
-	Apis          []API                  `yaml:"apis"`
-}
-
 func ParseYAMLFile(filePath string) (APIConfig, error) {
 	var config APIConfig
 
@@ -43,6 +18,7 @@ func ParseYAMLFile(filePath string) (APIConfig, error) {
 	if err != nil {
 		return config, err
 	}
+	defer yamlFile.Close()
 
 	decoder := yaml.NewDecoder(yamlFile)
 	if err := decoder.Decode(&config); err != nil {
@@ -50,9 +26,22 @@ func ParseYAMLFile(filePath string) (APIConfig, error) {
 	}
 
 	return config, nil
-
 }
 
+func ParsePostmanJSON(filePath string) (Collection, error) {
+	var collection Collection
+	jsonFile, err := os.Open(filePath)
+	if err != nil {
+		return collection, err
+	}
+	defer jsonFile.Close()
+	decoder := json.NewDecoder(jsonFile)
+	if err := decoder.Decode(&collection); err != nil {
+		return collection, err
+	}
+	return collection, nil
+
+}
 func ExtractValue(data map[string]interface{}, path string) (interface{}, error) {
 	keys := strings.Split(path, ".")
 	current := data
@@ -81,4 +70,44 @@ func renderTemplate(templateStr string, config map[string]interface{}) (string, 
 		return "", err
 	}
 	return buffer.String(), nil
+}
+
+func ConvertJsonToYaml(collection Collection, filePath string) error {
+	apiConfig := APIConfig{}
+	var apis []API
+	for _, val := range collection.Items {
+		apis = append(apis, API{
+			Name:   val.Name,
+			Url:    val.Request.Url.Raw,
+			Method: val.Request.Method,
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+			Meta: MetaData{
+				"single", 0, 0,
+			},
+			Body:      val.Request.Body.Raw,
+			Variables: []Variable{},
+		})
+	}
+	apiConfig.Apis = apis
+	for _, val := range collection.Variables {
+		apiConfig.Configuration[val.Key] = val.Value
+	}
+
+	data, err := yaml.Marshal(&apiConfig)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(strings.TrimSuffix(filePath, ".json") + ".yaml")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+	return nil
 }
