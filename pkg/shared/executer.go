@@ -22,24 +22,37 @@ func executeMultipleAPI(api API, config *map[string]interface{}) {
 	i := 0
 	var resp *http.Response
 	var err error
-	for i < api.Meta.Max || (resp != nil && resp.StatusCode == 200) {
+	for i < api.Meta.Max || (resp != nil && resp.StatusCode != 200) {
 		i++
 		resp, err = executeAndDecorateAPI(api, config)
 		time.Sleep(time.Second * time.Duration(api.Meta.Interval))
+
+		// exit condition
+		response := analyzeResponse(resp)
+		val, _ := ExtractValue(response, api.Meta.Exit.Key)
+		if convVal(val, api.Meta.Exit.Type) == api.Meta.Exit.Value {
+			if err := postScript(response, api, config); err != nil {
+				fmt.Printf("%v: %s\n", err, response)
+			}
+			val, _ := json.Marshal(response)
+			fmt.Println(string(val))
+			for _, key := range api.Input {
+				var input string
+				fmt.Printf("Enter %s:", key.Key)
+				fmt.Scanln(&input)
+				(*config)[key.Key] = input
+			}
+			return
+		}
 	}
-	handleAPIResponse(api, config, resp, err)
+	if err != nil {
+		slog.Warn("Error while executing API", "name", api.Name, "error", err.Error())
+		return
+	}
 }
 
 func executeSingleAPI(api API, config *map[string]interface{}) {
 	resp, err := executeAndDecorateAPI(api, config)
-	handleAPIResponse(api, config, resp, err)
-}
-
-func executeAndDecorateAPI(api API, config *map[string]interface{}) (*http.Response, error) {
-	return apiDecorator(callAPI)(api, config)
-}
-
-func handleAPIResponse(api API, config *map[string]interface{}, resp *http.Response, err error) {
 	if err != nil {
 		slog.Warn("Error while executing API", "name", api.Name, "error", err.Error())
 		return
@@ -52,7 +65,14 @@ func handleAPIResponse(api API, config *map[string]interface{}, resp *http.Respo
 	}
 }
 
+func executeAndDecorateAPI(api API, config *map[string]interface{}) (*http.Response, error) {
+	return apiDecorator(callAPI)(api, config)
+}
+
 func analyzeResponse(resp *http.Response) map[string]interface{} {
+	if resp == nil {
+		return nil
+	}
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("error reading response body: %v", err)
@@ -72,12 +92,12 @@ func analyzeResponse(resp *http.Response) map[string]interface{} {
 func postScript(data map[string]interface{}, api API, config *map[string]interface{}) error {
 	configMap := *config
 	for i := range api.Variables {
-		val, err := ExtractValue(data, api.Variables[i].Path)
+		val, err := ExtractValue(data, api.Variables[i].Value)
 		if err != nil {
-			return fmt.Errorf("path %s not found in the response ", api.Variables[i].Path)
+			return fmt.Errorf("path %s not found in the response ", api.Variables[i].Value)
 
 		}
-		configMap[api.Variables[i].Name] = val
+		configMap[api.Variables[i].Key] = val
 	}
 	*config = configMap
 	return nil

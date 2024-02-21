@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -87,7 +88,7 @@ func ConvertJsonToYaml(collection Collection, filePath string) error {
 				"Content-Type": "application/json",
 			},
 			Meta: MetaData{
-				"single", 0, 0,
+				"single", 0, 0, Variable{},
 			},
 			Body:      val.Request.Body.Raw,
 			Variables: []Variable{},
@@ -112,4 +113,13 @@ func ConvertJsonToYaml(collection Collection, filePath string) error {
 		return err
 	}
 	return nil
+}
+
+func convVal(val any, valType string) string {
+	if valType == "boolean" {
+		return strconv.FormatBool(val.(bool))
+	} else if valType == "number" {
+		return strconv.FormatInt(val.(int64), 10)
+	}
+	return ""
 }
