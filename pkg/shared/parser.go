@@ -73,10 +73,13 @@ func renderTemplate(templateStr string, config map[string]interface{}) (string, 
 }
 
 func ConvertJsonToYaml(collection Collection, filePath string) error {
-	apiConfig := APIConfig{}
-	var apis []API
+	fmt.Println(collection)
+	apiConfig := APIConfig{
+		Apis:          make([]API, 0),
+		Configuration: map[string]interface{}{},
+	}
 	for _, val := range collection.Items {
-		apis = append(apis, API{
+		apiConfig.Apis = append(apiConfig.Apis, API{
 			Name:   val.Name,
 			Url:    val.Request.Url.Raw,
 			Method: val.Request.Method,
@@ -90,7 +93,6 @@ func ConvertJsonToYaml(collection Collection, filePath string) error {
 			Variables: []Variable{},
 		})
 	}
-	apiConfig.Apis = apis
 	for _, val := range collection.Variables {
 		apiConfig.Configuration[val.Key] = val.Value
 	}

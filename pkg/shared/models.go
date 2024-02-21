@@ -26,22 +26,24 @@ type APIConfig struct {
 	Apis          []API                  `yaml:"apis"`
 }
 
+type RawField struct {
+	Raw string `json:"raw"`
+}
+type Request struct {
+	Method string   `json:"method"`
+	Body   RawField `json:"body"`
+	Url    RawField `json:"url"`
+}
+type Item struct {
+	Name    string  `json:"name"`
+	Request Request `json:"request"`
+}
+type PostmanVariable struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Type  string `json:"type"`
+}
 type Collection struct {
-	Items []struct {
-		Name    string `json:"name"`
-		Request struct {
-			Method string `json:"method"`
-			Body   struct {
-				Raw string `json:"raw"`
-			} `json:"body"`
-			Url struct {
-				Raw string `json:"raw"`
-			} `json:"url"`
-		}
-	} `json:"item"`
-	Variables []struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
-		Type  string `json:"type"`
-	} `json:"variable"`
+	Items     []Item            `json:"item"`
+	Variables []PostmanVariable `json:"variable"`
 }
