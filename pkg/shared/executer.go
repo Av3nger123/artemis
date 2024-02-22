@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"time"
 )
@@ -22,42 +21,37 @@ func executeMultipleAPI(api API, config *map[string]interface{}) {
 	i := 0
 	var resp *http.Response
 	var err error
+	var response map[string]interface{}
 	for i < api.Meta.Max || (resp != nil && resp.StatusCode != 200) {
 		i++
 		resp, err = executeAndDecorateAPI(api, config)
 		time.Sleep(time.Second * time.Duration(api.Meta.Interval))
 
 		// exit condition
-		response := analyzeResponse(resp)
+		response = analyzeResponse(resp)
+		Logger.Info("API response", "response", response)
 		val, _ := ExtractValue(response, api.Meta.Exit.Key)
 		if convVal(val, api.Meta.Exit.Type) == api.Meta.Exit.Value {
-			if err := postScript(response, api, config); err != nil {
-				fmt.Printf("%v: %s\n", err, response)
-			}
-			val, _ := json.Marshal(response)
-			fmt.Println(string(val))
-			for _, key := range api.Input {
-				var input string
-				fmt.Printf("Enter %s:", key.Key)
-				fmt.Scanln(&input)
-				(*config)[key.Key] = input
-			}
-			return
+			break
 		}
 	}
 	if err != nil {
-		slog.Warn("Error while executing API", "name", api.Name, "error", err.Error())
+		Logger.Warn("Error while executing API", "name", api.Name, "error", err.Error())
 		return
+	}
+	if err := postScript(response, api, config); err != nil {
+		fmt.Printf("%v: %s\n", err, response)
 	}
 }
 
 func executeSingleAPI(api API, config *map[string]interface{}) {
 	resp, err := executeAndDecorateAPI(api, config)
 	if err != nil {
-		slog.Warn("Error while executing API", "name", api.Name, "error", err.Error())
+		Logger.Warn("Error while executing API", "name", api.Name, "error", err.Error())
 		return
 	}
 	response := analyzeResponse(resp)
+	Logger.Info("API response", "response", response)
 	if response != nil {
 		if err := postScript(response, api, config); err != nil {
 			fmt.Printf("%v: %s\n", err, response)
@@ -99,6 +93,19 @@ func postScript(data map[string]interface{}, api API, config *map[string]interfa
 		}
 		configMap[api.Variables[i].Key] = val
 	}
+	if api.Input != nil || len(api.Input) > 0 {
+		val, _ := json.Marshal(data)
+		fmt.Println(string(val))
+		for _, key := range api.Input {
+			var input string
+			fmt.Println("================================")
+			fmt.Printf("Enter value for key %s:\n", key.Key)
+			fmt.Scanln(&input)
+			configMap[key.Key] = input
+			Logger.Info("User input", "key", key.Key, "value", input)
+		}
+	}
+
 	*config = configMap
 	return nil
 }
@@ -118,7 +125,7 @@ func callAPI(api API, config *map[string]interface{}) (*http.Response, error) {
 		val, _ := renderTemplate(value, *config)
 		req.Header.Set(key, val)
 	}
-
+	Logger.Info("API call", "name", api.Name, "url", url, "method", method, "headers", req.Header, "body", body)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -135,7 +142,7 @@ func apiDecorator(f func(API, *map[string]interface{}) (*http.Response, error)) 
 		if err != nil {
 			return nil, err
 		}
-		slog.Info("result:", "name", api.Name, "time", duration, "status", resp.StatusCode)
+		Logger.Info("result:", "name", api.Name, "time", duration, "status", resp.StatusCode)
 		return resp, err
 	}
 }

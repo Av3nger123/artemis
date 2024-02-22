@@ -11,6 +11,8 @@ var testCmd = &cobra.Command{
 	Short: "Test APIs defined in YAML file",
 	Long:  "Test APIs defined in YAML file and display the responses",
 	Run: func(cmd *cobra.Command, args []string) {
+		file := shared.InitLog("app.log")
+		defer file.Close()
 		testAPIs(cmd)
 	},
 }

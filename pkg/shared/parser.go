@@ -116,6 +116,9 @@ func ConvertJsonToYaml(collection Collection, filePath string) error {
 }
 
 func convVal(val any, valType string) string {
+	if val == nil {
+		return ""
+	}
 	if valType == "boolean" {
 		return strconv.FormatBool(val.(bool))
 	} else if valType == "number" {
