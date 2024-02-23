@@ -18,6 +18,24 @@ To install Artemis, make sure you have Go installed and then run:
 ```bash
 source ./install.sh
 ```
+
+## Commands
+
+### Command for testing YAML file
+
+```sh
+artemis test -f sample.yaml
+```
+
+### Command to convert Postman collection to YAML format
+
+An additional feature that i shipped with this is to convert postman collection format to artemis yaml format for faster configuration
+
+```sh
+artemis generate -f postmancollection.json
+```
+**Note**: After generating a YAML file from a Postman collection, manual adjustments might be necessary to tailor the YAML file according to specific requirements. The generated file serves as a starting point and helps in maintaining the structure and format consistent with the original collection.
+
 # API Configuration
 
 ## Basic YAML Config
@@ -132,10 +150,4 @@ This section introduces additional metadata for configuring advanced features su
             key: "data.isAuthenticated"
             value: "true"
             type: boolean
-
-```
-
-```vbnet
-This Markdown file provides a comprehensive explanation of various configurations for API requests, including basic setup, variable capture, assertion checks, and advanced features like polling. Each configuration is explained with its purpose and structure.
-
 ```
