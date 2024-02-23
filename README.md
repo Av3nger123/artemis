@@ -38,7 +38,9 @@ artemis generate -f postmancollection.json
 
 ### Logging
 
-Additionally, a log report will be generated in `app.log` to provide detailed information about the execution process.
+Additionally, a log report will be generated in `app.log` by default, but you can specify a custom log file path using the -l or --log= flag to provide detailed information about the execution process.
+
+
 
 For custom log file path:
 
