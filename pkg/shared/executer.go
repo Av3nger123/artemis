@@ -39,6 +39,7 @@ func executeMultipleAPI(api API, config *map[string]interface{}) {
 		Logger.Warn("Error while executing API", "name", api.Name, "error", err.Error())
 		return
 	}
+	assertResponse(api, resp.StatusCode, response)
 	if err := postScript(response, api, config); err != nil {
 		fmt.Printf("%v: %s\n", err, response)
 	}
@@ -83,8 +84,14 @@ func analyzeResponse(resp *http.Response) map[string]interface{} {
 	return response
 }
 
+func assertResponse(api API, status int, data map[string]interface{}) {
+	res := api.Assert.Status != int32(status)
+	Logger.Info("API assertions", "name", api.Name, "pass", res)
+}
+
 func postScript(data map[string]interface{}, api API, config *map[string]interface{}) error {
 	configMap := *config
+	// config population from response
 	for i := range api.Variables {
 		val, err := ExtractValue(data, api.Variables[i].Value)
 		if err != nil {
@@ -93,6 +100,8 @@ func postScript(data map[string]interface{}, api API, config *map[string]interfa
 		}
 		configMap[api.Variables[i].Key] = val
 	}
+
+	// config population from input
 	if api.Input != nil || len(api.Input) > 0 {
 		val, _ := json.Marshal(data)
 		fmt.Println(string(val))
@@ -105,7 +114,6 @@ func postScript(data map[string]interface{}, api API, config *map[string]interfa
 			Logger.Info("User input", "key", key.Key, "value", input)
 		}
 	}
-
 	*config = configMap
 	return nil
 }

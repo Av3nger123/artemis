@@ -13,6 +13,10 @@ type MetaData struct {
 	Exit     Variable `yaml:"exit"`
 }
 
+type Assert struct {
+	Status int32 `yaml:"status"`
+}
+
 type API struct {
 	Name      string            `yaml:"name"`
 	Url       string            `yaml:"url"`
@@ -23,7 +27,8 @@ type API struct {
 	Input     []struct {
 		Key string `yaml:"key"`
 	} `yaml:"input"`
-	Meta MetaData `yaml:"meta"`
+	Meta   MetaData `yaml:"meta"`
+	Assert Assert   `yaml:"assert"`
 }
 type APIConfig struct {
 	Configuration map[string]interface{} `yaml:"configuration"`
