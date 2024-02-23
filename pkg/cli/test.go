@@ -2,6 +2,7 @@ package cli
 
 import (
 	"artemis/pkg/shared"
+	"fmt"
 
 	"github.com/spf13/cobra"
 )
@@ -11,7 +12,9 @@ var testCmd = &cobra.Command{
 	Short: "Test APIs defined in YAML file",
 	Long:  "Test APIs defined in YAML file and display the responses",
 	Run: func(cmd *cobra.Command, args []string) {
-		file := shared.InitLog("app.log")
+		logFilePath, _ := cmd.Flags().GetString("log")
+		fmt.Println("Log file path:", logFilePath)
+		file := shared.InitLog(logFilePath)
 		defer file.Close()
 		testAPIs(cmd)
 	},

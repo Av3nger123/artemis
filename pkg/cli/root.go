@@ -22,6 +22,7 @@ func Init() {
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
+	testCmd.Flags().StringP("log", "l", "app.log", "Path to the log file")
 
 	RootCmd.AddCommand(generateCmd)
 	generateCmd.Flags().StringP("file", "f", "", "Path to YAML file")

@@ -36,6 +36,15 @@ artemis generate -f postmancollection.json
 ```
 **Note**: After generating a YAML file from a Postman collection, manual adjustments might be necessary to tailor the YAML file according to specific requirements. The generated file serves as a starting point and helps in maintaining the structure and format consistent with the original collection.
 
+### Logging
+
+Additionally, a log report will be generated in `app.log` to provide detailed information about the execution process.
+
+For custom log file path:
+
+```sh
+artemis test -f sample.yaml -l custom_log_file.log
+```
 # API Configuration
 
 ## Basic YAML Config
