@@ -47,6 +47,14 @@ For custom log file path:
 ```sh
 artemis test -f sample.yaml -l custom_log_file.log
 ```
+
+For custom env file path:
+
+```sh
+artemis test -f sample.yaml -l custom_log_file.log -e dev.env
+```
+
+
 # API Configuration
 
 ## Basic YAML Config
@@ -128,6 +136,8 @@ input:
   - key: password
 ```
 
+
+
 ## Meta Section
 
 This section introduces additional metadata for configuring advanced features such as multiple calls of the same API, specifying the maximum number of calls, polling intervals, and exit conditions.
@@ -162,6 +172,18 @@ This section introduces additional metadata for configuring advanced features su
             value: "true"
             type: boolean
 ```
+## Environment support
+
+```yaml
+configuration:
+  url: "{{env.url}}"
+  secret: "{{env.secret}}"
+```
+
+Here, `{{env.url}}` and `{{env.secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables when the YAML file is processed.
+
+This approach allows you to reference environment variables directly within your YAML configuration, providing a convenient and secure way to manage sensitive information without exposing it directly in the file
+
 
 ## Working:
 
