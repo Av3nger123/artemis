@@ -23,6 +23,7 @@ func Init() {
 		slog.Error("Error marking flag as required", "error", err)
 	}
 	testCmd.Flags().StringP("log", "l", "app.log", "Path to the log file")
+	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
 
 	RootCmd.AddCommand(generateCmd)
 	generateCmd.Flags().StringP("file", "f", "", "Path to YAML file")

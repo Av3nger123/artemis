@@ -126,3 +126,22 @@ func convVal(val any, valType string) string {
 	}
 	return ""
 }
+
+func SubstituteEnvVars(input string) interface{} {
+	envVarPrefix := "{{env."
+	for strings.Contains(input, envVarPrefix) {
+		startIndex := strings.Index(input, envVarPrefix)
+		endIndex := strings.Index(input, "}}")
+		if endIndex == -1 {
+			break
+		}
+		// Extract the environment variable name
+		varName := input[startIndex+len(envVarPrefix) : endIndex]
+
+		// Substitute the environment variable value
+		varValue := GetEnvValue(varName)
+		input = strings.Replace(input, input[startIndex:endIndex+len("}}")], varValue, 1)
+	}
+
+	return input
+}

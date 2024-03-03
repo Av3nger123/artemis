@@ -2,3 +2,4 @@ artemis
 *.yaml
 *.json
 *.log
+*.env
