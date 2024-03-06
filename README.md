@@ -41,19 +41,24 @@ artemis generate -f postmancollection.json
 Additionally, a log report will be generated in `app.log` by default, but you can specify a custom log file path using the -l or --log= flag to provide detailed information about the execution process.
 
 
-
 For custom log file path:
 
 ```sh
 artemis test -f sample.yaml -l custom_log_file.log
 ```
 
+### Environment variables
+
+Artemis supports loading environment variables from a specified `.env` file. This allows you to store sensitive information or configuration-specific details outside of your main configuration files.
+
 For custom env file path:
 
 ```sh
 artemis test -f sample.yaml -l custom_log_file.log -e dev.env
 ```
+When running Artemis with the -e flag followed by the path to your environment file, Artemis will load the environment variables from that file and make them available during the execution of your tests.
 
+**Remember not to commit your environment files to version control systems like Git, as they may contain sensitive information.**
 
 # API Configuration
 
@@ -180,7 +185,12 @@ configuration:
   secret: "{{env.secret}}"
 ```
 
-Here, `{{env.url}}` and `{{env.secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables when the YAML file is processed.
+Here, `{{env.url}}` and `{{env.secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables shown below, when the YAML file is processed. 
+
+```dotenv
+url=https://localhost:8000
+secret=my_secret_key
+```
 
 This approach allows you to reference environment variables directly within your YAML configuration, providing a convenient and secure way to manage sensitive information without exposing it directly in the file
 
