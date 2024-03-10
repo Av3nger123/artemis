@@ -201,10 +201,8 @@ This approach allows you to reference environment variables directly within your
 
 2. **New Assertion Addition for Response Body**: Introduce new assertion options specifically for validating response bodies. This could include assertions for checking specific JSON elements, comparing response bodies with expected patterns, or validating response structures against predefined schemas. (Status: Backlog)
 
-3. **Pulling Data from Environment Variables**: Enhance configurability by allowing the extraction of data from environment variables. This feature enables users to securely manage sensitive data such as API keys, passwords, or tokens outside of the configuration files. (Status: Planned)
+3. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests, optimizing test execution time. (Status: In Progress)
 
-4. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests, optimizing test execution time. (Status: In Progress)
+4. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: Backlog)
 
-5. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: Backlog)
-
-6. **New YAML Format for Better Developer Experience (DX)**: Introduce a new YAML format optimized for better developer experience (DX). This format aims to enhance readability, maintainability, and ease of use for configuring API requests and testing scenarios. (Status: Backlog)
+5. **New YAML Format for Better Developer Experience (DX)**: Introduce a new YAML format optimized for better developer experience (DX). This format aims to enhance readability, maintainability, and ease of use for configuring API requests and testing scenarios. (Status: Backlog)
