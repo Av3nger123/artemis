@@ -56,9 +56,6 @@ func ParseResponse(api models.API, resp *http.Response) map[string]interface{} {
 }
 
 func AssertResponse(api models.API, response map[string]interface{}) bool {
-	if response == nil {
-		return false
-	}
 	assert := true
 	for _, val := range api.Test.ResponseBody {
 		assert = assert && executeCondition(val, response)
@@ -103,11 +100,10 @@ func LogDecorator(f func(models.API, *map[string]interface{}) (*http.Response, e
 	return func(api models.API, config *map[string]interface{}) (*http.Response, error) {
 		startTime := time.Now()
 		resp, err := f(api, config)
-		duration := time.Since(startTime)
 		if err != nil {
 			return nil, err
 		}
-		Logger.Info("result:", "name", api.Name, "time", duration, "status", resp.StatusCode)
+		Logger.Info("result:", "name", api.Name, "time", time.Since(startTime), "status", resp.StatusCode)
 		return resp, err
 	}
 }
