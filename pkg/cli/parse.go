@@ -2,6 +2,7 @@ package cli
 
 import (
 	"artemis/pkg/shared"
+	"artemis/pkg/shared/models"
 	"fmt"
 	"log/slog"
 
@@ -18,7 +19,7 @@ var parseCmd = &cobra.Command{
 	},
 }
 
-func parseYAMLFile(cmd *cobra.Command) shared.APIConfig {
+func parseYAMLFile(cmd *cobra.Command) models.APIConfig {
 	filePath, err := cmd.Flags().GetString("file")
 	if err != nil {
 		slog.Error("error getting file path")
@@ -28,6 +29,5 @@ func parseYAMLFile(cmd *cobra.Command) shared.APIConfig {
 	if err != nil {
 		slog.Error("error parsing YAML file", "error", err)
 	}
-
 	return config
 }
