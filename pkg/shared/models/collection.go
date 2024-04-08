@@ -3,7 +3,6 @@ package models
 type Variable struct {
 	Key   string      `yaml:"variable_name"`
 	Value interface{} `yaml:"response_path"`
-	Type  string      `yaml:"type"`
 }
 
 type MetaData struct {
@@ -42,7 +41,6 @@ type API struct {
 type Collection struct {
 	Name        string     `yaml:"collection_name"`
 	Type        string     `yaml:"collection_type"`
-	Mode        string     `yaml:"collection_mode"`
 	Variables   []Variable `yaml:"collection_variables"`
 	VariableMap map[string]interface{}
 }

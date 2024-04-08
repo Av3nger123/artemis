@@ -59,46 +59,50 @@ func renderTemplate(templateStr string, config map[string]interface{}) (string, 
 }
 
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
+	apiConfig := models.APIConfig{
+		Apis:       make([]models.API, 0),
+		Collection: models.Collection{},
+	}
+	for _, val := range collection.Items {
+		apiConfig.Apis = append(apiConfig.Apis, models.API{
+			Name:   val.Name,
+			Url:    val.Request.Url.Raw,
+			Method: val.Request.Method,
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+			Meta: models.MetaData{
+				RetryEnabled:   false,
+				RetryFrequency: 0,
+				MaxRetries:     1,
+			},
+			Body:     val.Request.Body.Raw,
+			Bindings: make([]models.Binding, 0),
+			Test: models.Test{
+				Status:       200,
+				ResponseBody: []models.BodyAssert{},
+			},
+		})
+	}
+	for _, val := range collection.Variables {
+		apiConfig.Collection.VariableMap[val.Key] = val.Value
+	}
+
+	data, err := yaml.Marshal(&apiConfig)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(strings.TrimSuffix(filePath, ".json") + ".yaml")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
 	return nil
-	// fmt.Println(collection)
-	// apiConfig := models.APIConfig{
-	// 	Apis:       make([]models.API, 0),
-	// 	Collection: map[string]interface{}{},
-	// }
-	// for _, val := range collection.Items {
-	// 	apiConfig.Apis = append(apiConfig.Apis, API{
-	// 		Name:   val.Name,
-	// 		Url:    val.Request.Url.Raw,
-	// 		Method: val.Request.Method,
-	// 		Headers: map[string]string{
-	// 			"Content-Type": "application/json",
-	// 		},
-	// 		Meta: MetaData{
-	// 			"single", 0, 0, Variable{},
-	// 		},
-	// 		Body:      val.Request.Body.Raw,
-	// 		Variables: []Variable{},
-	// 	})
-	// }
-	// for _, val := range collection.Variables {
-	// 	apiConfig.Configuration[val.Key] = val.Value
-	// }
-
-	// data, err := yaml.Marshal(&apiConfig)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// file, err := os.Create(strings.TrimSuffix(filePath, ".json") + ".yaml")
-	// if err != nil {
-	// 	return err
-	// }
-	// defer file.Close()
-
-	// if _, err := file.Write(data); err != nil {
-	// 	return err
-	// }
-	// return nil
 }
 
 func TypeCast(val any, valType string) string {
