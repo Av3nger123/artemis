@@ -12,9 +12,20 @@ type MetaData struct {
 	RetryFrequency int  `yaml:"retry_frequency"`
 }
 
+type BodyAssert struct {
+	Value string `yaml:"value"`
+	Path  string `yaml:"path"`
+	Type  string `yaml:"type"`
+}
+
 type Test struct {
-	Status       int32    `yaml:"status_code"`
-	ResponseBody []string `yaml:"response_body"`
+	Status       int32        `yaml:"status_code"`
+	ResponseBody []BodyAssert `yaml:"response_body"`
+}
+
+type Binding struct {
+	Key  string `yaml:"key"`
+	Path string `yaml:"path"`
 }
 
 type API struct {
@@ -23,7 +34,7 @@ type API struct {
 	Method   string            `yaml:"method"`
 	Headers  map[string]string `yaml:"headers"`
 	Body     string            `yaml:"request_body"`
-	Bindings []Variable        `yaml:"value_bindings"`
+	Bindings []Binding         `yaml:"post_scripts"`
 	Meta     MetaData          `yaml:"meta"`
 	Test     Test              `yaml:"test"`
 }

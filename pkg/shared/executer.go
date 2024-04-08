@@ -58,12 +58,12 @@ func ParseResponse(api models.API, resp *http.Response) map[string]interface{} {
 func AssertResponse(api models.API, response map[string]interface{}) bool {
 	assert := true
 	for _, val := range api.Test.ResponseBody {
-		assert = assert && executeCondition(val, response)
+		assert = assert && executeCondition(val.Path, val.Value, val.Type, response)
 	}
 	return assert
 }
 
-func executeCondition(condition string, response map[string]interface{}) bool {
+func executeCondition(path string, value string, valueType string, response map[string]interface{}) bool {
 	return false
 }
 
@@ -71,9 +71,9 @@ func PostAPICall(data map[string]interface{}, api models.API, config *map[string
 	configMap := *config
 	// config population from response
 	for i := range api.Bindings {
-		val, err := ExtractValue(data, api.Bindings[i].Key)
+		val, err := ExtractValue(data, api.Bindings[i])
 		if err != nil {
-			return fmt.Errorf("path %s not found in the response ", api.Bindings[i].Key)
+			return fmt.Errorf("path %s not found in the response ", api.Bindings[i])
 
 		}
 		configMap[api.Bindings[i].Key] = val

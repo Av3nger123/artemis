@@ -4,7 +4,6 @@ import (
 	"artemis/pkg/shared/models"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -43,22 +42,8 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 	}
 	return collection, nil
 }
-func ExtractValue(data map[string]interface{}, path string) (interface{}, error) {
-	keys := strings.Split(path, ".")
-	current := data
-	for _, key := range keys {
-		val, ok := current[key]
-		if !ok {
-			return nil, fmt.Errorf("path %s not found in response", path)
-		}
-		if nested, ok := val.(map[string]interface{}); ok {
-			current = nested
-		} else {
-			return val, nil
-		}
-	}
-	return nil, fmt.Errorf("path %s not found in response", path)
-
+func ExtractValue(data map[string]interface{}, path models.Binding) (interface{}, error) {
+	return nil, nil
 }
 
 func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
