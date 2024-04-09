@@ -2,6 +2,7 @@ package shared
 
 import (
 	"artemis/pkg/shared/models"
+	"artemis/pkg/shared/utils"
 	"bytes"
 	"encoding/json"
 	"os"
@@ -97,7 +98,7 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 		return err
 	}
 
-	file, err := os.Create(strings.TrimSuffix(filePath, ".json") + ".yaml")
+	file, err := os.Create(utils.Slugify(collection.Info.Name) + ".yaml")
 	if err != nil {
 		return err
 	}
