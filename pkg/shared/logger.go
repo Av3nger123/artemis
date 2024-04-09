@@ -15,6 +15,6 @@ func InitLog(filePath string) *os.File {
 		os.Exit(1)
 	}
 
-	Logger = slog.New(slog.NewJSONHandler(file, nil))
+	Logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	return file
 }

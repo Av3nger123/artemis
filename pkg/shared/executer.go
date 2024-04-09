@@ -11,12 +11,10 @@ import (
 )
 
 func CallAPI(api models.API, config *map[string]interface{}) (*http.Response, error) {
-
-	method, _ := renderTemplate(api.Method, *config)
 	url, _ := renderTemplate(api.Url, *config)
 	body, _ := renderTemplate(api.Body, *config)
 
-	req, err := http.NewRequest(method, url, bytes.NewBuffer([]byte(body)))
+	req, err := http.NewRequest(api.Method, url, bytes.NewBuffer([]byte(body)))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
@@ -25,7 +23,7 @@ func CallAPI(api models.API, config *map[string]interface{}) (*http.Response, er
 		val, _ := renderTemplate(value, *config)
 		req.Header.Set(key, val)
 	}
-	Logger.Info("API call", "name", api.Name, "url", url, "method", method, "headers", req.Header, "body", body)
+	Logger.Info("API call", "name", api.Name, "url", url, "method", api.Method, "headers", req.Header, "body", body)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

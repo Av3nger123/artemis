@@ -28,21 +28,21 @@ func testAPIs(cmd *cobra.Command) {
 	config := parseYAMLFile(cmd)
 	shared.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", config.Collection.Name))
 
-	// Map creation and ENV substitution
-	for i := range config.Collection.Variables {
-		config.Collection.VariableMap[config.Collection.Variables[i].Key] = shared.SubstituteEnvVars(config.Collection.Variables[i].Value.(string))
-	}
+	variableMap := make(map[string]interface{}, 0)
 
-	// Execute Tests
+	// map creation and env substitution
+	for i := range config.Collection.Variables {
+		variableMap[config.Collection.Variables[i].Key] = shared.SubstituteEnvVars(config.Collection.Variables[i].Value.(string))
+	}
+	// tests execution
 	for i := range config.Apis {
-		withLogging(testAPI)(config.Apis[i], &config.Collection.VariableMap)
+		withLogging(testAPI)(config.Apis[i], &variableMap)
 	}
 	shared.Logger.Info("Testing ended")
 }
 
 func withLogging(testAPIFunc func(api models.API, configVars *map[string]interface{})) func(api models.API, configVars *map[string]interface{}) {
 	return func(api models.API, configVars *map[string]interface{}) {
-		shared.Logger.Info(fmt.Sprintf("Starting API testing for: %s", api.Name))
 		startTime := time.Now()
 		testAPIFunc(api, configVars)
 		shared.Logger.Info(fmt.Sprintf("API testing completed for: %s, Duration: %v", api.Name, time.Since(startTime)))
@@ -54,29 +54,17 @@ func testAPI(api models.API, configVars *map[string]interface{}) {
 	var resp *http.Response
 	var err error
 	var response map[string]interface{}
-	retry := api.Meta.RetryEnabled
-	for i < api.Meta.MaxRetries || retry {
+	for i < api.Meta.MaxRetries {
 		i++
-		shared.Logger.Info("Making API call", "attempt", i, "retry", retry)
 		resp, err = shared.LogDecorator(shared.CallAPI)(api, configVars)
 		time.Sleep(time.Second * time.Duration(api.Meta.RetryFrequency))
-		shared.Logger.Info("API call completed", "attempt", i, "retry", retry)
-
-		// exit condition
-		shared.Logger.Info("Asserting API response status code", "attempt", i)
-		retry = (resp != nil && resp.StatusCode != int(api.Test.Status))
-		if retry {
+		if resp != nil && resp.StatusCode != int(api.Test.Status) {
+			fmt.Println(resp.StatusCode, api.Test.Status)
 			continue
 		}
-
-		shared.Logger.Info("Parsing API response", "attempt", i)
 		response = shared.ParseResponse(api, resp)
-
-		shared.Logger.Info("API response parsed", "attempt", i, "response", response)
-
-		shared.Logger.Info("Asserting API response", "attempt", i)
-		retry = shared.AssertResponse(api, response)
-		if !retry {
+		assert := shared.AssertResponse(api, response)
+		if assert {
 			break
 		}
 	}

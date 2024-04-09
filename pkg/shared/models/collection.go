@@ -6,9 +6,8 @@ type Variable struct {
 }
 
 type MetaData struct {
-	RetryEnabled   bool `yaml:"retry_enabled"`
-	MaxRetries     int  `yaml:"retry_limit"`
-	RetryFrequency int  `yaml:"retry_frequency"`
+	MaxRetries     int `yaml:"retry_limit"`
+	RetryFrequency int `yaml:"retry_frequency"`
 }
 
 type BodyAssert struct {
@@ -18,7 +17,7 @@ type BodyAssert struct {
 }
 
 type Test struct {
-	Status       int32        `yaml:"status_code"`
+	Status       int          `yaml:"status_code"`
 	ResponseBody []BodyAssert `yaml:"response_body"`
 }
 
@@ -35,7 +34,7 @@ type API struct {
 	Body     string            `yaml:"request_body"`
 	Bindings []Binding         `yaml:"post_scripts"`
 	Meta     MetaData          `yaml:"meta"`
-	Test     Test              `yaml:"test"`
+	Test     Test              `yaml:"tests"`
 }
 
 type Collection struct {

@@ -3,12 +3,10 @@ package shared
 import (
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
-	"bytes"
 	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
-	"text/template"
 
 	"gopkg.in/yaml.v2"
 )
@@ -48,15 +46,26 @@ func ExtractValue(data map[string]interface{}, path models.Binding) (interface{}
 }
 
 func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
-	tmpl, err := template.New("template").Parse(templateStr)
-	if err != nil {
-		return "", err
+	final := ""
+	i := 0
+	for ; i < len(templateStr); i++ {
+		if templateStr[i] == '{' && templateStr[i+1] == '{' {
+			start := i + 2
+			for templateStr[i] != '}' {
+				i++
+			}
+			val := config[templateStr[start:i]]
+			if val != nil {
+				final += val.(string)
+			} else {
+				final += templateStr[start-2 : i+1]
+			}
+			i++
+		} else {
+			final += templateStr[i : i+1]
+		}
 	}
-	var buffer bytes.Buffer
-	if err := tmpl.Execute(&buffer, config); err != nil {
-		return "", err
-	}
-	return buffer.String(), nil
+	return final, nil
 }
 
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
@@ -77,7 +86,6 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 				"Content-Type": "application/json",
 			},
 			Meta: models.MetaData{
-				RetryEnabled:   false,
 				RetryFrequency: 0,
 				MaxRetries:     1,
 			},
