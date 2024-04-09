@@ -63,7 +63,6 @@ func testAPI(api models.API, configVars *map[string]interface{}) {
 			continue
 		}
 		response = shared.ParseResponse(api, resp)
-		fmt.Println(response)
 		assert := shared.AssertResponse(api, response)
 		if assert {
 			break
@@ -72,5 +71,9 @@ func testAPI(api models.API, configVars *map[string]interface{}) {
 	if err != nil {
 		shared.Logger.Warn("Error while executing API", "name", api.Name, "error", err.Error())
 		return
+	}
+	err = shared.PostAPICall(response, api, configVars)
+	if err != nil {
+		shared.Logger.Warn("Error while executing post api scripts", "name", api.Name, "error", err.Error())
 	}
 }
