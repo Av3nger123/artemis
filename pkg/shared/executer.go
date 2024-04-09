@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/yalp/jsonpath"
 )
 
 func CallAPI(api models.API, config *map[string]interface{}) (*http.Response, error) {
@@ -62,7 +64,8 @@ func AssertResponse(api models.API, response map[string]interface{}) bool {
 }
 
 func executeCondition(path string, value string, valueType string, response map[string]interface{}) bool {
-	return false
+	val, _ := jsonpath.Read(response, path)
+	return val == value
 }
 
 func PostAPICall(data map[string]interface{}, api models.API, config *map[string]interface{}) error {
@@ -78,7 +81,7 @@ func PostAPICall(data map[string]interface{}, api models.API, config *map[string
 	}
 
 	// config population from input
-	// if api.Input != nil || len(api.Input) > 0 {
+	// for _, v  :=api.Bindings != nil || len(api.Input) > 0 {
 	// 	val, _ := json.Marshal(data)
 	// 	fmt.Println(string(val))
 	// 	for _, key := range api.Input {

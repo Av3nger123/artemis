@@ -10,3 +10,5 @@ require (
 	golang.org/x/exp v0.0.0-20240213143201-ec583247a57a
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+require github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0 // indirect

@@ -4,10 +4,12 @@ import (
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/yalp/jsonpath"
 	"gopkg.in/yaml.v2"
 )
 
@@ -41,8 +43,13 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 	}
 	return collection, nil
 }
-func ExtractValue(data map[string]interface{}, path models.Binding) (interface{}, error) {
-	return nil, nil
+func ExtractValue(data map[string]interface{}, binding models.Binding) (interface{}, error) {
+	val, err := jsonpath.Read(data, binding.Path)
+	fmt.Println(val, err)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }
 
 func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {

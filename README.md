@@ -181,11 +181,11 @@ This section introduces additional metadata for configuring advanced features su
 
 ```yaml
 configuration:
-  url: "{{env.url}}"
-  secret: "{{env.secret}}"
+  url: "{{url}}"
+  secret: "{{secret}}"
 ```
 
-Here, `{{env.url}}` and `{{env.secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables shown below, when the YAML file is processed. 
+Here, `{{url}}` and `{{secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables shown below, when the YAML file is processed. 
 
 ```dotenv
 url=https://localhost:8000

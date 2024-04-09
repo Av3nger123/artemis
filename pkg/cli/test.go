@@ -63,6 +63,7 @@ func testAPI(api models.API, configVars *map[string]interface{}) {
 			continue
 		}
 		response = shared.ParseResponse(api, resp)
+		fmt.Println(response)
 		assert := shared.AssertResponse(api, response)
 		if assert {
 			break
