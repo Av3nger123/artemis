@@ -60,8 +60,12 @@ func renderTemplate(templateStr string, config map[string]interface{}) (string, 
 
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
 	apiConfig := models.APIConfig{
-		Apis:       make([]models.API, 0),
-		Collection: models.Collection{},
+		Apis: make([]models.API, 0),
+		Collection: models.Collection{
+			Name:      collection.Info.Name,
+			Variables: make([]models.Variable, 0),
+			Type:      "functional",
+		},
 	}
 	for _, val := range collection.Items {
 		apiConfig.Apis = append(apiConfig.Apis, models.API{
@@ -85,7 +89,7 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 		})
 	}
 	for _, val := range collection.Variables {
-		apiConfig.Collection.VariableMap[val.Key] = val.Value
+		apiConfig.Collection.Variables = append(apiConfig.Collection.Variables, models.Variable{Key: val.Key, Value: val.Value})
 	}
 
 	data, err := yaml.Marshal(&apiConfig)

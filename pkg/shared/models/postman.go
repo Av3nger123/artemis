@@ -17,7 +17,12 @@ type PostmanVariable struct {
 	Value string `json:"value"`
 	Type  string `json:"type"`
 }
+
+type Info struct {
+	Name string `json:"name"`
+}
 type PostmanCollection struct {
 	Items     []Item            `json:"item"`
 	Variables []PostmanVariable `json:"variable"`
+	Info      Info              `json:"info"`
 }

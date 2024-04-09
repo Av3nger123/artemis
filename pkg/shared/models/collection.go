@@ -1,8 +1,8 @@
 package models
 
 type Variable struct {
-	Key   string      `yaml:"variable_name"`
-	Value interface{} `yaml:"response_path"`
+	Key   string      `yaml:"name"`
+	Value interface{} `yaml:"value"`
 }
 
 type MetaData struct {
