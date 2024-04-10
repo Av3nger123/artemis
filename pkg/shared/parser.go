@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yalp/jsonpath"
+	"github.com/oliveagle/jsonpath"
 	"gopkg.in/yaml.v2"
 )
 
@@ -44,8 +44,8 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 	return collection, nil
 }
 func ExtractValue(data map[string]interface{}, binding models.Binding) (interface{}, error) {
-	val, err := jsonpath.Read(data, binding.Path)
-	fmt.Println(val, err)
+	val, err := jsonpath.JsonPathLookup(data, binding.Path)
+	fmt.Println(val)
 	if err != nil {
 		return nil, err
 	}

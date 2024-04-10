@@ -59,7 +59,6 @@ func testAPI(api models.API, configVars *map[string]interface{}) {
 		resp, err = shared.LogDecorator(shared.CallAPI)(api, configVars)
 		time.Sleep(time.Second * time.Duration(api.Meta.RetryFrequency))
 		if resp != nil && resp.StatusCode != int(api.Test.Status) {
-			fmt.Println(resp.StatusCode, api.Test.Status)
 			continue
 		}
 		response = shared.ParseResponse(api, resp)

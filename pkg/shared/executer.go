@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/yalp/jsonpath"
+	"github.com/oliveagle/jsonpath"
 )
 
 func CallAPI(api models.API, config *map[string]interface{}) (*http.Response, error) {
@@ -64,7 +64,10 @@ func AssertResponse(api models.API, response map[string]interface{}) bool {
 }
 
 func executeCondition(path string, value string, valueType string, response map[string]interface{}) bool {
-	val, _ := jsonpath.Read(response, path)
+	val, _ := jsonpath.JsonPathLookup(response, path)
+	if slice, ok := val.([]interface{}); ok {
+		return slice[0] == value
+	}
 	return val == value
 }
 
