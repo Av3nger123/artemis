@@ -32,7 +32,7 @@ artemis test -f sample.yaml
 An additional feature that i shipped with this is to convert postman collection format to artemis yaml format for faster configuration
 
 ```sh
-artemis generate -f postmancollection.json
+artemis generate -f postman_collection.json
 ```
 **Note**: After generating a YAML file from a Postman collection, manual adjustments might be necessary to tailor the YAML file according to specific requirements. The generated file serves as a starting point and helps in maintaining the structure and format consistent with the original collection.
 
@@ -67,17 +67,21 @@ When running Artemis with the -e flag followed by the path to your environment f
 This configuration defines a basic API request to generate a token. It includes the following parameters:
 
 - **name**: Name of the API request.
-- **url**: The URL endpoint for the API request, with a placeholder "{{.url}}" that will be replaced with the base URL defined in the configuration section.
+- **url**: The URL endpoint for the API request, with a placeholder "{{url}}" that will be replaced with the base URL defined in the configuration section.
 - **method**: HTTP method for the request (e.g., POST).
 - **headers**: Headers to be included in the request, specifying the Content-Type as "application/json".
 - **body**: JSON payload containing the username and password for authentication.
 
 ```yaml
 configuration:
-  url: "https://api.example.com/v2"
+  collection_name: "API Collection"
+  collection_variables:
+    - name: "url"
+      value: "https://api.example.com/v2"
+  collection_type: functional
 apis:
-  - name: "Generate Token"
-    url: "{{.url}}/token"
+  - name: "Login"
+    url: "{{url}}/token"
     method: "POST"
     headers:
       Content-Type: "application/json"
@@ -90,20 +94,18 @@ This configuration extends the basic API request by adding support for capturing
 
 - **variables**: Defines a list of variables to capture from the response.
     - **name**: Name of the variable.
-    - **path**: JSON path to locate the variable value in the response.
-    - **type**: Data type of the variable (e.g., string).
+    - **path**: [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) to locate the variable value in the response.
 
 ```yaml
-  - name: "Generate Token"
-    url: "{{.url}}/token"
+  - name: "Login"
+    url: "{{url}}/token"
     method: "POST"
     headers:
       Content-Type: "application/json"
     body: '{"username":"user_name","password":"password"}'
-    variables:
-      - name: "token"
-        path: "data.token.access_token"
-        type: "string"
+    post_scripts:
+      - key: "token"
+        path: "$.data.token.access_token"
 
 ```
 
@@ -111,49 +113,37 @@ This configuration extends the basic API request by adding support for capturing
 
 This configuration further enhances the API request by adding assertions to validate the response. It checks if the HTTP status code is 200.
 
-- **assert**: Specifies assertions to be performed on the response.
-  - **status**: Expected HTTP status code.
+- **tests**: Specifies assertions to be performed on the response.
+  - **status_code**: Expected HTTP status code.
+  - **response_body**: Expected values in response.
+    - **path**: The [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) in the response body.
+    - **value**: Expected value.
+    - **type**: Expected value type.
 
 ```yaml
   - name: "Generate Token"
-    url: "{{.url}}/token"
+    url: "{{url}}/token"
     method: "POST"
     headers:
       Content-Type: "application/json"
     body: '{"username":"user_name","password":"password"}'
-    variables:
-      - name: "token"
-        path: "data.token.access_token"
-        type: "string"
-    assert:
-        status: 200
+    post_scripts:
+      - key: "token"
+        path: "$.data.token.access_token"
+    tests:
+      status_code: 200
+      response_body: 
+        - path: "$.data.message"
+          value: "success"
+          type: "string"
 ```
-
-## User Input
-
-This section allows defining user inputs that can be provided during execution. The input is specified as a list of key-value pairs.
-
-- **key**: Key name for the input field.
-
-```yaml
-input:
-  - key: username
-  - key: password
-```
-
-
 
 ## Meta Section
 
 This section introduces additional metadata for configuring advanced features such as multiple calls of the same API, specifying the maximum number of calls, polling intervals, and exit conditions.
 
-- **type**: Type of API call (e.g., single or multiple).
-- **max**: Maximum number of times the API should be called.
-- **interval**: Time interval between successive API calls (in seconds).
-- **exit**: Condition for exiting the polling mode.
-    - **key**: Key to check in the response JSON.
-    - **value**: Expected value of the key.
-    - *type**: Data type of the value.
+- **retry_limit**: Max retry limit when assertions fail.
+- **retry_frequency**: Time between the api calls.
 
 ```yaml
   - name: "Generate Token"
@@ -162,20 +152,18 @@ This section introduces additional metadata for configuring advanced features su
     headers:
       Content-Type: "application/json"
     body: '{"username":"user_name","password":"password"}'
-    variables:
-      - name: "token"
-        path: "data.token.access_token"
-        type: "string"
-    assert:
-        status: 200
+    post_scripts:
+      - key: "token"
+        path: "$.data.token.access_token"
+    tests:
+      status_code: 200
+      response_body: 
+        - path: "$.data.message"
+          value: "success"
+          type: "string"
     meta:
-        type: multiple
-        max: 10
-        interval: 2
-        exit: 
-            key: "data.isAuthenticated"
-            value: "true"
-            type: boolean
+      retry_limit: 10
+      retry_frequency: 5
 ```
 ## Environment support
 
@@ -196,13 +184,6 @@ This approach allows you to reference environment variables directly within your
 
 
 ## Working:
+1. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests, optimizing test execution time. (Status: In Progress)
 
-1. **Pre and Post Scripts**: Implement support for pre and post scripts that can be executed before and after API requests. This feature will allow users to perform additional setup or cleanup tasks, such as setting up test data or logging. (Status: Backlog)
-
-2. **New Assertion Addition for Response Body**: Introduce new assertion options specifically for validating response bodies. This could include assertions for checking specific JSON elements, comparing response bodies with expected patterns, or validating response structures against predefined schemas. (Status: Backlog)
-
-3. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests, optimizing test execution time. (Status: In Progress)
-
-4. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: Backlog)
-
-5. **New YAML Format for Better Developer Experience (DX)**: Introduce a new YAML format optimized for better developer experience (DX). This format aims to enhance readability, maintainability, and ease of use for configuring API requests and testing scenarios. (Status: Backlog)
+2. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: Backlog)
