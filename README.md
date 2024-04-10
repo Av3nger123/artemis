@@ -184,6 +184,6 @@ This approach allows you to reference environment variables directly within your
 
 
 ## Working:
-1. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests, optimizing test execution time. (Status: In Progress)
+1. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests. (Status: In Progress)
 
-2. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: Backlog)
+2. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: In Progress)
