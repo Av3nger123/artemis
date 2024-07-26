@@ -19,7 +19,7 @@ var parseCmd = &cobra.Command{
 	},
 }
 
-func parseYAMLFile(cmd *cobra.Command) models.APIConfig {
+func parseYAMLFile(cmd *cobra.Command) models.Config {
 	filePath, err := cmd.Flags().GetString("file")
 	if err != nil {
 		slog.Error("error getting file path")

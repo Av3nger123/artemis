@@ -3,14 +3,14 @@ package models
 type RawField struct {
 	Raw string `json:"raw"`
 }
-type Request struct {
+type PMRequest struct {
 	Method string   `json:"method"`
 	Body   RawField `json:"body"`
 	Url    RawField `json:"url"`
 }
 type Item struct {
-	Name    string  `json:"name"`
-	Request Request `json:"request"`
+	Name    string    `json:"name"`
+	Request PMRequest `json:"request"`
 }
 type PostmanVariable struct {
 	Key   string `json:"key"`

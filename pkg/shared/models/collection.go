@@ -1,49 +1,45 @@
 package models
 
 type Variable struct {
-	Key   string      `yaml:"name"`
-	Value interface{} `yaml:"value"`
-}
-
-type MetaData struct {
-	MaxRetries     int `yaml:"retry_limit"`
-	RetryFrequency int `yaml:"retry_frequency"`
-}
-
-type BodyAssert struct {
+	Name  string `yaml:"name"`
 	Value string `yaml:"value"`
+}
+
+type BodyCheck struct {
 	Path  string `yaml:"path"`
+	Value string `yaml:"value"`
 	Type  string `yaml:"type"`
 }
 
-type Test struct {
-	Status       int          `yaml:"status_code"`
-	ResponseBody []BodyAssert `yaml:"response_body"`
+type Request struct {
+	URL     string            `yaml:"url"`
+	Method  string            `yaml:"method"`
+	Headers map[string]string `yaml:"headers"`
+	Body    string            `yaml:"body"`
 }
 
-type Binding struct {
+type Response struct {
+	StatusCode int         `yaml:"status_code"`
+	Body       []BodyCheck `yaml:"body,omitempty"`
+}
+
+type Script struct {
 	Key  string `yaml:"key"`
 	Path string `yaml:"path"`
 }
 
-type API struct {
-	Name     string            `yaml:"name"`
-	Url      string            `yaml:"endpoint"`
-	Method   string            `yaml:"method"`
-	Headers  map[string]string `yaml:"headers"`
-	Body     string            `yaml:"request_body"`
-	Bindings []Binding         `yaml:"post_scripts"`
-	Meta     MetaData          `yaml:"meta"`
-	Test     Test              `yaml:"tests"`
+type Step struct {
+	Name     string   `yaml:"name"`
+	Type     string   `yaml:"type"`
+	Request  Request  `yaml:"request"`
+	Response Response `yaml:"response"`
+	Scripts  []Script `yaml:"scripts,omitempty"`
+	Retry    int      `yaml:"retry,omitempty"`
 }
 
-type Collection struct {
-	Name        string     `yaml:"collection_name"`
-	Type        string     `yaml:"collection_type"`
-	Variables   []Variable `yaml:"collection_variables"`
-	VariableMap map[string]interface{}
-}
-type APIConfig struct {
-	Collection Collection `yaml:"api_collection"`
-	Apis       []API      `yaml:"apis"`
+type Config struct {
+	Name      string     `yaml:"name"`
+	Type      string     `yaml:"type"`
+	Variables []Variable `yaml:"variables"`
+	Steps     []Step     `yaml:"steps"`
 }

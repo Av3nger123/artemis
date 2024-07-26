@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
 	"encoding/json"
@@ -13,8 +14,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func ParseYAMLFile(filePath string) (models.APIConfig, error) {
-	var config models.APIConfig
+func ParseYAMLFile(filePath string) (models.Config, error) {
+	var config models.Config
 
 	yamlFile, err := os.Open(filePath)
 	if err != nil {
@@ -43,7 +44,7 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 	}
 	return collection, nil
 }
-func ExtractValue(data map[string]interface{}, binding models.Binding) (interface{}, error) {
+func ExtractValue(data map[string]interface{}, binding models.Script) (interface{}, error) {
 	val, err := jsonpath.JsonPathLookup(data, binding.Path)
 	fmt.Println(val)
 	if err != nil {
@@ -52,7 +53,7 @@ func ExtractValue(data map[string]interface{}, binding models.Binding) (interfac
 	return val, nil
 }
 
-func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
+func TransformText(templateStr string, config map[string]interface{}) (string, error) {
 	final := ""
 	i := 0
 	for ; i < len(templateStr); i++ {
@@ -76,36 +77,33 @@ func renderTemplate(templateStr string, config map[string]interface{}) (string, 
 }
 
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
-	apiConfig := models.APIConfig{
-		Apis: make([]models.API, 0),
-		Collection: models.Collection{
-			Name:      collection.Info.Name,
-			Variables: make([]models.Variable, 0),
-			Type:      "functional",
-		},
+	apiConfig := models.Config{
+		Steps:     make([]models.Step, 0),
+		Name:      collection.Info.Name,
+		Variables: make([]models.Variable, 0),
+		Type:      "functional",
 	}
 	for _, val := range collection.Items {
-		apiConfig.Apis = append(apiConfig.Apis, models.API{
-			Name:   val.Name,
-			Url:    val.Request.Url.Raw,
-			Method: val.Request.Method,
-			Headers: map[string]string{
-				"Content-Type": "application/json",
+		apiConfig.Steps = append(apiConfig.Steps, models.Step{
+			Request: models.Request{
+				URL:    val.Request.Url.Raw,
+				Method: val.Request.Method,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+				Body: val.Request.Body.Raw,
 			},
-			Meta: models.MetaData{
-				RetryFrequency: 0,
-				MaxRetries:     1,
-			},
-			Body:     val.Request.Body.Raw,
-			Bindings: make([]models.Binding, 0),
-			Test: models.Test{
-				Status:       200,
-				ResponseBody: []models.BodyAssert{},
+			Scripts: []models.Script{},
+			Name:    val.Name,
+			Retry:   1,
+			Response: models.Response{
+				StatusCode: 200,
+				Body:       []models.BodyCheck{},
 			},
 		})
 	}
 	for _, val := range collection.Variables {
-		apiConfig.Collection.Variables = append(apiConfig.Collection.Variables, models.Variable{Key: val.Key, Value: val.Value})
+		apiConfig.Variables = append(apiConfig.Variables, models.Variable{Name: val.Key, Value: val.Value})
 	}
 
 	data, err := yaml.Marshal(&apiConfig)
@@ -149,7 +147,7 @@ func SubstituteEnvVars(input string) interface{} {
 		varName := input[startIndex+len(envVarPrefix) : endIndex]
 
 		// Substitute the environment variable value
-		varValue := GetEnvValue(varName)
+		varValue := env.GetEnvValue(varName)
 		input = strings.Replace(input, input[startIndex:endIndex+len("}}")], varValue, 1)
 	}
 
