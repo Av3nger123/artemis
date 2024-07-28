@@ -60,32 +60,44 @@ When running Artemis with the -e flag followed by the path to your environment f
 
 **Remember not to commit your environment files to version control systems like Git, as they may contain sensitive information.**
 
-# API Configuration
+# Configuration
 
 ## Basic YAML Config
 
 This configuration defines a basic API request to generate a token. It includes the following parameters:
 
-- **name**: Name of the API request.
-- **url**: The URL endpoint for the API request, with a placeholder "{{url}}" that will be replaced with the base URL defined in the configuration section.
-- **method**: HTTP method for the request (e.g., POST).
-- **headers**: Headers to be included in the request, specifying the Content-Type as "application/json".
-- **body**: JSON payload containing the username and password for authentication.
+- **name**: Name of script
+- **variables**: Variables that you want to use in the script
+  - **name**: Name of the variable
+  - **value**: Value of the variable
+- **steps**
+  - **name**: Name of the Step.
+  - **type**: Type of the step (currently only supports REST APIs with json payloads)
+  - **request**
+    - **url**: The URL endpoint for the API request, with a placeholder "{{url}}" that will be replaced with the base URL defined in the configuration section.
+    - **method**: HTTP method for the request (e.g., POST).
+    - **headers**: Headers to be included in the request, specifying the Content-Type as "application/json".
+    - **body**: JSON payload containing the username and password for authentication.
+  - **response**:
+    - **status_code**:
 
 ```yaml
-configuration:
-  collection_name: "API Collection"
-  collection_variables:
-    - name: "url"
-      value: "https://api.example.com/v2"
-  collection_type: functional
-apis:
+name: "API Collection"
+variables:
+  - name: "url"
+    value: "https://api.example.com/v2"
+type: functional
+steps:
   - name: "Login"
-    url: "{{url}}/token"
-    method: "POST"
-    headers:
-      Content-Type: "application/json"
-    body: '{"username":"user_name","password":"password"}'
+    type: api
+      request:
+        url: "{{url}}/token"
+        method: "POST"
+        headers:
+          Content-Type: "application/json"
+        body: '{"username":"user_name","password":"password"}'
+      response:
+        status_code: 200
 ```
 
 ## Adding Variables
@@ -97,13 +109,23 @@ This configuration extends the basic API request by adding support for capturing
     - **path**: [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) to locate the variable value in the response.
 
 ```yaml
+name: "API Collection"
+variables:
+  - name: "url"
+    value: "https://api.example.com/v2"
+type: functional
+steps:
   - name: "Login"
-    url: "{{url}}/token"
-    method: "POST"
-    headers:
-      Content-Type: "application/json"
-    body: '{"username":"user_name","password":"password"}'
-    post_scripts:
+    type: api
+      request:
+        url: "{{url}}/token"
+        method: "POST"
+        headers:
+          Content-Type: "application/json"
+        body: '{"username":"user_name","password":"password"}'
+      response:
+        status_code: 200
+    scripts:
       - key: "token"
         path: "$.data.token.access_token"
 
@@ -113,57 +135,63 @@ This configuration extends the basic API request by adding support for capturing
 
 This configuration further enhances the API request by adding assertions to validate the response. It checks if the HTTP status code is 200.
 
-- **tests**: Specifies assertions to be performed on the response.
+- **response**: Specifies assertions to be performed on the response.
   - **status_code**: Expected HTTP status code.
-  - **response_body**: Expected values in response.
+  - **body**: Expected values in response.
     - **path**: The [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) in the response body.
     - **value**: Expected value.
     - **type**: Expected value type.
 
 ```yaml
-  - name: "Generate Token"
-    url: "{{url}}/token"
-    method: "POST"
-    headers:
-      Content-Type: "application/json"
-    body: '{"username":"user_name","password":"password"}'
-    post_scripts:
-      - key: "token"
-        path: "$.data.token.access_token"
-    tests:
-      status_code: 200
-      response_body: 
-        - path: "$.data.message"
-          value: "success"
-          type: "string"
+name: "API Collection"
+variables:
+  - name: "url"
+    value: "https://api.example.com/v2"
+type: functional
+steps:
+  - name: "Login"
+    type: api
+      request:
+        url: "{{url}}/token"
+        method: "POST"
+        headers:
+          Content-Type: "application/json"
+        body: '{"username":"user_name","password":"password"}'
+      response:
+        status_code: 200
+        body: 
+          - path: "$.data.message"
+            value: "success"
+            type: "string"
 ```
 
 ## Meta Section
 
 This section introduces additional metadata for configuring advanced features such as multiple calls of the same API, specifying the maximum number of calls, polling intervals, and exit conditions.
 
-- **retry_limit**: Max retry limit when assertions fail.
-- **retry_frequency**: Time between the api calls.
-
+- **retry**: Max retry limit when assertions fail.
 ```yaml
-  - name: "Generate Token"
-    url: "{{.url}}/token"
-    method: "POST"
-    headers:
-      Content-Type: "application/json"
-    body: '{"username":"user_name","password":"password"}'
-    post_scripts:
-      - key: "token"
-        path: "$.data.token.access_token"
-    tests:
-      status_code: 200
-      response_body: 
-        - path: "$.data.message"
-          value: "success"
-          type: "string"
-    meta:
-      retry_limit: 10
-      retry_frequency: 5
+name: "API Collection"
+variables:
+  - name: "url"
+    value: "https://api.example.com/v2"
+type: functional
+steps:
+  - name: "Login"
+    type: api
+      request:
+        url: "{{url}}/token"
+        method: "POST"
+        headers:
+          Content-Type: "application/json"
+        body: '{"username":"user_name","password":"password"}'
+      response:
+        status_code: 200
+        body: 
+          - path: "$.data.message"
+            value: "success"
+            type: "string"
+      retry: 5
 ```
 ## Environment support
 
