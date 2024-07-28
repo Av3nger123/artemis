@@ -10,3 +10,8 @@ require (
 	golang.org/x/exp v0.0.0-20240213143201-ec583247a57a
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+require (
+	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852 // indirect
+	gorm.io/gorm v1.25.11
+)

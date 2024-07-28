@@ -1,19 +1,21 @@
 package shared
 
 import (
-	"bytes"
+	"artemis/pkg/shared/env"
+	"artemis/pkg/shared/models"
+	"artemis/pkg/shared/utils"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
-	"text/template"
 
+	"github.com/oliveagle/jsonpath"
 	"gopkg.in/yaml.v2"
 )
 
-func ParseYAMLFile(filePath string) (APIConfig, error) {
-	var config APIConfig
+func ParseYAMLFile(filePath string) (models.Config, error) {
+	var config models.Config
 
 	yamlFile, err := os.Open(filePath)
 	if err != nil {
@@ -29,8 +31,8 @@ func ParseYAMLFile(filePath string) (APIConfig, error) {
 	return config, nil
 }
 
-func ParsePostmanJSON(filePath string) (Collection, error) {
-	var collection Collection
+func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
+	var collection models.PostmanCollection
 	jsonFile, err := os.Open(filePath)
 	if err != nil {
 		return collection, err
@@ -41,61 +43,67 @@ func ParsePostmanJSON(filePath string) (Collection, error) {
 		return collection, err
 	}
 	return collection, nil
-
 }
-func ExtractValue(data map[string]interface{}, path string) (interface{}, error) {
-	keys := strings.Split(path, ".")
-	current := data
-	for _, key := range keys {
-		val, ok := current[key]
-		if !ok {
-			return nil, fmt.Errorf("path %s not found in response", path)
-		}
-		if nested, ok := val.(map[string]interface{}); ok {
-			current = nested
-		} else {
-			return val, nil
-		}
-	}
-	return nil, fmt.Errorf("path %s not found in response", path)
-
-}
-
-func renderTemplate(templateStr string, config map[string]interface{}) (string, error) {
-	tmpl, err := template.New("template").Parse(templateStr)
+func ExtractValue(data map[string]interface{}, binding models.Script) (interface{}, error) {
+	val, err := jsonpath.JsonPathLookup(data, binding.Path)
+	fmt.Println(val)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	var buffer bytes.Buffer
-	if err := tmpl.Execute(&buffer, config); err != nil {
-		return "", err
-	}
-	return buffer.String(), nil
+	return val, nil
 }
 
-func ConvertJsonToYaml(collection Collection, filePath string) error {
-	fmt.Println(collection)
-	apiConfig := APIConfig{
-		Apis:          make([]API, 0),
-		Configuration: map[string]interface{}{},
+func TransformText(templateStr string, config map[string]interface{}) (string, error) {
+	final := ""
+	i := 0
+	for ; i < len(templateStr); i++ {
+		if templateStr[i] == '{' && templateStr[i+1] == '{' {
+			start := i + 2
+			for templateStr[i] != '}' {
+				i++
+			}
+			val := config[templateStr[start:i]]
+			if val != nil {
+				final += val.(string)
+			} else {
+				final += templateStr[start-2 : i+1]
+			}
+			i++
+		} else {
+			final += templateStr[i : i+1]
+		}
+	}
+	return final, nil
+}
+
+func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
+	apiConfig := models.Config{
+		Steps:     make([]models.Step, 0),
+		Name:      collection.Info.Name,
+		Variables: make([]models.Variable, 0),
+		Type:      "functional",
 	}
 	for _, val := range collection.Items {
-		apiConfig.Apis = append(apiConfig.Apis, API{
-			Name:   val.Name,
-			Url:    val.Request.Url.Raw,
-			Method: val.Request.Method,
-			Headers: map[string]string{
-				"Content-Type": "application/json",
+		apiConfig.Steps = append(apiConfig.Steps, models.Step{
+			Request: models.Request{
+				URL:    val.Request.Url.Raw,
+				Method: val.Request.Method,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+				Body: val.Request.Body.Raw,
 			},
-			Meta: MetaData{
-				"single", 0, 0, Variable{},
+			Scripts: []models.Script{},
+			Name:    val.Name,
+			Retry:   1,
+			Response: models.Response{
+				StatusCode: 200,
+				Body:       []models.BodyCheck{},
 			},
-			Body:      val.Request.Body.Raw,
-			Variables: []Variable{},
 		})
 	}
 	for _, val := range collection.Variables {
-		apiConfig.Configuration[val.Key] = val.Value
+		apiConfig.Variables = append(apiConfig.Variables, models.Variable{Name: val.Key, Value: val.Value})
 	}
 
 	data, err := yaml.Marshal(&apiConfig)
@@ -103,7 +111,7 @@ func ConvertJsonToYaml(collection Collection, filePath string) error {
 		return err
 	}
 
-	file, err := os.Create(strings.TrimSuffix(filePath, ".json") + ".yaml")
+	file, err := os.Create(utils.Slugify(collection.Info.Name) + ".yaml")
 	if err != nil {
 		return err
 	}
@@ -115,7 +123,7 @@ func ConvertJsonToYaml(collection Collection, filePath string) error {
 	return nil
 }
 
-func convVal(val any, valType string) string {
+func TypeCast(val any, valType string) string {
 	if val == nil {
 		return ""
 	}
@@ -139,7 +147,7 @@ func SubstituteEnvVars(input string) interface{} {
 		varName := input[startIndex+len(envVarPrefix) : endIndex]
 
 		// Substitute the environment variable value
-		varValue := GetEnvValue(varName)
+		varValue := env.GetEnvValue(varName)
 		input = strings.Replace(input, input[startIndex:endIndex+len("}}")], varValue, 1)
 	}
 
