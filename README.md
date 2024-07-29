@@ -197,11 +197,11 @@ steps:
 
 ```yaml
 configuration:
-  url: "{{url}}"
-  secret: "{{secret}}"
+  url: "{{env.url}}"
+  secret: "{{env.secret}}"
 ```
 
-Here, `{{url}}` and `{{secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables shown below, when the YAML file is processed. 
+Here, `{{env.url}}` and `{{env.secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables shown below, when the YAML file is processed. 
 
 ```dotenv
 url=https://localhost:8000
