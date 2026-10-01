@@ -5,11 +5,12 @@ Artemis is a command-line tool for automated testing of REST APIs, built with Go
 ## Features
 
 - Easy-to-use command-line interface (CLI) powered by Cobra
-- Supports testing of REST API endpoints
-- Customizable testing scenarios and assertions
-- Integration with continuous integration (CI) pipelines
-- Detailed test reports and logs
-- Interactive CLI that prompts users for input during execution
+- REST API endpoints described as steps in a YAML file
+- Assertions with real operators: `equals`, `contains`, `matches`, `exists`, `type`, `gt`/`gte`/`lt`/`lte`
+- Values captured from one response and templated into the next
+- A run summary on the terminal, plus an opt-in JSON log of every request, response and error
+- A non-zero exit code whenever anything fails, so a CI job goes red on a broken API
+- Postman collections converted to Artemis YAML as a starting point
 
 ## Installation
 
@@ -44,6 +45,17 @@ Assertions    3  (2 passed, 1 failed)
 FAIL in 8ms
 ```
 
+### Command for validating a YAML file without calling anything
+
+```sh
+artemis parse -f sample.yaml
+```
+
+`parse` loads the file exactly as `test` does -- strict decoding, so an unknown or
+misspelled key is an error naming its line, and every step type is checked --
+then prints the parsed scenario. It sends no requests, and exits non-zero if the
+file is not one artemis can run.
+
 ### Command to convert Postman collection to YAML format
 
 An additional feature that i shipped with this is to convert postman collection format to artemis yaml format for faster configuration
@@ -56,7 +68,7 @@ artemis generate -f postman_collection.json
 ### Logging
 
 The terminal output above is all a run writes by default: no log file is created
-unless you ask for one. Pass `-l` or `--log=` to also write a detailed JSON log of
+unless you ask for one. Pass `-l` or `--log` to also write a detailed JSON log of
 the run -- every request, every response and every error -- to that path:
 
 ```sh
@@ -85,20 +97,25 @@ When running Artemis with the -e flag followed by the path to your environment f
 
 This configuration defines a basic API request to generate a token. It includes the following parameters:
 
-- **name**: Name of script
-- **variables**: Variables that you want to use in the script
-  - **name**: Name of the variable
-  - **value**: Value of the variable
-- **steps**
-  - **name**: Name of the Step.
-  - **type**: Type of the step (currently only supports REST APIs with json payloads)
+- **name**: Name of the scenario.
+- **type**: Recorded with the scenario and nothing more today; `functional` is what
+  the Postman importer writes and what the examples here use.
+- **variables**: Variables the steps can reference as `{{name}}`.
+  - **name**: Name of the variable.
+  - **value**: Value of the variable.
+- **steps**: The steps, executed in the order they are written. `name`, `type`,
+  `request`, `response`, `scripts` and `retry` are all keys of a step, at the
+  same indentation.
+  - **name**: Name of the step.
+  - **type**: Type of the step (currently only `api`: REST APIs with JSON payloads).
   - **request**
-    - **url**: The URL endpoint for the API request, with a placeholder "{{url}}" that will be replaced with the base URL defined in the configuration section.
+    - **url**: The URL endpoint for the request. `"{{url}}"` is replaced with the
+      value of the variable named `url`.
     - **method**: HTTP method for the request (e.g., POST).
-    - **headers**: Headers to be included in the request, specifying the Content-Type as "application/json".
-    - **body**: JSON payload containing the username and password for authentication.
-  - **response**:
-    - **status_code**:
+    - **headers**: Headers to be included in the request.
+    - **body**: Request body, as a string.
+  - **response**
+    - **status_code**: The HTTP status code the step expects.
 
 ```yaml
 name: "API Collection"
@@ -109,23 +126,24 @@ type: functional
 steps:
   - name: "Login"
     type: api
-      request:
-        url: "{{url}}/token"
-        method: "POST"
-        headers:
-          Content-Type: "application/json"
-        body: '{"username":"user_name","password":"password"}'
-      response:
-        status_code: 200
+    request:
+      url: "{{url}}/token"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"username":"user_name","password":"password"}'
+    response:
+      status_code: 200
 ```
 
 ## Adding Variables
 
-This configuration extends the basic API request by adding support for capturing variables from the response. In this case, it captures the access token from the response body and saves it as a variable named "token".
+This configuration extends the basic API request by adding support for capturing variables from the response. In this case, it captures the access token from the response body and saves it under the key "token", which later steps write as `{{token}}`.
 
-- **variables**: Defines a list of variables to capture from the response.
-    - **name**: Name of the variable.
-    - **path**: [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) to locate the variable value in the response.
+- **scripts**: A list of values to capture from the response. A captured value is
+  available to every later step as `{{key}}`.
+    - **key**: The name the captured value is referenced by.
+    - **path**: [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) to locate the value in the response.
 
 ```yaml
 name: "API Collection"
@@ -136,18 +154,17 @@ type: functional
 steps:
   - name: "Login"
     type: api
-      request:
-        url: "{{url}}/token"
-        method: "POST"
-        headers:
-          Content-Type: "application/json"
-        body: '{"username":"user_name","password":"password"}'
-      response:
-        status_code: 200
+    request:
+      url: "{{url}}/token"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"username":"user_name","password":"password"}'
+    response:
+      status_code: 200
     scripts:
       - key: "token"
         path: "$.data.token.access_token"
-
 ```
 
 ## Placeholders
@@ -208,25 +225,25 @@ compile, `gt` against an object -- is reported as an errored assertion with the
 reason, and fails the run.
 
 ```yaml
-    response:
-      status_code: 200
-      body:
-        - path: "$.data.message"
-          value: "success"
-        - path: "$.data.id"
-          operator: gt
-          value: 0
-        - path: "$.data.token"
-          operator: exists
-        - path: "$.data.roles"
-          operator: contains
-          value: "admin"
-        - path: "$.data.email"
-          operator: matches
-          value: ".+@.+"
-        - path: "$.data.count"
-          type: "number"
-          value: 3
+response:
+  status_code: 200
+  body:
+    - path: "$.data.message"
+      value: "success"
+    - path: "$.data.id"
+      operator: gt
+      value: 0
+    - path: "$.data.token"
+      operator: exists
+    - path: "$.data.roles"
+      operator: contains
+      value: "admin"
+    - path: "$.data.email"
+      operator: matches
+      value: ".+@.+"
+    - path: "$.data.count"
+      type: "number"
+      value: 3
 ```
 
 ```yaml
@@ -238,23 +255,24 @@ type: functional
 steps:
   - name: "Login"
     type: api
-      request:
-        url: "{{url}}/token"
-        method: "POST"
-        headers:
-          Content-Type: "application/json"
-        body: '{"username":"user_name","password":"password"}'
-      response:
-        status_code: 200
-        body: 
-          - path: "$.data.message"
-            value: "success"
-            type: "string"
+    request:
+      url: "{{url}}/token"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"username":"user_name","password":"password"}'
+    response:
+      status_code: 200
+      body:
+        - path: "$.data.message"
+          value: "success"
+          type: "string"
 ```
 
 ## Meta Section
 
-This section introduces additional metadata for configuring advanced features such as multiple calls of the same API, specifying the maximum number of calls, polling intervals, and exit conditions.
+A step can be retried, which is how a scenario polls an API that is not ready
+yet.
 
 - **retry**: How many times a step may be attempted, and how long to wait between attempts.
   - **times**: the total number of attempts, not the number of retries after the first — `times: 3` sends at most three requests. Omitted, zero or negative means one attempt; a step is never attempted zero times.
@@ -270,38 +288,60 @@ type: functional
 steps:
   - name: "Login"
     type: api
-      request:
-        url: "{{url}}/token"
-        method: "POST"
-        headers:
-          Content-Type: "application/json"
-        body: '{"username":"user_name","password":"password"}'
-      response:
-        status_code: 200
-        body: 
-          - path: "$.data.message"
-            value: "success"
-            type: "string"
-      retry:
-        times: 5
-        delay: "2s"
+    request:
+      url: "{{url}}/token"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"username":"user_name","password":"password"}'
+    response:
+      status_code: 200
+      body:
+        - path: "$.data.message"
+          value: "success"
+          type: "string"
+    retry:
+      times: 5
+      delay: "2s"
 ```
 ## Environment support
 
+Environment variables are read in a variable's `value`, with `{{env.NAME}}`:
+
 ```yaml
-configuration:
-  url: "{{env.url}}"
-  secret: "{{env.secret}}"
+name: "API Collection"
+type: functional
+variables:
+  - name: "url"
+    value: "{{env.url}}"
+  - name: "secret"
+    value: "{{env.secret}}"
+steps:
+  - name: "Login"
+    type: api
+    request:
+      url: "{{url}}/token"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"secret":"{{secret}}"}'
+    response:
+      status_code: 200
 ```
 
-Here, `{{env.url}}` and `{{env.secret}}` are placeholders that will be replaced with the actual values of the url and secret environment variables shown below, when the YAML file is processed. 
+`{{env.url}}` and `{{env.secret}}` are replaced with the values of the `url` and
+`secret` environment variables, loaded from the `.env` file (or the file given
+with `-e`) and from the process environment:
 
 ```dotenv
 url=https://localhost:8000
 secret=my_secret_key
 ```
 
-This approach allows you to reference environment variables directly within your YAML configuration, providing a convenient and secure way to manage sensitive information without exposing it directly in the file
+The steps then use `{{url}}` and `{{secret}}` like any other variable. `{{env.*}}`
+is resolved only in a variable's value, not inside a step, so a scenario has one
+place where its environment is wired up. A name that is not set becomes the empty
+string rather than failing the run: that is how a scenario says "no token".
 
 
 ## Development
@@ -335,12 +375,25 @@ make golden      # go test ./pkg/cli -run TestGolden -update
 git diff pkg/cli/testdata
 ```
 
+### README examples
+
+`pkg/shared/readme_test.go` parses the YAML in this file. Every fenced `yaml`
+block has to be well-formed YAML, and every block that is a whole scenario -- one
+with a top-level `steps:` -- is loaded through the same strict decoder and
+validator `artemis test` uses. An example here that artemis would reject is a
+failing test, not a surprise for whoever copies it.
+
 ### CI
 
 `.github/workflows/ci.yml` runs on every push and pull request: `go build ./...`, `go vet ./...`, a gofmt check, `go test -race -coverprofile=coverage.out ./...`, and golangci-lint. The same commands are available as make targets, so a red build is reproducible locally.
 
 
-## Working:
-1. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests. (Status: In Progress)
+## Not yet
 
-2. **Enhanced logging and reporting**: Implement more detailed logging and reporting features to provide deeper insights into test results and execution process. (Status: In Progress)
+- **Concurrent execution.** Steps run one after another, in the order they are
+  written, and a scenario's steps share their captured variables. There is no way
+  to ask for parallelism yet.
+- **Step types other than `api`.** `type:` accepts `api` and nothing else; any
+  other value is an error at load time.
+- **Machine-readable reports.** The terminal summary and the JSON log are the two
+  outputs; there is no JUnit or JSON report format.
