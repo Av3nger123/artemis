@@ -7,7 +7,7 @@ import (
 	"artemis/pkg/result"
 	"artemis/pkg/shared/models"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // body is the response every engine test asserts against.
@@ -284,7 +284,7 @@ func TestBodyWithNoChecksMakesNoAssertions(t *testing.T) {
 	}
 }
 
-// The point of `value: any` is what yaml.v2 hands over: an unquoted 200 is an
+// The point of `value: any` is what yaml hands over: an unquoted 200 is an
 // int and must still match the float64 that encoding/json produced. This is
 // the bug the old engine had -- `float64(200) == "200"` was always false.
 func TestChecksDecodedFromYAMLCompareProperly(t *testing.T) {

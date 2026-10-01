@@ -81,9 +81,13 @@ func executeSteps(config models.Config, filePath string) *result.RunResult {
 	for i := range config.Steps {
 		step := config.Steps[i]
 		stepResult := scenario.NewStep(step.Name)
-		if step.Type != "api" {
-			stepResult.Skip(fmt.Sprintf("unsupported step type %q", step.Type))
-			logger.Logger.Warn("Skipping step", "name", step.Name, "type", step.Type)
+		// Unreachable for a parsed scenario -- models.Config.Validate rejects
+		// an unknown type before anything runs -- but a caller that builds a
+		// Config by hand must not be the one path where a step artemis cannot
+		// execute still reports a pass. A skip counts as passed; this does not.
+		if !models.IsKnownStepType(step.Type) {
+			stepResult.Fail(0, fmt.Errorf("unknown step type %q", step.Type))
+			logger.Logger.Error("Unknown step type", "name", step.Name, "type", step.Type)
 			continue
 		}
 		testAPI(step, &variableMap, stepResult)

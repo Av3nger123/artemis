@@ -10,9 +10,18 @@ import (
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
+// ParseYAMLFile reads a scenario and returns it only if artemis understands
+// every part of it.
+//
+// Decoding is strict -- KnownFields(true) -- so a typo'd key is an error naming
+// the field and its line instead of a key that is quietly dropped, leaving a
+// scenario that asserts nothing and "passes". The parsed config is then
+// validated, so a step type nothing can execute stops the run before any
+// request is sent. Both entry points, `artemis test` and `artemis parse`, come
+// through here, which is what makes parse a real validator.
 func ParseYAMLFile(filePath string) (models.Config, error) {
 	var config models.Config
 
@@ -23,7 +32,12 @@ func ParseYAMLFile(filePath string) (models.Config, error) {
 	defer yamlFile.Close()
 
 	decoder := yaml.NewDecoder(yamlFile)
+	decoder.KnownFields(true)
 	if err := decoder.Decode(&config); err != nil {
+		return config, err
+	}
+
+	if err := config.Validate(); err != nil {
 		return config, err
 	}
 
@@ -61,6 +75,9 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 	}
 	for _, val := range collection.Items {
 		apiConfig.Steps = append(apiConfig.Steps, models.Step{
+			// Set explicitly: a generated file has to pass the same
+			// validation a hand-written one does.
+			Type: "api",
 			Request: models.Request{
 				URL:    val.Request.Url.Raw,
 				Method: val.Request.Method,
@@ -81,21 +98,20 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 		apiConfig.Variables = append(apiConfig.Variables, models.Variable{Name: val.Key, Value: val.Value})
 	}
 
-	data, err := yaml.Marshal(&apiConfig)
-	if err != nil {
-		return err
-	}
-
 	file, err := os.Create(utils.Slugify(collection.Info.Name) + ".yaml")
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	if _, err := file.Write(data); err != nil {
+	// Two spaces, not yaml.v3's default four: the version bump should not
+	// silently reshape every file this generator has ever written.
+	encoder := yaml.NewEncoder(file)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&apiConfig); err != nil {
 		return err
 	}
-	return nil
+	return encoder.Close()
 }
 
 func SubstituteEnvVars(input string) interface{} {

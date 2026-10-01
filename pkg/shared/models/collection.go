@@ -3,6 +3,8 @@ package models
 import (
 	"fmt"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Variable struct {
@@ -66,21 +68,51 @@ type Retry struct {
 
 // UnmarshalYAML accepts both `retry: {times: 3, delay: "1s"}` and the older
 // scalar `retry: 5`, which means `times: 5`.
-func (r *Retry) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var times int
-	if err := unmarshal(&times); err == nil {
+//
+// The decoder's KnownFields setting does not reach a node decoded by hand, so
+// an unknown key in the mapping is rejected here: otherwise `retry:` would be
+// the one corner of the file where a typo still vanished.
+func (r *Retry) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		var times int
+		if err := node.Decode(&times); err != nil {
+			return retryShapeError(node, err)
+		}
 		r.Times, r.Delay = times, ""
 		return nil
-	}
 
-	// A mapping. The alias avoids recursing back into this method.
-	type retry Retry
-	var full retry
-	if err := unmarshal(&full); err != nil {
-		return fmt.Errorf("retry must be a number of attempts or a {times, delay} mapping: %w", err)
+	case yaml.MappingNode:
+		// Content alternates key, value, key, value.
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			switch key := node.Content[i].Value; key {
+			case "times", "delay":
+			default:
+				return fmt.Errorf("line %d: field %s not found in retry (known fields: times, delay)", node.Content[i].Line, key)
+			}
+		}
+		// The alias avoids recursing back into this method.
+		type retry Retry
+		var full retry
+		if err := node.Decode(&full); err != nil {
+			return retryShapeError(node, err)
+		}
+		*r = Retry(full)
+		return nil
+
+	default:
+		return retryShapeError(node, nil)
 	}
-	*r = Retry(full)
-	return nil
+}
+
+// retryShapeError says what retry may be, keeping the decoder's own complaint
+// when there is one.
+func retryShapeError(node *yaml.Node, err error) error {
+	const want = "retry must be a number of attempts or a {times, delay} mapping"
+	if err != nil {
+		return fmt.Errorf("line %d: %s: %w", node.Line, want, err)
+	}
+	return fmt.Errorf("line %d: %s", node.Line, want)
 }
 
 // Attempts is how many times the step may be tried: always at least one.

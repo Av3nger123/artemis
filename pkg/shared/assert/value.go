@@ -62,10 +62,11 @@ func jsonTypeOf(v any) string {
 	}
 }
 
-// normalizeYAML rewrites a value decoded by yaml.v2 into the shapes
-// encoding/json produces, so an expectation and a response can be compared.
-// yaml.v2 decodes a mapping to map[interface{}]interface{}, which never equals
-// a JSON object; everything else is passed through untouched.
+// normalizeYAML rewrites a value decoded by yaml into the shapes encoding/json
+// produces, so an expectation and a response can be compared. yaml.v3 decodes a
+// mapping to map[string]interface{} and yaml.v2 did so to
+// map[interface{}]interface{}, neither of which equals a JSON object once
+// nested; both are handled, and everything else is passed through untouched.
 func normalizeYAML(v any) any {
 	switch t := v.(type) {
 	case map[any]any:
@@ -94,7 +95,7 @@ func normalizeYAML(v any) any {
 // toFloat reads v as a number.
 //
 // Every numeric kind a YAML or JSON decoder can hand over works -- float64 is
-// what encoding/json gives, int is what yaml.v2 gives an unquoted scalar, and
+// what encoding/json gives, int is what yaml gives an unquoted scalar, and
 // the reflect fallback covers the rest without a type switch that has to list
 // them. A json.Number works too, for a decoder set to UseNumber. So does a
 // string that parses as a finite number: a response that quotes its numbers

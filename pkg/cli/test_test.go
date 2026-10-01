@@ -345,20 +345,24 @@ func TestExecuteStepsCaptureFromANonJSONBodyIsAnErroredAssertion(t *testing.T) {
 	}
 }
 
-func TestExecuteStepsUnsupportedStepTypeIsSkippedNotDropped(t *testing.T) {
+// A parsed scenario can never get here -- models.Config.Validate rejects an
+// unknown type -- but a Config built in code must not be the one path where a
+// step artemis cannot execute still reports a pass. A skip would: it counts as
+// passed.
+func TestExecuteStepsUnknownStepTypeErrorsTheStep(t *testing.T) {
 	initLog(t)
 
 	run := executeSteps(scenario(models.Step{Name: "query", Type: "db"}), "scenario.yaml")
 
 	step := run.Scenarios[0].Steps[0]
-	if step.Status != result.StatusSkip {
-		t.Errorf("step.Status = %q, want %q", step.Status, result.StatusSkip)
+	if step.Status != result.StatusError {
+		t.Errorf("step.Status = %q, want %q", step.Status, result.StatusError)
 	}
-	if !strings.Contains(step.Error, "unsupported step type") {
-		t.Errorf("step.Error = %q, want it to name the unsupported type", step.Error)
+	if !strings.Contains(step.Error, `unknown step type "db"`) {
+		t.Errorf("step.Error = %q, want it to name the unknown type", step.Error)
 	}
-	if !run.Passed() {
-		t.Error("run.Passed() = false, want true -- a skip must not fail the run yet (ART-7)")
+	if run.Passed() {
+		t.Error("run.Passed() = true, want false -- a step artemis cannot execute must fail the run (ART-7)")
 	}
 }
 
@@ -442,6 +446,182 @@ func TestExecuteMissingFileReturnsError(t *testing.T) {
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("error = %v, want it to wrap os.ErrNotExist", err)
+	}
+}
+
+// strictYAML is a scenario whose one step points at url, with extra lines
+// spliced in wherever a test wants a typo.
+func strictYAML(url, stepExtra string) string {
+	return fmt.Sprintf(`name: "strict"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%s"
+      method: "GET"
+    response:
+      status_code: 200
+%s`, url, stepExtra)
+}
+
+func TestExecuteUnknownTopLevelKeyReturnsError(t *testing.T) {
+	srv, calls := countingServer(t, 200)
+
+	err := execute(t, strictYAML(srv.URL, "")+"varaibles: []\n")
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for an unknown top-level key")
+	}
+	if !strings.Contains(err.Error(), "varaibles") {
+		t.Errorf("error = %q, want it to name the unknown key", err)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none -- the file never loaded", calls())
+	}
+}
+
+// The typo this issue is named after: `respones:` instead of `response:` used
+// to drop every assertion in the step and leave a scenario that passed.
+func TestExecuteMisspelledResponseKeyReturnsError(t *testing.T) {
+	srv, calls := countingServer(t, 500)
+
+	yaml := `name: "strict"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "` + srv.URL + `"
+      method: "GET"
+    respones:
+      status_code: 200
+`
+	err := execute(t, yaml)
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error -- a dropped response block is a scenario that asserts nothing")
+	}
+	if !strings.Contains(err.Error(), "respones") {
+		t.Errorf("error = %q, want it to name the misspelled key", err)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none", calls())
+	}
+}
+
+func TestExecuteUnknownNestedKeyReturnsError(t *testing.T) {
+	srv, calls := countingServer(t, 200)
+
+	err := execute(t, strictYAML(srv.URL, "      body:\n        - path: \"$.status\"\n          vlaue: \"ok\"\n"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for an unknown key inside a body check")
+	}
+	if !strings.Contains(err.Error(), "vlaue") {
+		t.Errorf("error = %q, want it to name the unknown key", err)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none", calls())
+	}
+}
+
+func TestExecuteUnknownRetryKeyReturnsError(t *testing.T) {
+	srv, calls := countingServer(t, 200)
+
+	err := execute(t, strictYAML(srv.URL, "    retry:\n      tims: 3\n"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for an unknown key inside retry")
+	}
+	if !strings.Contains(err.Error(), "tims") {
+		t.Errorf("error = %q, want it to name the unknown key", err)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none", calls())
+	}
+}
+
+// The first step is perfectly good; the second is not. Nothing may be sent,
+// because a scenario artemis cannot finish should not half-run.
+func TestExecuteUnknownStepTypeReturnsErrorBeforeAnyRequest(t *testing.T) {
+	srv, calls := countingServer(t, 200)
+
+	yaml := fmt.Sprintf(`name: "mixed"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%s"
+      method: "GET"
+    response:
+      status_code: 200
+  - name: "query"
+    type: db
+    request:
+      url: ""
+      method: "GET"
+    response:
+      status_code: 200
+`, srv.URL)
+
+	err := execute(t, yaml)
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for a step type artemis cannot execute")
+	}
+	for _, want := range []string{"step 2", "query", `"db"`, "api"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none -- step 1 must not run", calls())
+	}
+}
+
+func TestExecuteStepWithNoTypeReturnsError(t *testing.T) {
+	srv, calls := countingServer(t, 200)
+
+	yaml := fmt.Sprintf(`name: "untyped"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    request:
+      url: "%s"
+      method: "GET"
+    response:
+      status_code: 200
+`, srv.URL)
+
+	err := execute(t, yaml)
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for a step with no type")
+	}
+	if !strings.Contains(err.Error(), "missing type") {
+		t.Errorf("error = %q, want it to say the type is missing", err)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none", calls())
+	}
+}
+
+// Every load failure has to say which file it came from: the error is all the
+// user gets, and ART-2 wired it straight to the exit code.
+func TestExecuteLoadErrorsNameTheFile(t *testing.T) {
+	srv, _ := countingServer(t, 200)
+
+	for name, yaml := range map[string]string{
+		"unknown key":       strictYAML(srv.URL, "") + "varaibles: []\n",
+		"unknown step type": strings.Replace(strictYAML(srv.URL, ""), "type: api", "type: db", 1),
+	} {
+		err := execute(t, yaml)
+		if err == nil {
+			t.Fatalf("%s: Execute() = nil, want an error", name)
+		}
+		if !strings.Contains(err.Error(), "scenario.yaml") {
+			t.Errorf("%s: error = %q, want it to name the file", name, err)
+		}
 	}
 }
 

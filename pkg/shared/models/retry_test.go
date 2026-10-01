@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // parseStep decodes a step's YAML, which is how a retry policy ever reaches the
@@ -103,5 +103,22 @@ func TestRetryUnparseableShapeIsAnError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "retry must be") {
 		t.Errorf("error = %q, want it to say what retry may be", err)
+	}
+}
+
+// yaml.v3 does not carry the decoder's KnownFields setting into a node decoded
+// by a custom unmarshaler, so Retry checks its own keys. Without that, retry
+// would be the one corner of the scenario file where a typo still vanished.
+func TestRetryUnknownKeyIsAnError(t *testing.T) {
+	var step Step
+	err := yaml.Unmarshal([]byte("name: ping\nretry:\n  tims: 3\n"), &step)
+	if err == nil {
+		t.Fatal("Unmarshal() = nil, want an error for an unknown key in retry")
+	}
+	if !strings.Contains(err.Error(), "tims") {
+		t.Errorf("error = %q, want it to name the unknown key", err)
+	}
+	if !strings.Contains(err.Error(), "times, delay") {
+		t.Errorf("error = %q, want it to list the keys retry does have", err)
 	}
 }
