@@ -27,6 +27,23 @@ source ./install.sh
 artemis test -f sample.yaml
 ```
 
+A run prints a line per step as it finishes, the checks that did not pass under
+the step that made them, and a summary. It exits 0 only if everything passed:
+
+```
+scenario: checkout (checkout.yaml)
+  ok    login                         2ms
+  FAIL  orders                       <1ms
+         $.status equals ok, got pending
+  ERROR fetch order                  <1ms
+         error performing request: Get "http://127.0.0.1:1/orders": connection refused
+
+Scenarios     1  (1 errored)
+Steps         3  (1 passed, 1 failed, 1 errored)
+Assertions    3  (2 passed, 1 failed)
+FAIL in 8ms
+```
+
 ### Command to convert Postman collection to YAML format
 
 An additional feature that i shipped with this is to convert postman collection format to artemis yaml format for faster configuration
@@ -38,14 +55,16 @@ artemis generate -f postman_collection.json
 
 ### Logging
 
-Additionally, a log report will be generated in `app.log` by default, but you can specify a custom log file path using the -l or --log= flag to provide detailed information about the execution process.
-
-
-For custom log file path:
+The terminal output above is all a run writes by default: no log file is created
+unless you ask for one. Pass `-l` or `--log=` to also write a detailed JSON log of
+the run -- every request, every response and every error -- to that path:
 
 ```sh
 artemis test -f sample.yaml -l custom_log_file.log
 ```
+
+The log is appended to, so a path that already exists keeps its earlier runs. A
+path that cannot be opened fails the command.
 
 ### Environment variables
 
@@ -56,7 +75,7 @@ For custom env file path:
 ```sh
 artemis test -f sample.yaml -l custom_log_file.log -e dev.env
 ```
-When running Artemis with the -e flag followed by the path to your environment file, Artemis will load the environment variables from that file and make them available during the execution of your tests.
+When running Artemis with the -e flag followed by the path to your environment file, Artemis will load the environment variables from that file and make them available during the execution of your tests. A file named with `-e` that cannot be loaded is warned about; the default `.env` is optional and its absence is silent.
 
 **Remember not to commit your environment files to version control systems like Git, as they may contain sensitive information.**
 

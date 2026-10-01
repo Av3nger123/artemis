@@ -50,16 +50,18 @@ func ParseResponse(api models.Step, resp *http.Response) map[string]interface{} 
 	}
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("error reading response body: %v", err)
+		logger.Logger.Warn("Error reading response body", "name", api.Name, "error", err.Error())
 	}
 	var response map[string]interface{}
 
 	if resp.StatusCode == int(api.Response.StatusCode) {
 		if err := json.Unmarshal(responseBody, &response); err != nil {
-			fmt.Printf("error parsing response body: %v", err)
+			logger.Logger.Warn("Error parsing response body", "name", api.Name, "error", err.Error())
 		}
 	} else {
-		fmt.Printf("Error occurred %s", string(responseBody))
+		// The body of an unexpected status is log material, not terminal
+		// output: it would land unterminated in the middle of the step list.
+		logger.Logger.Warn("Unexpected response status", "name", api.Name, "status", resp.StatusCode, "body", string(responseBody))
 	}
 
 	return response

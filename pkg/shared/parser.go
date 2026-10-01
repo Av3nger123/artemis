@@ -2,10 +2,10 @@ package shared
 
 import (
 	"artemis/pkg/shared/env"
+	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -59,10 +59,12 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 }
 func ExtractValue(data map[string]interface{}, binding models.Script) (interface{}, error) {
 	val, err := jsonpath.JsonPathLookup(data, binding.Path)
-	fmt.Println(val)
 	if err != nil {
 		return nil, err
 	}
+	// A captured value goes to the log, never to stdout: it is often a token,
+	// and the terminal belongs to the step list.
+	logger.Logger.Debug("Captured value", "key", binding.Key, "path", binding.Path)
 	return val, nil
 }
 

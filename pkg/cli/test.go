@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"artemis/pkg/report"
 	"artemis/pkg/result"
 	"artemis/pkg/shared"
 	"artemis/pkg/shared/api"
@@ -24,9 +25,20 @@ var testCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logFilePath, _ := cmd.Flags().GetString("log")
 		envFilePath, _ := cmd.Flags().GetString("env")
-		file := logger.InitLog(logFilePath)
-		defer file.Close()
-		env.InitEnv(envFilePath)
+		closer, err := logger.InitLog(logFilePath)
+		if err != nil {
+			return err
+		}
+		defer closer.Close()
+		if err := env.InitEnv(envFilePath); err != nil {
+			logger.Logger.Warn("Could not load env file", "path", envFilePath, "error", err.Error())
+			// A missing .env is the normal case and not worth a line; a path the
+			// user named and that did not load is.
+			if cmd.Flags().Changed("env") {
+				// err already names the path.
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
+			}
+		}
 		return runTest(cmd)
 	},
 }
@@ -40,15 +52,20 @@ func runTest(cmd *cobra.Command) error {
 	}
 	filePath, _ := cmd.Flags().GetString("file")
 
-	run := executeSteps(config, filePath)
+	// cmd.OutOrStdout, not os.Stdout: a test captures the run's output by
+	// setting the command's writer.
+	rep := report.NewConsole(cmd.OutOrStdout())
+	run := executeSteps(config, filePath, rep)
+	rep.Summary(run)
 	if !run.Passed() {
 		return runFailedError(run)
 	}
 	return nil
 }
 
-// runFailedError states in one line what failed. The readable summary is ART-3;
-// this is only the reason attached to a non-zero exit.
+// runFailedError states in one line what failed. The readable breakdown is the
+// console summary on stdout; this is the reason attached to a non-zero exit, and
+// it is what survives when only stderr is kept.
 func runFailedError(run *result.RunResult) error {
 	c := run.Counts()
 	msg := fmt.Sprintf("%d of %d steps failed", c.Steps.Failed+c.Steps.Errored, c.Steps.Total)
@@ -64,9 +81,10 @@ func runFailedError(run *result.RunResult) error {
 // executeSteps runs every step of the scenario and returns the outcome. It never
 // returns nil: a run with nothing in it is a run that passed, and the caller
 // decides what that is worth.
-func executeSteps(config models.Config, filePath string) *result.RunResult {
+func executeSteps(config models.Config, filePath string, rep *report.Console) *result.RunResult {
 	run := result.NewRun()
 	scenario := run.NewScenario(config.Name, filePath)
+	rep.Scenario(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", config.Name))
 
 	variableMap := make(map[string]interface{}, 0)
@@ -88,10 +106,13 @@ func executeSteps(config models.Config, filePath string) *result.RunResult {
 		if !models.IsKnownStepType(step.Type) {
 			stepResult.Fail(0, fmt.Errorf("unknown step type %q", step.Type))
 			logger.Logger.Error("Unknown step type", "name", step.Name, "type", step.Type)
-			continue
+		} else {
+			testAPI(step, &variableMap, stepResult)
+			logger.Logger.Info(fmt.Sprintf("API testing completed for: %s, Duration: %v", step.Name, stepResult.Duration))
 		}
-		testAPI(step, &variableMap, stepResult)
-		logger.Logger.Info(fmt.Sprintf("API testing completed for: %s, Duration: %v", step.Name, stepResult.Duration))
+		// Every step that was reached gets a line, including one artemis could
+		// not execute: a step missing from the list is a step nobody questions.
+		rep.Step(stepResult)
 	}
 	scenario.Finish(time.Since(scenarioStart))
 

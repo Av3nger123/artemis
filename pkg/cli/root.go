@@ -26,7 +26,7 @@ func Init() {
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
-	testCmd.Flags().StringP("log", "l", "app.log", "Path to the log file")
+	testCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
 
 	RootCmd.AddCommand(generateCmd)

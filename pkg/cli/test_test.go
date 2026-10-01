@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,19 +14,33 @@ import (
 	"testing"
 	"time"
 
+	"artemis/pkg/report"
 	"artemis/pkg/result"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
+
+	"github.com/spf13/pflag"
 )
 
 var initOnce sync.Once
 
-// initLog points the package logger at a throwaway file; executeSteps logs
-// unconditionally and would otherwise dereference a nil logger.
+// initLog points the package logger at a throwaway file, so a test that wants to
+// see the records has somewhere to find them. It is not needed to keep the
+// runner from panicking: logger.Logger discards until it is pointed somewhere.
 func initLog(t *testing.T) {
 	t.Helper()
-	file := logger.InitLog(filepath.Join(t.TempDir(), "test.log"))
-	t.Cleanup(func() { _ = file.Close() })
+	closer, err := logger.InitLog(filepath.Join(t.TempDir(), "test.log"))
+	if err != nil {
+		t.Fatalf("InitLog() = %v, want nil", err)
+	}
+	t.Cleanup(func() { _ = closer.Close() })
+}
+
+// runScenario runs a scenario with its output thrown away. The tests that care
+// about what is printed build their own Console; everything else only wants the
+// result tree.
+func runScenario(config models.Config, filePath string) *result.RunResult {
+	return executeSteps(config, filePath, report.Discard())
 }
 
 // okServer answers every request with the given status and body.
@@ -57,7 +72,7 @@ func TestExecuteStepsPassingScenarioPasses(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 200, `{"status":"ok"}`)
 
-	run := executeSteps(scenario(apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})), "scenario.yaml")
+	run := runScenario(scenario(apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})), "scenario.yaml")
 
 	if !run.Passed() {
 		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
@@ -74,7 +89,7 @@ func TestExecuteStepsFailedBodyAssertionFailsTheRun(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 200, `{"status":"pending"}`)
 
-	run := executeSteps(scenario(apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})), "scenario.yaml")
+	run := runScenario(scenario(apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for a failing body assertion")
@@ -95,7 +110,7 @@ func TestExecuteStepsWrongStatusCodeFailsTheRun(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 500, `{"error":"boom"}`)
 
-	run := executeSteps(scenario(apiStep("ping", srv.URL, 200)), "scenario.yaml")
+	run := runScenario(scenario(apiStep("ping", srv.URL, 200)), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for a 500 where 200 was expected")
@@ -115,7 +130,7 @@ func TestExecuteStepsUnreachableURLErrorsTheStep(t *testing.T) {
 	url := srv.URL
 	srv.Close() // nothing is listening there any more
 
-	run := executeSteps(scenario(apiStep("ping", url, 200)), "scenario.yaml")
+	run := runScenario(scenario(apiStep("ping", url, 200)), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false when the request cannot be made")
@@ -172,7 +187,7 @@ func TestExecuteStepsOmittedRetryStillSendsTheRequestOnce(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})
 	step.Retry = models.Retry{} // what an omitted retry: parses to
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	if !run.Passed() {
 		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
@@ -196,7 +211,7 @@ func TestExecuteStepsRetriesEveryAttemptAndSleepsBetweenThem(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200)
 	step.Retry = models.Retry{Times: 3, Delay: "10ms"}
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	if run.Passed() {
 		t.Error("run.Passed() = true, want false -- every attempt returned 500")
@@ -221,7 +236,7 @@ func TestExecuteStepsStopsRetryingOnceAnAttemptPasses(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})
 	step.Retry = models.Retry{Times: 3, Delay: "10ms"}
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	if !run.Passed() {
 		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
@@ -248,7 +263,7 @@ func TestExecuteStepsRetryWithoutDelayDoesNotSleep(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200)
 	step.Retry = models.Retry{Times: 2}
 
-	executeSteps(scenario(step), "scenario.yaml")
+	runScenario(scenario(step), "scenario.yaml")
 
 	if calls() != 2 {
 		t.Errorf("server saw %d calls, want 2", calls())
@@ -265,7 +280,7 @@ func TestExecuteStepsBadRetryDelayFailsTheStepBeforeAnyRequest(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200)
 	step.Retry = models.Retry{Times: 2, Delay: "soon"}
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for an unparseable retry delay")
@@ -307,7 +322,7 @@ func TestExecuteStepsReportsTheKeptAttemptsTransportError(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200)
 	step.Retry = models.Retry{Times: 2, Delay: "10ms"}
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	got := run.Scenarios[0].Steps[0]
 	if got.Attempts != 2 {
@@ -331,7 +346,7 @@ func TestExecuteStepsCaptureFromANonJSONBodyIsAnErroredAssertion(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200)
 	step.Scripts = []models.Script{{Key: "token", Path: "$.token"}}
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false when a capture has nothing to read")
@@ -352,7 +367,7 @@ func TestExecuteStepsCaptureFromANonJSONBodyIsAnErroredAssertion(t *testing.T) {
 func TestExecuteStepsUnknownStepTypeErrorsTheStep(t *testing.T) {
 	initLog(t)
 
-	run := executeSteps(scenario(models.Step{Name: "query", Type: "db"}), "scenario.yaml")
+	run := runScenario(scenario(models.Step{Name: "query", Type: "db"}), "scenario.yaml")
 
 	step := run.Scenarios[0].Steps[0]
 	if step.Status != result.StatusError {
@@ -656,7 +671,7 @@ func TestExecuteStepsNumericCaptureTemplatesIntoTheNextURL(t *testing.T) {
 	login.Scripts = []models.Script{{Key: "id", Path: "$.id"}}
 	fetch := apiStep("fetch", srv.URL+"/users/{{id}}", 200, models.BodyCheck{Path: "$.id", Value: 42})
 
-	run := executeSteps(scenario(login, fetch), "scenario.yaml")
+	run := runScenario(scenario(login, fetch), "scenario.yaml")
 
 	if !run.Passed() {
 		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
@@ -670,7 +685,7 @@ func TestExecuteStepsUnknownTemplateVariableFailsTheStepBeforeAnyRequest(t *test
 	initLog(t)
 	srv, calls := countingServer(t, 200)
 
-	run := executeSteps(scenario(apiStep("ping", srv.URL+"/{{tokn}}", 200)), "scenario.yaml")
+	run := runScenario(scenario(apiStep("ping", srv.URL+"/{{tokn}}", 200)), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for an unknown template variable")
@@ -694,7 +709,7 @@ func TestExecuteStepsUnclosedTemplateInABodyFailsTheStep(t *testing.T) {
 	step := apiStep("ping", srv.URL, 200)
 	step.Request.Body = `{"token": "{{token`
 
-	run := executeSteps(scenario(step), "scenario.yaml")
+	run := runScenario(scenario(step), "scenario.yaml")
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for an unclosed placeholder")
@@ -705,4 +720,243 @@ func TestExecuteStepsUnclosedTemplateInABodyFailsTheStep(t *testing.T) {
 	if calls() != 0 {
 		t.Errorf("server saw %d calls, want none", calls())
 	}
+}
+
+// resetTestFlags puts the test command's flags back to their defaults. RootCmd is
+// a package var shared by every test in this file, and cobra keeps whatever the
+// last Execute set, so a test about default behaviour has to start from the
+// defaults a fresh process would have.
+func resetTestFlags(t *testing.T) {
+	t.Helper()
+	testCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if err := f.Value.Set(f.DefValue); err != nil {
+			t.Fatalf("resetting --%s to %q: %v", f.Name, f.DefValue, err)
+		}
+		f.Changed = false
+	})
+}
+
+// executeCapturing runs the real command on a scenario file and returns
+// everything it wrote to stdout, with no flags beyond --file: this is what a user
+// sees from `artemis test -f scenario.yaml`.
+func executeCapturing(t *testing.T, yaml string) (string, error) {
+	t.Helper()
+	initOnce.Do(Init)
+	resetTestFlags(t)
+
+	path := filepath.Join(t.TempDir(), "scenario.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	RootCmd.SetArgs([]string{"test", "-f", path})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&out)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	err := RootCmd.Execute()
+	return out.String(), err
+}
+
+func TestExecutePrintsStepsAndSummaryWithoutAnyFlags(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	out, err := executeCapturing(t, scenarioYAML(srv.URL, 200, "ok"))
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil", err)
+	}
+
+	for _, want := range []string{
+		"scenario: exit code",
+		"scenario.yaml",
+		"ok",
+		"ping",
+		"Scenarios     1  (1 passed)",
+		"Steps         1  (1 passed)",
+		"Assertions    2  (2 passed)",
+		"PASS in ",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output is missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestExecutePrintsTheFailedAssertionAndAFailingSummary(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"pending"}`)
+
+	out, err := executeCapturing(t, scenarioYAML(srv.URL, 200, "ok"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+
+	for _, want := range []string{
+		"FAIL ",
+		"ping",
+		"$.status equals ok, got pending",
+		"Steps         1  (1 failed)",
+		"Assertions    2  (1 passed, 1 failed)",
+		"FAIL in ",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output is missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// A step whose request could not be made has no assertions to show, so its own
+// error has to be what is printed.
+func TestExecutePrintsAnErroredStepsError(t *testing.T) {
+	srv := okServer(t, 200, `{}`)
+	url := srv.URL
+	srv.Close() // nothing is listening there any more
+
+	out, err := executeCapturing(t, scenarioYAML(url, 200, "ok"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+
+	if !strings.Contains(out, "ERROR") {
+		t.Errorf("output does not mark the step ERROR:\n%s", out)
+	}
+	if !strings.Contains(out, "connect") && !strings.Contains(out, "refused") {
+		t.Errorf("output does not print the transport error:\n%s", out)
+	}
+	if !strings.Contains(out, "Steps         1  (1 errored)") {
+		t.Errorf("output is missing the errored step tally:\n%s", out)
+	}
+}
+
+// A captured value used to be printed to stdout by shared.ExtractValue, so a run
+// that captured a token put it on the terminal between two step lines.
+func TestExecuteDoesNotPrintCapturedValuesToStdout(t *testing.T) {
+	srv := okServer(t, 200, `{"token":"s3cret"}`)
+
+	yaml := fmt.Sprintf(`name: "capture"
+type: functional
+variables: []
+steps:
+  - name: "login"
+    type: api
+    request:
+      url: "%s"
+      method: "GET"
+    response:
+      status_code: 200
+    scripts:
+      - key: "token"
+        path: "$.token"
+`, srv.URL)
+
+	out, err := executeCapturing(t, yaml)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil: %s", err, out)
+	}
+	if strings.Contains(out, "s3cret") {
+		t.Errorf("output contains the captured value:\n%s", out)
+	}
+}
+
+// The response body of an unexpected status used to be printed to stdout by
+// api.ParseResponse, unterminated, in the middle of the step list.
+func TestExecuteDoesNotPrintTheResponseBodyToStdout(t *testing.T) {
+	srv := okServer(t, 500, `{"secret":"do-not-print-me"}`)
+
+	out, err := executeCapturing(t, scenarioYAML(srv.URL, 200, "ok"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+	if strings.Contains(out, "do-not-print-me") {
+		t.Errorf("output contains the raw response body:\n%s", out)
+	}
+}
+
+// --log is opt-in: without it nothing is written anywhere, and in particular no
+// app.log appears in the working directory.
+func TestExecuteWritesNoLogFileWithoutTheLogFlag(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	before := dirEntries(t, ".")
+	if _, err := executeCapturing(t, scenarioYAML(srv.URL, 200, "ok")); err != nil {
+		t.Fatalf("Execute() = %v, want nil", err)
+	}
+
+	for name := range dirEntries(t, ".") {
+		if !before[name] {
+			t.Errorf("the run created %q; --log is meant to be opt-in", name)
+		}
+	}
+}
+
+func TestExecuteWithTheLogFlagWritesTheLogFile(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	initOnce.Do(Init)
+	resetTestFlags(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "scenario.yaml")
+	if err := os.WriteFile(path, []byte(scenarioYAML(srv.URL, 200, "ok")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "run.log")
+
+	var out bytes.Buffer
+	RootCmd.SetArgs([]string{"test", "-f", path, "-l", logPath})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&out)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	if err := RootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() = %v, want nil", err)
+	}
+
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("reading the log file: %v", err)
+	}
+	if !strings.Contains(string(logged), `"msg"`) {
+		t.Errorf("log file does not contain JSON records:\n%s", logged)
+	}
+	if !strings.Contains(out.String(), "PASS in ") {
+		t.Errorf("--log must not take the summary away from the terminal:\n%s", out.String())
+	}
+}
+
+// A log path that cannot be opened is the command's error to report -- the logger
+// used to call os.Exit(1) from inside the library.
+func TestExecuteUnopenableLogFileReturnsError(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	initOnce.Do(Init)
+	resetTestFlags(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "scenario.yaml")
+	if err := os.WriteFile(path, []byte(scenarioYAML(srv.URL, 200, "ok")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	RootCmd.SetArgs([]string{"test", "-f", path, "-l", filepath.Join(dir, "no-such-dir", "run.log")})
+	RootCmd.SetOut(os.Stderr)
+	err := RootCmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for a log file that cannot be opened")
+	}
+	if !strings.Contains(err.Error(), "run.log") {
+		t.Errorf("error = %q, want it to name the log file", err)
+	}
+}
+
+// dirEntries is the set of names in dir, so a test can tell what a run created.
+func dirEntries(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", dir, err)
+	}
+	names := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		names[e.Name()] = true
+	}
+	return names
 }
