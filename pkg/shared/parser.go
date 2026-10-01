@@ -94,7 +94,6 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 			},
 			Scripts: []models.Script{},
 			Name:    val.Name,
-			Retry:   1,
 			Response: models.Response{
 				StatusCode: 200,
 				Body:       []models.BodyCheck{},

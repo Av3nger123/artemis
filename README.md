@@ -208,7 +208,11 @@ steps:
 
 This section introduces additional metadata for configuring advanced features such as multiple calls of the same API, specifying the maximum number of calls, polling intervals, and exit conditions.
 
-- **retry**: Max retry limit when assertions fail.
+- **retry**: How many times a step may be attempted, and how long to wait between attempts.
+  - **times**: the total number of attempts, not the number of retries after the first — `times: 3` sends at most three requests. Omitted, zero or negative means one attempt; a step is never attempted zero times.
+  - **delay**: a duration string (`"500ms"`, `"2s"`, `"1m30s"`) slept *between* attempts — never before the first, never after the last. Omitted, there is no wait at all.
+
+  Retrying stops as soon as an attempt passes: the status code matched and every assertion held. The older scalar form `retry: 5` still works and means `times: 5`.
 ```yaml
 name: "API Collection"
 variables:
@@ -230,7 +234,9 @@ steps:
           - path: "$.data.message"
             value: "success"
             type: "string"
-      retry: 5
+      retry:
+        times: 5
+        delay: "2s"
 ```
 ## Environment support
 

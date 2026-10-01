@@ -10,6 +10,7 @@ import (
 	"artemis/pkg/shared/utils"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -95,53 +96,60 @@ func executeSteps(config models.Config, filePath string) *result.RunResult {
 	return run
 }
 
+// sleep is how the retry loop waits between attempts. It is a variable so a
+// test can record the delays asked for instead of waiting them out.
+var sleep = time.Sleep
+
+// attempt is everything one try of a step produced. A later attempt replaces an
+// earlier one whole, so a recorded result is never a mix of two tries.
+type attempt struct {
+	resp       *http.Response
+	err        error
+	response   map[string]interface{}
+	statusOK   bool
+	assertions []result.AssertionResult
+}
+
+// passed reports whether this attempt is one worth stopping on: the call was
+// made, the status was what the scenario asked for, and every assertion passed.
+func (a attempt) passed() bool {
+	return a.err == nil && a.resp != nil && a.statusOK && api.AllPassed(a.assertions)
+}
+
 // testAPI calls one step's API, retrying while it is still wrong, and records
-// what happened on stepResult. The assertions kept are the last attempt's.
+// what happened on stepResult. The assertions kept are those of the attempt the
+// loop stopped on.
 func testAPI(step models.Step, configVars *map[string]interface{}, stepResult *result.StepResult) {
 	start := time.Now()
 
-	var (
-		resp       *http.Response
-		callErr    error
-		response   map[string]interface{}
-		statusOK   bool
-		assertions []result.AssertionResult
-	)
+	// Resolve the retry policy before anything is sent: a delay that will not
+	// parse is the scenario's mistake, not the API's.
+	delay, err := step.Retry.Wait()
+	if err != nil {
+		stepResult.Fail(time.Since(start), err)
+		return
+	}
+	attempts := step.Retry.Attempts()
 
-	for attempt := 1; attempt <= step.Retry; attempt++ {
-		stepResult.Attempts = attempt
-		response, assertions, statusOK = nil, nil, false
-
-		resp, callErr = utils.LogDecorator(api.CallAPI)(step, configVars)
-		if callErr == nil && resp != nil {
-			statusOK = resp.StatusCode == step.Response.StatusCode
-			if statusOK {
-				response = api.ParseResponse(step, resp)
-				assertions = api.AssertResponse(step, response)
-				if api.AllPassed(assertions) {
-					break
-				}
-			}
+	var last attempt
+	for i := 1; i <= attempts; i++ {
+		stepResult.Attempts = i
+		last = tryAPI(step, configVars)
+		if last.passed() {
+			break
 		}
-		// Sleep between attempts only -- never after the last one. ART-5 makes
-		// the delay configurable; today it is a fixed 10s.
-		if attempt < step.Retry {
-			time.Sleep(time.Second * time.Duration(10))
+		// Between attempts only -- never before the first, never after the last.
+		if i < attempts && delay > 0 {
+			sleep(delay)
 		}
 	}
 
-	if stepResult.Attempts == 0 {
-		// retry: 0 (or omitted) means the loop above never ran. A step that was
-		// never tried is not a step that passed. ART-5 defaults it to one attempt.
-		stepResult.Fail(time.Since(start), errors.New("step made no attempts: retry is 0"))
+	if last.err != nil {
+		logger.Logger.Warn("Error while executing API", "name", step.Name, "error", last.err.Error())
+		stepResult.Fail(time.Since(start), last.err)
 		return
 	}
-	if callErr != nil {
-		logger.Logger.Warn("Error while executing API", "name", step.Name, "error", callErr.Error())
-		stepResult.Fail(time.Since(start), callErr)
-		return
-	}
-	if resp == nil {
+	if last.resp == nil {
 		stepResult.Fail(time.Since(start), errors.New("no response from the API"))
 		return
 	}
@@ -151,23 +159,51 @@ func testAPI(step models.Step, configVars *map[string]interface{}, stepResult *r
 		Kind:     "status_code",
 		Operator: "equals",
 		Expected: step.Response.StatusCode,
-		Actual:   resp.StatusCode,
+		Actual:   last.resp.StatusCode,
 	}
-	if statusOK {
+	if last.statusOK {
 		stepResult.Assert(statusAssertion.Pass())
 	} else {
 		stepResult.Assert(statusAssertion.Fail())
 	}
-	for _, a := range assertions {
+	for _, a := range last.assertions {
 		stepResult.Assert(a)
 	}
 
-	if statusOK {
-		if err := api.ExecuteScripts(response, step, configVars); err != nil {
+	// Scripts read values out of the parsed body, so they need one: a response
+	// that was not JSON leaves it nil, and capturing from nil is an error worth
+	// saying out loud rather than a path that mysteriously does not resolve.
+	if last.statusOK && len(step.Scripts) > 0 {
+		if last.response == nil {
+			stepResult.Assert(result.Assertion{Step: step.Name, Kind: "capture", Operator: "exists"}.
+				Errored(errors.New("no parsed response body to capture from")))
+		} else if err := api.ExecuteScripts(last.response, step, configVars); err != nil {
 			logger.Logger.Warn("Error while executing post api scripts", "name", step.Name, "error", err.Error())
 			stepResult.Assert(result.Assertion{Step: step.Name, Kind: "capture", Operator: "exists"}.Errored(err))
 		}
 	}
 
 	stepResult.Finish(time.Since(start))
+}
+
+// tryAPI makes one request and asserts against it.
+func tryAPI(step models.Step, configVars *map[string]interface{}) attempt {
+	var a attempt
+	a.resp, a.err = utils.LogDecorator(api.CallAPI)(step, configVars)
+	if a.err != nil || a.resp == nil {
+		return a
+	}
+	// Every attempt's body has to be read and closed or the connection is not
+	// reused -- with retries, a leak per attempt rather than per step.
+	defer func() {
+		_, _ = io.Copy(io.Discard, a.resp.Body)
+		a.resp.Body.Close()
+	}()
+
+	a.statusOK = a.resp.StatusCode == step.Response.StatusCode
+	if a.statusOK {
+		a.response = api.ParseResponse(step, a.resp)
+		a.assertions = api.AssertResponse(step, a.response)
+	}
+	return a
 }
