@@ -185,3 +185,114 @@ func TestConvertJsonToYamlProducesAParseableScenario(t *testing.T) {
 		t.Errorf("generated steps = %+v, want one api step", config.Steps)
 	}
 }
+
+// SubstituteEnvVars resolves {{env.NAME}} in a scenario's variables before any
+// step runs, so a token lives in the environment and not in the file.
+func TestSubstituteEnvVars(t *testing.T) {
+	t.Setenv("ARTEMIS_TEST_HOST", "api.example.com")
+	t.Setenv("ARTEMIS_TEST_TOKEN", "sekret")
+	t.Setenv("ARTEMIS_TEST_EMPTY", "")
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"no placeholder", "https://api.example.com", "https://api.example.com"},
+		{"empty", "", ""},
+		{"whole value", "{{env.ARTEMIS_TEST_TOKEN}}", "sekret"},
+		{"inside text", "https://{{env.ARTEMIS_TEST_HOST}}/v1", "https://api.example.com/v1"},
+		{"two references", "{{env.ARTEMIS_TEST_HOST}}:{{env.ARTEMIS_TEST_TOKEN}}", "api.example.com:sekret"},
+		{"repeated reference", "{{env.ARTEMIS_TEST_TOKEN}}{{env.ARTEMIS_TEST_TOKEN}}", "sekretsekret"},
+		{"unset name is empty", "a{{env.ARTEMIS_TEST_UNSET}}b", "ab"},
+		{"set but empty", "a{{env.ARTEMIS_TEST_EMPTY}}b", "ab"},
+		{"a scenario variable is left for the templater", "{{token}}", "{{token}}"},
+		{"env and scenario placeholders together", "{{token}} {{env.ARTEMIS_TEST_TOKEN}}", "{{token}} sekret"},
+		{"scenario placeholder first", "{{other}}{{env.ARTEMIS_TEST_TOKEN}}", "{{other}}sekret"},
+		{"a stray close before a reference", "}}{{env.ARTEMIS_TEST_TOKEN}}", "}}sekret"},
+		{"unclosed reference is copied through", "a{{env.ARTEMIS_TEST_TOKEN", "a{{env.ARTEMIS_TEST_TOKEN"},
+		{"second reference unclosed", "{{env.ARTEMIS_TEST_TOKEN}}/{{env.X", "sekret/{{env.X"},
+		{"lone brace", "a{b", "a{b"},
+		{"prefix only", "{{env.", "{{env."},
+		{"empty name", "{{env.}}", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := SubstituteEnvVars(c.in)
+			if got != c.want {
+				t.Errorf("SubstituteEnvVars(%q) = %#v, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// A value that references itself used to spin forever, and a closing delimiter
+// before an opening one used to panic on a reversed slice. Neither is reachable
+// now that the scan only moves forward, and this is the test that says so.
+func TestSubstituteEnvVarsTerminatesAndNeverPanics(t *testing.T) {
+	t.Setenv("ARTEMIS_TEST_SELF", "{{env.ARTEMIS_TEST_SELF}}")
+
+	full := "}}a{{env.ARTEMIS_TEST_SELF}}b{{env.}}c{{other}}d{{env.X"
+	for i := 0; i <= len(full); i++ {
+		prefix := full[:i]
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("SubstituteEnvVars(%q) panicked: %v", prefix, r)
+				}
+			}()
+			_ = SubstituteEnvVars(prefix)
+		}()
+	}
+}
+
+func TestExtractValue(t *testing.T) {
+	data := map[string]interface{}{
+		"token": "abc",
+		"id":    float64(7),
+		"ok":    true,
+		"user":  map[string]interface{}{"name": "ada", "roles": []interface{}{"admin", "dev"}},
+		"items": []interface{}{
+			map[string]interface{}{"sku": "x1"},
+			map[string]interface{}{"sku": "x2"},
+		},
+	}
+
+	cases := []struct {
+		name string
+		path string
+		want interface{}
+	}{
+		{"top-level string", "$.token", "abc"},
+		{"number stays a float64", "$.id", float64(7)},
+		{"bool", "$.ok", true},
+		{"nested", "$.user.name", "ada"},
+		{"array index", "$.items[0].sku", "x1"},
+		{"second element", "$.items[1].sku", "x2"},
+		{"inside a nested array", "$.user.roles[1]", "dev"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ExtractValue(data, models.Script{Key: "k", Path: c.path})
+			if err != nil {
+				t.Fatalf("ExtractValue(%q) = %v, want nil", c.path, err)
+			}
+			if got != c.want {
+				t.Errorf("ExtractValue(%q) = %#v, want %#v", c.path, got, c.want)
+			}
+		})
+	}
+}
+
+func TestExtractValueUnresolvablePathIsAnError(t *testing.T) {
+	data := map[string]interface{}{"token": "abc", "items": []interface{}{}}
+
+	for _, path := range []string{"$.nope", "$.token.deeper", "$.items[0]", "", "not a path"} {
+		t.Run(path, func(t *testing.T) {
+			got, err := ExtractValue(data, models.Script{Key: "k", Path: path})
+			if err == nil {
+				t.Errorf("ExtractValue(%q) = %#v, want an error", path, got)
+			}
+		})
+	}
+}

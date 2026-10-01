@@ -1,0 +1,21 @@
+# A capture with no path. The step's request succeeds, so what is being pinned is
+# that an unreadable capture is an errored assertion under the step -- not a
+# crash, and not a silent pass.
+name: "capture with no path"
+type: functional
+variables: []
+steps:
+  - name: "login"
+    type: api
+    request:
+      url: "%SERVER%/login"
+      method: "POST"
+      body: '{"user": "ada"}'
+    response:
+      status_code: 200
+      body:
+        - path: "$.token"
+          operator: exists
+    scripts:
+      - key: authToken
+        path: ""

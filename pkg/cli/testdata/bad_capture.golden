@@ -1,0 +1,11 @@
+scenario: capture with no path (testdata/bad_capture.yaml)
+  ERROR login                       <dur>
+         capture exists: capture "authToken": no path given
+
+Scenarios     1  (1 errored)
+Steps         1  (1 errored)
+Assertions    3  (2 passed, 1 errored)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed (1 errored), 1 of 3 assertions failed

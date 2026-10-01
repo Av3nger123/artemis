@@ -1,0 +1,11 @@
+scenario: status code (testdata/wrong_status.yaml)
+  FAIL  ping                        <dur>
+         status_code equals 200, got 500
+
+Scenarios     1  (1 failed)
+Steps         1  (1 failed)
+Assertions    1  (1 failed)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed, 1 of 1 assertions failed

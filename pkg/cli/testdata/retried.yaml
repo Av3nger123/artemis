@@ -1,0 +1,18 @@
+# A service that is not up yet: two attempts fail, the third passes.
+name: "wait for ready"
+type: functional
+variables: []
+steps:
+  - name: "ping until ready"
+    type: api
+    request:
+      url: "%SERVER%/ready"
+      method: "GET"
+    retry:
+      times: 3
+      delay: "50ms"
+    response:
+      status_code: 200
+      body:
+        - path: "$.status"
+          value: "ok"

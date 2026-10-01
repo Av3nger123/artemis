@@ -1,0 +1,254 @@
+package cli
+
+import (
+	"flag"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+// -update rewrites the golden files from what the runner actually prints:
+//
+//	go test ./pkg/cli -run TestGolden -update
+//
+// or `make golden`. Read the resulting diff before committing it -- a golden
+// file that is regenerated without being read asserts nothing.
+var update = flag.Bool("update", false, "rewrite the golden files in testdata")
+
+// serverPlaceholder is what a fixture writes where the test server's address
+// goes. The committed fixture therefore has no port in it, and a fixture whose
+// placeholder is never substituted fails loudly rather than quietly calling
+// somewhere real.
+const serverPlaceholder = "%SERVER%"
+
+// durSentinel is what a duration is replaced with before comparison.
+const durSentinel = "<dur>"
+
+// goldenCase is one whole run of artemis pinned to a file.
+//
+// Each case names testdata/<name>.yaml -- the scenario a user would write -- and
+// testdata/<name>.golden, which holds every byte the command printed plus the
+// error it exited with. The pair is the point: the YAML is readable as a
+// scenario and the golden is readable as a report, so a change to either side
+// of the runner shows up as a diff a person can judge.
+type goldenCase struct {
+	name string
+	// handler answers the scenario's requests. Nil for a case that fails
+	// before anything is sent.
+	handler http.HandlerFunc
+	// wantErr is whether the run must fail the process (ART-2).
+	wantErr bool
+	// noSleep stubs out the retry sleep, so a case can ask for a delay
+	// without the suite waiting it out.
+	noSleep bool
+}
+
+func TestGolden(t *testing.T) {
+	for _, c := range goldenCases(t) {
+		t.Run(c.name, func(t *testing.T) {
+			out, runErr := runGolden(t, c)
+
+			if c.wantErr && runErr == nil {
+				t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
+			}
+			if !c.wantErr && runErr != nil {
+				t.Errorf("Execute() = %v, want nil:\n%s", runErr, out)
+			}
+
+			path := filepath.Join("testdata", c.name+".golden")
+			if *update {
+				if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+					t.Fatalf("writing %s: %v", path, err)
+				}
+				t.Logf("updated %s", path)
+				return
+			}
+			want, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading %s: %v (run `make golden` to create it)", path, err)
+			}
+			if got := out; got != string(want) {
+				t.Errorf("output does not match %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
+			}
+		})
+	}
+}
+
+// runGolden runs one case through the real root command and returns the
+// scrubbed transcript: everything printed, then the error the command exited
+// with.
+func runGolden(t *testing.T, c goldenCase) (string, error) {
+	t.Helper()
+	initOnce.Do(Init)
+	resetTestFlags(t)
+
+	if c.noSleep {
+		orig := sleep
+		sleep = func(time.Duration) {}
+		t.Cleanup(func() { sleep = orig })
+	}
+
+	// A case with no handler never dials; port 1 is still a real address, so a
+	// case that does dial fails fast instead of hanging.
+	url := "http://127.0.0.1:1"
+	if c.handler != nil {
+		srv := httptest.NewServer(c.handler)
+		t.Cleanup(srv.Close)
+		url = srv.URL
+	}
+
+	fixture := filepath.Join("testdata", c.name+".yaml")
+	raw, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("reading %s: %v", fixture, err)
+	}
+	if !strings.Contains(string(raw), serverPlaceholder) {
+		t.Fatalf("%s does not contain %s -- a fixture must not hardcode an address", fixture, serverPlaceholder)
+	}
+	scenario := strings.ReplaceAll(string(raw), serverPlaceholder, url)
+
+	// The scenario is rendered into a temp file because the server's port is
+	// only known now. Its path is scrubbed back to the fixture's.
+	path := filepath.Join(t.TempDir(), c.name+".yaml")
+	if err := os.WriteFile(path, []byte(scenario), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	RootCmd.SetArgs([]string{"test", "-f", path})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&out)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+	runErr := RootCmd.Execute()
+
+	transcript := out.String()
+	if runErr != nil {
+		transcript += "\n--- exit error ---\n" + runErr.Error() + "\n"
+	}
+	return scrub(transcript, path, fixture, url), runErr
+}
+
+// durPattern matches what report.dur prints: a Go duration rounded to
+// milliseconds, or the "<1ms" it uses for something faster than it can show.
+const durPattern = `<1ms|(?:\d+h)?(?:\d+m)?\d+(?:\.\d+)?(?:ns|µs|ms|s)`
+
+// spacedDur matches a duration together with the whitespace in front of it, so
+// the replacement can keep the column exactly as wide as it was.
+var spacedDur = regexp.MustCompile(` +(?:` + durPattern + `)`)
+
+// scrub replaces everything in a transcript that changes between runs: the temp
+// scenario path, the test server's address, and every duration.
+//
+// Durations are replaced in place, keeping the field the same total width --
+// from the end of the preceding text to the end of the duration -- which is
+// fixed by report's format string even though the duration's own length is not.
+// What a duration actually reads as, and the exact column layout, are pinned by
+// pkg/report/console_test.go against a hand-built result tree; a golden file is
+// here for the shape of a whole run.
+func scrub(s, tempPath, fixture, url string) string {
+	s = strings.ReplaceAll(s, tempPath, fixture)
+	s = strings.ReplaceAll(s, url, "http://127.0.0.1:PORT")
+	return spacedDur.ReplaceAllStringFunc(s, func(m string) string {
+		pad := len(m) - len(durSentinel)
+		if pad < 1 {
+			pad = 1
+		}
+		return strings.Repeat(" ", pad) + durSentinel
+	})
+}
+
+// jsonHandler answers every request with one status and body.
+func jsonHandler(status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}
+}
+
+// goldenCases is the list of runs pinned to testdata. Keep a case's scenario in
+// its fixture and only what the server does here.
+func goldenCases(t *testing.T) []goldenCase {
+	t.Helper()
+	return []goldenCase{
+		{
+			// A whole passing run: a capture out of the first response
+			// templated into the second step's URL.
+			name: "pass",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/items":
+					w.WriteHeader(http.StatusCreated)
+					fmt.Fprint(w, `{"id": 42, "name": "widget"}`)
+				case "/items/42":
+					fmt.Fprint(w, `{"id": 42, "name": "widget", "tags": ["a", "b"]}`)
+				default:
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
+				}
+			},
+		},
+		{
+			// One body assertion is wrong: the step fails, the run fails,
+			// and the assertion is printed under the step that made it.
+			name:    "fail",
+			handler: jsonHandler(http.StatusOK, `{"status": "pending", "count": 3}`),
+			wantErr: true,
+		},
+		{
+			// The status code is not what the scenario asked for, so the body
+			// checks are never made -- one failed assertion, not three.
+			name:    "wrong_status",
+			handler: jsonHandler(http.StatusInternalServerError, `{"error": "boom"}`),
+			wantErr: true,
+		},
+		{
+			// A variable nobody declared: the step errors before a request is
+			// sent (ART-6). No real network failure is pinned here -- the
+			// runtime's wording for a refused dial is not ours to freeze.
+			name:    "template_error",
+			wantErr: true,
+		},
+		{
+			// An unparseable retry delay is the scenario's mistake, and it
+			// stops the step before anything is sent (ART-5).
+			name:    "bad_retry",
+			wantErr: true,
+		},
+		{
+			// The request is fine and the body assertion passes; the capture
+			// cannot be read. That is an errored assertion under the step, so
+			// the run fails with a reason instead of passing on a variable
+			// nothing ever set.
+			name:    "bad_capture",
+			handler: jsonHandler(http.StatusOK, `{"token": "abc"}`),
+			wantErr: true,
+		},
+		{
+			// Two failures then a pass: the step passes, and its line says how
+			// many attempts it took.
+			name:    "retried",
+			noSleep: true,
+			handler: func() http.HandlerFunc {
+				var calls atomic.Int32
+				return func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					if calls.Add(1) < 3 {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						fmt.Fprint(w, `{"status": "starting"}`)
+						return
+					}
+					fmt.Fprint(w, `{"status": "ok"}`)
+				}
+			}(),
+		},
+	}
+}

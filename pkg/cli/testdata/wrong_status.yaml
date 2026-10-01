@@ -1,0 +1,15 @@
+# A run where the API answers with a status nobody asked for.
+name: "status code"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%SERVER%/ping"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.status"
+          value: "ok"

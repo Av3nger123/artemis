@@ -214,7 +214,9 @@ func testAPI(step models.Step, configVars *map[string]interface{}, stepResult *r
 // tryAPI makes one request and asserts against it.
 func tryAPI(step models.Step, configVars *map[string]interface{}) attempt {
 	var a attempt
-	a.resp, a.err = utils.LogDecorator(api.CallAPI)(step, configVars)
+	// The body is closed by the defer below. bodyclose cannot see through
+	// LogDecorator's generic wrapper, hence the suppression.
+	a.resp, a.err = utils.LogDecorator(api.CallAPI)(step, configVars) //nolint:bodyclose
 	if a.err != nil || a.resp == nil {
 		return a
 	}

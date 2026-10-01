@@ -1,0 +1,12 @@
+scenario: status check (testdata/fail.yaml)
+  FAIL  ping                        <dur>
+         $.status equals ok, got pending
+         $.count lte 2, got 3
+
+Scenarios     1  (1 failed)
+Steps         1  (1 failed)
+Assertions    3  (1 passed, 2 failed)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed, 2 of 3 assertions failed

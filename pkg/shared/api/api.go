@@ -54,7 +54,7 @@ func ParseResponse(api models.Step, resp *http.Response) map[string]interface{} 
 	}
 	var response map[string]interface{}
 
-	if resp.StatusCode == int(api.Response.StatusCode) {
+	if resp.StatusCode == api.Response.StatusCode {
 		if err := json.Unmarshal(responseBody, &response); err != nil {
 			logger.Logger.Warn("Error parsing response body", "name", api.Name, "error", err.Error())
 		}
@@ -89,8 +89,9 @@ func ExecuteScripts(data map[string]interface{}, api models.Step, config *map[st
 	for i := range api.Scripts {
 		val, err := shared.ExtractValue(data, api.Scripts[i])
 		if err != nil {
-			return fmt.Errorf("path %s not found in the response ", api.Scripts[i].Path)
-
+			// The cause is kept: "no path" and "that path is not in this body"
+			// are different mistakes, and the old message said neither.
+			return fmt.Errorf("capture %q: %w", api.Scripts[i].Key, err)
 		}
 		configMap[api.Scripts[i].Key] = val
 	}

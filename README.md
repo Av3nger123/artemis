@@ -304,6 +304,42 @@ secret=my_secret_key
 This approach allows you to reference environment variables directly within your YAML configuration, providing a convenient and secure way to manage sensitive information without exposing it directly in the file
 
 
+## Development
+
+```sh
+make test        # go test ./...
+make test-race   # what CI runs
+make vet         # go vet ./...
+make lint        # golangci-lint, skipped with a note if it is not installed
+make cover       # coverage profile plus the total
+make build       # the artemis binary
+make all         # vet, lint, test, build
+```
+
+`make lint` needs golangci-lint, pinned to the version `.golangci.yml` is written for:
+
+```sh
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+```
+
+It is skipped -- with a note, not an error -- when the linter is not on your PATH, so a missing tool never blocks `make build`. Use `make lint-strict` if you want it to fail instead.
+
+### Golden-file tests
+
+`pkg/cli/testdata` holds whole runs: `<case>.yaml` is a scenario a user could have written, `<case>.golden` is every byte artemis printed for it plus the error it exited with. A fixture writes `%SERVER%` where the test's HTTP server goes, and the temp path, the server's port and every duration are normalised before comparison, so the files are stable across machines.
+
+When a change to the report or the runner is deliberate, regenerate them and read the diff:
+
+```sh
+make golden      # go test ./pkg/cli -run TestGolden -update
+git diff pkg/cli/testdata
+```
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push and pull request: `go build ./...`, `go vet ./...`, a gofmt check, `go test -race -coverprofile=coverage.out ./...`, and golangci-lint. The same commands are available as make targets, so a red build is reproducible locally.
+
+
 ## Working:
 1. **Sequential and Concurrent Modes**: Introduce support for both sequential and concurrent execution modes. Sequential mode ensures that API requests are executed one after another, while concurrent mode allows for parallel execution of API requests. (Status: In Progress)
 
