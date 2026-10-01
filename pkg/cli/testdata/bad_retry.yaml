@@ -1,0 +1,15 @@
+# A retry delay that is not a duration.
+name: "bad retry delay"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%SERVER%/ping"
+      method: "GET"
+    retry:
+      times: 3
+      delay: "soon"
+    response:
+      status_code: 200

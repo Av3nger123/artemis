@@ -1,0 +1,42 @@
+# Pinned to golangci-lint v1.64.8 -- the same version .github/workflows/ci.yml
+# installs and the Makefile's lint target suggests. Pinned on purpose: an
+# unpinned linter turns someone else's release into a red build on a branch
+# nobody touched.
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  # The default set is errcheck, gosimple, govet, ineffassign, staticcheck and
+  # unused. These are the additions worth the noise.
+  enable:
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+    - unconvert
+    - bodyclose
+
+linters-settings:
+  revive:
+    rules:
+      # Exported symbols should say what they are for. The ART-1..ART-7 packages
+      # already do; the older ones are being brought up as they are touched.
+      - name: exported
+        disabled: true
+  misspell:
+    locale: UK
+
+issues:
+  exclude-rules:
+    # A test asserting an error message does not need to check the error from
+    # every helper it calls. And the parser tests misspell keys on purpose --
+    # "respones:" is the typo ART-7 exists to catch -- so misspell has no
+    # business reading them.
+    - path: _test\.go
+      linters:
+        - errcheck
+        - bodyclose
+        - misspell
+  max-issues-per-linter: 0
+  max-same-issues: 0

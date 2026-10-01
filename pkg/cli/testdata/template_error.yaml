@@ -1,0 +1,15 @@
+# A placeholder naming a variable nothing declares or captures. It is in the
+# body on purpose: the offset the error reports is then a position in text the
+# fixture controls, not one that moves with the test server's port.
+name: "undeclared variable"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%SERVER%/ping"
+      method: "POST"
+      body: '{"token": "{{tokn}}"}'
+    response:
+      status_code: 200

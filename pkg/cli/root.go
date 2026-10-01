@@ -8,6 +8,10 @@ import (
 )
 
 func Init() {
+	// A failed test run is reported by RunE as an error; cobra must not answer
+	// it with usage text, and main prints the message itself.
+	RootCmd.SilenceUsage = true
+	RootCmd.SilenceErrors = true
 
 	// Parse command for validating yaml file
 	RootCmd.AddCommand(parseCmd)
@@ -22,7 +26,7 @@ func Init() {
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
-	testCmd.Flags().StringP("log", "l", "app.log", "Path to the log file")
+	testCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
 
 	RootCmd.AddCommand(generateCmd)

@@ -1,0 +1,18 @@
+# A run where the API answers, but with the wrong values.
+name: "status check"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%SERVER%/ping"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.status"
+          value: "ok"
+        - path: "$.count"
+          operator: lte
+          value: 2

@@ -1,0 +1,41 @@
+# A run that passes: create a thing, capture its id, read it back.
+name: "item lifecycle"
+type: functional
+variables:
+  - name: base
+    value: "%SERVER%"
+steps:
+  - name: "create item"
+    type: api
+    request:
+      url: "{{base}}/items"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"name": "widget"}'
+    response:
+      status_code: 201
+      body:
+        - path: "$.id"
+          type: number
+          operator: exists
+        - path: "$.name"
+          value: "widget"
+    scripts:
+      - key: itemId
+        path: "$.id"
+  - name: "read it back"
+    type: api
+    request:
+      url: "{{base}}/items/{{itemId}}"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.name"
+          operator: contains
+          value: "widg"
+        - path: "$.tags"
+          value:
+            - "a"
+            - "b"

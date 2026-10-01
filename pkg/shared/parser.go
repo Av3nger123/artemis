@@ -2,18 +2,28 @@ package shared
 
 import (
 	"artemis/pkg/shared/env"
+	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
+// ParseYAMLFile reads a scenario and returns it only if artemis understands
+// every part of it.
+//
+// Decoding is strict -- KnownFields(true) -- so a typo'd key is an error naming
+// the field and its line instead of a key that is quietly dropped, leaving a
+// scenario that asserts nothing and "passes". The parsed config is then
+// validated, so a step type nothing can execute stops the run before any
+// request is sent. Both entry points, `artemis test` and `artemis parse`, come
+// through here, which is what makes parse a real validator.
 func ParseYAMLFile(filePath string) (models.Config, error) {
 	var config models.Config
 
@@ -24,7 +34,12 @@ func ParseYAMLFile(filePath string) (models.Config, error) {
 	defer yamlFile.Close()
 
 	decoder := yaml.NewDecoder(yamlFile)
+	decoder.KnownFields(true)
 	if err := decoder.Decode(&config); err != nil {
+		return config, err
+	}
+
+	if err := config.Validate(); err != nil {
 		return config, err
 	}
 
@@ -44,36 +59,32 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 	}
 	return collection, nil
 }
-func ExtractValue(data map[string]interface{}, binding models.Script) (interface{}, error) {
-	val, err := jsonpath.JsonPathLookup(data, binding.Path)
-	fmt.Println(val)
-	if err != nil {
-		return nil, err
-	}
-	return val, nil
-}
 
-func TransformText(templateStr string, config map[string]interface{}) (string, error) {
-	final := ""
-	i := 0
-	for ; i < len(templateStr); i++ {
-		if templateStr[i] == '{' && templateStr[i+1] == '{' {
-			start := i + 2
-			for templateStr[i] != '}' {
-				i++
-			}
-			val := config[templateStr[start:i]]
-			if val != nil {
-				final += val.(string)
-			} else {
-				final += templateStr[start-2 : i+1]
-			}
-			i++
-		} else {
-			final += templateStr[i : i+1]
-		}
+// ExtractValue reads the value at a capture's path out of a parsed response
+// body.
+//
+// An empty path is rejected before the lookup, and a panic from the jsonpath
+// library is turned into an error: a scenario that omits `path:` under scripts:,
+// or writes one the library chokes on, must fail its step with a reason rather
+// than taking the whole run down with a stack trace.
+func ExtractValue(data map[string]interface{}, binding models.Script) (val interface{}, err error) {
+	if strings.TrimSpace(binding.Path) == "" {
+		return nil, errors.New("no path given")
 	}
-	return final, nil
+	defer func() {
+		if r := recover(); r != nil {
+			val, err = nil, fmt.Errorf("path %q could not be read: %v", binding.Path, r)
+		}
+	}()
+
+	val, err = jsonpath.JsonPathLookup(data, binding.Path)
+	if err != nil {
+		return nil, fmt.Errorf("path %q not found in the response: %w", binding.Path, err)
+	}
+	// A captured value goes to the log, never to stdout: it is often a token,
+	// and the terminal belongs to the step list.
+	logger.Logger.Debug("Captured value", "key", binding.Key, "path", binding.Path)
+	return val, nil
 }
 
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
@@ -85,6 +96,9 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 	}
 	for _, val := range collection.Items {
 		apiConfig.Steps = append(apiConfig.Steps, models.Step{
+			// Set explicitly: a generated file has to pass the same
+			// validation a hand-written one does.
+			Type: "api",
 			Request: models.Request{
 				URL:    val.Request.Url.Raw,
 				Method: val.Request.Method,
@@ -95,7 +109,6 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 			},
 			Scripts: []models.Script{},
 			Name:    val.Name,
-			Retry:   1,
 			Response: models.Response{
 				StatusCode: 200,
 				Body:       []models.BodyCheck{},
@@ -106,50 +119,55 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 		apiConfig.Variables = append(apiConfig.Variables, models.Variable{Name: val.Key, Value: val.Value})
 	}
 
-	data, err := yaml.Marshal(&apiConfig)
-	if err != nil {
-		return err
-	}
-
 	file, err := os.Create(utils.Slugify(collection.Info.Name) + ".yaml")
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	if _, err := file.Write(data); err != nil {
+	// Two spaces, not yaml.v3's default four: the version bump should not
+	// silently reshape every file this generator has ever written.
+	encoder := yaml.NewEncoder(file)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&apiConfig); err != nil {
 		return err
 	}
-	return nil
+	return encoder.Close()
 }
 
-func TypeCast(val any, valType string) string {
-	if val == nil {
-		return ""
-	}
-	if valType == "boolean" {
-		return strconv.FormatBool(val.(bool))
-	} else if valType == "number" {
-		return strconv.FormatInt(val.(int64), 10)
-	}
-	return ""
-}
-
+// SubstituteEnvVars replaces every {{env.NAME}} in input with NAME's value from
+// the process environment. A name that is not set becomes the empty string: an
+// absent variable is how a scenario says "no token", and failing the run over it
+// would make every optional variable mandatory.
+//
+// The scan is forward-only and single-pass, like TransformText's (ART-6): it
+// never looks backwards for a closing delimiter, so "}}{{env.X}}" and
+// "{{other}} {{env.X}}" render instead of panicking on a reversed slice, and a
+// value that itself contains {{env.X}} is never re-expanded, so a
+// self-referencing variable cannot loop forever.
+//
+// A reference that is never closed is copied through as it stands -- the
+// placeholders artemis itself resolves are TransformText's job, and it is the one
+// that reports an unclosed one.
 func SubstituteEnvVars(input string) interface{} {
-	envVarPrefix := "{{env."
-	for strings.Contains(input, envVarPrefix) {
-		startIndex := strings.Index(input, envVarPrefix)
-		endIndex := strings.Index(input, "}}")
-		if endIndex == -1 {
-			break
+	const prefix = "{{env."
+
+	var out strings.Builder
+	rest := input
+	for {
+		start := strings.Index(rest, prefix)
+		if start < 0 {
+			out.WriteString(rest)
+			return out.String()
 		}
-		// Extract the environment variable name
-		varName := input[startIndex+len(envVarPrefix) : endIndex]
-
-		// Substitute the environment variable value
-		varValue := env.GetEnvValue(varName)
-		input = strings.Replace(input, input[startIndex:endIndex+len("}}")], varValue, 1)
+		body := rest[start+len(prefix):]
+		end := strings.Index(body, "}}")
+		if end < 0 {
+			out.WriteString(rest)
+			return out.String()
+		}
+		out.WriteString(rest[:start])
+		out.WriteString(env.GetEnvValue(body[:end]))
+		rest = body[end+len("}}"):]
 	}
-
-	return input
 }

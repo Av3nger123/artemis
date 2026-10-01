@@ -1,7 +1,9 @@
 package api
 
 import (
+	"artemis/pkg/result"
 	"artemis/pkg/shared"
+	"artemis/pkg/shared/assert"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"bytes"
@@ -9,13 +11,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/oliveagle/jsonpath"
 )
 
 func CallAPI(step models.Step, config *map[string]interface{}) (*http.Response, error) {
-	url, _ := shared.TransformText(step.Request.URL, *config)
-	body, _ := shared.TransformText(step.Request.Body, *config)
+	url, err := shared.TransformText(step.Request.URL, *config)
+	if err != nil {
+		return nil, fmt.Errorf("rendering request url: %w", err)
+	}
+	body, err := shared.TransformText(step.Request.Body, *config)
+	if err != nil {
+		return nil, fmt.Errorf("rendering request body: %w", err)
+	}
 
 	req, err := http.NewRequest(step.Request.Method, url, bytes.NewBuffer([]byte(body)))
 	if err != nil {
@@ -23,7 +29,10 @@ func CallAPI(step models.Step, config *map[string]interface{}) (*http.Response, 
 	}
 
 	for key, value := range step.Request.Headers {
-		val, _ := shared.TransformText(value, *config)
+		val, err := shared.TransformText(value, *config)
+		if err != nil {
+			return nil, fmt.Errorf("rendering header %q: %w", key, err)
+		}
 		req.Header.Set(key, val)
 	}
 	logger.Logger.Info("API call", "name", step.Name, "url", url, "method", step.Request.Method, "headers", req.Header, "body", body)
@@ -41,34 +50,37 @@ func ParseResponse(api models.Step, resp *http.Response) map[string]interface{} 
 	}
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("error reading response body: %v", err)
+		logger.Logger.Warn("Error reading response body", "name", api.Name, "error", err.Error())
 	}
 	var response map[string]interface{}
 
-	if resp.StatusCode == int(api.Response.StatusCode) {
+	if resp.StatusCode == api.Response.StatusCode {
 		if err := json.Unmarshal(responseBody, &response); err != nil {
-			fmt.Printf("error parsing response body: %v", err)
+			logger.Logger.Warn("Error parsing response body", "name", api.Name, "error", err.Error())
 		}
 	} else {
-		fmt.Printf("Error occurred %s", string(responseBody))
+		// The body of an unexpected status is log material, not terminal
+		// output: it would land unterminated in the middle of the step list.
+		logger.Logger.Warn("Unexpected response status", "name", api.Name, "status", resp.StatusCode, "body", string(responseBody))
 	}
 
 	return response
 }
 
-func AssertResponse(api models.Step, response map[string]interface{}) bool {
-	assert := true
-	for _, val := range api.Response.Body {
-		var tempAssert bool
-		extractedValue, _ := jsonpath.JsonPathLookup(response, val.Path)
-		if slice, ok := extractedValue.([]interface{}); ok {
-			tempAssert = slice[0] == val.Value
-		} else {
-			tempAssert = extractedValue == val.Value
+// AssertResponse checks every body check of the step against the response.
+// The engine itself is pkg/shared/assert; this is the runner's door into it.
+func AssertResponse(step models.Step, response map[string]interface{}) []result.AssertionResult {
+	return assert.Body(step, response)
+}
+
+// AllPassed reports whether every assertion in as passed.
+func AllPassed(as []result.AssertionResult) bool {
+	for _, a := range as {
+		if !a.Passed() {
+			return false
 		}
-		assert = assert && tempAssert
 	}
-	return assert
+	return true
 }
 
 func ExecuteScripts(data map[string]interface{}, api models.Step, config *map[string]interface{}) error {
@@ -77,8 +89,9 @@ func ExecuteScripts(data map[string]interface{}, api models.Step, config *map[st
 	for i := range api.Scripts {
 		val, err := shared.ExtractValue(data, api.Scripts[i])
 		if err != nil {
-			return fmt.Errorf("path %s not found in the response ", api.Scripts[i].Path)
-
+			// The cause is kept: "no path" and "that path is not in this body"
+			// are different mistakes, and the old message said neither.
+			return fmt.Errorf("capture %q: %w", api.Scripts[i].Key, err)
 		}
 		configMap[api.Scripts[i].Key] = val
 	}
