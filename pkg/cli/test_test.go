@@ -1,0 +1,280 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"artemis/pkg/result"
+	"artemis/pkg/shared/logger"
+	"artemis/pkg/shared/models"
+)
+
+var initOnce sync.Once
+
+// initLog points the package logger at a throwaway file; executeSteps logs
+// unconditionally and would otherwise dereference a nil logger.
+func initLog(t *testing.T) {
+	t.Helper()
+	file := logger.InitLog(filepath.Join(t.TempDir(), "test.log"))
+	t.Cleanup(func() { _ = file.Close() })
+}
+
+// okServer answers every request with the given status and body.
+func okServer(t *testing.T, status int, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func apiStep(name, url string, wantStatus int, checks ...models.BodyCheck) models.Step {
+	return models.Step{
+		Name:     name,
+		Type:     "api",
+		Retry:    1,
+		Request:  models.Request{URL: url, Method: http.MethodGet},
+		Response: models.Response{StatusCode: wantStatus, Body: checks},
+	}
+}
+
+func scenario(steps ...models.Step) models.Config {
+	return models.Config{Name: "scenario", Type: "functional", Steps: steps}
+}
+
+func TestExecuteStepsPassingScenarioPasses(t *testing.T) {
+	initLog(t)
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	run := executeSteps(scenario(apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})), "scenario.yaml")
+
+	if !run.Passed() {
+		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
+	}
+	if got := run.Counts(); got.Assertions.Total != 2 || got.Assertions.Passed != 2 {
+		t.Errorf("assertion tally = %+v, want 2 passed (status code and body)", got.Assertions)
+	}
+	if run.Scenarios[0].Steps[0].Attempts != 1 {
+		t.Errorf("Attempts = %d, want 1", run.Scenarios[0].Steps[0].Attempts)
+	}
+}
+
+func TestExecuteStepsFailedBodyAssertionFailsTheRun(t *testing.T) {
+	initLog(t)
+	srv := okServer(t, 200, `{"status":"pending"}`)
+
+	run := executeSteps(scenario(apiStep("ping", srv.URL, 200, models.BodyCheck{Path: "$.status", Value: "ok"})), "scenario.yaml")
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for a failing body assertion")
+	}
+	if run.Status != result.StatusFail {
+		t.Errorf("run.Status = %q, want %q", run.Status, result.StatusFail)
+	}
+	failures := run.Failures()
+	if len(failures) != 1 || failures[0].Path != "$.status" || failures[0].Actual != "pending" {
+		t.Fatalf("Failures() = %+v, want one $.status mismatch with actual %q", failures, "pending")
+	}
+	if got := runFailedError(run).Error(); !strings.Contains(got, "1 of 1 steps failed") {
+		t.Errorf("error = %q, want it to name the failed step count", got)
+	}
+}
+
+func TestExecuteStepsWrongStatusCodeFailsTheRun(t *testing.T) {
+	initLog(t)
+	srv := okServer(t, 500, `{"error":"boom"}`)
+
+	run := executeSteps(scenario(apiStep("ping", srv.URL, 200)), "scenario.yaml")
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for a 500 where 200 was expected")
+	}
+	failures := run.Failures()
+	if len(failures) != 1 || failures[0].Kind != "status_code" {
+		t.Fatalf("Failures() = %+v, want one status_code failure", failures)
+	}
+	if failures[0].Expected != 200 || failures[0].Actual != 500 {
+		t.Errorf("expected/actual = %v/%v, want 200/500", failures[0].Expected, failures[0].Actual)
+	}
+}
+
+func TestExecuteStepsUnreachableURLErrorsTheStep(t *testing.T) {
+	initLog(t)
+	srv := okServer(t, 200, `{}`)
+	url := srv.URL
+	srv.Close() // nothing is listening there any more
+
+	run := executeSteps(scenario(apiStep("ping", url, 200)), "scenario.yaml")
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false when the request cannot be made")
+	}
+	step := run.Scenarios[0].Steps[0]
+	if step.Status != result.StatusError {
+		t.Errorf("step.Status = %q, want %q", step.Status, result.StatusError)
+	}
+	if step.Error == "" {
+		t.Error("step.Error is empty, want the transport error")
+	}
+	if run.Status != result.StatusError {
+		t.Errorf("run.Status = %q, want %q", run.Status, result.StatusError)
+	}
+}
+
+func TestExecuteStepsZeroAttemptsErrorsTheStep(t *testing.T) {
+	initLog(t)
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	step := apiStep("ping", srv.URL, 200)
+	step.Retry = 0 // what an omitted retry: parses to today
+
+	run := executeSteps(scenario(step), "scenario.yaml")
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for a step that never ran")
+	}
+	got := run.Scenarios[0].Steps[0]
+	if got.Status != result.StatusError {
+		t.Errorf("step.Status = %q, want %q", got.Status, result.StatusError)
+	}
+	if !strings.Contains(got.Error, "no attempts") {
+		t.Errorf("step.Error = %q, want it to say the step made no attempts", got.Error)
+	}
+}
+
+func TestExecuteStepsRetriesWithoutSleepingAfterTheLastAttempt(t *testing.T) {
+	initLog(t)
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	step := apiStep("ping", srv.URL, 200)
+	step.Retry = 1
+
+	start := time.Now()
+	run := executeSteps(scenario(step), "scenario.yaml")
+
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("one attempt took %v, want no sleep after the final attempt", elapsed)
+	}
+	if calls != 1 {
+		t.Errorf("server saw %d calls, want 1", calls)
+	}
+	if run.Passed() {
+		t.Error("run.Passed() = true, want false")
+	}
+}
+
+func TestExecuteStepsUnsupportedStepTypeIsSkippedNotDropped(t *testing.T) {
+	initLog(t)
+
+	run := executeSteps(scenario(models.Step{Name: "query", Type: "db"}), "scenario.yaml")
+
+	step := run.Scenarios[0].Steps[0]
+	if step.Status != result.StatusSkip {
+		t.Errorf("step.Status = %q, want %q", step.Status, result.StatusSkip)
+	}
+	if !strings.Contains(step.Error, "unsupported step type") {
+		t.Errorf("step.Error = %q, want it to name the unsupported type", step.Error)
+	}
+	if !run.Passed() {
+		t.Error("run.Passed() = false, want true -- a skip must not fail the run yet (ART-7)")
+	}
+}
+
+// execute runs the real root command, the way main does.
+func execute(t *testing.T, yaml string) error {
+	t.Helper()
+	initOnce.Do(Init)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "scenario.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return executeFile(t, path)
+}
+
+func executeFile(t *testing.T, path string) error {
+	t.Helper()
+	initOnce.Do(Init)
+
+	dir := t.TempDir()
+	RootCmd.SetArgs([]string{"test", "-f", path, "-l", filepath.Join(dir, "app.log"), "-e", filepath.Join(dir, ".env")})
+	RootCmd.SetOut(os.Stderr)
+	return RootCmd.Execute()
+}
+
+func scenarioYAML(url string, wantStatus int, wantBody string) string {
+	return fmt.Sprintf(`name: "exit code"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    retry: 1
+    request:
+      url: "%s"
+      method: "GET"
+    response:
+      status_code: %d
+      body:
+        - path: "$.status"
+          value: "%s"
+`, url, wantStatus, wantBody)
+}
+
+func TestExecutePassingScenarioReturnsNil(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	if err := execute(t, scenarioYAML(srv.URL, 200, "ok")); err != nil {
+		t.Fatalf("Execute() = %v, want nil", err)
+	}
+}
+
+func TestExecuteFailingAssertionReturnsError(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"pending"}`)
+
+	err := execute(t, scenarioYAML(srv.URL, 200, "ok"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error so the process exits 1")
+	}
+	if !strings.Contains(err.Error(), "assertions failed") {
+		t.Errorf("error = %q, want it to mention the failed assertions", err)
+	}
+}
+
+func TestExecuteUnparseableYAMLReturnsError(t *testing.T) {
+	err := execute(t, "name: [unterminated\n\tsteps: nope\n")
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for unparseable YAML")
+	}
+	if !strings.Contains(err.Error(), "scenario.yaml") {
+		t.Errorf("error = %q, want it to name the file", err)
+	}
+}
+
+func TestExecuteMissingFileReturnsError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.yaml")
+
+	err := executeFile(t, missing)
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error for a file that does not exist")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("error = %v, want it to wrap os.ErrNotExist", err)
+	}
+}

@@ -8,6 +8,10 @@ import (
 )
 
 func Init() {
+	// A failed test run is reported by RunE as an error; cobra must not answer
+	// it with usage text, and main prints the message itself.
+	RootCmd.SilenceUsage = true
+	RootCmd.SilenceErrors = true
 
 	// Parse command for validating yaml file
 	RootCmd.AddCommand(parseCmd)
