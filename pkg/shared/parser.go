@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
@@ -121,18 +120,6 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 		return err
 	}
 	return nil
-}
-
-func TypeCast(val any, valType string) string {
-	if val == nil {
-		return ""
-	}
-	if valType == "boolean" {
-		return strconv.FormatBool(val.(bool))
-	} else if valType == "number" {
-		return strconv.FormatInt(val.(int64), 10)
-	}
-	return ""
 }
 
 func SubstituteEnvVars(input string) interface{} {

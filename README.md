@@ -139,8 +139,47 @@ This configuration further enhances the API request by adding assertions to vali
   - **status_code**: Expected HTTP status code.
   - **body**: Expected values in response.
     - **path**: The [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) in the response body.
-    - **value**: Expected value.
-    - **type**: Expected value type.
+    - **operator**: The comparison to make. Defaults to `equals`.
+    - **value**: Expected value. It keeps the type you write: `value: 200` is a number, `value: "200"` a string, `value: true` a boolean.
+    - **type**: Optional. The JSON type the value at **path** must have -- one of `string`, `number`, `boolean`, `object`, `array`, `null`. A value of another type fails the check.
+
+### Operators
+
+| Operator | Checks |
+| --- | --- |
+| `equals` (default) | The value equals **value**. Numbers compare as numbers whichever way they are written, and arrays and objects compare element by element. |
+| `contains` | A string contains **value** as a substring, an array has it as an element, or an object has it as a key. |
+| `matches` | The value, rendered as a string, matches the regular expression in **value**. Unanchored, so `"ok"` matches `"not ok"`. |
+| `exists` | The path resolves to a non-null value. `value: false` asserts the opposite -- the key must be absent. |
+| `type` | The value's JSON type is **value** -- `string`, `number`, `boolean`, `object`, `array` or `null`. |
+| `gt`, `gte`, `lt`, `lte` | The value is a number greater than, at least, less than or at most **value**. |
+
+A check that cannot be made at all -- a malformed path, a path that is not in the
+response, an operator Artemis does not know, a regular expression that will not
+compile, `gt` against an object -- is reported as an errored assertion with the
+reason, and fails the run.
+
+```yaml
+    response:
+      status_code: 200
+      body:
+        - path: "$.data.message"
+          value: "success"
+        - path: "$.data.id"
+          operator: gt
+          value: 0
+        - path: "$.data.token"
+          operator: exists
+        - path: "$.data.roles"
+          operator: contains
+          value: "admin"
+        - path: "$.data.email"
+          operator: matches
+          value: ".+@.+"
+        - path: "$.data.count"
+          type: "number"
+          value: 3
+```
 
 ```yaml
 name: "API Collection"

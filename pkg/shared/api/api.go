@@ -3,6 +3,7 @@ package api
 import (
 	"artemis/pkg/result"
 	"artemis/pkg/shared"
+	"artemis/pkg/shared/assert"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"bytes"
@@ -10,8 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/oliveagle/jsonpath"
 )
 
 func CallAPI(step models.Step, config *map[string]interface{}) (*http.Response, error) {
@@ -57,43 +56,10 @@ func ParseResponse(api models.Step, resp *http.Response) map[string]interface{} 
 	return response
 }
 
-// AssertResponse checks every body check of the step against the response and
-// returns one result per check, carrying the path, what was expected and what
-// was found. A path that does not resolve is an errored assertion, not a
-// silently failed one.
+// AssertResponse checks every body check of the step against the response.
+// The engine itself is pkg/shared/assert; this is the runner's door into it.
 func AssertResponse(step models.Step, response map[string]interface{}) []result.AssertionResult {
-	assertions := make([]result.AssertionResult, 0, len(step.Response.Body))
-	for _, check := range step.Response.Body {
-		a := result.Assertion{
-			Step:     step.Name,
-			Kind:     "body",
-			Path:     check.Path,
-			Operator: "equals",
-			Expected: check.Value,
-		}
-
-		extractedValue, err := jsonpath.JsonPathLookup(response, check.Path)
-		if err != nil {
-			assertions = append(assertions, a.Errored(err))
-			continue
-		}
-
-		if slice, ok := extractedValue.([]interface{}); ok {
-			if len(slice) == 0 {
-				assertions = append(assertions, a.Errored(fmt.Errorf("path %s resolved to an empty list", check.Path)))
-				continue
-			}
-			extractedValue = slice[0]
-		}
-
-		a.Actual = extractedValue
-		if extractedValue == check.Value {
-			assertions = append(assertions, a.Pass())
-		} else {
-			assertions = append(assertions, a.Fail())
-		}
-	}
-	return assertions
+	return assert.Body(step, response)
 }
 
 // AllPassed reports whether every assertion in as passed.
