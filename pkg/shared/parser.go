@@ -52,29 +52,6 @@ func ExtractValue(data map[string]interface{}, binding models.Script) (interface
 	return val, nil
 }
 
-func TransformText(templateStr string, config map[string]interface{}) (string, error) {
-	final := ""
-	i := 0
-	for ; i < len(templateStr); i++ {
-		if templateStr[i] == '{' && templateStr[i+1] == '{' {
-			start := i + 2
-			for templateStr[i] != '}' {
-				i++
-			}
-			val := config[templateStr[start:i]]
-			if val != nil {
-				final += val.(string)
-			} else {
-				final += templateStr[start-2 : i+1]
-			}
-			i++
-		} else {
-			final += templateStr[i : i+1]
-		}
-	}
-	return final, nil
-}
-
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
 	apiConfig := models.Config{
 		Steps:     make([]models.Step, 0),

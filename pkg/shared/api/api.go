@@ -14,8 +14,14 @@ import (
 )
 
 func CallAPI(step models.Step, config *map[string]interface{}) (*http.Response, error) {
-	url, _ := shared.TransformText(step.Request.URL, *config)
-	body, _ := shared.TransformText(step.Request.Body, *config)
+	url, err := shared.TransformText(step.Request.URL, *config)
+	if err != nil {
+		return nil, fmt.Errorf("rendering request url: %w", err)
+	}
+	body, err := shared.TransformText(step.Request.Body, *config)
+	if err != nil {
+		return nil, fmt.Errorf("rendering request body: %w", err)
+	}
 
 	req, err := http.NewRequest(step.Request.Method, url, bytes.NewBuffer([]byte(body)))
 	if err != nil {
@@ -23,7 +29,10 @@ func CallAPI(step models.Step, config *map[string]interface{}) (*http.Response, 
 	}
 
 	for key, value := range step.Request.Headers {
-		val, _ := shared.TransformText(value, *config)
+		val, err := shared.TransformText(value, *config)
+		if err != nil {
+			return nil, fmt.Errorf("rendering header %q: %w", key, err)
+		}
 		req.Header.Set(key, val)
 	}
 	logger.Logger.Info("API call", "name", step.Name, "url", url, "method", step.Request.Method, "headers", req.Header, "body", body)

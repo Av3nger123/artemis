@@ -444,3 +444,85 @@ func TestExecuteMissingFileReturnsError(t *testing.T) {
 		t.Errorf("error = %v, want it to wrap os.ErrNotExist", err)
 	}
 }
+
+// pathRecordingServer answers every request with body and remembers the paths
+// it was asked for, in order.
+func pathRecordingServer(t *testing.T, body string) (*httptest.Server, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), paths...)
+	}
+}
+
+// A numeric capture templated into a later url used to panic on an unchecked
+// string assertion: every number out of a JSON body is a float64.
+func TestExecuteStepsNumericCaptureTemplatesIntoTheNextURL(t *testing.T) {
+	initLog(t)
+	srv, paths := pathRecordingServer(t, `{"id":42}`)
+
+	login := apiStep("login", srv.URL+"/login", 200)
+	login.Scripts = []models.Script{{Key: "id", Path: "$.id"}}
+	fetch := apiStep("fetch", srv.URL+"/users/{{id}}", 200, models.BodyCheck{Path: "$.id", Value: 42})
+
+	run := executeSteps(scenario(login, fetch), "scenario.yaml")
+
+	if !run.Passed() {
+		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
+	}
+	if got := paths(); len(got) != 2 || got[1] != "/users/42" {
+		t.Errorf("server saw paths %v, want the second to be /users/42", got)
+	}
+}
+
+func TestExecuteStepsUnknownTemplateVariableFailsTheStepBeforeAnyRequest(t *testing.T) {
+	initLog(t)
+	srv, calls := countingServer(t, 200)
+
+	run := executeSteps(scenario(apiStep("ping", srv.URL+"/{{tokn}}", 200)), "scenario.yaml")
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for an unknown template variable")
+	}
+	step := run.Scenarios[0].Steps[0]
+	if !strings.Contains(step.Error, "unknown variable") || !strings.Contains(step.Error, "tokn") {
+		t.Errorf("step.Error = %q, want it to name the unknown variable", step.Error)
+	}
+	if !strings.Contains(step.Error, "request url") {
+		t.Errorf("step.Error = %q, want it to say which part of the request failed to render", step.Error)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none -- the url never rendered", calls())
+	}
+}
+
+func TestExecuteStepsUnclosedTemplateInABodyFailsTheStep(t *testing.T) {
+	initLog(t)
+	srv, calls := countingServer(t, 200)
+
+	step := apiStep("ping", srv.URL, 200)
+	step.Request.Body = `{"token": "{{token`
+
+	run := executeSteps(scenario(step), "scenario.yaml")
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for an unclosed placeholder")
+	}
+	if got := run.Scenarios[0].Steps[0].Error; !strings.Contains(got, "request body") || !strings.Contains(got, "unclosed") {
+		t.Errorf("step.Error = %q, want it to report the unclosed placeholder in the body", got)
+	}
+	if calls() != 0 {
+		t.Errorf("server saw %d calls, want none", calls())
+	}
+}

@@ -131,6 +131,35 @@ steps:
 
 ```
 
+## Placeholders
+
+Anywhere a step's `url`, `body` or a header value is written, `{{name}}` is
+replaced with the value of `name`. A name resolves against the scenario's
+`variables:` and against anything an earlier step captured with `scripts:`.
+Surrounding spaces are ignored, so `{{ url }}` and `{{url}}` are the same.
+
+A captured value does not have to be a string. A number renders as it was
+written (`42`, not `42.000000`), a boolean as `true` or `false`, a null as
+`null`, and an object or array as compact JSON -- so a captured object can be
+templated straight into a body:
+
+```yaml
+body: '{"user": {{user}}}'
+```
+
+Two things are errors, and fail the step before any request goes out:
+
+- **An unknown name.** `{{tokn}}` is not quietly sent to the server as literal
+  braces; the step fails saying which variable is missing.
+- **An unclosed placeholder.** `{{token` with no `}}`, or `{{url}` with one
+  closing brace, fails naming the placeholder and its position.
+
+Substitution is single pass: a value that itself contains `{{x}}` is used as it
+is and not expanded again. There is no escape syntax -- `{{` always opens a
+placeholder, so a body that needs literal braces should keep them in a
+variable's value. To use an environment variable, reference it from a variable's
+value (`{{env.NAME}}`, below) rather than in a step.
+
 ## Adding Assertions
 
 This configuration further enhances the API request by adding assertions to validate the response. It checks if the HTTP status code is 200.
