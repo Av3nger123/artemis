@@ -1,7 +1,6 @@
 package httpstep
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -192,7 +191,7 @@ func TestWrongStatusIsTheOnlyAssertion(t *testing.T) {
 
 	s := step("ping", models.Request{URL: srv.URL, Method: http.MethodGet}, 200)
 	s.Response.Body = []models.BodyCheck{{Path: "$.status", Value: "ok"}}
-	s.Scripts = []models.Script{{Key: "k", Path: "$.status"}}
+	s.Capture = map[string]models.Capture{"k": {JSON: "$.status"}}
 
 	sc := scope()
 	res, err := run(s, sc)
@@ -238,10 +237,10 @@ func TestCapturesLandInTheScope(t *testing.T) {
 	srv := serve(t, 200, `{"token": "abc", "user": {"id": 7}, "items": [{"sku": "x1"}]}`)
 
 	s := step("login", models.Request{URL: srv.URL, Method: http.MethodPost}, 200)
-	s.Scripts = []models.Script{
-		{Key: "authToken", Path: "$.token"},
-		{Key: "userId", Path: "$.user.id"},
-		{Key: "sku", Path: "$.items[0].sku"},
+	s.Capture = map[string]models.Capture{
+		"authToken": {JSON: "$.token"},
+		"userId":    {JSON: "$.user.id"},
+		"sku":       {JSON: "$.items[0].sku"},
 	}
 
 	sc := scope()
@@ -263,39 +262,52 @@ func TestCapturesLandInTheScope(t *testing.T) {
 	}
 }
 
+// Reading a value out of the response is pkg/shared/capture's job and is tested
+// there; what this pins is that httpstep hands it the response and puts what it
+// gets back into the step's assertions, after the body checks.
 func TestCaptureThatCannotBeMadeIsAnErroredAssertion(t *testing.T) {
-	cases := []struct {
-		name   string
-		body   string
-		path   string
-		wantIn string
-	}{
-		{"path does not resolve", `{"token": "abc"}`, "$.nope.deeper", "$.nope.deeper"},
-		{"no path given", `{"token": "abc"}`, "", "no path given"},
-		{"body is not json", `<html>no</html>`, "$.token", "no parsed response body"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			srv := serve(t, 200, c.body)
-			s := step("login", models.Request{URL: srv.URL, Method: http.MethodGet}, 200)
-			s.Scripts = []models.Script{{Key: "authToken", Path: c.path}}
+	srv := serve(t, 200, `{"token": "abc"}`)
+	s := step("login", models.Request{URL: srv.URL, Method: http.MethodGet}, 200)
+	s.Response.Body = []models.BodyCheck{{Path: "$.token", Operator: "exists"}}
+	s.Capture = map[string]models.Capture{"authToken": {JSON: "$.nope.deeper"}}
 
-			sc := scope()
-			res, err := run(s, sc)
-			if err != nil {
-				t.Fatalf("Execute() = %v, want nil -- a bad capture is an errored assertion, not a step that could not run", err)
-			}
-			last := res.Assertions[len(res.Assertions)-1]
-			if last.Kind != "capture" || last.Status != result.StatusError {
-				t.Fatalf("last assertion = %+v, want an errored capture", last)
-			}
-			if !strings.Contains(last.Error, c.wantIn) {
-				t.Errorf("assertion error = %q, want it to mention %q", last.Error, c.wantIn)
-			}
-			if _, ok := sc.Get("authToken"); ok {
-				t.Error("a failed capture still wrote to the scope")
-			}
-		})
+	sc := scope()
+	res, err := run(s, sc)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil -- a bad capture is an errored assertion, not a step that could not run", err)
+	}
+	if len(res.Assertions) != 3 {
+		t.Fatalf("assertions = %v, want status, body check, capture", res.Assertions)
+	}
+	last := res.Assertions[2]
+	if last.Kind != "capture" || last.Status != result.StatusError {
+		t.Fatalf("last assertion = %+v, want an errored capture", last)
+	}
+	if last.Path != "authToken" {
+		t.Errorf("assertion Path = %q, want the capture key", last.Path)
+	}
+	if _, ok := sc.Get("authToken"); ok {
+		t.Error("a failed capture still wrote to the scope")
+	}
+}
+
+// A regex capture reads the response as text, so a step type's output does not
+// have to be JSON for captures to work -- which is the whole point of ART-18.
+func TestARegexCaptureReadsANonJSONBody(t *testing.T) {
+	srv := serve(t, 200, `<html><b>ada</b></html>`)
+	s := step("page", models.Request{URL: srv.URL, Method: http.MethodGet}, 200)
+	s.Capture = map[string]models.Capture{"who": {Regex: `<b>(.*)</b>`}}
+
+	sc := scope()
+	res, err := run(s, sc)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil", err)
+	}
+	if !result.AllPassed(res.Assertions) {
+		t.Errorf("assertions = %v, want all passed", res.Assertions)
+	}
+	if got, _ := sc.Get("who"); got != "ada" {
+		t.Errorf("scope[who] = %#v, want \"ada\"", got)
 	}
 }
 
@@ -427,16 +439,5 @@ func TestTheConnectionIsReused(t *testing.T) {
 
 	if n := atomic.LoadInt32(&conns); n != 1 {
 		t.Errorf("the server saw %d connections for 3 requests, want 1 -- a body that is not drained and closed is a connection that is not reused", n)
-	}
-}
-
-// errNoParsedBody is matched by a test rather than by its wording, so the
-// message can be reworded without breaking anything.
-func TestNoParsedBodyIsASentinel(t *testing.T) {
-	if !errors.Is(errNoParsedBody, errNoParsedBody) {
-		t.Fatal("unreachable")
-	}
-	if errNoParsedBody.Error() == "" {
-		t.Error("errNoParsedBody has no message")
 	}
 }

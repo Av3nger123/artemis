@@ -2,16 +2,12 @@ package shared
 
 import (
 	"artemis/pkg/shared/env"
-	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
 	"strings"
 
-	"github.com/oliveagle/jsonpath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -62,33 +58,6 @@ func ParsePostmanJSON(filePath string) (models.PostmanCollection, error) {
 	return collection, nil
 }
 
-// ExtractValue reads the value at a capture's path out of a parsed response
-// body.
-//
-// An empty path is rejected before the lookup, and a panic from the jsonpath
-// library is turned into an error: a scenario that omits `path:` under scripts:,
-// or writes one the library chokes on, must fail its step with a reason rather
-// than taking the whole run down with a stack trace.
-func ExtractValue(data map[string]interface{}, binding models.Script) (val interface{}, err error) {
-	if strings.TrimSpace(binding.Path) == "" {
-		return nil, errors.New("no path given")
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			val, err = nil, fmt.Errorf("path %q could not be read: %v", binding.Path, r)
-		}
-	}()
-
-	val, err = jsonpath.JsonPathLookup(data, binding.Path)
-	if err != nil {
-		return nil, fmt.Errorf("path %q not found in the response: %w", binding.Path, err)
-	}
-	// A captured value goes to the log, never to stdout: it is often a token,
-	// and the terminal belongs to the step list.
-	logger.Logger.Debug("Captured value", "key", binding.Key, "path", binding.Path)
-	return val, nil
-}
-
 func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) error {
 	apiConfig := models.Config{
 		Steps:     make([]models.Step, 0),
@@ -109,8 +78,7 @@ func ConvertJsonToYaml(collection models.PostmanCollection, filePath string) err
 				},
 				Body: val.Request.Body.Raw,
 			},
-			Scripts: []models.Script{},
-			Name:    val.Name,
+			Name: val.Name,
 			Response: models.Response{
 				StatusCode: 200,
 				Body:       []models.BodyCheck{},

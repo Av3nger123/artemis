@@ -1,11 +1,12 @@
-scenario: capture with no path (testdata/bad_capture.yaml)
+scenario: captures that cannot be read (testdata/bad_capture.yaml)
   ERROR login                       <dur>
-         capture exists: capture "authToken": no path given
+         authToken json: path "$.session.token" not found in the output: key error: session not found in object
+         requestId regex: regex "req-([0-9a-f]+)" matched nothing in the output
 
 Scenarios     1  (1 errored)
 Steps         1  (1 errored)
-Assertions    3  (2 passed, 1 errored)
+Assertions    4  (2 passed, 2 errored)
 FAIL in <dur>
 
 --- exit error ---
-1 of 1 steps failed (1 errored), 1 of 3 assertions failed
+1 of 1 steps failed (1 errored), 2 of 4 assertions failed

@@ -36,9 +36,9 @@ steps:
           operator: gt
           value: 0
           type: number
-    scripts:
-      - key: "token"
-        path: "$.token"
+    capture:
+      token: "$.token"
+      requestId: {regex: "req-([0-9a-f]+)"}
 `
 
 // knownTypes stands in for what the registry hands the loader in a real run.
@@ -77,8 +77,11 @@ func TestParseYAMLFileReadsAFullScenario(t *testing.T) {
 	if len(step.Response.Body) != 2 || step.Response.Body[1].Operator != "gt" {
 		t.Errorf("step.Response.Body = %+v, want two checks, the second a gt", step.Response.Body)
 	}
-	if len(step.Scripts) != 1 || step.Scripts[0].Key != "token" {
-		t.Errorf("step.Scripts = %+v, want one capture of token", step.Scripts)
+	if len(step.Capture) != 2 || step.Capture["token"].JSON != "$.token" {
+		t.Errorf("step.Capture = %+v, want a json capture of token", step.Capture)
+	}
+	if step.Capture["requestId"].Regex != "req-([0-9a-f]+)" {
+		t.Errorf("step.Capture[requestId] = %+v, want the regex form", step.Capture["requestId"])
 	}
 }
 
@@ -94,7 +97,7 @@ func TestParseYAMLFileRejectsUnknownKeys(t *testing.T) {
 		"request":    {`method: "POST"`, `verb: "POST"`, "verb"},
 		"response":   {"status_code: 200", "status: 200", "status"},
 		"body check": {`path: "$.token"`, `pth: "$.token"`, "pth"},
-		"script":     {`key: "token"`, `kye: "token"`, "kye"},
+		"capture":    {`{regex: "req-([0-9a-f]+)"}`, `{rgex: "req-([0-9a-f]+)"}`, "rgex"},
 		"retry":      {"times: 3", "tims: 3", "tims"},
 	}
 
@@ -249,56 +252,5 @@ func TestSubstituteEnvVarsTerminatesAndNeverPanics(t *testing.T) {
 			}()
 			_ = SubstituteEnvVars(prefix)
 		}()
-	}
-}
-
-func TestExtractValue(t *testing.T) {
-	data := map[string]interface{}{
-		"token": "abc",
-		"id":    float64(7),
-		"ok":    true,
-		"user":  map[string]interface{}{"name": "ada", "roles": []interface{}{"admin", "dev"}},
-		"items": []interface{}{
-			map[string]interface{}{"sku": "x1"},
-			map[string]interface{}{"sku": "x2"},
-		},
-	}
-
-	cases := []struct {
-		name string
-		path string
-		want interface{}
-	}{
-		{"top-level string", "$.token", "abc"},
-		{"number stays a float64", "$.id", float64(7)},
-		{"bool", "$.ok", true},
-		{"nested", "$.user.name", "ada"},
-		{"array index", "$.items[0].sku", "x1"},
-		{"second element", "$.items[1].sku", "x2"},
-		{"inside a nested array", "$.user.roles[1]", "dev"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got, err := ExtractValue(data, models.Script{Key: "k", Path: c.path})
-			if err != nil {
-				t.Fatalf("ExtractValue(%q) = %v, want nil", c.path, err)
-			}
-			if got != c.want {
-				t.Errorf("ExtractValue(%q) = %#v, want %#v", c.path, got, c.want)
-			}
-		})
-	}
-}
-
-func TestExtractValueUnresolvablePathIsAnError(t *testing.T) {
-	data := map[string]interface{}{"token": "abc", "items": []interface{}{}}
-
-	for _, path := range []string{"$.nope", "$.token.deeper", "$.items[0]", "", "not a path"} {
-		t.Run(path, func(t *testing.T) {
-			got, err := ExtractValue(data, models.Script{Key: "k", Path: path})
-			if err == nil {
-				t.Errorf("ExtractValue(%q) = %#v, want an error", path, got)
-			}
-		})
 	}
 }

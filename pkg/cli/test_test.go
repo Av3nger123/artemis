@@ -345,7 +345,7 @@ func TestExecuteStepsCaptureFromANonJSONBodyIsAnErroredAssertion(t *testing.T) {
 	srv := okServer(t, 200, `not json at all`)
 
 	step := apiStep("ping", srv.URL, 200)
-	step.Scripts = []models.Script{{Key: "token", Path: "$.token"}}
+	step.Capture = map[string]models.Capture{"token": {JSON: "$.token"}}
 
 	run := runScenario(scenario(step), "scenario.yaml")
 
@@ -356,7 +356,7 @@ func TestExecuteStepsCaptureFromANonJSONBodyIsAnErroredAssertion(t *testing.T) {
 	if len(failures) != 1 || failures[0].Kind != "capture" {
 		t.Fatalf("Failures() = %+v, want one capture error", failures)
 	}
-	if !strings.Contains(failures[0].Error, "no parsed response body") {
+	if !strings.Contains(failures[0].Error, "no parsed JSON output") {
 		t.Errorf("error = %q, want it to say there was no body to capture from", failures[0].Error)
 	}
 }
@@ -669,7 +669,7 @@ func TestExecuteStepsNumericCaptureTemplatesIntoTheNextURL(t *testing.T) {
 	srv, paths := pathRecordingServer(t, `{"id":42}`)
 
 	login := apiStep("login", srv.URL+"/login", 200)
-	login.Scripts = []models.Script{{Key: "id", Path: "$.id"}}
+	login.Capture = map[string]models.Capture{"id": {JSON: "$.id"}}
 	fetch := apiStep("fetch", srv.URL+"/users/{{id}}", 200, models.BodyCheck{Path: "$.id", Value: 42})
 
 	run := runScenario(scenario(login, fetch), "scenario.yaml")
@@ -845,9 +845,8 @@ steps:
       method: "GET"
     response:
       status_code: 200
-    scripts:
-      - key: "token"
-        path: "$.token"
+    capture:
+      token: "$.token"
 `, srv.URL)
 
 	out, err := executeCapturing(t, yaml)

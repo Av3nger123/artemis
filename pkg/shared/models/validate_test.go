@@ -119,3 +119,94 @@ func TestValidateWithNothingRegisteredSaysSo(t *testing.T) {
 		t.Errorf("error = %q, want it to say nothing is registered", err)
 	}
 }
+
+func TestValidateRejectsACaptureWithNoName(t *testing.T) {
+	c := Config{Steps: []Step{{
+		Name:    "login",
+		Type:    "api",
+		Capture: map[string]Capture{"": {JSON: "$.token"}},
+	}}}
+	err := c.Validate([]string{"api"})
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error for a capture with no name")
+	}
+	if !strings.Contains(err.Error(), "has no name") {
+		t.Errorf("Validate() = %q, want it to say the capture has no name", err)
+	}
+}
+
+// `token:` with nothing after it is a null node, and yaml.v3 never calls an
+// UnmarshalYAML method for one -- so the only place that mistake can be caught
+// is here.
+func TestValidateRejectsACaptureWithNoSource(t *testing.T) {
+	c := Config{Steps: []Step{{
+		Name:    "login",
+		Type:    "api",
+		Capture: map[string]Capture{"token": {}},
+	}}}
+	err := c.Validate([]string{"api"})
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error for a capture with no source")
+	}
+	if !strings.Contains(err.Error(), `capture "token"`) {
+		t.Errorf("Validate() = %q, want it to name the capture", err)
+	}
+}
+
+func TestValidateReportsEveryBadCaptureInSortedOrder(t *testing.T) {
+	c := Config{Steps: []Step{{
+		Name: "login",
+		Type: "api",
+		Capture: map[string]Capture{
+			"zebra": {},
+			"apple": {},
+			"ok":    {JSON: "$.fine"},
+		},
+	}}}
+	err := c.Validate([]string{"api"})
+	if err == nil {
+		t.Fatal("Validate() = nil, want errors")
+	}
+	got := err.Error()
+	apple, zebra := strings.Index(got, "apple"), strings.Index(got, "zebra")
+	if apple < 0 || zebra < 0 {
+		t.Fatalf("Validate() = %q, want both bad captures in it", got)
+	}
+	if apple > zebra {
+		t.Errorf("Validate() = %q, want the captures in sorted order", got)
+	}
+	if strings.Contains(got, "$.fine") || strings.Contains(got, `"ok"`) {
+		t.Errorf("Validate() = %q, want the good capture left out", got)
+	}
+}
+
+func TestValidateAcceptsAStepWithGoodCaptures(t *testing.T) {
+	c := Config{Steps: []Step{{
+		Name: "login",
+		Type: "api",
+		Capture: map[string]Capture{
+			"token": {JSON: "$.token"},
+			"id":    {Regex: "id=([0-9]+)"},
+		},
+	}}}
+	if err := c.Validate([]string{"api"}); err != nil {
+		t.Errorf("Validate() = %v, want nil", err)
+	}
+}
+
+func TestCaptureKeysAreSorted(t *testing.T) {
+	s := Step{Capture: map[string]Capture{"c": {}, "a": {}, "b": {}}}
+	got := s.CaptureKeys()
+	want := []string{"a", "b", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("CaptureKeys() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("CaptureKeys() = %v, want %v", got, want)
+		}
+	}
+	if (Step{}).CaptureKeys() != nil {
+		t.Error("CaptureKeys() on a step with no captures is not nil")
+	}
+}

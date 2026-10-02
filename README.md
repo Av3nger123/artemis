@@ -104,7 +104,7 @@ This configuration defines a basic API request to generate a token. It includes 
   - **name**: Name of the variable.
   - **value**: Value of the variable.
 - **steps**: The steps, executed in the order they are written. `name`, `type`,
-  `request`, `response`, `scripts`, `retry` and `timeout` are all keys of a step,
+  `request`, `response`, `capture`, `retry` and `timeout` are all keys of a step,
   at the same indentation.
   - **name**: Name of the step.
   - **type**: Type of the step (currently only `api`: REST APIs with JSON payloads).
@@ -136,14 +136,26 @@ steps:
       status_code: 200
 ```
 
-## Adding Variables
+## Capturing Values
 
-This configuration extends the basic API request by adding support for capturing variables from the response. In this case, it captures the access token from the response body and saves it under the key "token", which later steps write as `{{token}}`.
+A step can pull values out of what it produced and leave them for the steps
+after it. Here the access token is captured under the name `token`, which later
+steps write as `{{token}}`.
 
-- **scripts**: A list of values to capture from the response. A captured value is
-  available to every later step as `{{key}}`.
-    - **key**: The name the captured value is referenced by.
-    - **path**: [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) to locate the value in the response.
+- **capture**: A map from the name a value is referenced by to where the value
+  comes from. Any step type can have one -- it is not an HTTP-only key.
+    - A plain string is a [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html)
+      into the step's output parsed as JSON: `token: "$.data.access_token"`.
+    - `{json: "..."}` is the same thing written out.
+    - `{regex: "..."}` matches the output as plain text, for output that is not
+      JSON at all. The value is capturing group 1 when the pattern has one, and
+      the whole match when it does not. Flags go inline: `(?s)`, `(?i)`.
+
+Exactly one of `json:` and `regex:` is given. Everything that can be checked
+without running anything is checked when the file is read, so a regex that will
+not compile, a capture with no path, and a key that is not `json` or `regex` are
+all load errors naming the line -- `artemis parse -f scenario.yaml` finds them
+without sending a request.
 
 ```yaml
 name: "API Collection"
@@ -162,22 +174,53 @@ steps:
       body: '{"username":"user_name","password":"password"}'
     response:
       status_code: 200
-    scripts:
-      - key: "token"
-        path: "$.data.token.access_token"
+    capture:
+      token: "$.data.token.access_token"
+```
+
+A capture that cannot be read is an errored assertion under its step, naming the
+key, and the step fails -- one per unreadable capture, so two mistyped paths take
+one run to find. A capture that is read writes nothing to the terminal: it is
+often a token.
+
+```yaml
+name: "API Collection"
+variables:
+  - name: "url"
+    value: "https://api.example.com/v2"
+type: functional
+steps:
+  - name: "Follow the redirect"
+    type: api
+    request:
+      url: "{{url}}/latest"
+      method: "GET"
+    response:
+      status_code: 200
+    capture:
+      itemId: {regex: "/items/([0-9]+)"}
+      name: {json: "$.name"}
+  - name: "Read it back"
+    type: api
+    request:
+      url: "{{url}}/items/{{itemId}}"
+      method: "GET"
+    response:
+      status_code: 200
 ```
 
 ## Placeholders
 
 Anywhere a step's `url`, `body` or a header value is written, `{{name}}` is
 replaced with the value of `name`. A name resolves against the scenario's
-`variables:` and against anything an earlier step captured with `scripts:`.
+`variables:` and against anything an earlier step captured with `capture:`.
 Surrounding spaces are ignored, so `{{ url }}` and `{{url}}` are the same.
 
-A captured value does not have to be a string. A number renders as it was
-written (`42`, not `42.000000`), a boolean as `true` or `false`, a null as
-`null`, and an object or array as compact JSON -- so a captured object can be
-templated straight into a body:
+A captured value does not have to be a string: a JSON-path capture keeps the
+type the response gave it. A number renders as it was written (`42`, not
+`42.000000`), a boolean as `true` or `false`, a null as `null`, and an object or
+array as compact JSON -- so a captured object can be templated straight into a
+body:
 
 ```yaml
 body: '{"user": {{user}}}'

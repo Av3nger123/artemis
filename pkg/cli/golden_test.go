@@ -224,13 +224,31 @@ func goldenCases(t *testing.T) []goldenCase {
 			wantErr: true,
 		},
 		{
-			// The request is fine and the body assertion passes; the capture
-			// cannot be read. That is an errored assertion under the step, so
-			// the run fails with a reason instead of passing on a variable
-			// nothing ever set.
+			// The request is fine and the body assertion passes; neither
+			// capture can be read. Each is an errored assertion under the
+			// step, so the run fails with a reason per capture instead of
+			// passing on variables nothing ever set.
 			name:    "bad_capture",
 			handler: jsonHandler(http.StatusOK, `{"token": "abc"}`),
 			wantErr: true,
+		},
+		{
+			// A capture off a body that is not JSON: the regex reads the raw
+			// text and the value is templated into the next step's URL
+			// (ART-18).
+			name: "regex_capture",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/redirect":
+					w.Header().Set("Content-Type", "text/plain")
+					fmt.Fprint(w, "moved to /items/42\n")
+				case "/items/42":
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, `{"id": 42}`)
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			},
 		},
 		{
 			// Two failures then a pass: the step passes, and its line says how

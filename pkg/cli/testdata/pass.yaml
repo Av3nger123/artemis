@@ -21,9 +21,8 @@ steps:
           operator: exists
         - path: "$.name"
           value: "widget"
-    scripts:
-      - key: itemId
-        path: "$.id"
+    capture:
+      itemId: "$.id"
   - name: "read it back"
     type: api
     request:

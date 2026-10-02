@@ -1,5 +1,6 @@
 // Package httpstep is the HTTP step: it sends a request, checks the response and
-// captures values out of it. It is registered in the default registry under the
+// hands the response to pkg/shared/capture, which pulls the step's `capture:`
+// values out of it. It is registered in the default registry under the
 // step type "api", which is the spelling scenarios have always written -- the
 // package is named for the protocol, the type for the YAML.
 //
@@ -17,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +27,7 @@ import (
 	"artemis/pkg/result"
 	"artemis/pkg/shared"
 	"artemis/pkg/shared/assert"
+	"artemis/pkg/shared/capture"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 )
@@ -38,11 +39,6 @@ const StepType = "api"
 // There is no "no timeout": a request with no deadline is how a CI job hangs
 // until someone notices, and 30s is far above any API worth asserting on.
 const DefaultTimeout = 30 * time.Second
-
-// errNoParsedBody is what a capture from a response that was not a JSON object
-// reports. It is a package-level error so a test can match it rather than its
-// wording.
-var errNoParsedBody = errors.New("no parsed response body to capture from")
 
 // client is shared by every step. Its Timeout field is deliberately unset --
 // the deadline is a context per attempt, so each step can have its own while
@@ -122,7 +118,9 @@ func (e Executor) Execute(step models.Step, scope executor.Scope) (*result.StepR
 	for _, a := range assert.Body(step, parsed) {
 		res.Assert(a)
 	}
-	capture(step, parsed, scope, res)
+	for _, a := range capture.Apply(step, capture.Source{Text: body, JSON: parsed}, scope.Vars()) {
+		res.Assert(a)
+	}
 	return res, nil
 }
 
@@ -182,33 +180,6 @@ func parseBody(step models.Step, body []byte) map[string]any {
 		return nil
 	}
 	return parsed
-}
-
-// capture writes the step's captures into the scope, one errored assertion per
-// capture that could not be made.
-//
-// A capture needs a parsed body, so a response that was not JSON is an errored
-// assertion rather than a path that mysteriously does not resolve.
-func capture(step models.Step, parsed map[string]any, scope executor.Scope, res *result.StepResult) {
-	if len(step.Scripts) == 0 {
-		return
-	}
-	a := result.Assertion{Step: step.Name, Kind: "capture", Operator: "exists"}
-	if parsed == nil {
-		res.Assert(a.Errored(errNoParsedBody))
-		return
-	}
-	for i := range step.Scripts {
-		val, err := shared.ExtractValue(parsed, step.Scripts[i])
-		if err != nil {
-			// The cause is kept: "no path" and "that path is not in this body"
-			// are different mistakes.
-			logger.Logger.Warn("Error while capturing a value", "name", step.Name, "key", step.Scripts[i].Key, "error", err.Error())
-			res.Assert(a.Errored(fmt.Errorf("capture %q: %w", step.Scripts[i].Key, err)))
-			return
-		}
-		scope.Set(step.Scripts[i].Key, val)
-	}
 }
 
 func (e Executor) client() *http.Client {

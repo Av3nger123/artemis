@@ -49,7 +49,28 @@ func validateStep(step Step, i int, known []string) error {
 	case !isKnown(step.Type, known):
 		return fmt.Errorf("%s: unknown type %q (known types: %s)", where, step.Type, list)
 	}
-	return nil
+	return validateCaptures(step, where)
+}
+
+// validateCaptures checks the two things about a `capture:` map that Capture's
+// own decoder cannot see: the name a value is captured under, which is the map
+// key rather than part of the value, and a capture with no source at all, which
+// yaml.v3 produces for `token:` with nothing after it -- a null node never
+// reaches an UnmarshalYAML method.
+//
+// Keys are reported in sorted order so a scenario with two bad ones reads the
+// same on every run, and every problem is collected, like Validate's own.
+func validateCaptures(step Step, where string) error {
+	var problems []error
+	for _, key := range step.CaptureKeys() {
+		switch c := step.Capture[key]; {
+		case strings.TrimSpace(key) == "":
+			problems = append(problems, fmt.Errorf("%s: capture %q has no name", where, key))
+		case strings.TrimSpace(c.JSON) == "" && strings.TrimSpace(c.Regex) == "":
+			problems = append(problems, fmt.Errorf("%s: capture %q gives no json or regex to read the value with", where, key))
+		}
+	}
+	return errors.Join(problems...)
 }
 
 // isKnown reports whether t is one of known. The match is exact: `API` is not

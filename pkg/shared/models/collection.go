@@ -38,18 +38,16 @@ type Response struct {
 	Body       []BodyCheck `yaml:"body,omitempty"`
 }
 
-type Script struct {
-	Key  string `yaml:"key"`
-	Path string `yaml:"path"`
-}
-
 type Step struct {
 	Name     string   `yaml:"name"`
 	Type     string   `yaml:"type"`
 	Request  Request  `yaml:"request"`
 	Response Response `yaml:"response"`
-	Scripts  []Script `yaml:"scripts,omitempty"`
-	Retry    Retry    `yaml:"retry,omitempty"`
+	// Capture is what the step pulls out of whatever it produced, keyed by
+	// the name the steps after it reference the value by. It replaces the old
+	// `scripts:` list, which only the api step ever read.
+	Capture map[string]Capture `yaml:"capture,omitempty"`
+	Retry   Retry              `yaml:"retry,omitempty"`
 	// Timeout is how long one attempt of this step may take, as a Go duration
 	// string ("5s", "1m30s"). It is per attempt, not per step: a step with
 	// `retry: {times: 3}` and `timeout: "5s"` may take fifteen seconds. Absent,

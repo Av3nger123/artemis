@@ -53,7 +53,7 @@ func TransformText(templateStr string, config map[string]interface{}) (string, e
 		}
 		val, ok := config[name]
 		if !ok {
-			return "", fmt.Errorf("unknown variable %q at offset %d: declare it under variables: or capture it with scripts:", name, offset+open)
+			return "", fmt.Errorf("unknown variable %q at offset %d: declare it under variables: or capture it in an earlier step's capture:", name, offset+open)
 		}
 		rendered, err := renderValue(val)
 		if err != nil {
@@ -70,7 +70,7 @@ func TransformText(templateStr string, config map[string]interface{}) (string, e
 // renderValue renders a value the way a scenario would have written it.
 //
 // Values reach the config map from two places: scenario variables, which are
-// strings, and scripts: captures, which come out of encoding/json -- where
+// strings, and capture: values, which come out of encoding/json -- where
 // every number is a float64. So an id of 42 has to render as "42" and not
 // "42.000000" or "4.2e+01". Objects, arrays and nil render as compact JSON, for
 // a body that templates a captured object into itself.
