@@ -96,9 +96,18 @@ const (
 	UnclosedInterpolationExpr Code = "unclosed-interpolation-expr"
 )
 
-// The checker's codes, named in docs/artemis-dsl-design.md. The stages that
-// emit them land in ART-31 and ART-33; the codes are declared here because the
-// registry is the contract, not the call site.
+// The checker's codes, named in docs/artemis-dsl-design.md and emitted by
+// pkg/dsl/check. Everything here is a *name* fault, as against the parser's
+// shape faults above: the word in the file is spelled the way the grammar
+// wants and means nothing, or means something that is not available here.
+//
+// The split between UnknownField and UnknownIdentifier is by the *near miss*,
+// not by position. An unresolvable name whose nearest in-scope candidate is
+// one of the step type's own roots is UnknownField -- the author was reaching
+// for a field of the step's result and misspelled it, which is the design
+// document's worked example, `expect statu == 200`. Any other unresolvable
+// name is UnknownIdentifier. A UI can therefore offer a field picker for the
+// first and a name picker for the second.
 const (
 	// UnknownField is an identifier that is not a field of anything in scope
 	// -- the design's worked example, `expect statu == 200`. It carries a
@@ -108,6 +117,46 @@ const (
 	// NotInScope is a name that exists in the language but not in this step's
 	// type: `status` in a browser step. The hint lists the roots that are.
 	NotInScope Code = "not-in-scope"
+
+	// UnknownIdentifier is a name bound nowhere -- not a root of any step
+	// type, not a `var`, not a `capture` from an earlier step -- and not a
+	// near miss of one of this step's own roots. `bse` for `base` is one, and
+	// so is a callee that names no builtin.
+	UnknownIdentifier Code = "unknown-identifier"
+
+	// ReservedWord is one of token.Reserved used where a name was expected.
+	// The hint names what that specific word is held for, because "reserved"
+	// alone does not tell an author whether to wait for it or rename around
+	// it.
+	ReservedWord Code = "reserved-word"
+
+	// InvalidRegex is a regex literal that does not compile. The message
+	// carries Go's own compile error, so the author does not have to guess
+	// which parenthesis. This is one of the two faults the design moves from
+	// run time to compile time.
+	InvalidRegex Code = "invalid-regex"
+
+	// InvalidDuration is a string in a duration position -- `timeout`,
+	// `retry`'s `delay`, an `expect`'s `within` budget -- that
+	// time.ParseDuration rejects.
+	InvalidDuration Code = "invalid-duration"
+
+	// UnknownConfig is a `config` whose subject names nothing the language
+	// configures. Only `browser` does today.
+	UnknownConfig Code = "unknown-config"
+
+	// UnknownType is the right-hand side of `is` when it is not one of the six
+	// names in token.TypeNames.
+	UnknownType Code = "unknown-type"
+
+	// BadArity is a builtin call or a browser action given the wrong number of
+	// arguments: `attr("#a")` wants two, `click "x" = 1` wants one.
+	BadArity Code = "bad-arity"
+
+	// BadValue is a value in a position whose kind is fixed by the grammar or
+	// by the field's meaning: `env(42)`, `times = "3"`, `headless = "yes"`, or
+	// a `header` with no name before its `=`.
+	BadValue Code = "bad-value"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -139,6 +188,14 @@ var registry = []CodeInfo{
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
+	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},
+	{ReservedWord, Error, "a word reserved for a later tier is used as a name"},
+	{InvalidRegex, Error, "a regex literal does not compile"},
+	{InvalidDuration, Error, "a string in a duration position is not a duration"},
+	{UnknownConfig, Error, "a \"config\" names a subject the language does not configure"},
+	{UnknownType, Error, "the right-hand side of \"is\" is not a type name"},
+	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
+	{BadValue, Error, "a value is the wrong kind for the position it is in"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

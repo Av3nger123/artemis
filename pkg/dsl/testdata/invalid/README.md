@@ -44,51 +44,70 @@ No Go changes: the driver globs `*.art`.
 
 ## Fixtures waiting on a stage
 
-Six faults the corpus must cover belong to `pkg/dsl/check`, which lands in
-ART-33. The design calls for these goldens to be written *before* the checker is
-finished, because that is what stops diagnostics being under-built, and an empty
-golden with a note asserts nothing. So such a fixture declares what it waits
-for, in its header:
+A fault can get its fixture before the stage that reports it exists. The design
+calls for the checker's goldens to be written *before* the checker, because that
+is what stops diagnostics being under-built, and an empty golden with a note
+asserts nothing. So such a fixture declares what it waits for, in its header:
 
 ```
-# todo(ART-33): unknown-field
+# todo(ART-46): not-in-scope
 ```
 
-and its golden is **authored**: the text ART-33 is expected to produce. `-update`
-never rewrites it. The driver asserts the two things checkable today — the file
-parses with *zero* diagnostics, so nothing reports a false syntax error on code
-whose only fault is a name, and the golden's `=== codes` footer names exactly
-the codes the `# todo` lines do.
+and its golden is **authored**: the text that stage is expected to produce.
+`-update` never rewrites it. The driver asserts the two things checkable before
+the stage lands — the file draws *zero* diagnostics, so nothing reports a false
+error on code whose only fault is one the stage owns, and the golden's
+`=== codes` footer names exactly the codes the `# todo` lines do.
 
 When the stage lands the test fails, naming the file and the lines to delete.
-ART-33 then deletes them, runs `-update`, and reads the diff against the text
-that was written for it — matching it, or changing it deliberately.
+That stage then deletes them, runs `-update`, and reads the diff against the
+text that was written for it — matching it, or changing it deliberately.
 
-Four of the codes these fixtures name are not in `diag`'s registry yet:
-`reserved-word`, `invalid-regex`, `invalid-duration`, `unknown-identifier`.
-ART-33 registers them. A `# todo` line's code is therefore a plain string the
-driver does not check against the registry; codes actually *produced* are
-checked.
+A `# todo` line's code is a plain string the driver does not check against
+`diag`'s registry, because a code with no emitter would make `codes.golden`
+claim something false. Codes actually *produced* are checked.
+
+ART-32 used this for six fixtures and ART-33 answered them. Every message, hint
+and suggestion the checker produces is the text ART-32 authored, with two
+deliberate changes: `unknown_ident.art`'s second diagnostic is `unknown-field`
+rather than `unknown-identifier` (`bdy` is a near miss of `body`, a root the api
+step binds — see `diag/codes.go` on the split), and `bad_duration.art` was
+rewritten from `config http` and `retry { attempts, wait }`, which the grammar
+does not have, to a step-level `timeout` and `retry { times, delay }`. There are
+no `# todo` fixtures outstanding today.
 
 ## The corpus
 
 | Fixture | Pins |
 | --- | --- |
 | `action_not_first.art` | `action-not-first` — a statement above the action block |
-| `bad_duration.art` | **todo(ART-33)** `invalid-duration` ×2 — `timeout = "5 secs"`, `wait = "soon"` |
+| `bad_arity.art` | `bad-arity` ×3 — `attr("#link")`, `click "x" = v`, `fill "#e"` with no value |
+| `bad_duration.art` | `invalid-duration` ×2 — `timeout = "5 secs"`, `delay = "soon"` |
 | `bad_object.art` | `unexpected-token` — a missing `:` in an object literal, and what it derails |
-| `bad_regex.art` | **todo(ART-33)** `invalid-regex` — `/order-(\d+/` |
+| `bad_regex.art` | `invalid-regex` — `/order-(\d+/`, carrying Go's own compile error |
+| `bad_value.art` | `bad-value` ×5 — a bool, a call argument, a missing key, an int, an array |
+| `browser_fn_in_api.art` | `not-in-scope` ×2 — `page.url` and `text()` in an api step |
+| `capture_same_step.art` | `unknown-identifier` — a capture read in the step that writes it |
 | `chained_compare.art` | `non-associative-operator` — `a == 1 == true` |
 | `many_errors.art` | four unrelated faults, all reported; also asserted by count in `TestAllErrorsReported` |
-| `missing_action.art` | `missing-action` — a step with no action block |
-| `out_of_scope_root.art` | **todo(ART-33)** `not-in-scope` — `status` in a `browser` step |
-| `reserved_word.art` | **todo(ART-33)** `reserved-word` ×2 — `var let`, `capture import` |
+| `missing_action.art` | `missing-action` — a step with no action block, and no scope cascade under it |
+| `out_of_scope_root.art` | `not-in-scope` — `status` in a `browser` step, with the roots that are |
+| `page_member.art` | `unknown-field` — `page.titl`, the one root whose members are closed |
+| `reserved_ai.art` | `reserved-word` — `ai`, and the agentic-assertion note in its hint |
+| `reserved_word.art` | `reserved-word` ×2 — `var let`, `capture import` |
 | `two_actions.art` | `duplicate-action` — `get` then `run` in one step |
 | `unclosed_interp.art` | `unclosed-interpolation` — a `${` still open at end of file |
 | `unclosed_interp_cascade.art` | the same typo mid-line: eleven diagnostics from one fault |
-| `unknown_field.art` | **todo(ART-33)** `unknown-field` — `expect statu == 200`, with the did-you-mean |
-| `unknown_ident.art` | **todo(ART-33)** `unknown-identifier` ×2 — in an expression and inside a `${}` |
+| `unknown_block_field.art` | `unknown-field` ×3 — a near miss, and two names near nothing |
+| `unknown_config.art` | `unknown-config` ×2 — `config browsr` and `config http` |
+| `unknown_field.art` | `unknown-field` — `expect statu == 200`, with the did-you-mean |
+| `unknown_function.art` | `unknown-identifier` ×2 — an unknown callee, and one named without its call |
+| `unknown_ident.art` | `unknown-identifier` then `unknown-field` — in a `${}` and in an expression |
+| `unknown_type.art` | `unknown-type` ×2 — `is numbr` and `is int` |
 
 `unclosed_interp_cascade.art` is pinned, not suppressed. Eleven diagnostics from
 one typo is honest output from a recovering parser; narrowing it is a change to
-`pkg/dsl/parser`, and this golden is the evidence for whoever takes that on.
+`pkg/dsl/parser`, and this golden is the evidence for whoever takes that on. The
+checker stays out of it: an interpolated string that did not lex has its
+contents skipped, because the "expressions" inside one are whatever the parser
+could salvage from the rest of the file.

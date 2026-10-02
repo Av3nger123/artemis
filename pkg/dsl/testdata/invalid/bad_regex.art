@@ -1,5 +1,3 @@
-# todo(ART-33): invalid-regex
-#
 # A regex literal that does not compile. This moves from run time to compile
 # time by design: a scenario that fails forty minutes into a suite because of an
 # unbalanced parenthesis is the class of fault the rewrite exists to delete.

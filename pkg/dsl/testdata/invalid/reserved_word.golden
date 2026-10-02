@@ -1,14 +1,14 @@
 === terminal
-reserved_word.art:21:7: "let" is a reserved word
-   21 |   var let = 1
+reserved_word.art:18:7: "let" is a reserved word
+   18 |   var let = 1
       |       ^^^
    hint: reserved for a future local-binding form; rename this var
 
-reserved_word.art:25:13: "import" is a reserved word
-   25 |     capture import = body.data.token
+reserved_word.art:22:13: "import" is a reserved word
+   22 |     capture import = body.data.token
       |             ^^^^^^
    hint: reserved for a future module system; rename this capture
 
 === codes
-reserved-word	error	21:7-21:10
-reserved-word	error	25:13-25:19
+reserved-word	error	18:7-18:10
+reserved-word	error	22:13-22:19

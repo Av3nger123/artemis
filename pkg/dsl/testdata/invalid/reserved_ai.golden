@@ -1,0 +1,10 @@
+=== terminal
+reserved_ai.art:14:7: "ai" is a reserved word
+   14 |   var ai = 1
+      |       ^^
+   hint: reserved for a possible future agentic assertion; rename this var
+         it is deliberately not in scope: a CI gate's most valuable property
+         is determinism, and an assertion that flakes is worse than a missing one
+
+=== codes
+reserved-word	error	14:7-14:9

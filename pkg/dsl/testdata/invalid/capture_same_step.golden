@@ -1,0 +1,9 @@
+=== terminal
+capture_same_step.art:15:12: unknown name "token"
+   15 |     expect token exists
+      |            ^^^^^
+   hint: an api step binds status, body, raw, headers
+         also in scope: base
+
+=== codes
+unknown-identifier	error	15:12-15:17

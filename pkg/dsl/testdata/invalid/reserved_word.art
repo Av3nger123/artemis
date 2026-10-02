@@ -1,6 +1,3 @@
-# todo(ART-33): reserved-word
-# todo(ART-33): reserved-word
-#
 # Two reserved words used as names. The design reserves `if`, `else`, `for`,
 # `in`, `while`, `parallel`, `group`, `fn`, `return`, `import`, `use`, `let`,
 # `setup`, `teardown` and `ai` so that a later tier needs no breaking change,

@@ -1,0 +1,14 @@
+=== terminal
+unknown_type.art:11:31: unknown type name "numbr"
+   11 |     expect body.data.count is numbr
+      |                               ^^^^^
+   hint: did you mean "number"?
+
+unknown_type.art:12:31: unknown type name "int"
+   12 |     expect body.data.total is int
+      |                               ^^^
+   hint: a type is one of: string, number, boolean, object, array, null
+
+=== codes
+unknown-type	error	11:31-11:36	suggest: "number"
+unknown-type	error	12:31-12:34

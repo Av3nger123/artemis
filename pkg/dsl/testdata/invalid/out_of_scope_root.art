@@ -1,5 +1,3 @@
-# todo(ART-33): not-in-scope
-#
 # `status` exists in the language; it is not bound in a browser step. That is a
 # different fault from an unknown name and gets a different code, because the
 # useful hint is the list of roots this step type *does* bind -- which is what

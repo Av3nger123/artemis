@@ -1,14 +1,14 @@
 === terminal
-bad_duration.art:13:15: "5 secs" is not a duration
-   13 |     timeout = "5 secs"
+bad_duration.art:11:15: "5 secs" is not a duration
+   11 |     timeout = "5 secs"
       |               ^^^^^^^^
    hint: a duration is a number and a unit: "30s", "500ms", "2m"
 
-bad_duration.art:20:14: "soon" is not a duration
-   20 |       wait = "soon"
-      |              ^^^^^^
+bad_duration.art:14:15: "soon" is not a duration
+   14 |       delay = "soon"
+      |               ^^^^^^
    hint: a duration is a number and a unit: "30s", "500ms", "2m"
 
 === codes
-invalid-duration	error	13:15-13:23
-invalid-duration	error	20:14-20:20
+invalid-duration	error	11:15-11:23
+invalid-duration	error	14:15-14:21

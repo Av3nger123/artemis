@@ -1,0 +1,17 @@
+# A capture read in the step that writes it.
+#
+# The design binds each `capture` for the steps that come *after* it, which is
+# the ordering that makes a capture a dependency between steps rather than a
+# local variable. Reading one in its own step is therefore an unknown name, and
+# the hint lists what is available -- including the scenario's vars, which is
+# the other half of every step's scope.
+
+scenario "captures" {
+  var base = env("API_URL")
+
+  step "login" {
+    post "${base}/token"
+    capture token = body.data.access_token
+    expect token exists
+  }
+}

@@ -9,29 +9,35 @@
 // approve.
 //
 // The driver lives above pkg/dsl/parser rather than inside it because the
-// corpus is about the front end as a whole. Today that is parser.Parse; ART-33
-// adds check.Check to frontEnd below and nothing else here changes. It is not
-// in testdata/ itself because Go tooling ignores that directory, and it does
-// not shell out to the binary because `artemis parse` does not exist yet and a
-// golden that depended on a command's framing would move when the framing did.
+// corpus is about the front end as a whole: frontEnd below is lex, parse and
+// check, and a later stage extends it in one place. It is not in testdata/
+// itself because Go tooling ignores that directory, and it does not shell out
+// to the binary because `artemis parse` does not exist yet and a golden that
+// depended on a command's framing would move when the framing did.
 //
 // # Fixtures for stages that do not exist yet
 //
-// Six of the eleven faults the corpus must cover -- unknown field, out-of-scope
+// Six of the eleven faults the corpus covers -- unknown field, out-of-scope
 // root, reserved word, uncompilable regex, bad duration, unknown identifier --
-// are pkg/dsl/check's, which lands in ART-33. The design calls for these
-// goldens to be written *before* the checker is finished, because that is what
-// stops diagnostics being under-built, and an empty golden with a note asserts
-// nothing. So such a fixture declares what it is waiting for:
+// were pkg/dsl/check's, and their goldens were written *before* the checker
+// was, because that is what stops diagnostics being under-built and an empty
+// golden with a note asserts nothing. The mechanism that held them is still
+// here, because the next stage to add fixtures ahead of itself -- ART-46's
+// browser scope cases, ART-44's --json shapes -- needs it. Such a fixture
+// declares what it is waiting for:
 //
-//	# todo(ART-33): unknown-field
+//	# todo(ART-46): not-in-scope
 //
-// and its golden is hand-written: the text ART-33 is expected to produce. The
-// test then asserts the two things that are checkable today -- the file parses
-// with *zero* diagnostics, so nothing reports a false syntax error on code
-// whose only fault is a name, and the golden's code footer is exactly the todo
-// list -- and fails loudly the moment the stage lands, naming the lines to
-// delete. -update never rewrites such a golden.
+// and its golden is hand-written: the text that stage is expected to produce.
+// The test then asserts the two things that are checkable before it lands --
+// the file draws *zero* diagnostics, so nothing reports a false error on code
+// whose only fault is one the stage owns, and the golden's code footer is
+// exactly the todo list -- and fails loudly the moment the stage arrives,
+// naming the lines to delete. -update never rewrites such a golden.
+//
+// ART-33 landed against exactly that contract. Every message, hint and
+// suggestion it produces is the text ART-32 authored for it; two things moved
+// deliberately, both recorded in worklane-docs/plans/ART-33.md.
 package dsl
 
 import (
@@ -45,6 +51,7 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/parser"
 )
@@ -109,15 +116,16 @@ func TestInvalidCorpus(t *testing.T) {
 	}
 }
 
-// frontEnd is every stage the corpus runs, and the one place a later issue
-// extends. ART-33 adds:
+// frontEnd is every stage the corpus runs: lex, parse, check.
 //
-//	bag.Merge(check.Check(tree))
-//
-// and the checker fixtures' todo lines come out. Nothing else in this file
-// changes, and no golden moves except the ones ART-33 is responsible for.
+// The checker's diagnostics go into the same bag, so Bag.All()'s sort is what
+// interleaves them with the parser's into file order -- a scope error on line
+// 2 comes out above a syntax error on line 3 no matter which pass found what.
 func frontEnd(file, src string) (*ast.File, *diag.Bag) {
-	return parser.Parse(file, src)
+	tree, bag := parser.Parse(file, src)
+	_, checked := check.Check(tree)
+	bag.Merge(checked)
+	return tree, bag
 }
 
 // TestAllErrorsReported is R5, asserted in Go rather than through a golden.
@@ -163,6 +171,7 @@ func TestAllErrorsReported(t *testing.T) {
 // deletion would still pass every other test in this file.
 func TestEveryNamedFaultHasAFixture(t *testing.T) {
 	want := []string{
+		// ART-32's eleven.
 		"unknown_field",     // unknown field with a near-miss name
 		"out_of_scope_root", // out-of-scope root
 		"reserved_word",     // reserved word
@@ -174,6 +183,19 @@ func TestEveryNamedFaultHasAFixture(t *testing.T) {
 		"unknown_ident",     // unknown identifier
 		"bad_object",        // malformed object literal
 		"many_errors",       // several unrelated errors, all reported
+
+		// ART-33's checks that ART-32 did not name. Each one is a code of its
+		// own in diag's registry, so each one needs a file that produces it.
+		"unknown_config",      // config with a subject the language does not configure
+		"unknown_block_field", // a field name no block defines
+		"unknown_type",        // the right-hand side of `is`
+		"unknown_function",    // an unknown callee, and one named without its call
+		"bad_arity",           // wrong argument count, in a call and in a browser action
+		"bad_value",           // a value of the wrong kind for its position
+		"browser_fn_in_api",   // a browser root and a browser function in an api step
+		"page_member",         // a typo in page's closed member set
+		"capture_same_step",   // a capture read in the step that writes it
+		"reserved_ai",         // `ai`, and the agentic-assertion note in its hint
 	}
 	for _, name := range want {
 		for _, ext := range []string{".art", ".golden"} {

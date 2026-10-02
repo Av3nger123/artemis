@@ -1,0 +1,14 @@
+=== terminal
+unknown_function.art:13:12: unknown function "tex"
+   13 |     expect tex("[role=status]") contains "Pro"
+      |            ^^^
+   hint: did you mean "text"?
+
+unknown_function.art:14:12: "visible" is a function, not a value
+   14 |     expect visible
+      |            ^^^^^^^
+   hint: call it: visible(".modal")
+
+=== codes
+unknown-identifier	error	13:12-13:15	suggest: "text"
+unknown-identifier	error	14:12-14:19	suggest: "visible(\".modal\")"

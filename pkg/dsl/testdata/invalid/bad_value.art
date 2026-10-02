@@ -1,0 +1,28 @@
+# Five values of the wrong kind for the position they are in.
+#
+# These are all well-formed syntax, so the parser has nothing to say: a string
+# on the right of an `=` is a string wherever it appears. What each field's
+# value has to *be* is the checker's table, and only a literal is reported --
+# `times = n` where n is a var could be anything, and a false "must be a whole
+# number" on a correct file would be worse than letting the run say it.
+
+scenario "values" {
+  config browser { headless = "yes" }
+
+  var region = env(42)
+
+  step "orders" {
+    get "/orders" {
+      header = "application/json"
+    }
+    retry { times = "3" }
+    expect status == 200
+  }
+
+  step "seed" {
+    run "psql" {
+      args = "seed.sql"
+    }
+    expect exit_code == 0
+  }
+}

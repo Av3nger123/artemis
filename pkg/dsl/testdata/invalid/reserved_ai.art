@@ -1,0 +1,20 @@
+# `ai` used as a name.
+#
+# It is reserved like the other fourteen words, and it is the only one reserved
+# for something the design explicitly declines to build: `expect ai "the error
+# explains the card was declined"`. So its hint says both halves -- what the
+# word is held for, and why it is not coming -- because an author who writes
+# `ai` has guessed at the feature and deserves the answer.
+#
+# reserved_word.art leaves this word out on purpose: `expect ai "..."` is a
+# syntax error before it is a reserved-word one, and pinning that would pin the
+# parser's recovery. `var ai = 1` is not, so the hint gets pinned here.
+
+scenario "reserved" {
+  var ai = 1
+
+  step "orders" {
+    get "/orders"
+    expect status == 200
+  }
+}

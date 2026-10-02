@@ -1,14 +1,14 @@
 === terminal
-unknown_ident.art:17:12: unknown name "bse"
-   17 |     get "${bse}/orders"
+unknown_ident.art:20:12: unknown name "bse"
+   20 |     get "${bse}/orders"
       |            ^^^
    hint: did you mean "base"?
 
-unknown_ident.art:18:12: unknown name "bdy"
-   18 |     expect bdy.data.count > 0
+unknown_ident.art:21:12: unknown field "bdy"
+   21 |     expect bdy.data.count > 0
       |            ^^^
    hint: did you mean "body"?
 
 === codes
-unknown-identifier	error	17:12-17:15	suggest: "base"
-unknown-identifier	error	18:12-18:15	suggest: "body"
+unknown-identifier	error	20:12-20:15	suggest: "base"
+unknown-field	error	21:12-21:15	suggest: "body"
