@@ -25,6 +25,13 @@ type BodyCheck struct {
 	Operator string `yaml:"operator,omitempty"`
 	Value    any    `yaml:"value"`
 	Type     string `yaml:"type,omitempty"`
+
+	// Line is the 1-based line of the scenario file this check was written
+	// on -- the `path:` line, which is the one a reader goes and edits. It is
+	// stamped on after decoding by pkg/shared's annotateLines and is zero for
+	// a check that did not come from a file. `yaml:"-"` so a scenario cannot
+	// set it and the YAML generator does not emit it.
+	Line int `yaml:"-"`
 }
 
 type Request struct {
@@ -37,6 +44,11 @@ type Request struct {
 type Response struct {
 	StatusCode int         `yaml:"status_code"`
 	Body       []BodyCheck `yaml:"body,omitempty"`
+
+	// StatusCodeLine is the line the `status_code:` key sits on, which is what
+	// a status mismatch should point at -- not the `response:` header above it.
+	// Zero when the step did not write one; see BodyCheck.Line.
+	StatusCodeLine int `yaml:"-"`
 }
 
 type Step struct {
@@ -61,6 +73,10 @@ type Step struct {
 	// a default applies -- see AttemptTimeout -- because no deadline at all is
 	// how a run hangs until someone kills it.
 	Timeout string `yaml:"timeout,omitempty"`
+
+	// Line is the line the step's first key sits on, which is where a step that
+	// could not run at all points. See BodyCheck.Line.
+	Line int `yaml:"-"`
 }
 
 // AttemptTimeout is how long one attempt of the step may take, falling back to

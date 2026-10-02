@@ -49,6 +49,11 @@ type Expect struct {
 	ExitCode int         `yaml:"exit_code,omitempty"`
 	Stdout   []TextCheck `yaml:"stdout,omitempty"`
 	Stderr   []TextCheck `yaml:"stderr,omitempty"`
+
+	// ExitCodeLine is the line the `exit_code:` key sits on. Zero when the step
+	// did not write one -- the assertion is still made, and it points at the
+	// step instead. See BodyCheck.Line.
+	ExitCodeLine int `yaml:"-"`
 }
 
 // TextCheck is one assertion against a stream of plain text.
@@ -64,4 +69,8 @@ type Expect struct {
 type TextCheck struct {
 	Operator string `yaml:"operator,omitempty"`
 	Value    string `yaml:"value,omitempty"`
+
+	// Line is the line of the scenario file this check was written on. See
+	// BodyCheck.Line.
+	Line int `yaml:"-"`
 }

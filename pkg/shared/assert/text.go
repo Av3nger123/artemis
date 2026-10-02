@@ -48,6 +48,7 @@ func Text(stepName, kind string, check models.TextCheck, text string) result.Ass
 		Operator: op,
 		Expected: check.Value,
 		Actual:   Excerpt(text),
+		Line:     check.Line,
 	}
 
 	switch op {

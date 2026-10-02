@@ -289,3 +289,17 @@ func TestTheJSONPathsThatDoNotResolve(t *testing.T) {
 		})
 	}
 }
+
+// A capture that could not be read points at the line its key sits on, which is
+// the name a scenario goes and fixes (ART-12).
+func TestApplyCarriesTheCapturesLine(t *testing.T) {
+	got := Apply(step(map[string]models.Capture{
+		"token": {JSON: "$.nope", Line: 19},
+	}), src(`{"other": 1}`), map[string]any{})
+	if len(got) != 1 {
+		t.Fatalf("Apply() = %+v, want one errored assertion", got)
+	}
+	if got[0].Line != 19 {
+		t.Errorf("Apply()[0].Line = %d, want 19", got[0].Line)
+	}
+}

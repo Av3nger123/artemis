@@ -81,6 +81,10 @@ func executeScenario(reg *executor.Registry, config models.Config, filePath stri
 	for i := range config.Steps {
 		step := config.Steps[i]
 		stepResult := scenario.NewStep(step.Name)
+		// The line the step was written on, so a step that could not run at all
+		// -- and an assertion with no line of its own -- still points somewhere
+		// a reader can go (ART-12).
+		stepResult.Line = step.Line
 		runStep(reg, step, scope, stepResult)
 		logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", step.Name, stepResult.Duration))
 		// Every step that was reached gets a line, including one artemis could

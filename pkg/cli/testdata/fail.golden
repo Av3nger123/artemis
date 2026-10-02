@@ -3,6 +3,22 @@ scenario: status check (testdata/fail.yaml)
          $.status equals ok, got pending
          $.count lte 2, got 3
 
+2 failures:
+
+1) testdata/fail.yaml:14
+     scenario  status check
+     step      ping
+     assert    body $.status equals
+     expected  "ok"
+     actual    "pending"
+
+2) testdata/fail.yaml:16
+     scenario  status check
+     step      ping
+     assert    body $.count lte
+     expected  2
+     actual    3
+
 Scenarios     1  (1 failed)
 Steps         1  (1 failed)
 Assertions    3  (1 passed, 2 failed)

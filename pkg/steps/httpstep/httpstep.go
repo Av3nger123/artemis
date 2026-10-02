@@ -156,6 +156,10 @@ func (e Executor) build(ctx context.Context, step models.Step, scope executor.Sc
 
 // statusAssertion is the one check every HTTP step makes, whether or not it
 // asked for any others.
+//
+// Its line is the `status_code:` the step wrote, which is the line a reader edits
+// when the status is not what they asked for. A step that wrote none leaves it at
+// zero and the reader is sent to the step instead (ART-12).
 func statusAssertion(step models.Step, got int, ok bool) result.AssertionResult {
 	a := result.Assertion{
 		Step:     step.Name,
@@ -163,6 +167,7 @@ func statusAssertion(step models.Step, got int, ok bool) result.AssertionResult 
 		Operator: "equals",
 		Expected: step.Response.StatusCode,
 		Actual:   got,
+		Line:     step.Response.StatusCodeLine,
 	}
 	if ok {
 		return a.Pass()

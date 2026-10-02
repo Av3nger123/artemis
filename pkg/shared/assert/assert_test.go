@@ -331,3 +331,19 @@ response:
 		}
 	}
 }
+
+// A body check carries the line it was written on into the assertion it makes,
+// which is what a failure block points a reader at (ART-12).
+func TestCheckCarriesTheChecksLine(t *testing.T) {
+	body := map[string]any{"status": "pending"}
+	got := Check("ping", models.BodyCheck{Path: "$.status", Value: "ok", Line: 14}, body)
+	if got.Line != 14 {
+		t.Errorf("Check().Line = %d, want 14", got.Line)
+	}
+	// An errored check carries it too: a path that does not resolve is the
+	// mistake most worth being sent to the right line for.
+	errored := Check("ping", models.BodyCheck{Path: "$.nope", Value: "ok", Line: 19}, body)
+	if errored.Status != result.StatusError || errored.Line != 19 {
+		t.Errorf("Check() on a missing path = %+v, want an errored assertion on line 19", errored)
+	}
+}

@@ -2,6 +2,13 @@ scenario: undeclared variable (testdata/template_error.yaml)
   ERROR ping                        <dur>
          rendering request body: unknown variable "tokn" at offset 11: declare it under variables: or capture it in an earlier step's capture:
 
+1 failure:
+
+1) testdata/template_error.yaml:8
+     scenario  undeclared variable
+     step      ping
+     error     rendering request body: unknown variable "tokn" at offset 11: declare it under variables: or capture it in an earlier step's capture:
+
 Scenarios     1  (1 errored)
 Steps         1  (1 errored)
 Assertions    0

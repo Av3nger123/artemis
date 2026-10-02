@@ -6,6 +6,12 @@ scenario: testdata/suite/02_broken.yaml
 scenario: items (testdata/suite/nested/03_items.yaml)
   ok    list items                  <dur>
 
+1 failure:
+
+1) testdata/suite/02_broken.yaml
+     error     parse testdata/suite/02_broken.yaml: yaml: unmarshal errors:
+               line 12: field respones not found in type models.Step
+
 Scenarios     3  (2 passed, 1 errored)
 Steps         2  (2 passed)
 Assertions    4  (4 passed)

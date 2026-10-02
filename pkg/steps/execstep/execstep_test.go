@@ -574,3 +574,18 @@ func TestCappedBufferCountsWhatItDropped(t *testing.T) {
 		t.Errorf("dropped = %d, want %d", got, want)
 	}
 }
+
+// A wrong exit code points at the `exit_code:` the step wrote (ART-12).
+func TestExitCodeAssertionCarriesTheExitCodeLine(t *testing.T) {
+	step := models.Step{Name: "build", Expect: models.Expect{ExitCode: 0, ExitCodeLine: 27}}
+	if got := exitCodeAssertion(step, 1); got.Line != 27 {
+		t.Errorf("exitCodeAssertion().Line = %d, want 27", got.Line)
+	}
+	// A step that did not write one -- which is the common case, since exit_code
+	// defaults to the 0 almost every scenario wants -- leaves it at zero for
+	// result.Diagnostics to resolve against the step.
+	bare := models.Step{Name: "build"}
+	if got := exitCodeAssertion(bare, 1); got.Line != 0 {
+		t.Errorf("exitCodeAssertion().Line = %d, want 0", got.Line)
+	}
+}

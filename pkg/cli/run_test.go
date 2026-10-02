@@ -564,3 +564,82 @@ func TestReportWithAnUnknownFormatRunsNothing(t *testing.T) {
 		t.Errorf("something ran before the flag was refused:\n%s", stdout)
 	}
 }
+
+// End to end through the real command: a failing run names the file and the line
+// of the check that failed, and the summary's verdict is still the last line
+// (ART-12).
+func TestRunPrintsAFailureBlockNamingTheFileAndLine(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"pending"}`)
+
+	stdout, _, err := runStreams(t, `name: "status check"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "`+srv.URL+`/ping"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.status"
+          value: "ok"
+`)
+	if err == nil {
+		t.Fatalf("Execute() = nil, want an error:\n%s", stdout)
+	}
+
+	// The scenario is written to a temp file, so only the line and the basename
+	// are ours to assert on.
+	if !strings.Contains(stdout, "scenario.yaml:13") {
+		t.Errorf("output does not point at the failing check's line:\n%s", stdout)
+	}
+	for _, want := range []string{"1 failure:", "step      ping", `expected  "ok"`, `actual    "pending"`} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("output is missing %q:\n%s", want, stdout)
+		}
+	}
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if last := lines[len(lines)-1]; !strings.HasPrefix(last, "FAIL in ") {
+		t.Errorf("last line = %q, want the summary verdict", last)
+	}
+}
+
+// A passing run gains nothing: no heading, no blocks.
+func TestRunPrintsNoFailureBlocksWhenEverythingPassed(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"))
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil:\n%s", err, stdout)
+	}
+	if strings.Contains(stdout, "failure") {
+		t.Errorf("a passing run mentions a failure:\n%s", stdout)
+	}
+}
+
+// With --report json the console moves to stderr, and the blocks move with it:
+// stdout stays exactly one document.
+func TestFailureBlocksFollowTheConsoleToStderr(t *testing.T) {
+	srv := okServer(t, 500, `{}`)
+
+	stdout, stderr, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json")
+	if err == nil {
+		t.Fatalf("Execute() = nil, want an error:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "1 failure:") {
+		t.Errorf("stderr does not carry the failure block:\n%s", stderr)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+	}
+	failures, ok := doc["failures"].([]any)
+	if !ok || len(failures) != 1 {
+		t.Fatalf("failures = %v, want one entry", doc["failures"])
+	}
+	if first := failures[0].(map[string]any); first["step"] == "" || first["line"] == 0.0 {
+		t.Errorf("failures[0] = %v, want a step and a line", first)
+	}
+}

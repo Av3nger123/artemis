@@ -263,6 +263,7 @@ func exitCodeAssertion(step models.Step, got int) result.AssertionResult {
 		Operator: assert.OpEquals,
 		Expected: step.Expect.ExitCode,
 		Actual:   got,
+		Line:     step.Expect.ExitCodeLine,
 	}
 	if got == step.Expect.ExitCode {
 		return a.Pass()

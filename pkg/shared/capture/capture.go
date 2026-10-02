@@ -81,8 +81,8 @@ func Apply(step models.Step, src Source, vars map[string]any) []result.Assertion
 }
 
 // assertionFor describes the capture an errored assertion is about: the key in
-// Path, because that is the name a scenario would go and fix, and the source
-// kind as the operator.
+// Path, because that is the name a scenario would go and fix, the source kind as
+// the operator, and the line that key sits on, which is where to go and fix it.
 func assertionFor(step models.Step, key string, c models.Capture) result.Assertion {
 	operator := "json"
 	expected := any(c.JSON)
@@ -95,6 +95,7 @@ func assertionFor(step models.Step, key string, c models.Capture) result.Asserti
 		Path:     key,
 		Operator: operator,
 		Expected: expected,
+		Line:     c.Line,
 	}
 }
 

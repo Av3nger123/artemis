@@ -9,6 +9,7 @@ Artemis is a command-line tool for automated testing of REST APIs, built with Go
 - Assertions with real operators: `equals`, `contains`, `matches`, `exists`, `type`, `gt`/`gte`/`lt`/`lte`
 - Values captured from one response and templated into the next
 - A run summary on the terminal, plus an opt-in JSON log of every request, response and error
+- A block per failure naming the scenario file and line, the step, expected and actual -- output an agent can act on
 - `--report json`: the whole outcome of a run as one JSON document, for a CI job or an agent to read
 - `--report junit`: the same run as JUnit XML, so CI surfaces failures under the scenario they came from
 - A non-zero exit code whenever anything fails, so a CI job goes red on a broken API
@@ -77,6 +78,58 @@ Assertions    4  (4 passed)
 FAIL in 17ms
 ```
 
+### Reading a failure
+
+Under the step list, a failing run prints one block per thing to go and fix. Each
+block stands alone -- it names the file and the line, the scenario and the step, so
+nothing above it has to be read -- because the reader is as often the agent that
+wrote the scenario as a person scrolling a CI log:
+
+```
+2 failures:
+
+1) suite/items.yaml:14
+     scenario  items
+     step      list items
+     assert    body $.total gt
+     expected  0
+     actual    0
+
+2) suite/items.yaml:22
+     scenario  items
+     step      missing route
+     assert    status_code equals
+     expected  200
+     actual    404
+```
+
+| Field | What it is |
+| --- | --- |
+| the heading | `file:line` -- the line of the scenario to edit: the check's `path:`, the `status_code:`, the `exit_code:`, the capture's name. A step that could not run at all points at its own first line. A line artemis does not know is left off rather than printed as `:0`. |
+| `scenario` | The scenario's name. Absent for a file that would not load: there was no name to read. |
+| `step` | The step's name. Absent for a file that would not load, which never ran one. |
+| `assert` | The check: its kind, what it addressed, and the comparison applied. |
+| `expected` / `actual` | The two values. A string is quoted and a number is not, so `"200"` and `200` do not read alike; when the two sides are different JSON types each is followed by its type. |
+| `error` | In place of `expected`/`actual` when there was nothing to compare: a path that did not resolve, a command that could not be started, a file that would not parse. |
+
+A step that could not run, and a scenario whose file would not load, each get a
+block too:
+
+```
+3) suite/login.yaml:8
+     scenario  login
+     step      sign in
+     error     rendering request url: unknown variable "host"
+
+4) suite/02_broken.yaml
+     error     parse suite/02_broken.yaml: yaml: unmarshal errors:
+               line 12: field respones not found in type models.Step
+```
+
+The blocks come between the step list and the tallies, so the verdict line is
+still the last thing a run writes. The same list is in the JSON report, flat,
+as [`failures`](#the-document).
+
 `artemis test -f sample.yaml` is the old name for a one-file run. It still works
 and still fails the process on a failing run, but it prints a deprecation line:
 use `artemis run`.
@@ -142,6 +195,7 @@ included, so a reader can tell "nothing failed" from "nothing ran".
           "status": "fail",
           "duration_ms": 12.5,
           "attempts": 1,
+          "line": 5,
           "error": "",
           "assertions": [
             {
@@ -151,7 +205,8 @@ included, so a reader can tell "nothing failed" from "nothing ran".
               "expected": 200,
               "actual": 200,
               "status": "pass",
-              "error": ""
+              "error": "",
+              "line": 11
             },
             {
               "kind": "body",
@@ -160,11 +215,27 @@ included, so a reader can tell "nothing failed" from "nothing ran".
               "expected": "ready",
               "actual": "pending",
               "status": "fail",
-              "error": ""
+              "error": "",
+              "line": 14
             }
           ]
         }
       ]
+    }
+  ],
+  "failures": [
+    {
+      "file": "suite/items.yaml",
+      "line": 14,
+      "scenario": "items",
+      "step": "get item",
+      "status": "fail",
+      "kind": "body",
+      "path": "$.status",
+      "operator": "equals",
+      "expected": "ready",
+      "actual": "pending",
+      "error": ""
     }
   ]
 }
@@ -185,7 +256,9 @@ included, so a reader can tell "nothing failed" from "nothing ran".
 | `kind` | assertion | What sort of check it was: `status_code`, `body`, `exit_code`, `stdout`, `stderr`. |
 | `path` | assertion | What was inspected -- a JSON path for a body check, `""` for a check with nothing to address. |
 | `operator` | assertion | The comparison that was applied: `equals`, `contains`, `gt`, and the rest of [Operators](#operators). |
-| `expected` / `actual` | assertion | The value the scenario asked for and the value that was there, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve. |
+| `expected` / `actual` | assertion, failure | The value the scenario asked for and the value that was there, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve. |
+| `line` | step, assertion, failure | The line of the scenario file it was written on, and `0` when artemis does not know -- a check with no line of its own, a scenario built from a Postman collection. |
+| `failures` | run | Everything the run says to go and fix, flat and in run order: the same list the terminal blocks are built from. One entry per failing assertion, per step that could not run, and per file that would not load, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed. A failure with no check behind it has `kind: ""` and `expected: null`; its `error` says why. |
 
 Every key is always present, with its zero value rather than omitted, so a `jq`
 expression never has to tell absent from empty. `expected` and `actual` are the
@@ -193,7 +266,7 @@ exception: they are `null`, because either may legitimately be any JSON type.
 Every list is a list, empty rather than `null`.
 
 What is *not* in the document is anything artemis does not record today: no
-request or response bodies, no headers, no line numbers.
+request or response bodies and no headers.
 `pkg/cli/testdata/report_json.golden` is a whole document from a real run, for
 reading; `pkg/report/json.go` is where the shape is defined.
 
@@ -758,5 +831,5 @@ failing test, not a surprise for whoever copies it.
   nothing else; any other value is an error at load time. `db` and `browser` are
   what the executor interface was sized for, and neither exists yet.
 - **Request and response detail in a report.** Neither report carries a request
-  body, a response body, headers or the line of the scenario a failure came from:
-  the result model does not record them yet.
+  body, a response body or headers: the result model does not record them. The
+  line a failure came from it does -- see [Reading a failure](#reading-a-failure).

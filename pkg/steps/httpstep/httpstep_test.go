@@ -441,3 +441,21 @@ func TestTheConnectionIsReused(t *testing.T) {
 		t.Errorf("the server saw %d connections for 3 requests, want 1 -- a body that is not drained and closed is a connection that is not reused", n)
 	}
 }
+
+// A status mismatch points at the `status_code:` the step wrote, not at the step
+// as a whole (ART-12).
+func TestStatusAssertionCarriesTheStatusCodeLine(t *testing.T) {
+	step := models.Step{
+		Name:     "ping",
+		Response: models.Response{StatusCode: 200, StatusCodeLine: 11},
+	}
+	if got := statusAssertion(step, http.StatusInternalServerError, false); got.Line != 11 {
+		t.Errorf("statusAssertion().Line = %d, want 11", got.Line)
+	}
+	// A step that never wrote one leaves the line at zero, and the reader is
+	// sent to the step instead. That fallback is result.Diagnostics's.
+	bare := models.Step{Name: "ping", Response: models.Response{StatusCode: 200}}
+	if got := statusAssertion(bare, http.StatusOK, true); got.Line != 0 {
+		t.Errorf("statusAssertion().Line = %d, want 0", got.Line)
+	}
+}

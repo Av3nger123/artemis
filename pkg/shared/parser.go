@@ -1,6 +1,8 @@
 package shared
 
 import (
+	"bytes"
+
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/shared/utils"
@@ -22,16 +24,21 @@ import (
 // can execute stops the run before any request is sent. Both entry points,
 // `artemis test` and `artemis parse`, come through here, which is what makes
 // parse a real validator.
+//
+// The file is then read a second time as a plain node tree, to stamp onto the
+// config the line each part of it was written on (ART-12). The bytes are read
+// once and decoded twice rather than decoded once into a node and converted,
+// because KnownFields is a property of the decoder and does not survive being
+// handed a node: strictness is worth more than a pass over the file.
 func ParseYAMLFile(filePath string, knownTypes []string) (models.Config, error) {
 	var config models.Config
 
-	yamlFile, err := os.Open(filePath)
+	raw, err := os.ReadFile(filePath)
 	if err != nil {
 		return config, err
 	}
-	defer yamlFile.Close()
 
-	decoder := yaml.NewDecoder(yamlFile)
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&config); err != nil {
 		return config, err
@@ -39,6 +46,15 @@ func ParseYAMLFile(filePath string, knownTypes []string) (models.Config, error) 
 
 	if err := config.Validate(knownTypes); err != nil {
 		return config, err
+	}
+
+	// Past the point of no return: the scenario is good. A second decode of
+	// bytes the first one accepted cannot fail, and if it somehow did, the
+	// scenario still runs -- with no line numbers, which is what a scenario
+	// built in Go has always had.
+	var doc yaml.Node
+	if err := yaml.NewDecoder(bytes.NewReader(raw)).Decode(&doc); err == nil {
+		annotateLines(&config, &doc)
 	}
 
 	return config, nil

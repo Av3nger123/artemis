@@ -89,6 +89,10 @@ func reportRun(cmd *cobra.Command, path string) error {
 
 	rep := report.NewConsole(consoleOut)
 	run := runFiles(executor.Default(), files, rep)
+	// Between the step lines and the tallies: the blocks are what a reader --
+	// or the agent that wrote the scenario -- acts on (ART-12), and the
+	// summary's verdict stays the last line a run writes.
+	rep.Failures(run)
 	rep.Summary(run)
 
 	// A report that could not be written wins over the run's own failure: the

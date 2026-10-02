@@ -96,3 +96,11 @@ func TestATextAssertionDoesNotCarryTheWholeStream(t *testing.T) {
 		t.Errorf("Actual is %d bytes, want an excerpt", len(actual))
 	}
 }
+
+// A text check carries its line, like a body check does.
+func TestTextCarriesTheChecksLine(t *testing.T) {
+	got := Text("build", "stdout", models.TextCheck{Operator: OpContains, Value: "done", Line: 29}, "nothing")
+	if got.Line != 29 {
+		t.Errorf("Text().Line = %d, want 29", got.Line)
+	}
+}

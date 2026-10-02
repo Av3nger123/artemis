@@ -74,6 +74,11 @@ type AssertionResult struct {
 	Status Status
 	// Error is the message when the check could not be made at all.
 	Error string
+	// Line is the 1-based line of the scenario file the check was written on,
+	// or zero when it is not known -- a step built in Go, or a check with no
+	// line of its own. A reader of a failure resolves zero against the step's
+	// own line rather than printing it; see Diagnostics.
+	Line int
 }
 
 // Passed reports whether the assertion did not fail the run.
@@ -88,6 +93,7 @@ type Assertion struct {
 	Operator string
 	Expected any
 	Actual   any
+	Line     int
 }
 
 // Pass records a as having passed.
@@ -115,6 +121,7 @@ func (a Assertion) with(status Status, errMsg string) AssertionResult {
 		Actual:   a.Actual,
 		Status:   status,
 		Error:    errMsg,
+		Line:     a.Line,
 	}
 }
 
@@ -134,6 +141,10 @@ type StepResult struct {
 	Attempts int
 	// Assertions are the checks made against the final attempt.
 	Assertions []AssertionResult
+	// Line is the 1-based line of the scenario file the step was written on,
+	// or zero when it is not known. It is what a step that could not run at all
+	// points at, and the fallback for an assertion with no line of its own.
+	Line int
 }
 
 // AllPassed reports whether every assertion in as passed. It is what "is this

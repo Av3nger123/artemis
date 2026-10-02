@@ -9,6 +9,26 @@ scenario: testdata/report_json/03_broken.yaml
   ERROR parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:
   line 10: field respones not found in type models.Step
 
+3 failures:
+
+1) testdata/report_json/02_items.yaml:13
+     scenario  items
+     step      list items
+     assert    body $.total gt
+     expected  0
+     actual    0
+
+2) testdata/report_json/02_items.yaml:22
+     scenario  items
+     step      missing route
+     assert    status_code equals
+     expected  200
+     actual    404
+
+3) testdata/report_json/03_broken.yaml
+     error     parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:
+               line 10: field respones not found in type models.Step
+
 Scenarios     3  (1 passed, 1 failed, 1 errored)
 Steps         3  (1 passed, 2 failed)
 Assertions    5  (3 passed, 2 failed)
@@ -55,6 +75,7 @@ FAIL in <dur>
           "status": "pass",
           "duration_ms": 0,
           "attempts": 1,
+          "line": 5,
           "error": "",
           "assertions": [
             {
@@ -64,7 +85,8 @@ FAIL in <dur>
               "expected": 200,
               "actual": 200,
               "status": "pass",
-              "error": ""
+              "error": "",
+              "line": 11
             },
             {
               "kind": "body",
@@ -73,7 +95,8 @@ FAIL in <dur>
               "expected": "ok",
               "actual": "ok",
               "status": "pass",
-              "error": ""
+              "error": "",
+              "line": 13
             }
           ]
         }
@@ -91,6 +114,7 @@ FAIL in <dur>
           "status": "fail",
           "duration_ms": 0,
           "attempts": 1,
+          "line": 5,
           "error": "",
           "assertions": [
             {
@@ -100,7 +124,8 @@ FAIL in <dur>
               "expected": 200,
               "actual": 200,
               "status": "pass",
-              "error": ""
+              "error": "",
+              "line": 11
             },
             {
               "kind": "body",
@@ -109,7 +134,8 @@ FAIL in <dur>
               "expected": 0,
               "actual": 0,
               "status": "fail",
-              "error": ""
+              "error": "",
+              "line": 13
             }
           ]
         },
@@ -118,6 +144,7 @@ FAIL in <dur>
           "status": "fail",
           "duration_ms": 0,
           "attempts": 1,
+          "line": 16,
           "error": "",
           "assertions": [
             {
@@ -127,7 +154,8 @@ FAIL in <dur>
               "expected": 200,
               "actual": 404,
               "status": "fail",
-              "error": ""
+              "error": "",
+              "line": 22
             }
           ]
         }
@@ -140,6 +168,47 @@ FAIL in <dur>
       "duration_ms": 0,
       "error": "parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:\n  line 10: field respones not found in type models.Step",
       "steps": []
+    }
+  ],
+  "failures": [
+    {
+      "file": "testdata/report_json/02_items.yaml",
+      "line": 13,
+      "scenario": "items",
+      "step": "list items",
+      "status": "fail",
+      "kind": "body",
+      "path": "$.total",
+      "operator": "gt",
+      "expected": 0,
+      "actual": 0,
+      "error": ""
+    },
+    {
+      "file": "testdata/report_json/02_items.yaml",
+      "line": 22,
+      "scenario": "items",
+      "step": "missing route",
+      "status": "fail",
+      "kind": "status_code",
+      "path": "",
+      "operator": "equals",
+      "expected": 200,
+      "actual": 404,
+      "error": ""
+    },
+    {
+      "file": "testdata/report_json/03_broken.yaml",
+      "line": 0,
+      "scenario": "",
+      "step": "",
+      "status": "error",
+      "kind": "",
+      "path": "",
+      "operator": "",
+      "expected": null,
+      "actual": null,
+      "error": "parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:\n  line 10: field respones not found in type models.Step"
     }
   ]
 }

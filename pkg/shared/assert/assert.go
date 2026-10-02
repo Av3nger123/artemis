@@ -63,6 +63,7 @@ func Check(stepName string, check models.BodyCheck, response map[string]any) (re
 		Path:     check.Path,
 		Operator: op,
 		Expected: normalizeYAML(check.Value),
+		Line:     check.Line,
 	}
 	defer func() {
 		if r := recover(); r != nil {

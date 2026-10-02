@@ -29,6 +29,10 @@ type Capture struct {
 	JSON  string `yaml:"json,omitempty"`
 	Regex string `yaml:"regex,omitempty"`
 
+	// Line is the line the capture's key sits on -- the name, not the source,
+	// because the name is what a scenario goes and fixes. See BodyCheck.Line.
+	Line int `yaml:"-"`
+
 	re *regexp.Regexp
 }
 

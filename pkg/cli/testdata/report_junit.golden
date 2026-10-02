@@ -9,6 +9,26 @@ scenario: testdata/report_json/03_broken.yaml
   ERROR parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:
   line 10: field respones not found in type models.Step
 
+3 failures:
+
+1) testdata/report_json/02_items.yaml:13
+     scenario  items
+     step      list items
+     assert    body $.total gt
+     expected  0
+     actual    0
+
+2) testdata/report_json/02_items.yaml:22
+     scenario  items
+     step      missing route
+     assert    status_code equals
+     expected  200
+     actual    404
+
+3) testdata/report_json/03_broken.yaml
+     error     parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:
+               line 10: field respones not found in type models.Step
+
 Scenarios     3  (1 passed, 1 failed, 1 errored)
 Steps         3  (1 passed, 2 failed)
 Assertions    5  (3 passed, 2 failed)

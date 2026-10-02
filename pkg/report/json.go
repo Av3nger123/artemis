@@ -40,9 +40,18 @@ const SchemaVersion = 1
 //     expression never has to tell absent from empty. expected and actual are the
 //     exception: they are null when the assertion had no such value, because
 //     either may legitimately be any JSON type.
+//   - A line is the 1-based line of the scenario file the thing was written on,
+//     and 0 when artemis does not know -- a step built in Go, a check with no line
+//     of its own.
 //
-// What is not here is anything the result tree does not hold: no request or
-// response bodies, no headers, no line numbers. That is ART-12's ground.
+// Beside the tree there is failures: the same list the terminal blocks are built
+// from, flat, each entry naming its file, line, scenario and step (ART-12). It is
+// a second view of what is already in the tree, for the consumer this document
+// mostly serves -- something deciding what to go and fix, which should not have to
+// walk four levels to find out.
+//
+// What is still not here is anything the result tree does not hold: no request or
+// response bodies, and no headers.
 type jsonRun struct {
 	SchemaVersion int            `json:"schema_version"`
 	StartedAt     string         `json:"started_at"`
@@ -51,6 +60,7 @@ type jsonRun struct {
 	Passed        bool           `json:"passed"`
 	Counts        jsonCounts     `json:"counts"`
 	Scenarios     []jsonScenario `json:"scenarios"`
+	Failures      []jsonFailure  `json:"failures"`
 }
 
 // jsonCounts is the run's tallies at each level, so a consumer does not have to
@@ -83,6 +93,7 @@ type jsonStep struct {
 	Status     string          `json:"status"`
 	DurationMS float64         `json:"duration_ms"`
 	Attempts   int             `json:"attempts"`
+	Line       int             `json:"line"`
 	Error      string          `json:"error"`
 	Assertions []jsonAssertion `json:"assertions"`
 }
@@ -97,6 +108,30 @@ type jsonAssertion struct {
 	Expected any    `json:"expected"`
 	Actual   any    `json:"actual"`
 	Status   string `json:"status"`
+	Error    string `json:"error"`
+	Line     int    `json:"line"`
+}
+
+// jsonFailure is one entry of the flat failures array: a result.Diagnostic on the
+// wire.
+//
+// Unlike jsonAssertion it does repeat the scenario and the step, because the
+// point of this array is that an entry stands alone. The assertion's own fields
+// are inlined rather than nested: there is at most one check behind a failure, and
+// a consumer asking "what was expected" should not have to know whether there was
+// one. They are null or empty for a failure with no check behind it -- a step that
+// could not run, a file that would not load -- which is what status and error say.
+type jsonFailure struct {
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Scenario string `json:"scenario"`
+	Step     string `json:"step"`
+	Status   string `json:"status"`
+	Kind     string `json:"kind"`
+	Path     string `json:"path"`
+	Operator string `json:"operator"`
+	Expected any    `json:"expected"`
+	Actual   any    `json:"actual"`
 	Error    string `json:"error"`
 }
 
@@ -136,12 +171,40 @@ func fromRun(run *result.RunResult) jsonRun {
 		Passed:        run.Passed(),
 		Counts:        fromCounts(run.Counts()),
 		Scenarios:     make([]jsonScenario, 0, len(run.Scenarios)),
+		Failures:      fromDiagnostics(run.Diagnostics()),
 	}
 	for _, sc := range run.Scenarios {
 		if sc == nil {
 			continue
 		}
 		out.Scenarios = append(out.Scenarios, fromScenario(sc))
+	}
+	return out
+}
+
+// fromDiagnostics maps the run's diagnostics onto the wire type. A run that
+// passed gets an empty array, not null: a consumer iterating failures should not
+// have to handle both.
+func fromDiagnostics(diags []result.Diagnostic) []jsonFailure {
+	out := make([]jsonFailure, 0, len(diags))
+	for _, d := range diags {
+		f := jsonFailure{
+			File:     d.File,
+			Line:     d.Line,
+			Scenario: d.Scenario,
+			Step:     d.Step,
+			Status:   d.Status.String(),
+			Error:    d.Error,
+		}
+		if d.Assertion != nil {
+			f.Kind = d.Assertion.Kind
+			f.Path = d.Assertion.Path
+			f.Operator = d.Assertion.Operator
+			f.Expected = d.Assertion.Expected
+			f.Actual = d.Assertion.Actual
+			f.Error = d.Assertion.Error
+		}
+		out = append(out, f)
 	}
 	return out
 }
@@ -170,6 +233,7 @@ func fromStep(step *result.StepResult) jsonStep {
 		Status:     step.Status.String(),
 		DurationMS: millis(step.Duration),
 		Attempts:   step.Attempts,
+		Line:       step.Line,
 		Error:      step.Error,
 		Assertions: make([]jsonAssertion, 0, len(step.Assertions)),
 	}
@@ -182,6 +246,7 @@ func fromStep(step *result.StepResult) jsonStep {
 			Actual:   a.Actual,
 			Status:   a.Status.String(),
 			Error:    a.Error,
+			Line:     a.Line,
 		})
 	}
 	return out

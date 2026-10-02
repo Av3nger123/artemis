@@ -40,13 +40,13 @@ func decode(t *testing.T, doc string) map[string]any {
 // byte because the key names are a published contract -- a reviewer should see
 // a rename here as a diff, not discover it from a broken consumer.
 func TestWriteJSONPinsTheSchema(t *testing.T) {
-	step := &result.StepResult{Name: "get item", Attempts: 1}
+	step := &result.StepResult{Name: "get item", Attempts: 1, Line: 5}
 	step.Assert(result.Assertion{
-		Kind: "status_code", Operator: "equals", Expected: 200, Actual: 200,
+		Kind: "status_code", Operator: "equals", Expected: 200, Actual: 200, Line: 11,
 	}.Pass())
 	step.Assert(result.Assertion{
 		Kind: "body", Path: "$.status", Operator: "equals",
-		Expected: "ready", Actual: "pending",
+		Expected: "ready", Actual: "pending", Line: 14,
 	}.Fail())
 	step.Finish(12*time.Millisecond + 500*time.Microsecond)
 
@@ -102,6 +102,7 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
           "status": "fail",
           "duration_ms": 12.5,
           "attempts": 1,
+          "line": 5,
           "error": "",
           "assertions": [
             {
@@ -111,7 +112,8 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
               "expected": 200,
               "actual": 200,
               "status": "pass",
-              "error": ""
+              "error": "",
+              "line": 11
             },
             {
               "kind": "body",
@@ -120,11 +122,27 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
               "expected": "ready",
               "actual": "pending",
               "status": "fail",
-              "error": ""
+              "error": "",
+              "line": 14
             }
           ]
         }
       ]
+    }
+  ],
+  "failures": [
+    {
+      "file": "suite/items.yaml",
+      "line": 14,
+      "scenario": "items",
+      "step": "get item",
+      "status": "fail",
+      "kind": "body",
+      "path": "$.status",
+      "operator": "equals",
+      "expected": "ready",
+      "actual": "pending",
+      "error": ""
     }
   ]
 }
@@ -308,5 +326,72 @@ func TestWriteJSONRendersSubMillisecondDurations(t *testing.T) {
 
 	if doc := writeJSON(t, run); !strings.Contains(doc, `"duration_ms": 0.25`) {
 		t.Errorf("document does not contain 0.25 ms:\n%s", doc)
+	}
+}
+
+// A passing run's failures array is [], never null: a consumer iterating it
+// should not have to handle both.
+func TestWriteJSONFailuresIsAnEmptyArrayForAPassingRun(t *testing.T) {
+	step := &result.StepResult{Name: "ping", Attempts: 1, Line: 5}
+	step.Assert(result.Assertion{Kind: "status_code", Operator: "equals", Expected: 200, Actual: 200, Line: 11}.Pass())
+	step.Finish(time.Millisecond)
+	sc := &result.ScenarioResult{Name: "s", File: "s.yaml", Steps: []*result.StepResult{step}}
+	sc.Finish(time.Millisecond)
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusPass, Scenarios: []*result.ScenarioResult{sc}}
+
+	doc := writeJSON(t, run)
+	if !strings.Contains(doc, `"failures": []`) {
+		t.Errorf("WriteJSON() does not carry an empty failures array:\n%s", doc)
+	}
+}
+
+// A step that could not run, and a file that would not load, are both in failures
+// with their reason and no check behind them.
+func TestWriteJSONFailuresCoversAStepAndAScenarioThatCouldNotRun(t *testing.T) {
+	step := &result.StepResult{Name: "fetch", Line: 6}
+	step.Fail(time.Millisecond, errors.New("connection refused"))
+	ran := &result.ScenarioResult{Name: "s", File: "s.yaml", Steps: []*result.StepResult{step}}
+	ran.Finish(time.Millisecond)
+	broken := &result.ScenarioResult{File: "broken.yaml"}
+	broken.Fail(0, errors.New("will not parse"))
+
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusError,
+		Scenarios: []*result.ScenarioResult{ran, broken}}
+
+	failures, ok := decode(t, writeJSON(t, run))["failures"].([]any)
+	if !ok || len(failures) != 2 {
+		t.Fatalf("failures = %v, want two entries", decode(t, writeJSON(t, run))["failures"])
+	}
+	first := failures[0].(map[string]any)
+	if first["step"] != "fetch" || first["line"] != 6.0 || first["error"] != "connection refused" {
+		t.Errorf("failures[0] = %v, want the step, its line and its reason", first)
+	}
+	if first["kind"] != "" || first["expected"] != nil {
+		t.Errorf("failures[0] = %v, want no check behind it", first)
+	}
+	second := failures[1].(map[string]any)
+	if second["file"] != "broken.yaml" || second["step"] != "" || second["error"] != "will not parse" {
+		t.Errorf("failures[1] = %v, want the file and its reason", second)
+	}
+}
+
+// The line on a step and on an assertion is the tree's, verbatim: zero when
+// artemis does not know, not omitted and not guessed at.
+func TestWriteJSONCarriesAnUnknownLineAsZero(t *testing.T) {
+	step := &result.StepResult{Name: "ping", Attempts: 1}
+	step.Assert(result.Assertion{Kind: "body", Path: "$.x", Operator: "equals", Expected: 1, Actual: 2}.Fail())
+	step.Finish(time.Millisecond)
+	sc := &result.ScenarioResult{Name: "s", File: "s.yaml", Steps: []*result.StepResult{step}}
+	sc.Finish(time.Millisecond)
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusFail, Scenarios: []*result.ScenarioResult{sc}}
+
+	doc := decode(t, writeJSON(t, run))
+	scenarios := doc["scenarios"].([]any)
+	gotStep := scenarios[0].(map[string]any)["steps"].([]any)[0].(map[string]any)
+	if gotStep["line"] != 0.0 {
+		t.Errorf("step line = %v, want 0", gotStep["line"])
+	}
+	if a := gotStep["assertions"].([]any)[0].(map[string]any); a["line"] != 0.0 {
+		t.Errorf("assertion line = %v, want 0", a["line"])
 	}
 }
