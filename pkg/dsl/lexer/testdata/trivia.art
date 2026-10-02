@@ -1,0 +1,22 @@
+# A scenario file opens with a comment, which is leading trivia on the
+# `scenario` token -- the only token it could belong to.
+
+scenario "trivia" {   # and this one trails the `{`
+
+  # A blank line above and below this comment. Two newline trivia either side
+  # is how the printer knows to keep the gap.
+
+	var indented_with_a_tab = 1
+  var	mixed	= 2
+
+  step "one" { get "/x" }   # a whole step on one line
+
+  step "two" {
+    get "/y"
+
+    expect status == 200
+  }
+}
+
+# Trailing trivia at the end of a file belongs to the EOF token, including the
+# fact that this file ends without a newline.

@@ -1,0 +1,17 @@
+scenario "interpolation" {
+  var base = env("API_URL")
+
+  step "nested and adjacent" {
+    get "${base}/users/${body.id}"
+    header "X-Literal" = "costs \$5 and \"quotes\""
+    header "X-Nested" = "${ attr("${base}", "href") }"
+    body = {
+      "joined": "${base}${base}",
+      "multi": "a string that
+  runs across two lines, with ${base} in it",
+      "pattern": "no interpolation here"
+    }
+    expect body.email matches /.+@.+\/.+/
+    capture id = body.data.id
+  }
+}
