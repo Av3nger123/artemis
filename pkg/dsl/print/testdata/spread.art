@@ -1,0 +1,25 @@
+# The same scenario as compact.art, spread as far as the grammar allows: every
+# field on its own line, every block broken. Canonical mode pulls the one-field
+# blocks back inline, so this golden is compact.art's apart from the blank lines
+# between the declarations -- paragraphing is the one piece of layout canonical
+# mode reads from the file, because the author meant it.
+scenario "compact" {
+  var url = env("API_URL")
+
+  step "one" {
+    get "${url}/a" {
+      query "q" = 1
+      header "Accept" = "text/plain"
+    }
+    expect status == 200
+    capture id = body.id
+  }
+
+  step "two" {
+    browser {
+      goto "/b"
+      click "#go"
+    }
+    expect page.title contains "B"
+  }
+}

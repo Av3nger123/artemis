@@ -1,0 +1,10 @@
+# A comparison chained with another. The grammar permits at most one per
+# expression rather than folding it one way or the other silently, because
+# `a == b == c` means two different things in two different languages.
+
+scenario "range" {
+  step "checks a count" {
+    get "/orders"
+    expect body.data.count == 1 == true
+  }
+}

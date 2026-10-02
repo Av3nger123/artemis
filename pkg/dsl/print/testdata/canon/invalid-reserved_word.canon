@@ -1,0 +1,25 @@
+# Two reserved words used as names. The design reserves `if`, `else`, `for`,
+# `in`, `while`, `parallel`, `group`, `fn`, `return`, `import`, `use`, `let`,
+# `setup`, `teardown` and `ai` so that a later tier needs no breaking change,
+# and says the diagnostic must name what the word is reserved for -- "reserved"
+# alone does not tell an author whether to wait for it or rename around it.
+#
+# They parse as ordinary identifiers: rejecting them in the lexer would make
+# them lexical keywords, and the message has to know which tier each word is
+# held for, which is the checker's knowledge.
+#
+# `ai` is reserved too, but its future spelling -- `expect ai "the error
+# explains the card was declined"` -- is a string where today's grammar wants a
+# newline, so it is a syntax error before it is a reserved-word one. Pinning
+# that would pin the parser's recovery rather than the reserved-word
+# diagnostic, so it is left out of this fixture on purpose.
+
+scenario "reserved" {
+  var let = 1
+
+  step "orders" {
+    get "/orders"
+    capture import = body.data.token
+    expect status == 200
+  }
+}

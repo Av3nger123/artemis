@@ -1,0 +1,111 @@
+# Every expression form in the grammar, in one file, so the round trip and the
+# checker's future corpus both have something exhaustive to run against.
+
+scenario "expressions" {
+  config browser { headless = true, viewport = "1280x720" }
+
+  # Literals.
+  var num = 42
+  var float = 3.5
+  var exp = 1e9
+  var neg = -7
+  var str = "plain"
+  var re = /.+@.+/
+  var yes = true
+  var no = false
+  var nothing = null
+
+  # Interpolation, including nesting and an escaped dollar.
+  var base = env("API_URL")
+  var url = "${base}/users"
+  var deep = "${base}/users/${num}/orders"
+  var dollar = "costs \$5"
+  var called = "${env("REGION")}-1"
+
+  # Objects and arrays, with trailing commas.
+  var obj = {"a": 1, "b": "two", "c": true}
+  var nested = {"list": [1, 2, {"deep": null}]}
+  var arr = ["x", "y"]
+  var empty_obj = {}
+  var empty_arr = []
+
+  step "operators" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${num}"
+      header "Content-Type" = "application/json"
+      query "limit" = 10
+      body = {"username": "alice", "tags": ["a", "b"]}
+    }
+    timeout = "5s"
+    retry { times = 3, delay = "2s" }
+
+    # Every comparison.
+    expect status == 200
+    expect status != 500
+    expect body.data.count > 0
+    expect body.data.count >= 1
+    expect body.data.count < 100
+    expect body.data.count <= 99
+    expect body.data.roles contains "admin"
+    expect body.data.email matches /.+@.+/
+
+    # The postfix predicates, and `not` in front of each.
+    expect body.data.token exists
+    expect not body.data.deleted exists
+    expect body.data.count is number
+    expect body.data.name is string
+    expect body.data.ok is boolean
+    expect body.data.meta is object
+    expect body.data.roles is array
+    expect body.data.parent is null
+    expect not body.data.count is string
+
+    # Logical operators and grouping.
+    expect status == 200 and body.data.count > 0
+    expect status == 200 or status == 201
+    expect (status == 200 or status == 201) and body.ok
+    expect not (status == 500)
+    expect not not body.ok
+
+    # Postfix chains.
+    expect body.data.items[0].name == "first"
+    expect headers["content-type"] contains "json"
+    expect raw contains "ok"
+
+    capture token = body.data.access_token
+    capture first = body.data.items[0]
+  }
+
+  step "terminal" {
+    run "psql" {
+      args = ["-f", "seed.sql"]
+      cwd = "db"
+      stdin = "select 1"
+      env { PGPASSWORD = "secret", PGHOST = "localhost" }
+    }
+    expect exit_code == 0
+    expect stdout contains "COPY 42"
+    expect stderr == ""
+  }
+
+  step "browser" {
+    browser {
+      goto "${base}/settings/billing"
+      fill "#email" = "alice@example.com"
+      select "#plan" = "pro"
+      click "text=Sign in"
+      press "Enter"
+      hover ".menu"
+      upload "#avatar" = "me.png"
+      wait "1s"
+    }
+    expect page.url contains "/billing/confirmed" within "10s"
+    expect page.title == "Billing"
+    expect text("[role=status]") contains "Pro"
+    expect value("#email") == "alice@example.com"
+    expect attr("#link", "href") contains "/pro"
+    expect count(".invoice") == 1
+    expect visible(".invoice-preview")
+    capture invoice = text(".invoice-total")
+  }
+}

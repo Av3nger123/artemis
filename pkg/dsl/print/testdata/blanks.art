@@ -1,0 +1,25 @@
+# Runs of blank lines, tabs, and aligned `=`. Canonical mode keeps one blank
+# line where the author left one or more, drops the ones at the top and bottom
+# of a block, replaces tabs with two spaces, and collapses the alignment.
+scenario "blanks" {
+
+
+	var short	= 1
+	var a_much_longer_name	= 2
+
+
+
+	step "one" {
+
+
+		get "/a"
+
+
+
+		expect status == 200
+
+
+	}
+
+
+}

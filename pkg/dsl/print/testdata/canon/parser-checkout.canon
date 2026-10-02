@@ -1,0 +1,56 @@
+scenario "checkout" {
+  config browser { headless = true, viewport = "1280x720" }
+
+  var url = env("API_URL")
+  var app = env("APP_URL")
+  var pw = env("API_PASSWORD")
+
+  step "seed the database" {
+    run "psql" {
+      args = ["-f", "seed.sql"]
+      cwd = "db"
+      env { PGPASSWORD = pw }
+    }
+    expect exit_code == 0
+    expect stdout contains "COPY 42"
+  }
+
+  step "login" {
+    post "${url}/token" {
+      header "Content-Type" = "application/json"
+      body = {"username": "alice", "password": pw}
+    }
+    expect status == 200
+    capture token = body.data.access_token
+  }
+
+  step "orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+      query "limit" = 10
+    }
+    timeout = "5s"
+    retry { times = 3, delay = "2s" }
+
+    expect status == 200
+    expect body.data.count > 0
+    expect body.data.email matches /.+@.+/
+    expect body.data.roles contains "admin"
+    expect body.data.token exists
+    expect body.data.count is number
+  }
+
+  step "upgrade in the app" {
+    browser {
+      goto "${app}/settings/billing"
+      fill "#email" = "alice@example.com"
+      fill "#password" = pw
+      click "text=Sign in"
+      click "[data-test=upgrade-pro]"
+    }
+    expect page.url contains "/billing/confirmed" within "10s"
+    expect text("[role=status]") contains "Pro"
+    expect visible(".invoice-preview")
+    capture invoice = text(".invoice-total")
+  }
+}

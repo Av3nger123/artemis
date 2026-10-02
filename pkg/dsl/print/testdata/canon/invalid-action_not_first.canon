@@ -1,0 +1,10 @@
+# A step statement above the step's action block. The step still parses -- one
+# precise diagnostic beats a cascade of unexpected tokens -- and the diagnostic
+# says what to move.
+
+scenario "orders" {
+  step "asserts before it acts" {
+    expect status == 200
+    get "/orders"
+  }
+}

@@ -1,0 +1,19 @@
+# Two `config` declarations with subjects the language does not configure. Only
+# `config browser` has settings today, which is deliberate -- the design calls
+# the browser config "deliberately tiny" and defers everything else until a
+# scenario needs it.
+#
+# The parser accepts any identifier after `config` precisely so that this is a
+# name error with a did-you-mean rather than a syntax error with nothing to
+# suggest. `browsr` gets the suggestion; `http` is not near anything and gets
+# the list instead.
+
+scenario "configured" {
+  config browsr { headless = true }
+  config http { timeout = "5s" }
+
+  step "orders" {
+    get "/orders"
+    expect status == 200
+  }
+}
