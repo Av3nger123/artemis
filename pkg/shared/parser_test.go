@@ -41,13 +41,19 @@ steps:
         path: "$.token"
 `
 
+// knownTypes stands in for what the registry hands the loader in a real run.
+// This package cannot read the registry -- the executors import it -- so the
+// list is written out here, and models' own tests are what pin that Validate
+// uses whatever it is given.
+var knownTypes = []string{"api"}
+
 func parse(t *testing.T, yaml string) error {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "scenario.yaml")
 	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ParseYAMLFile(path)
+	_, err := ParseYAMLFile(path, knownTypes)
 	return err
 }
 
@@ -57,7 +63,7 @@ func TestParseYAMLFileReadsAFullScenario(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	config, err := ParseYAMLFile(path)
+	config, err := ParseYAMLFile(path, knownTypes)
 	if err != nil {
 		t.Fatalf("ParseYAMLFile() = %v, want nil", err)
 	}
@@ -84,7 +90,7 @@ func TestParseYAMLFileRejectsUnknownKeys(t *testing.T) {
 	// thing that tells the user where to look.
 	tests := map[string]struct{ from, to, key string }{
 		"top level":  {"type: functional", "tpye: functional", "tpye"},
-		"step":       {"    type: api\n", "    type: api\n    timeout: 5\n", "timeout"},
+		"step":       {"    type: api\n", "    type: api\n    timeuot: 5s\n", "timeuot"},
 		"request":    {`method: "POST"`, `verb: "POST"`, "verb"},
 		"response":   {"status_code: 200", "status: 200", "status"},
 		"body check": {`path: "$.token"`, `pth: "$.token"`, "pth"},
@@ -147,7 +153,7 @@ func chdir(t *testing.T, dir string) {
 }
 
 func TestParseYAMLFileMissingFileErrorsAsNotExist(t *testing.T) {
-	_, err := ParseYAMLFile(filepath.Join(t.TempDir(), "nope.yaml"))
+	_, err := ParseYAMLFile(filepath.Join(t.TempDir(), "nope.yaml"), knownTypes)
 	if !os.IsNotExist(err) {
 		t.Fatalf("ParseYAMLFile() = %v, want a not-exist error", err)
 	}
@@ -177,7 +183,7 @@ func TestConvertJsonToYamlProducesAParseableScenario(t *testing.T) {
 		t.Fatalf("ConvertJsonToYaml() = %v, want nil", err)
 	}
 
-	config, err := ParseYAMLFile("my-collection.yaml")
+	config, err := ParseYAMLFile("my-collection.yaml", knownTypes)
 	if err != nil {
 		t.Fatalf("ParseYAMLFile() on the generated file = %v, want nil", err)
 	}

@@ -313,3 +313,29 @@ func TestAssertionDescribe(t *testing.T) {
 		})
 	}
 }
+
+func TestAllPassed(t *testing.T) {
+	pass := Assertion{Kind: "status_code", Operator: "equals"}.Pass()
+	fail := Assertion{Kind: "status_code", Operator: "equals"}.Fail()
+	errored := Assertion{Kind: "capture", Operator: "exists"}.Errored(errors.New("no path given"))
+	skipped := AssertionResult{Status: StatusSkip}
+
+	cases := []struct {
+		name string
+		as   []AssertionResult
+		want bool
+	}{
+		{"none", nil, true},
+		{"all pass", []AssertionResult{pass, pass}, true},
+		{"a skip still passes", []AssertionResult{pass, skipped}, true},
+		{"one fails", []AssertionResult{pass, fail}, false},
+		{"one errors", []AssertionResult{pass, errored}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AllPassed(tc.as); got != tc.want {
+				t.Errorf("AllPassed() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

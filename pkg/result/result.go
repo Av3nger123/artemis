@@ -136,6 +136,19 @@ type StepResult struct {
 	Assertions []AssertionResult
 }
 
+// AllPassed reports whether every assertion in as passed. It is what "is this
+// attempt worth stopping on" means to the retry loop, and it is asked of a bare
+// slice rather than of a StepResult because an executor's result has not been
+// Finished yet and so has no status to read.
+func AllPassed(as []AssertionResult) bool {
+	for _, a := range as {
+		if !a.Passed() {
+			return false
+		}
+	}
+	return true
+}
+
 // Passed reports whether the step did not fail the run.
 func (s *StepResult) Passed() bool { return s.Status.Passed() }
 

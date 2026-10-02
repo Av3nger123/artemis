@@ -50,6 +50,47 @@ type Step struct {
 	Response Response `yaml:"response"`
 	Scripts  []Script `yaml:"scripts,omitempty"`
 	Retry    Retry    `yaml:"retry,omitempty"`
+	// Timeout is how long one attempt of this step may take, as a Go duration
+	// string ("5s", "1m30s"). It is per attempt, not per step: a step with
+	// `retry: {times: 3}` and `timeout: "5s"` may take fifteen seconds. Absent,
+	// a default applies -- see AttemptTimeout -- because no deadline at all is
+	// how a run hangs until someone kills it.
+	Timeout string `yaml:"timeout,omitempty"`
+}
+
+// AttemptTimeout is how long one attempt of the step may take, falling back to
+// def when the step does not say. A duration that will not parse, or one that is
+// negative, is an error: it is the scenario's mistake and silently running
+// without a deadline is the one outcome worth refusing.
+//
+// Zero -- `timeout: "0s"` -- is also def rather than "no deadline". There is no
+// spelling of "wait forever", by design.
+func (s Step) AttemptTimeout(def time.Duration) (time.Duration, error) {
+	if s.Timeout == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(s.Timeout)
+	if err != nil {
+		return 0, fmt.Errorf("timeout %q is not a duration (want something like \"500ms\" or \"5s\")", s.Timeout)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("timeout %q is negative", s.Timeout)
+	}
+	if d == 0 {
+		return def, nil
+	}
+	return d, nil
+}
+
+// CheckTimeout reports whether Timeout is a value an executor can use.
+//
+// It is what the runner asks before the first attempt, so a `timeout: "soon"`
+// costs no requests to discover. The runner has no business naming a default --
+// that belongs to the step type -- so the one passed here is inert: only the
+// error is read.
+func (s Step) CheckTimeout() error {
+	_, err := s.AttemptTimeout(time.Second)
+	return err
 }
 
 // Retry is how many times a step may be attempted and how long to wait between

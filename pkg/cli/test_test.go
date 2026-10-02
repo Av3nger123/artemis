@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
 	"artemis/pkg/shared/logger"
@@ -36,11 +37,11 @@ func initLog(t *testing.T) {
 	t.Cleanup(func() { _ = closer.Close() })
 }
 
-// runScenario runs a scenario with its output thrown away. The tests that care
-// about what is printed build their own Console; everything else only wants the
-// result tree.
+// runScenario runs a scenario with its output thrown away, against the registry
+// the binary uses. The tests that care about what is printed build their own
+// Console; everything else only wants the result tree.
 func runScenario(config models.Config, filePath string) *result.RunResult {
-	return executeSteps(config, filePath, report.Discard())
+	return executeSteps(executor.Default(), config, filePath, report.Discard())
 }
 
 // okServer answers every request with the given status and body.
@@ -959,4 +960,199 @@ func dirEntries(t *testing.T, dir string) map[string]bool {
 		names[e.Name()] = true
 	}
 	return names
+}
+
+// The runner dispatches on the step's type through the registry it was given and
+// hands the executor the scenario's scope. Nothing here mentions HTTP: that is
+// the point of the seam.
+func TestExecuteStepsDispatchesThroughTheRegistry(t *testing.T) {
+	initLog(t)
+
+	var saw struct {
+		step  models.Step
+		vars  map[string]any
+		calls int
+	}
+	reg := executor.NewRegistry()
+	reg.Register("probe", executor.Func(func(step models.Step, scope executor.Scope) (*result.StepResult, error) {
+		saw.step, saw.vars, saw.calls = step, scope.Vars(), saw.calls+1
+		scope.Set("probed", "yes")
+		res := &result.StepResult{}
+		res.Assert(result.Assertion{Kind: "probe", Operator: "equals"}.Pass())
+		return res, nil
+	}))
+
+	config := models.Config{
+		Name:      "probing",
+		Variables: []models.Variable{{Name: "base", Value: "http://example.test"}},
+		Steps:     []models.Step{{Name: "probe it", Type: "probe"}},
+	}
+	run := executeSteps(reg, config, "scenario.yaml", report.Discard())
+
+	if saw.calls != 1 {
+		t.Fatalf("the executor was called %d times, want 1", saw.calls)
+	}
+	if saw.step.Name != "probe it" {
+		t.Errorf("executor saw step %q, want %q", saw.step.Name, "probe it")
+	}
+	if saw.vars["base"] != "http://example.test" {
+		t.Errorf("scope[base] = %#v, want the declared variable", saw.vars["base"])
+	}
+	if !run.Passed() {
+		t.Errorf("run.Passed() = false, want true: %s", runFailedError(run))
+	}
+	got := run.Scenarios[0].Steps[0]
+	if len(got.Assertions) != 1 || got.Assertions[0].Kind != "probe" {
+		t.Errorf("Assertions = %+v, want the executor's one", got.Assertions)
+	}
+	// The runner stamps the name and duration the executor left off.
+	if got.Name != "probe it" {
+		t.Errorf("step.Name = %q, want %q", got.Name, "probe it")
+	}
+}
+
+// An executor that returns neither a result nor an error is broken. The step it
+// was asked to run must not pass because of it.
+func TestExecuteStepsAnExecutorThatReturnsNothingErrorsTheStep(t *testing.T) {
+	initLog(t)
+
+	reg := executor.NewRegistry()
+	reg.Register("broken", executor.Func(func(models.Step, executor.Scope) (*result.StepResult, error) {
+		return nil, nil
+	}))
+
+	run := executeSteps(reg, models.Config{Steps: []models.Step{{Name: "x", Type: "broken"}}}, "scenario.yaml", report.Discard())
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false")
+	}
+	if got := run.Scenarios[0].Steps[0].Error; !strings.Contains(got, `"broken"`) {
+		t.Errorf("step.Error = %q, want it to name the step type", got)
+	}
+}
+
+// Retrying is the runner's, not the executor's: the executor is asked again, it
+// does not loop. Captures written by an attempt that was then retried are
+// overwritten by the attempt the loop stops on.
+func TestExecuteStepsRetriesByCallingTheExecutorAgain(t *testing.T) {
+	initLog(t)
+	slept := recordSleeps(t)
+
+	calls := 0
+	reg := executor.NewRegistry()
+	reg.Register("flaky", executor.Func(func(_ models.Step, scope executor.Scope) (*result.StepResult, error) {
+		calls++
+		scope.Set("attempt", calls)
+		res := &result.StepResult{}
+		a := result.Assertion{Kind: "flaky", Operator: "equals"}
+		if calls < 3 {
+			res.Assert(a.Fail())
+		} else {
+			res.Assert(a.Pass())
+		}
+		return res, nil
+	}))
+
+	config := models.Config{Steps: []models.Step{{
+		Name:  "settle",
+		Type:  "flaky",
+		Retry: models.Retry{Times: 4, Delay: "10ms"},
+	}}}
+	run := executeSteps(reg, config, "scenario.yaml", report.Discard())
+
+	if calls != 3 {
+		t.Errorf("the executor was called %d times, want 3 -- it should stop as soon as an attempt passes", calls)
+	}
+	got := run.Scenarios[0].Steps[0]
+	if got.Attempts != 3 {
+		t.Errorf("Attempts = %d, want 3", got.Attempts)
+	}
+	if len(got.Assertions) != 1 || !got.Assertions[0].Passed() {
+		t.Errorf("Assertions = %+v, want only the passing attempt's one", got.Assertions)
+	}
+	if want := []time.Duration{10 * time.Millisecond, 10 * time.Millisecond}; len(*slept) != len(want) {
+		t.Errorf("slept %v, want %v -- between attempts only", *slept, want)
+	}
+}
+
+// A timeout that will not parse is the scenario's mistake, and the step fails
+// before the executor is reached at all.
+func TestExecuteStepsBadTimeoutFailsTheStepBeforeAnyAttempt(t *testing.T) {
+	initLog(t)
+
+	calls := 0
+	reg := executor.NewRegistry()
+	reg.Register("probe", executor.Func(func(models.Step, executor.Scope) (*result.StepResult, error) {
+		calls++
+		return &result.StepResult{}, nil
+	}))
+
+	config := models.Config{Steps: []models.Step{{
+		Name:    "probe it",
+		Type:    "probe",
+		Timeout: "soon",
+		Retry:   models.Retry{Times: 3},
+	}}}
+	run := executeSteps(reg, config, "scenario.yaml", report.Discard())
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for an unparseable timeout")
+	}
+	got := run.Scenarios[0].Steps[0]
+	if got.Status != result.StatusError {
+		t.Errorf("step.Status = %q, want %q", got.Status, result.StatusError)
+	}
+	if !strings.Contains(got.Error, `timeout "soon"`) {
+		t.Errorf("step.Error = %q, want it to name the bad timeout", got.Error)
+	}
+	if calls != 0 {
+		t.Errorf("the executor was called %d times, want 0", calls)
+	}
+}
+
+// timeout: travels from the YAML all the way to the attempt. The server never
+// answers, so the only thing that can end the step is the deadline the scenario
+// asked for -- and a run that hangs instead is the bug this pins.
+func TestExecuteTimeoutFromTheYAMLBoundsTheRequest(t *testing.T) {
+	blocked := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-blocked
+	}))
+	t.Cleanup(func() { close(blocked); srv.Close() })
+
+	yaml := fmt.Sprintf(`name: "hang"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    timeout: "100ms"
+    request:
+      url: "%s"
+      method: "GET"
+    response:
+      status_code: 200
+`, srv.URL)
+
+	type outcome struct {
+		out string
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		out, err := executeCapturing(t, yaml)
+		done <- outcome{out, err}
+	}()
+
+	select {
+	case got := <-done:
+		if got.err == nil {
+			t.Fatalf("execute() = nil, want the step to have failed on its timeout\n%s", got.out)
+		}
+		if !strings.Contains(got.out, "no response within 100ms") {
+			t.Errorf("output does not name the timeout that was hit:\n%s", got.out)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the run did not finish: the step's timeout: was not applied")
+	}
 }

@@ -104,8 +104,8 @@ This configuration defines a basic API request to generate a token. It includes 
   - **name**: Name of the variable.
   - **value**: Value of the variable.
 - **steps**: The steps, executed in the order they are written. `name`, `type`,
-  `request`, `response`, `scripts` and `retry` are all keys of a step, at the
-  same indentation.
+  `request`, `response`, `scripts`, `retry` and `timeout` are all keys of a step,
+  at the same indentation.
   - **name**: Name of the step.
   - **type**: Type of the step (currently only `api`: REST APIs with JSON payloads).
   - **request**
@@ -279,6 +279,10 @@ yet.
   - **delay**: a duration string (`"500ms"`, `"2s"`, `"1m30s"`) slept *between* attempts — never before the first, never after the last. Omitted, there is no wait at all.
 
   Retrying stops as soon as an attempt passes: the status code matched and every assertion held. The older scalar form `retry: 5` still works and means `times: 5`.
+
+- **timeout**: How long one attempt may take, as a duration string (`"5s"`, `"1m30s"`). Omitted, it is **30s**. There is no way to say "wait forever": a request with no deadline is how a CI job hangs until someone notices.
+
+  It is per attempt, not per step, so a step with `timeout: "5s"` and `retry: {times: 3}` may take fifteen seconds. A step that runs out of time fails with `no response within 5s`, which is a failed step like any other and is retried if the step asked for retries.
 ```yaml
 name: "API Collection"
 variables:
@@ -303,6 +307,7 @@ steps:
     retry:
       times: 5
       delay: "2s"
+    timeout: "10s"
 ```
 ## Environment support
 

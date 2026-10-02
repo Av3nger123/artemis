@@ -9,10 +9,13 @@ func apiStep(name string) Step {
 	return Step{Name: name, Type: "api"}
 }
 
+// known is what the registry hands Validate in a real run: today, one type.
+var known = []string{"api"}
+
 func TestValidateAcceptsKnownStepTypes(t *testing.T) {
 	config := Config{Name: "orders", Steps: []Step{apiStep("login"), apiStep("fetch")}}
 
-	if err := config.Validate(); err != nil {
+	if err := config.Validate(known); err != nil {
 		t.Fatalf("Validate() = %v, want nil", err)
 	}
 }
@@ -21,7 +24,7 @@ func TestValidateAcceptsKnownStepTypes(t *testing.T) {
 // steps list is a run with nothing to get wrong, and ART-2 decides what that
 // exit code is worth.
 func TestValidateAcceptsAScenarioWithNoSteps(t *testing.T) {
-	if err := (Config{Name: "empty"}).Validate(); err != nil {
+	if err := (Config{Name: "empty"}).Validate(known); err != nil {
 		t.Fatalf("Validate() = %v, want nil", err)
 	}
 }
@@ -29,7 +32,7 @@ func TestValidateAcceptsAScenarioWithNoSteps(t *testing.T) {
 func TestValidateRejectsUnknownStepType(t *testing.T) {
 	config := Config{Steps: []Step{apiStep("login"), {Name: "query", Type: "db"}}}
 
-	err := config.Validate()
+	err := config.Validate(known)
 	if err == nil {
 		t.Fatal("Validate() = nil, want an error for a step type nothing executes")
 	}
@@ -42,7 +45,7 @@ func TestValidateRejectsUnknownStepType(t *testing.T) {
 }
 
 func TestValidateRejectsAStepWithNoType(t *testing.T) {
-	err := Config{Steps: []Step{{Name: "ping"}}}.Validate()
+	err := Config{Steps: []Step{{Name: "ping"}}}.Validate(known)
 	if err == nil {
 		t.Fatal("Validate() = nil, want an error for a step with no type")
 	}
@@ -54,7 +57,7 @@ func TestValidateRejectsAStepWithNoType(t *testing.T) {
 // The match is exact, so the set of valid spellings equals the set of
 // documented ones.
 func TestValidateRejectsAMisCasedStepType(t *testing.T) {
-	if err := (Config{Steps: []Step{{Name: "ping", Type: "API"}}}).Validate(); err == nil {
+	if err := (Config{Steps: []Step{{Name: "ping", Type: "API"}}}).Validate(known); err == nil {
 		t.Fatal(`Validate() = nil, want an error: "API" is not "api"`)
 	}
 }
@@ -68,7 +71,7 @@ func TestValidateReportsEveryBadStep(t *testing.T) {
 		{Name: "d"},
 	}}
 
-	err := config.Validate()
+	err := config.Validate(known)
 	if err == nil {
 		t.Fatal("Validate() = nil, want errors")
 	}
@@ -82,13 +85,37 @@ func TestValidateReportsEveryBadStep(t *testing.T) {
 	}
 }
 
-func TestIsKnownStepType(t *testing.T) {
-	for _, tc := range []struct {
-		typ  string
-		want bool
-	}{{"api", true}, {"", false}, {"API", false}, {"db", false}, {" api", false}} {
-		if got := IsKnownStepType(tc.typ); got != tc.want {
-			t.Errorf("IsKnownStepType(%q) = %v, want %v", tc.typ, got, tc.want)
+// Validate reports against the list it was given, not a list of its own: this
+// is what makes the registry the single place a step type is declared.
+func TestValidateAcceptsWhateverTheRegistryRegistered(t *testing.T) {
+	config := Config{Steps: []Step{{Name: "run", Type: "exec"}}}
+
+	if err := config.Validate([]string{"api", "exec"}); err != nil {
+		t.Fatalf("Validate() = %v, want nil once exec is registered", err)
+	}
+	if err := config.Validate([]string{"api"}); err == nil {
+		t.Fatal("Validate() = nil, want an error while exec is not registered")
+	}
+}
+
+// The spelling is exact in both directions.
+func TestValidateMatchesTypesExactly(t *testing.T) {
+	for _, typ := range []string{"API", " api", "api ", ""} {
+		if err := (Config{Steps: []Step{{Name: "ping", Type: typ}}}).Validate(known); err == nil {
+			t.Errorf("Validate() = nil for type %q, want an error", typ)
 		}
+	}
+}
+
+// An empty list is a wiring mistake, not a scenario mistake, but a scenario must
+// still not pass validation against it -- and the message must not read
+// "known types: ".
+func TestValidateWithNothingRegisteredSaysSo(t *testing.T) {
+	err := Config{Steps: []Step{apiStep("login")}}.Validate(nil)
+	if err == nil {
+		t.Fatal("Validate(nil) = nil, want an error -- nothing can be executed")
+	}
+	if !strings.Contains(err.Error(), "none are registered") {
+		t.Errorf("error = %q, want it to say nothing is registered", err)
 	}
 }

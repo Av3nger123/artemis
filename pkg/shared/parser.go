@@ -21,10 +21,12 @@ import (
 // Decoding is strict -- KnownFields(true) -- so a typo'd key is an error naming
 // the field and its line instead of a key that is quietly dropped, leaving a
 // scenario that asserts nothing and "passes". The parsed config is then
-// validated, so a step type nothing can execute stops the run before any
-// request is sent. Both entry points, `artemis test` and `artemis parse`, come
-// through here, which is what makes parse a real validator.
-func ParseYAMLFile(filePath string) (models.Config, error) {
+// validated against knownTypes -- the step types that are actually registered,
+// which the caller reads off executor.Registry.Types -- so a step type nothing
+// can execute stops the run before any request is sent. Both entry points,
+// `artemis test` and `artemis parse`, come through here, which is what makes
+// parse a real validator.
+func ParseYAMLFile(filePath string, knownTypes []string) (models.Config, error) {
 	var config models.Config
 
 	yamlFile, err := os.Open(filePath)
@@ -39,7 +41,7 @@ func ParseYAMLFile(filePath string) (models.Config, error) {
 		return config, err
 	}
 
-	if err := config.Validate(); err != nil {
+	if err := config.Validate(knownTypes); err != nil {
 		return config, err
 	}
 

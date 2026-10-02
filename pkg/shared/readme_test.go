@@ -53,7 +53,7 @@ func TestREADMEScenariosParse(t *testing.T) {
 		if err := os.WriteFile(path, []byte(b.body), 0o600); err != nil {
 			t.Fatalf("writing the example from README line %d: %v", b.line, err)
 		}
-		config, err := ParseYAMLFile(path)
+		config, err := ParseYAMLFile(path, knownTypes)
 		if err != nil {
 			t.Errorf("README line %d: artemis cannot load this example: %v\n%s", b.line, err, b.body)
 			continue
