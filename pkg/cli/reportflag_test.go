@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -70,7 +69,7 @@ func TestParseReportsRefusals(t *testing.T) {
 		{
 			name: "unknown format",
 			args: []string{"yaml"},
-			want: []string{"yaml", "json"},
+			want: []string{"yaml", "json", "junit"},
 		},
 		{
 			name: "no format at all",
@@ -98,50 +97,30 @@ func TestParseReportsRefusals(t *testing.T) {
 }
 
 // Two documents on one stream is unparseable, and it is exactly what the flag
-// exists to prevent, so it is refused rather than interleaved. Reaching it needs
-// two formats, which json alone is not, so a second one is registered for the
-// length of this test -- the case has to be pinned before ART-11 adds junit, not
-// after.
+// exists to prevent, so it is refused rather than interleaved.
 func TestParseReportsRefusesTwoReportsOnStdout(t *testing.T) {
-	withFormat(t, "testfmt")
-
-	_, err := parseReports([]string{"json", "testfmt=-"})
+	_, err := parseReports([]string{"json", "junit=-"})
 	if err == nil {
 		t.Fatal("parseReports() = nil, want an error for two reports on stdout")
 	}
-	for _, want := range []string{"json", "testfmt", "stdout"} {
+	for _, want := range []string{"json", "junit", "stdout"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("parseReports() = %q, want it to mention %q", err, want)
 		}
 	}
 }
 
-// Two formats are fine as long as only one of them takes stdout.
+// Two formats are fine as long as only one of them takes stdout -- which is the
+// point of the grammar: both reports out of one run.
 func TestParseReportsAllowsTwoFormatsWhenOnlyOneTakesStdout(t *testing.T) {
-	withFormat(t, "testfmt")
-
-	got, err := parseReports([]string{"json", "testfmt=out.txt"})
+	got, err := parseReports([]string{"json", "junit=junit.xml"})
 	if err != nil {
 		t.Fatalf("parseReports() = %v, want nil", err)
 	}
-	want := []reportTarget{{format: "json"}, {format: "testfmt", path: "out.txt"}}
+	want := []reportTarget{{format: "json"}, {format: "junit", path: "junit.xml"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("parseReports() = %+v, want %+v", got, want)
 	}
-}
-
-// withFormat registers a second report format for the length of a test, so the
-// two-format cases can be pinned while json is the only real one.
-func withFormat(t *testing.T, format string) {
-	t.Helper()
-	if _, taken := reportWriters[format]; taken {
-		t.Fatalf("%q is a real format; pick a name that is not", format)
-	}
-	reportWriters[format] = func(w io.Writer, _ *result.RunResult) error {
-		_, err := io.WriteString(w, format+"\n")
-		return err
-	}
-	t.Cleanup(func() { delete(reportWriters, format) })
 }
 
 func TestAnyToStdoutIsFalseWhenEveryReportIsAFile(t *testing.T) {
@@ -204,5 +183,31 @@ func TestWriteReportsFailsOnAnUnwritablePath(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("writeReports() = %q, want it to mention %q", err, want)
 		}
+	}
+}
+
+// Both formats out of one run: each goes where it was aimed, and neither
+// document ends up in the other's stream.
+func TestWriteReportsWritesEveryTarget(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "junit.xml")
+	targets, err := parseReports([]string{"json", "junit=" + path})
+	if err != nil {
+		t.Fatalf("parseReports() = %v, want nil", err)
+	}
+
+	var buf bytes.Buffer
+	if err := writeReports(&buf, targets, &result.RunResult{Status: result.StatusPass}); err != nil {
+		t.Fatalf("writeReports() = %v, want nil", err)
+	}
+	if !strings.Contains(buf.String(), `"schema_version"`) || strings.Contains(buf.String(), "<testsuites") {
+		t.Errorf("stdout is not exactly the JSON document:\n%s", buf.String())
+	}
+
+	raw, err := os.ReadFile(path) //nolint:gosec // a path this test just named
+	if err != nil {
+		t.Fatalf("reading the JUnit report: %v", err)
+	}
+	if !strings.Contains(string(raw), "<testsuites") {
+		t.Errorf("the file does not hold a JUnit document:\n%s", raw)
 	}
 }

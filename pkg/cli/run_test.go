@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -447,6 +448,86 @@ func TestReportJSONIsWrittenForAFailingRun(t *testing.T) {
 	}
 }
 
+// `--report junit=<path>` is the CI shape: the document in a file the job
+// uploads, the console still on stdout for the log. Every step of the scenario is
+// a <testcase> under the <testsuite> of its scenario, which is what makes a CI
+// reporter show failures per scenario.
+func TestReportJUnitToAFile(t *testing.T) {
+	srv := okServer(t, 500, `{"status":"boom"}`)
+	path := filepath.Join(t.TempDir(), "junit.xml")
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "junit="+path)
+	if err == nil {
+		t.Fatalf("Execute() = nil, want an error for a failing run\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "FAIL in ") {
+		t.Errorf("stdout does not hold the console report:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "<testsuites") {
+		t.Errorf("stdout holds the document, which was asked for as a file:\n%s", stdout)
+	}
+
+	raw, readErr := os.ReadFile(path) //nolint:gosec // the path this test gave the command
+	if readErr != nil {
+		t.Fatalf("reading the report: %v", readErr)
+	}
+	var doc struct {
+		Failures int `xml:"failures,attr"`
+		Suites   []struct {
+			Name  string `xml:"name,attr"`
+			Cases []struct {
+				Name    string `xml:"name,attr"`
+				Failure *struct {
+					Message string `xml:"message,attr"`
+				} `xml:"failure"`
+			} `xml:"testcase"`
+		} `xml:"testsuite"`
+	}
+	if err := xml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("%s is not an XML document: %v\n%s", path, err, raw)
+	}
+	if doc.Failures != 1 {
+		t.Errorf("failures = %d, want 1\n%s", doc.Failures, raw)
+	}
+	if len(doc.Suites) != 1 || doc.Suites[0].Name != "health" {
+		t.Fatalf("want one suite named after the scenario, got %+v\n%s", doc.Suites, raw)
+	}
+	one := doc.Suites[0].Cases
+	if len(one) != 1 || one[0].Failure == nil {
+		t.Fatalf("want one failing case, got %+v\n%s", one, raw)
+	}
+	if !strings.Contains(one[0].Failure.Message, "status_code") {
+		t.Errorf("message = %q, want the assertion that failed", one[0].Failure.Message)
+	}
+}
+
+// Both formats out of one run, which is what the repeatable flag is for: the JSON
+// document on stdout for whatever reads it, the JUnit file for the CI job.
+func TestReportJSONAndJUnitTogether(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	path := filepath.Join(t.TempDir(), "junit.xml")
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"),
+		"--report", "json", "--report", "junit="+path)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\n%s", err, stdout)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+		t.Fatalf("stdout is not exactly one JSON document: %v\n%s", err, stdout)
+	}
+	raw, readErr := os.ReadFile(path) //nolint:gosec // the path this test gave the command
+	if readErr != nil {
+		t.Fatalf("reading the JUnit report: %v", readErr)
+	}
+	if err := xml.Unmarshal(raw, new(struct{})); err != nil {
+		t.Fatalf("%s is not an XML document: %v\n%s", path, err, raw)
+	}
+	if !strings.Contains(string(raw), `tests="1"`) {
+		t.Errorf("the JUnit report does not hold the run's one step:\n%s", raw)
+	}
+}
+
 // A report that cannot be written fails the command although the run passed. A
 // CI job whose artifact silently vanished is worse off than one that went red.
 func TestReportThatCannotBeWrittenFailsAPassingRun(t *testing.T) {
@@ -474,8 +555,10 @@ func TestReportWithAnUnknownFormatRunsNothing(t *testing.T) {
 	if err == nil {
 		t.Fatal("Execute() = nil, want an error")
 	}
-	if !strings.Contains(err.Error(), "json") {
-		t.Errorf("Execute() = %q, want it to name the formats artemis knows", err)
+	for _, want := range []string{"json", "junit"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Execute() = %q, want it to name the formats artemis knows", err)
+		}
 	}
 	if stdout != "" {
 		t.Errorf("something ran before the flag was refused:\n%s", stdout)

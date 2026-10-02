@@ -1,0 +1,38 @@
+scenario: health (testdata/report_json/01_health.yaml)
+  ok    ping                        <dur>
+scenario: items (testdata/report_json/02_items.yaml)
+  FAIL  list items                  <dur>
+         $.total gt 0, got 0
+  FAIL  missing route               <dur>
+         status_code equals 200, got 404
+scenario: testdata/report_json/03_broken.yaml
+  ERROR parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:
+  line 10: field respones not found in type models.Step
+
+Scenarios     3  (1 passed, 1 failed, 1 errored)
+Steps         3  (1 passed, 2 failed)
+Assertions    5  (3 passed, 2 failed)
+FAIL in <dur>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="artemis" tests="4" failures="2" errors="1" skipped="0" time="0.000" timestamp="1970-01-01T00:00:00Z">
+  <testsuite name="health" file="testdata/report_json/01_health.yaml" tests="1" failures="0" errors="0" skipped="0" time="0.000">
+    <testcase name="ping" classname="testdata/report_json/01_health.yaml" time="0.000"></testcase>
+  </testsuite>
+  <testsuite name="items" file="testdata/report_json/02_items.yaml" tests="2" failures="2" errors="0" skipped="0" time="0.000">
+    <testcase name="list items" classname="testdata/report_json/02_items.yaml" time="0.000">
+      <failure message="$.total gt 0, got 0">$.total gt 0, got 0</failure>
+    </testcase>
+    <testcase name="missing route" classname="testdata/report_json/02_items.yaml" time="0.000">
+      <failure message="status_code equals 200, got 404">status_code equals 200, got 404</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="testdata/report_json/03_broken.yaml" file="testdata/report_json/03_broken.yaml" tests="1" failures="0" errors="1" skipped="0" time="0.000">
+    <testcase name="could not load" classname="testdata/report_json/03_broken.yaml" time="0.000">
+      <error message="parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:&#xA;  line 10: field respones not found in type models.Step">parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:&#xA;  line 10: field respones not found in type models.Step</error>
+    </testcase>
+  </testsuite>
+</testsuites>
+
+--- exit error ---
+2 of 3 steps failed, 2 of 5 assertions failed; 1 scenario could not run: parse testdata/report_json/03_broken.yaml: yaml: unmarshal errors:
+  line 10: field respones not found in type models.Step

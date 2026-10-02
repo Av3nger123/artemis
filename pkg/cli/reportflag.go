@@ -22,7 +22,8 @@ const (
 // format is adding a line here and the writer it names; nothing else in the CLI
 // has to know about it.
 var reportWriters = map[string]func(io.Writer, *result.RunResult) error{
-	"json": report.WriteJSON,
+	"json":  report.WriteJSON,
+	"junit": report.WriteJUnit,
 }
 
 // reportTarget is one report the user asked for: a format and where it goes. An

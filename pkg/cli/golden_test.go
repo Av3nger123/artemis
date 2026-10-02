@@ -55,6 +55,19 @@ type goldenCase struct {
 	// args are extra flags appended after the path, for a case that pins what
 	// a flag does to a whole run.
 	args []string
+	// fixture is the testdata name to run, when it is not the case's own --
+	// two cases that pin two reports of the same run share one fixture, so the
+	// documents are directly comparable.
+	fixture string
+}
+
+// fixtureName is the testdata entry a case runs: its own name unless it borrows
+// another's.
+func (c goldenCase) fixtureName() string {
+	if c.fixture != "" {
+		return c.fixture
+	}
+	return c.name
 }
 
 func TestGolden(t *testing.T) {
@@ -137,15 +150,16 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 // committed suite.
 func renderFixture(t *testing.T, c goldenCase, url string) (fixture, path string) {
 	t.Helper()
+	name := c.fixtureName()
 	if !c.dir {
-		fixture = filepath.Join("testdata", c.name+".yaml")
-		path = filepath.Join(t.TempDir(), c.name+".yaml")
+		fixture = filepath.Join("testdata", name+".yaml")
+		path = filepath.Join(t.TempDir(), name+".yaml")
 		writeRendered(t, fixture, path, url, true)
 		return fixture, path
 	}
 
-	fixture = filepath.Join("testdata", c.name)
-	path = filepath.Join(t.TempDir(), c.name)
+	fixture = filepath.Join("testdata", name)
+	path = filepath.Join(t.TempDir(), name)
 	substituted := false
 	err := filepath.WalkDir(fixture, func(src string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -210,6 +224,14 @@ var (
 	jsonDurationMS = regexp.MustCompile(`"duration_ms": [0-9.]+`)
 )
 
+// xmlTimestamp and xmlTime match the two values in a --report junit document
+// that change between runs, replaced for the same reason as the JSON ones: a
+// report golden stays a document a reader can paste into a CI reporter.
+var (
+	xmlTimestamp = regexp.MustCompile(`timestamp="[^"]*"`)
+	xmlTime      = regexp.MustCompile(`time="[0-9.]+"`)
+)
+
 // scrub replaces everything in a transcript that changes between runs: the temp
 // scenario path, the test server's address, every duration, and the timings
 // inside a JSON report.
@@ -225,6 +247,8 @@ func scrub(s, tempPath, fixture, url string) string {
 	s = strings.ReplaceAll(s, url, "http://127.0.0.1:PORT")
 	s = jsonStartedAt.ReplaceAllString(s, `"started_at": "1970-01-01T00:00:00Z"`)
 	s = jsonDurationMS.ReplaceAllString(s, `"duration_ms": 0`)
+	s = xmlTimestamp.ReplaceAllString(s, `timestamp="1970-01-01T00:00:00Z"`)
+	s = xmlTime.ReplaceAllString(s, `time="0.000"`)
 	return spacedDur.ReplaceAllStringFunc(s, func(m string) string {
 		pad := len(m) - len(durSentinel)
 		if pad < 1 {
@@ -352,18 +376,21 @@ func goldenCases(t *testing.T) []goldenCase {
 			dir:     true,
 			args:    []string{"--report", "json"},
 			wantErr: true,
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				switch r.URL.Path {
-				case "/health":
-					fmt.Fprint(w, `{"status": "ok", "build": "1a2b3c"}`)
-				case "/items":
-					fmt.Fprint(w, `{"total": 0, "items": []}`)
-				default:
-					w.WriteHeader(http.StatusNotFound)
-					fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
-				}
-			},
+			handler: reportFixtureHandler(),
+		},
+		{
+			// The same run as report_json, as JUnit XML: a scenario is a
+			// testsuite and a step is a testcase, a failed step carries
+			// <failure> and an errored one <error>, and the file that would
+			// not load is a suite with one synthetic errored case so the load
+			// failure is visible in a CI UI (ART-11). Sharing report_json's
+			// fixture makes the two documents comparable.
+			name:    "report_junit",
+			fixture: "report_json",
+			dir:     true,
+			args:    []string{"--report", "junit"},
+			wantErr: true,
+			handler: reportFixtureHandler(),
 		},
 		{
 			// Two failures then a pass: the step passes, and its line says how
@@ -383,5 +410,23 @@ func goldenCases(t *testing.T) []goldenCase {
 				}
 			}(),
 		},
+	}
+}
+
+// reportFixtureHandler answers the testdata/report_json suite, which both report
+// goldens run: one scenario that passes, one with a failed assertion and an
+// errored step, and a file that will not load.
+func reportFixtureHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/health":
+			fmt.Fprint(w, `{"status": "ok", "build": "1a2b3c"}`)
+		case "/items":
+			fmt.Fprint(w, `{"total": 0, "items": []}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
+		}
 	}
 }
