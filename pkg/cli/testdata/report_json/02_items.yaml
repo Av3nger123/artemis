@@ -1,0 +1,22 @@
+name: "items"
+type: functional
+variables: []
+steps:
+  - name: "list items"
+    type: api
+    request:
+      url: "%SERVER%/items"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.total"
+          operator: "gt"
+          value: 0
+  - name: "missing route"
+    type: api
+    request:
+      url: "%SERVER%/nope"
+      method: "GET"
+    response:
+      status_code: 200

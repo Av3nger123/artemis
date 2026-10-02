@@ -58,9 +58,16 @@ func initRunEnv(cmd *cobra.Command) (io.Closer, error) {
 }
 
 // reportRun discovers the scenarios at path, runs them as one run, prints the
-// summary, and returns an error if anything failed -- that error is what makes
-// the process exit non-zero.
+// summary, writes whatever --report asked for, and returns an error if anything
+// failed -- that error is what makes the process exit non-zero.
 func reportRun(cmd *cobra.Command, path string) error {
+	// Before discovery: a mistyped format must not cost a suite run.
+	reportValues, _ := cmd.Flags().GetStringArray(reportFlag)
+	targets, err := parseReports(reportValues)
+	if err != nil {
+		return err
+	}
+
 	files, err := discover(path)
 	if err != nil {
 		return err
@@ -68,9 +75,28 @@ func reportRun(cmd *cobra.Command, path string) error {
 
 	// cmd.OutOrStdout, not os.Stdout: a test captures the run's output by
 	// setting the command's writer.
-	rep := report.NewConsole(cmd.OutOrStdout())
+	//
+	// When a report goes to stdout, the console goes to stderr instead, so
+	// stdout is exactly one document and `artemis run suite --report json | jq`
+	// works. It is moved rather than silenced: a person watching a long suite
+	// should still see steps tick past, and the console is the only thing that
+	// prints the failure breakdown.
+	out := cmd.OutOrStdout()
+	consoleOut := out
+	if anyToStdout(targets) {
+		consoleOut = cmd.ErrOrStderr()
+	}
+
+	rep := report.NewConsole(consoleOut)
 	run := runFiles(executor.Default(), files, rep)
 	rep.Summary(run)
+
+	// A report that could not be written wins over the run's own failure: the
+	// console has already said the run failed, and the missing artifact is the
+	// part the caller does not know about yet.
+	if err := writeReports(out, targets, run); err != nil {
+		return err
+	}
 	if !run.Passed() {
 		return runFailedError(run)
 	}

@@ -737,6 +737,16 @@ func resetRunFlags(t *testing.T) {
 	t.Helper()
 	for _, cmd := range []*cobra.Command{runCmd, testCmd} {
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			// A repeatable flag appends, and its DefValue is the printed form
+			// "[]", so setting that would leave one bogus value behind rather
+			// than none. Emptying it is what "no --report was given" means.
+			if sv, ok := f.Value.(pflag.SliceValue); ok {
+				if err := sv.Replace(nil); err != nil {
+					t.Fatalf("emptying %s --%s: %v", cmd.Name(), f.Name, err)
+				}
+				f.Changed = false
+				return
+			}
 			if err := f.Value.Set(f.DefValue); err != nil {
 				t.Fatalf("resetting %s --%s to %q: %v", cmd.Name(), f.Name, f.DefValue, err)
 			}

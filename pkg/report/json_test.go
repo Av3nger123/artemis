@@ -1,0 +1,312 @@
+package report
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"artemis/pkg/result"
+)
+
+// startedAt is a fixed time so a document can be compared byte for byte.
+var startedAt = time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+
+// writeJSON renders run and fails the test if it could not be written.
+func writeJSON(t *testing.T, run *result.RunResult) string {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := WriteJSON(&buf, run); err != nil {
+		t.Fatalf("WriteJSON() = %v, want nil", err)
+	}
+	return buf.String()
+}
+
+// decode parses a document into a map, for a test that asks about one key
+// rather than the whole shape.
+func decode(t *testing.T, doc string) map[string]any {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal([]byte(doc), &got); err != nil {
+		t.Fatalf("the document is not valid JSON: %v\n%s", err, doc)
+	}
+	return got
+}
+
+// The schema, in full, for the smallest interesting run: one scenario, one step
+// that failed, one assertion that passed and one that did not. Pinned byte for
+// byte because the key names are a published contract -- a reviewer should see
+// a rename here as a diff, not discover it from a broken consumer.
+func TestWriteJSONPinsTheSchema(t *testing.T) {
+	step := &result.StepResult{Name: "get item", Attempts: 1}
+	step.Assert(result.Assertion{
+		Kind: "status_code", Operator: "equals", Expected: 200, Actual: 200,
+	}.Pass())
+	step.Assert(result.Assertion{
+		Kind: "body", Path: "$.status", Operator: "equals",
+		Expected: "ready", Actual: "pending",
+	}.Fail())
+	step.Finish(12*time.Millisecond + 500*time.Microsecond)
+
+	sc := &result.ScenarioResult{Name: "items", File: "suite/items.yaml", Steps: []*result.StepResult{step}}
+	sc.Finish(13 * time.Millisecond)
+
+	run := &result.RunResult{
+		StartedAt: startedAt,
+		Duration:  14 * time.Millisecond,
+		Status:    result.StatusFail,
+		Scenarios: []*result.ScenarioResult{sc},
+	}
+
+	want := `{
+  "schema_version": 1,
+  "started_at": "2026-03-04T05:06:07Z",
+  "duration_ms": 14,
+  "status": "fail",
+  "passed": false,
+  "counts": {
+    "scenarios": {
+      "total": 1,
+      "passed": 0,
+      "failed": 1,
+      "errored": 0,
+      "skipped": 0
+    },
+    "steps": {
+      "total": 1,
+      "passed": 0,
+      "failed": 1,
+      "errored": 0,
+      "skipped": 0
+    },
+    "assertions": {
+      "total": 2,
+      "passed": 1,
+      "failed": 1,
+      "errored": 0,
+      "skipped": 0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "items",
+      "file": "suite/items.yaml",
+      "status": "fail",
+      "duration_ms": 13,
+      "error": "",
+      "steps": [
+        {
+          "name": "get item",
+          "status": "fail",
+          "duration_ms": 12.5,
+          "attempts": 1,
+          "error": "",
+          "assertions": [
+            {
+              "kind": "status_code",
+              "path": "",
+              "operator": "equals",
+              "expected": 200,
+              "actual": 200,
+              "status": "pass",
+              "error": ""
+            },
+            {
+              "kind": "body",
+              "path": "$.status",
+              "operator": "equals",
+              "expected": "ready",
+              "actual": "pending",
+              "status": "fail",
+              "error": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+`
+	if got := writeJSON(t, run); got != want {
+		t.Errorf("WriteJSON() document does not match\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
+}
+
+// A passing run says so at the top in two ways: the status word and the boolean
+// a consumer can branch on without knowing the vocabulary.
+func TestWriteJSONReportsAPassingRun(t *testing.T) {
+	step := &result.StepResult{Name: "ping", Attempts: 1}
+	step.Finish(time.Millisecond)
+	sc := &result.ScenarioResult{Name: "health", File: "health.yaml", Steps: []*result.StepResult{step}}
+	sc.Finish(time.Millisecond)
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusPass, Scenarios: []*result.ScenarioResult{sc}}
+
+	got := decode(t, writeJSON(t, run))
+	if got["status"] != "pass" {
+		t.Errorf("status = %v, want pass", got["status"])
+	}
+	if got["passed"] != true {
+		t.Errorf("passed = %v, want true", got["passed"])
+	}
+}
+
+// A scenario whose file would not load has no steps and carries the reason. The
+// document must hold both, or the one thing the reader needs is missing.
+func TestWriteJSONKeepsAnErroredScenarioWithNoSteps(t *testing.T) {
+	sc := &result.ScenarioResult{File: "suite/broken.yaml"}
+	sc.Fail(0, errors.New("parse suite/broken.yaml: field respones not found"))
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusError, Scenarios: []*result.ScenarioResult{sc}}
+
+	doc := writeJSON(t, run)
+	for _, want := range []string{
+		`"file": "suite/broken.yaml"`,
+		`"status": "error"`,
+		`"error": "parse suite/broken.yaml: field respones not found"`,
+		`"steps": []`,
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("document does not contain %s:\n%s", want, doc)
+		}
+	}
+}
+
+// A step that never asserted anything still reports why, and a skipped step is
+// in the document rather than absent from it: "it did not run" and "it was never
+// written" are different things.
+func TestWriteJSONKeepsErroredAndSkippedSteps(t *testing.T) {
+	bad := &result.StepResult{Name: "login", Attempts: 3}
+	bad.Fail(900*time.Millisecond, errors.New("Post \"http://x/login\": connection refused"))
+	skipped := &result.StepResult{Name: "logout"}
+	skipped.Skip("login did not run")
+
+	sc := &result.ScenarioResult{Name: "auth", File: "auth.yaml", Steps: []*result.StepResult{bad, skipped}}
+	sc.Finish(900 * time.Millisecond)
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusError, Scenarios: []*result.ScenarioResult{sc}}
+
+	doc := writeJSON(t, run)
+	for _, want := range []string{
+		`"error": "Post \"http://x/login\": connection refused"`,
+		`"attempts": 3`,
+		`"duration_ms": 900`,
+		`"name": "logout"`,
+		`"status": "skip"`,
+		`"error": "login did not run"`,
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("document does not contain %s:\n%s", want, doc)
+		}
+	}
+}
+
+// An assertion's expected and actual keep the type they had: a consumer reading
+// `.expected` for a numeric check must get a number, and an object must survive
+// as an object. A value that was never there is null, not an empty string.
+func TestWriteJSONPreservesAssertionValueTypes(t *testing.T) {
+	step := &result.StepResult{Name: "shapes", Attempts: 1}
+	step.Assert(result.Assertion{Kind: "body", Path: "$.count", Operator: "gt", Expected: 2, Actual: float64(3)}.Pass())
+	step.Assert(result.Assertion{Kind: "body", Path: "$.ok", Operator: "equals", Expected: true, Actual: false}.Fail())
+	step.Assert(result.Assertion{
+		Kind: "body", Path: "$.item", Operator: "equals",
+		Expected: map[string]any{"id": float64(1)}, Actual: []any{float64(1), "two"},
+	}.Fail())
+	step.Assert(result.Assertion{Kind: "body", Path: "$.missing", Operator: "exists", Expected: true}.Errored(errors.New("no match for $.missing")))
+	step.Finish(time.Millisecond)
+
+	sc := &result.ScenarioResult{Name: "shapes", File: "shapes.yaml", Steps: []*result.StepResult{step}}
+	sc.Finish(time.Millisecond)
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusFail, Scenarios: []*result.ScenarioResult{sc}}
+
+	doc := decode(t, writeJSON(t, run))
+	scenarios, ok := doc["scenarios"].([]any)
+	if !ok || len(scenarios) != 1 {
+		t.Fatalf("scenarios = %v, want one", doc["scenarios"])
+	}
+	steps := scenarios[0].(map[string]any)["steps"].([]any)
+	asserts := steps[0].(map[string]any)["assertions"].([]any)
+	if len(asserts) != 4 {
+		t.Fatalf("got %d assertions, want 4", len(asserts))
+	}
+
+	first := asserts[0].(map[string]any)
+	if first["expected"] != float64(2) || first["actual"] != float64(3) {
+		t.Errorf("numeric assertion = %v, want numbers 2 and 3", first)
+	}
+	second := asserts[1].(map[string]any)
+	if second["expected"] != true || second["actual"] != false {
+		t.Errorf("boolean assertion = %v, want booleans", second)
+	}
+	third := asserts[2].(map[string]any)
+	if _, ok := third["expected"].(map[string]any); !ok {
+		t.Errorf("expected = %#v, want an object", third["expected"])
+	}
+	if _, ok := third["actual"].([]any); !ok {
+		t.Errorf("actual = %#v, want an array", third["actual"])
+	}
+	fourth := asserts[3].(map[string]any)
+	if fourth["actual"] != nil {
+		t.Errorf("actual = %#v, want null for an assertion that found nothing", fourth["actual"])
+	}
+	if fourth["status"] != "error" || fourth["error"] != "no match for $.missing" {
+		t.Errorf("errored assertion = %v, want the reason", fourth)
+	}
+}
+
+// A run with nothing in it is still a document, and its empty levels are arrays:
+// a consumer iterating scenarios should never have to handle null as well.
+func TestWriteJSONRendersAnEmptyRunAsArraysNotNull(t *testing.T) {
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusPass}
+
+	doc := writeJSON(t, run)
+	if !strings.Contains(doc, `"scenarios": []`) {
+		t.Errorf("document does not contain an empty scenarios array:\n%s", doc)
+	}
+	if strings.Contains(doc, "null") {
+		t.Errorf("document contains null:\n%s", doc)
+	}
+}
+
+// Nil is the one thing a caller can hand over by accident, and it must produce a
+// document saying nothing ran rather than a panic.
+func TestWriteJSONOfNilIsAnEmptyRun(t *testing.T) {
+	doc := decode(t, writeJSON(t, nil))
+	if doc["schema_version"] != float64(SchemaVersion) {
+		t.Errorf("schema_version = %v, want %d", doc["schema_version"], SchemaVersion)
+	}
+	if doc["started_at"] != "" {
+		t.Errorf("started_at = %v, want empty for a run that never began", doc["started_at"])
+	}
+}
+
+// failingWriter reports an error on every write, standing in for a full disk or
+// a closed pipe.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
+
+// A document that could not be written is an error the caller must be able to
+// fail on: a CI job whose report silently vanished is worse than one that failed.
+func TestWriteJSONReturnsAWriteError(t *testing.T) {
+	err := WriteJSON(failingWriter{}, &result.RunResult{StartedAt: startedAt})
+	if err == nil {
+		t.Fatal("WriteJSON() = nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "disk full") {
+		t.Errorf("WriteJSON() = %v, want it to name the underlying error", err)
+	}
+}
+
+// Sub-millisecond work is a number, not "<1ms": the console rounds for a reader,
+// a document must stay comparable.
+func TestWriteJSONRendersSubMillisecondDurations(t *testing.T) {
+	step := &result.StepResult{Name: "fast", Attempts: 1}
+	step.Finish(250 * time.Microsecond)
+	sc := &result.ScenarioResult{Name: "fast", File: "fast.yaml", Steps: []*result.StepResult{step}}
+	sc.Finish(250 * time.Microsecond)
+	run := &result.RunResult{StartedAt: startedAt, Status: result.StatusPass, Scenarios: []*result.ScenarioResult{sc}}
+
+	if doc := writeJSON(t, run); !strings.Contains(doc, `"duration_ms": 0.25`) {
+		t.Errorf("document does not contain 0.25 ms:\n%s", doc)
+	}
+}

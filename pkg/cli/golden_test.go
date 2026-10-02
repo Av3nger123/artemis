@@ -52,6 +52,9 @@ type goldenCase struct {
 	// noSleep stubs out the retry sleep, so a case can ask for a delay
 	// without the suite waiting it out.
 	noSleep bool
+	// args are extra flags appended after the path, for a case that pins what
+	// a flag does to a whole run.
+	args []string
 }
 
 func TestGolden(t *testing.T) {
@@ -111,7 +114,7 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 	fixture, path := renderFixture(t, c, url)
 
 	var out strings.Builder
-	RootCmd.SetArgs([]string{"run", path})
+	RootCmd.SetArgs(append([]string{"run", path}, c.args...))
 	RootCmd.SetOut(&out)
 	RootCmd.SetErr(&out)
 	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
@@ -198,8 +201,18 @@ const durPattern = `<1ms|(?:\d+h)?(?:\d+m)?\d+(?:\.\d+)?(?:ns|µs|ms|s)`
 // the replacement can keep the column exactly as wide as it was.
 var spacedDur = regexp.MustCompile(` +(?:` + durPattern + `)`)
 
+// jsonStartedAt and jsonDurationMS match the two values in a --report json
+// document that change between runs. They are replaced with fixed values rather
+// than a sentinel word, so a report golden stays a parseable JSON document
+// anyone can pipe into jq.
+var (
+	jsonStartedAt  = regexp.MustCompile(`"started_at": "[^"]*"`)
+	jsonDurationMS = regexp.MustCompile(`"duration_ms": [0-9.]+`)
+)
+
 // scrub replaces everything in a transcript that changes between runs: the temp
-// scenario path, the test server's address, and every duration.
+// scenario path, the test server's address, every duration, and the timings
+// inside a JSON report.
 //
 // Durations are replaced in place, keeping the field the same total width --
 // from the end of the preceding text to the end of the duration -- which is
@@ -210,6 +223,8 @@ var spacedDur = regexp.MustCompile(` +(?:` + durPattern + `)`)
 func scrub(s, tempPath, fixture, url string) string {
 	s = strings.ReplaceAll(s, tempPath, fixture)
 	s = strings.ReplaceAll(s, url, "http://127.0.0.1:PORT")
+	s = jsonStartedAt.ReplaceAllString(s, `"started_at": "1970-01-01T00:00:00Z"`)
+	s = jsonDurationMS.ReplaceAllString(s, `"duration_ms": 0`)
 	return spacedDur.ReplaceAllStringFunc(s, func(m string) string {
 		pad := len(m) - len(durSentinel)
 		if pad < 1 {
@@ -320,6 +335,30 @@ func goldenCases(t *testing.T) []goldenCase {
 					fmt.Fprint(w, `{"token": "t0ken"}`)
 				case "/items":
 					fmt.Fprint(w, `{"items": []}`)
+				default:
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
+				}
+			},
+		},
+		{
+			// The whole --report json document for a run with something of
+			// every kind in it: a scenario that passed, one with a failed
+			// assertion and an errored step, and a file that would not load
+			// and so has no steps at all (ART-10). The console report is on
+			// stderr here, which the transcript merges back in front of the
+			// document.
+			name:    "report_json",
+			dir:     true,
+			args:    []string{"--report", "json"},
+			wantErr: true,
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/health":
+					fmt.Fprint(w, `{"status": "ok", "build": "1a2b3c"}`)
+				case "/items":
+					fmt.Fprint(w, `{"total": 0, "items": []}`)
 				default:
 					w.WriteHeader(http.StatusNotFound)
 					fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)

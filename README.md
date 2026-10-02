@@ -9,6 +9,7 @@ Artemis is a command-line tool for automated testing of REST APIs, built with Go
 - Assertions with real operators: `equals`, `contains`, `matches`, `exists`, `type`, `gt`/`gte`/`lt`/`lte`
 - Values captured from one response and templated into the next
 - A run summary on the terminal, plus an opt-in JSON log of every request, response and error
+- `--report json`: the whole outcome of a run as one JSON document, for a CI job or an agent to read
 - A non-zero exit code whenever anything fails, so a CI job goes red on a broken API
 - Postman collections converted to Artemis YAML as a starting point
 
@@ -78,6 +79,118 @@ FAIL in 17ms
 `artemis test -f sample.yaml` is the old name for a one-file run. It still works
 and still fails the process on a failing run, but it prints a deprecation line:
 use `artemis run`.
+
+### Machine-readable reports
+
+`--report` writes the outcome of a run in a format another program can read. Its
+value is `format[=path]`:
+
+```sh
+artemis run ./suite --report json              # the document on stdout
+artemis run ./suite --report json=results.json # the document in a file
+```
+
+`json` is the only format today. The flag is repeatable, and a format given twice
+is an error.
+
+With no path the document goes to **stdout**, and the console report moves to
+**stderr**, so stdout holds exactly one JSON document and nothing else:
+
+```sh
+artemis run ./suite --report json | jq '.counts.assertions'
+```
+
+With a path, the document is written there -- truncating whatever was there
+before -- and the console report stays on stdout. A document is written whether
+the run passed or failed, and a report that cannot be written fails the command
+even when the run itself passed: a missing artifact must not pass for a green
+build. The exit code is unchanged by the flag; it still comes from the run.
+
+#### The document
+
+One document per run, mirroring the result tree: a run of scenarios, a scenario
+of steps, a step of assertions. Everything that ran is in it, passing things
+included, so a reader can tell "nothing failed" from "nothing ran".
+
+```json
+{
+  "schema_version": 1,
+  "started_at": "2026-03-04T05:06:07Z",
+  "duration_ms": 14,
+  "status": "fail",
+  "passed": false,
+  "counts": {
+    "scenarios":  { "total": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0 },
+    "steps":      { "total": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0 },
+    "assertions": { "total": 2, "passed": 1, "failed": 1, "errored": 0, "skipped": 0 }
+  },
+  "scenarios": [
+    {
+      "name": "items",
+      "file": "suite/items.yaml",
+      "status": "fail",
+      "duration_ms": 13,
+      "error": "",
+      "steps": [
+        {
+          "name": "get item",
+          "status": "fail",
+          "duration_ms": 12.5,
+          "attempts": 1,
+          "error": "",
+          "assertions": [
+            {
+              "kind": "status_code",
+              "path": "",
+              "operator": "equals",
+              "expected": 200,
+              "actual": 200,
+              "status": "pass",
+              "error": ""
+            },
+            {
+              "kind": "body",
+              "path": "$.status",
+              "operator": "equals",
+              "expected": "ready",
+              "actual": "pending",
+              "status": "fail",
+              "error": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Key | Where | Meaning |
+| --- | --- | --- |
+| `schema_version` | run | `1`. It goes up when a key is removed or its meaning changes; a new key does not change it. |
+| `started_at` | run | When the run began, RFC 3339. |
+| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. `fail` is "it ran and gave the wrong answer"; `error` is "it could not run at all". Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. |
+| `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary. |
+| `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. |
+| `counts` | run | Totals per level, so nobody has to walk the tree to say "2 of 5 assertions failed". |
+| `name` | scenario, step | As written in the scenario. A scenario whose file would not load has no name, so it is `""` and `file` is what identifies it. |
+| `file` | scenario | The path the scenario was read from. |
+| `error` | scenario, step, assertion | Why it could not run, or `""`. A scenario's error is a file that would not load, and such a scenario has no steps. |
+| `attempts` | step | How many times the step was tried; `1` unless `retry:` asked for more. |
+| `kind` | assertion | What sort of check it was: `status_code`, `body`, `exit_code`, `stdout`, `stderr`. |
+| `path` | assertion | What was inspected -- a JSON path for a body check, `""` for a check with nothing to address. |
+| `operator` | assertion | The comparison that was applied: `equals`, `contains`, `gt`, and the rest of [Operators](#operators). |
+| `expected` / `actual` | assertion | The value the scenario asked for and the value that was there, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve. |
+
+Every key is always present, with its zero value rather than omitted, so a `jq`
+expression never has to tell absent from empty. `expected` and `actual` are the
+exception: they are `null`, because either may legitimately be any JSON type.
+Every list is a list, empty rather than `null`.
+
+What is *not* in the document is anything artemis does not record today: no
+request or response bodies, no headers, no line numbers.
+`pkg/cli/testdata/report_json.golden` is a whole document from a real run, for
+reading; `pkg/report/json.go` is where the shape is defined.
 
 ### Command for validating a YAML file without calling anything
 
@@ -568,5 +681,5 @@ failing test, not a surprise for whoever copies it.
 - **Step types other than `api` and `exec`.** `type:` accepts those two and
   nothing else; any other value is an error at load time. `db` and `browser` are
   what the executor interface was sized for, and neither exists yet.
-- **Machine-readable reports.** The terminal summary and the JSON log are the two
-  outputs; there is no JUnit or JSON report format.
+- **JUnit reports.** `--report json` exists; `--report junit`, which is what CI
+  surfaces per scenario, does not yet.

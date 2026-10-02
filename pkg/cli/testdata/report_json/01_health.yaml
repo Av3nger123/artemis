@@ -1,0 +1,16 @@
+name: "health"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%SERVER%/health"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.status"
+          value: "ok"
+    capture:
+      build: "$.build"

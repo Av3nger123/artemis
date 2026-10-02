@@ -1,0 +1,11 @@
+name: "broken"
+type: functional
+variables: []
+steps:
+  - name: "typo"
+    type: api
+    request:
+      url: "%SERVER%/health"
+      method: "GET"
+    respones:
+      status_code: 200

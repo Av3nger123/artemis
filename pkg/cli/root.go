@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,10 @@ func Init() {
 	RootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	runCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
+	// Repeatable, and its value is format[=path], so a second format is a value
+	// rather than a second flag: --report json --report junit=junit.xml.
+	runCmd.Flags().StringArray(reportFlag, nil,
+		"Write a machine-readable report: "+strings.Join(reportFormats(), "|")+"[=path] (default: stdout, which moves the console report to stderr). Repeatable")
 
 	// Deprecated: superseded by run, kept so the old invocation keeps working.
 	RootCmd.AddCommand(testCmd)

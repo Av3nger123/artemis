@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -281,4 +283,201 @@ steps:
         - path: "$.status"
           value: "%s"
 `, name, url, wantBody)
+}
+
+// runStreams writes yaml to a temp file, runs `artemis run <file>` with extra
+// args, and returns stdout and stderr separately. The separation is the point:
+// `--report json` is only useful if stdout holds the document and nothing else.
+func runStreams(t *testing.T, yaml string, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	path := filepath.Join(t.TempDir(), "scenario.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs(append([]string{"run", path}, args...))
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	runErr := RootCmd.Execute()
+	return out.String(), errOut.String(), runErr
+}
+
+// The whole point of the format: stdout is one JSON document and nothing else,
+// so `artemis run suite --report json | jq` works. The console report is still
+// written -- a person watching a long run needs it -- but on stderr.
+func TestReportJSONPutsOneDocumentOnStdoutAndTheConsoleOnStderr(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	stdout, stderr, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json")
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+	}
+	if doc["status"] != "pass" {
+		t.Errorf("status = %v, want pass", doc["status"])
+	}
+	if strings.Contains(stdout, "scenario: health") {
+		t.Errorf("stdout holds the console report as well as the document:\n%s", stdout)
+	}
+	for _, want := range []string{"scenario: health", "PASS in "} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr does not contain %q:\n%s", want, stderr)
+		}
+	}
+}
+
+// The document holds everything that ran, down to the assertion, not only what
+// failed: a reader must be able to tell "nothing failed" from "nothing ran".
+func TestReportJSONCarriesTheWholeTree(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"pending"}`)
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json")
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error: the body assertion does not match")
+	}
+
+	var doc struct {
+		Status    string `json:"status"`
+		Passed    bool   `json:"passed"`
+		Scenarios []struct {
+			Name   string `json:"name"`
+			File   string `json:"file"`
+			Status string `json:"status"`
+			Steps  []struct {
+				Name       string `json:"name"`
+				Status     string `json:"status"`
+				Attempts   int    `json:"attempts"`
+				Assertions []struct {
+					Kind     string `json:"kind"`
+					Path     string `json:"path"`
+					Operator string `json:"operator"`
+					Expected any    `json:"expected"`
+					Actual   any    `json:"actual"`
+					Status   string `json:"status"`
+				} `json:"assertions"`
+			} `json:"steps"`
+		} `json:"scenarios"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+	}
+
+	if doc.Status != "fail" || doc.Passed {
+		t.Errorf("run = %q/%v, want fail/false", doc.Status, doc.Passed)
+	}
+	if len(doc.Scenarios) != 1 || len(doc.Scenarios[0].Steps) != 1 {
+		t.Fatalf("document = %+v, want one scenario of one step", doc)
+	}
+	sc := doc.Scenarios[0]
+	if sc.Name != "health" || !strings.HasSuffix(sc.File, "scenario.yaml") {
+		t.Errorf("scenario = %q (%q), want it named and its file given", sc.Name, sc.File)
+	}
+	step := sc.Steps[0]
+	if step.Name != "ping" || step.Attempts != 1 {
+		t.Errorf("step = %q, %d attempts, want ping, 1", step.Name, step.Attempts)
+	}
+	if len(step.Assertions) != 2 {
+		t.Fatalf("got %d assertions, want the passing status check and the failing body check: %+v", len(step.Assertions), step.Assertions)
+	}
+	if step.Assertions[0].Kind != "status_code" || step.Assertions[0].Status != "pass" {
+		t.Errorf("first assertion = %+v, want a passing status_code check", step.Assertions[0])
+	}
+	body := step.Assertions[1]
+	if body.Path != "$.status" || body.Status != "fail" || body.Expected != "ok" || body.Actual != "pending" {
+		t.Errorf("second assertion = %+v, want $.status expected ok, actual pending, failed", body)
+	}
+}
+
+// With a path, the document goes to the file and the console stays where it was:
+// a CI job that keeps an artifact should not have its log moved out from under it.
+func TestReportJSONToAFileLeavesTheConsoleOnStdout(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	path := filepath.Join(t.TempDir(), "results.json")
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json="+path)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\n%s", err, stdout)
+	}
+	if !strings.Contains(stdout, "PASS in ") {
+		t.Errorf("stdout does not hold the console report:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "schema_version") {
+		t.Errorf("stdout holds the document, which was asked for as a file:\n%s", stdout)
+	}
+
+	raw, err := os.ReadFile(path) //nolint:gosec // the path this test gave the command
+	if err != nil {
+		t.Fatalf("reading the report: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("%s is not a JSON document: %v\n%s", path, err, raw)
+	}
+	if doc["status"] != "pass" {
+		t.Errorf("status = %v, want pass", doc["status"])
+	}
+}
+
+// A document is written whether the run passed or not -- a report only produced
+// for green runs is a report nobody can use.
+func TestReportJSONIsWrittenForAFailingRun(t *testing.T) {
+	srv := okServer(t, 500, `{"status":"boom"}`)
+	path := filepath.Join(t.TempDir(), "results.json")
+
+	_, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json="+path)
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+	raw, readErr := os.ReadFile(path) //nolint:gosec // the path this test gave the command
+	if readErr != nil {
+		t.Fatalf("reading the report: %v", readErr)
+	}
+	if !strings.Contains(string(raw), `"status": "fail"`) {
+		t.Errorf("the report does not say the run failed:\n%s", raw)
+	}
+}
+
+// A report that cannot be written fails the command although the run passed. A
+// CI job whose artifact silently vanished is worse off than one that went red.
+func TestReportThatCannotBeWrittenFailsAPassingRun(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	path := filepath.Join(t.TempDir(), "no-such-dir", "results.json")
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json="+path)
+	if err == nil {
+		t.Fatalf("Execute() = nil, want an error\n%s", stdout)
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("Execute() = %q, want it to name the report path", err)
+	}
+	if !strings.Contains(stdout, "PASS in ") {
+		t.Errorf("stdout does not hold the console report of the run that did pass:\n%s", stdout)
+	}
+}
+
+// An unusable --report is refused before anything runs: a mistyped format must
+// not cost a suite run, and the message has to say what the formats are.
+func TestReportWithAnUnknownFormatRunsNothing(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "yaml")
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "json") {
+		t.Errorf("Execute() = %q, want it to name the formats artemis knows", err)
+	}
+	if stdout != "" {
+		t.Errorf("something ran before the flag was refused:\n%s", stdout)
+	}
 }
