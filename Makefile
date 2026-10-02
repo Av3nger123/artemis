@@ -34,10 +34,12 @@ cover:
 	$(GOTEST) -coverprofile=$(COVERPROFILE) ./...
 	$(GOCMD) tool cover -func=$(COVERPROFILE) | tail -1
 
-# Rewrite the golden files in pkg/cli/testdata from what the runner actually
-# prints. Read the diff before committing it: that is the whole point of them.
+# Rewrite the golden files from what the code actually prints -- the run reports
+# in pkg/cli/testdata and the rendered diagnostics in pkg/dsl/diag/testdata.
+# Read the diff before committing it: that is the whole point of them.
 golden:
 	$(GOTEST) ./pkg/cli -run TestGolden -update
+	$(GOTEST) ./pkg/dsl/diag -update
 
 vet:
 	$(GOVET) $(PKGS)

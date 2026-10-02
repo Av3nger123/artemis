@@ -1,0 +1,11 @@
+# Three lexical faults reported in one pass -- the lexer does not stop at the
+# first, so neither does the bag -- and an unterminated string last, because it
+# swallows the rest of the file by design.
+scenario "lexical" {
+  step "errors" {
+    header "A" = "bad escape: \q"
+    header "B" = /unterminated regex
+    header "C" = 1 ! 2
+    header "D" = "no closing quote
+  }
+}

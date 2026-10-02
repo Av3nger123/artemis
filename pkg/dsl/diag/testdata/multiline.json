@@ -1,0 +1,36 @@
+{
+  "diagnostics": [
+    {
+      "code": "unknown-field",
+      "severity": "error",
+      "span": {
+        "file": "block.art",
+        "line": 7,
+        "col": 14,
+        "endLine": 10,
+        "endCol": 8,
+        "offset": 328
+      },
+      "message": "a body block is not an object literal",
+      "hint": "write the fields as `body { \"sku\" = \"A-1\" }`",
+      "suggestions": [
+        {
+          "replace": "body {\n  \"sku\" = \"A-1\"\n}"
+        }
+      ]
+    },
+    {
+      "code": "unknown-field",
+      "severity": "error",
+      "span": {
+        "file": "block.art",
+        "line": 17,
+        "col": 14,
+        "endLine": 24,
+        "endCol": 8,
+        "offset": 465
+      },
+      "message": "every element of args must be a string"
+    }
+  ]
+}

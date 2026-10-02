@@ -1,0 +1,37 @@
+{
+  "diagnostics": [
+    {
+      "code": "unknown-field",
+      "severity": "error",
+      "span": {
+        "file": "checkout.art",
+        "line": 12,
+        "col": 10,
+        "endLine": 12,
+        "endCol": 15,
+        "offset": 387
+      },
+      "message": "unknown field \"statu\"",
+      "hint": "did you mean \"status\"?",
+      "suggestions": [
+        {
+          "replace": "status"
+        }
+      ]
+    },
+    {
+      "code": "not-in-scope",
+      "severity": "error",
+      "span": {
+        "file": "checkout.art",
+        "line": 31,
+        "col": 10,
+        "endLine": 31,
+        "endCol": 16,
+        "offset": 774
+      },
+      "message": "\"status\" is not in scope in a browser step",
+      "hint": "a browser step binds page.url, page.title, text(), value(),\nattr(), count(), visible()"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# An unclosed "${" is its own fixture: it runs to the end of the file, so the
+# file ends there -- a closing brace after it would be read as the
+# interpolation's own "}" and the fault would become an unterminated string.
+scenario "interpolation" {
+  step "unclosed" {
+    get "${ host

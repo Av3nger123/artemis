@@ -1,0 +1,7 @@
+invalid-escape	error	a string literal contains an escape the language does not define
+not-in-scope	error	a name is not bound in this step's type
+unclosed-interpolation	error	a "${" in a string has no closing "}"
+unexpected-character	error	a byte in the source starts no token
+unknown-field	error	an identifier names no field of anything in scope
+unterminated-regex	error	a regex literal has no closing slash
+unterminated-string	error	a string literal has no closing quote

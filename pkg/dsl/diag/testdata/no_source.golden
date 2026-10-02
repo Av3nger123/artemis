@@ -1,0 +1,9 @@
+warning: a diagnostic with no position at all
+
+absent.art:3:5: a file nobody read
+
+lexical.art:4:20: a zero-width span still gets one caret
+   4 | scenario "lexical" {
+     |                    ^
+
+lexical.art:900:1: a line past the end

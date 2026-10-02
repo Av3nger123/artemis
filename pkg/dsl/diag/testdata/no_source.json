@@ -1,0 +1,56 @@
+{
+  "diagnostics": [
+    {
+      "code": "not-in-scope",
+      "severity": "warning",
+      "span": {
+        "file": "",
+        "line": 0,
+        "col": 0,
+        "endLine": 0,
+        "endCol": 0,
+        "offset": 0
+      },
+      "message": "a diagnostic with no position at all"
+    },
+    {
+      "code": "unknown-field",
+      "severity": "error",
+      "span": {
+        "file": "absent.art",
+        "line": 3,
+        "col": 5,
+        "endLine": 3,
+        "endCol": 9,
+        "offset": 40
+      },
+      "message": "a file nobody read"
+    },
+    {
+      "code": "unexpected-character",
+      "severity": "error",
+      "span": {
+        "file": "lexical.art",
+        "line": 4,
+        "col": 20,
+        "endLine": 4,
+        "endCol": 20,
+        "offset": 0
+      },
+      "message": "a zero-width span still gets one caret"
+    },
+    {
+      "code": "not-in-scope",
+      "severity": "error",
+      "span": {
+        "file": "lexical.art",
+        "line": 900,
+        "col": 1,
+        "endLine": 900,
+        "endCol": 2,
+        "offset": 99999
+      },
+      "message": "a line past the end"
+    }
+  ]
+}
