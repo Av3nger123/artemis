@@ -1,0 +1,13 @@
+# A "${" that is still open when the file ends. This is the one the lexer itself
+# reports: it tracks open interpolations and, at end of file, points at each
+# "${" that never found its "}" rather than at the end of the file, because the
+# "${" is what the author has to go and look at.
+#
+# The unclosed braces either side of it are real too, and reported: a file that
+# ends inside a string ends inside everything that string was inside.
+
+scenario "unclosed interpolation" {
+  var base = "https://api.example.com"
+
+  step "orders" {
+    get "${base

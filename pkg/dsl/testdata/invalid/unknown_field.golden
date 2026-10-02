@@ -1,0 +1,8 @@
+=== terminal
+unknown_field.art:15:12: unknown field "statu"
+   15 |     expect statu == 200
+      |            ^^^^^
+   hint: did you mean "status"?
+
+=== codes
+unknown-field	error	15:12-15:17	suggest: "status"

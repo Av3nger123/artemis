@@ -1,0 +1,8 @@
+=== terminal
+two_actions.art:8:5: a step has exactly one action block
+   8 |     run "echo deploy"
+     |     ^^^
+   hint: the first one is at line 7; a second action means a second step
+
+=== codes
+duplicate-action	error	8:5-8:8

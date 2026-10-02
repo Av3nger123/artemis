@@ -1,0 +1,25 @@
+=== terminal
+unclosed_interp.art:9:35: unclosed scenario
+   9 | scenario "unclosed interpolation" {
+     |                                   ^
+   hint: this "{" is never closed
+
+unclosed_interp.art:12:17: unclosed step
+   12 |   step "orders" {
+      |                 ^
+   hint: this "{" is never closed
+
+unclosed_interp.art:13:10: unclosed "${": the interpolation is missing its "}"
+   13 |     get "${base
+      |          ^^
+
+unclosed_interp.art:14:1: expected "}" to close the interpolation, found end of file
+   14 |
+      | ^
+   hint: an interpolated string is "...${ expr }..."
+
+=== codes
+unclosed-block	error	9:35-9:36
+unclosed-block	error	12:17-12:18
+unclosed-interpolation	error	13:10-13:12
+unclosed-interpolation-expr	error	14:1-14:1

@@ -1,0 +1,11 @@
+# A malformed object literal: a missing ":" after the first key, and a number
+# where a key belongs. An object literal's keys are strings.
+
+scenario "create" {
+  step "posts a body" {
+    post "/orders" {
+      body = {"sku" "A-1", 3: true}
+    }
+    expect status == 201
+  }
+}

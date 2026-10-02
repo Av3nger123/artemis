@@ -1,0 +1,24 @@
+# todo(ART-33): invalid-duration
+# todo(ART-33): invalid-duration
+#
+# Two unparseable durations. `timeout` and `retry.wait` take a duration string,
+# and "5 secs" is the kind of thing a person writes once; today the equivalent
+# YAML fails at run time, and the design moves it to compile time.
+#
+# Both are well-formed syntax -- a string on the right of an `=` -- so the
+# parser has nothing to say, and the checker knows which fields are durations.
+
+scenario "timeouts" {
+  config http {
+    timeout = "5 secs"
+  }
+
+  step "orders" {
+    get "/orders"
+    retry {
+      attempts = 3
+      wait = "soon"
+    }
+    expect status == 200
+  }
+}

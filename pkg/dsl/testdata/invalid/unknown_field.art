@@ -1,0 +1,17 @@
+# todo(ART-33): unknown-field
+#
+# The design document's worked example. `statu` is a plausible typo for
+# `status`, so the diagnostic names the near miss and offers the replacement as
+# a mechanical fix rather than saying "unknown field" and stopping.
+#
+# This parses cleanly today: a field position accepts any identifier, which is
+# the parser-versus-checker division ART-31 settled. Rejecting it in the parser
+# would turn a hintable name error into a bare syntax error with nothing to
+# suggest, so the corpus asserts the parser stays silent here.
+
+scenario "checkout" {
+  step "orders" {
+    get "/orders"
+    expect statu == 200
+  }
+}

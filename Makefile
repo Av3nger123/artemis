@@ -35,11 +35,16 @@ cover:
 	$(GOCMD) tool cover -func=$(COVERPROFILE) | tail -1
 
 # Rewrite the golden files from what the code actually prints -- the run reports
-# in pkg/cli/testdata and the rendered diagnostics in pkg/dsl/diag/testdata.
+# in pkg/cli/testdata, the rendered diagnostics in pkg/dsl/diag/testdata, and the
+# invalid-file corpus in pkg/dsl/testdata/invalid.
 # Read the diff before committing it: that is the whole point of them.
+#
+# The corpus's own -update leaves the fixtures waiting on a later stage alone --
+# their goldens are written by hand, ahead of the stage that will produce them.
 golden:
 	$(GOTEST) ./pkg/cli -run TestGolden -update
 	$(GOTEST) ./pkg/dsl/diag -update
+	$(GOTEST) ./pkg/dsl -update
 
 vet:
 	$(GOVET) $(PKGS)

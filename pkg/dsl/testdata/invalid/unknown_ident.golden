@@ -1,0 +1,14 @@
+=== terminal
+unknown_ident.art:17:12: unknown name "bse"
+   17 |     get "${bse}/orders"
+      |            ^^^
+   hint: did you mean "base"?
+
+unknown_ident.art:18:12: unknown name "bdy"
+   18 |     expect bdy.data.count > 0
+      |            ^^^
+   hint: did you mean "body"?
+
+=== codes
+unknown-identifier	error	17:12-17:15	suggest: "base"
+unknown-identifier	error	18:12-18:15	suggest: "body"

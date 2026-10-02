@@ -1,0 +1,24 @@
+=== terminal
+many_errors.art:13:3: expected "config", "var" or "step", found "nonsense"
+   13 |   nonsense here
+      |   ^^^^^^^^
+
+many_errors.art:20:7: expected "=" and a value after "query", found "body"
+   20 |       body = {"sku": "A-1"}
+      |       ^^^^
+
+many_errors.art:29:33: "==" cannot be chained with another comparison
+   29 |     expect body.data.count == 1 == true
+      |                                 ^^
+   hint: an expect holds one comparison; join two with "and", or write two expect lines
+
+many_errors.art:33:8: step "has nothing to run" has no action block
+   33 |   step "has nothing to run" {
+      |        ^^^^^^^^^^^^^^^^^^^^
+   hint: a step does one of: an HTTP verb (get, post, ...), run "<command>", or browser { ... }
+
+=== codes
+unexpected-token	error	13:3-13:11
+unexpected-token	error	20:7-20:11
+non-associative-operator	error	29:33-29:35
+missing-action	error	33:8-33:28
