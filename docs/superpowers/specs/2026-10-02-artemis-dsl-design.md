@@ -62,6 +62,7 @@ follows it:
 | Syntax | Declarative blocks with embedded expressions, HCL-shaped | HTTP-literal (Hurl-shaped), statement/script-shaped |
 | YAML | Replaced, with a one-shot `artemis migrate` | Hard delete; indefinite dual support |
 | Agentic assertions | `ai` is a reserved keyword that fails to parse with a pointer | Shipping it; leaving it unreserved |
+| UI authoring | The language and toolchain are built so a UI can read, edit and write `.art` losslessly | A text-only format; a UI that owns its own storage format |
 
 ### Why Artemis keeps executing
 
@@ -288,19 +289,135 @@ error naming the release it is reserved for:
 here: a CI gate's most valuable property is determinism, and a non-deterministic
 assertion that flakes for unreproducible reasons is worse than a missing one.
 
+## Authoring from a UI
+
+A `.art` file must be editable by a graphical builder, not only by a text editor
+or a model. The UI application itself is out of scope here; what is in scope is
+that **the language and toolchain never make one impossible**. Four properties
+are required, and the first is the only one in this document that cannot be
+retrofitted cheaply.
+
+### 1. Lossless round-trip (decide now or never)
+
+A UI loads a file, changes one field, and writes it back. Anything the parser
+discarded is destroyed at that moment. So the tree is a **concrete** syntax tree:
+every node carries its leading and trailing *trivia* (comments, blank lines,
+original spacing), and `print` reproduces them.
+
+```
+parse(src) -> tree -> print(tree) == src     // byte-identical, for any valid file
+```
+
+This is stronger than the formatter idempotence already required, and it is the
+single biggest structural consequence of the UI requirement. A lexer that drops
+comments cannot be made lossless later without being rewritten, which is why it
+is settled here rather than deferred to M1.
+
+Two printing modes, sharing one implementation:
+
+| Mode | Behaviour | Used by |
+| --- | --- | --- |
+| Preserving | Reproduce trivia and layout exactly; only edited nodes are re-rendered | UI writes, `artemis fmt` on an already-canonical file |
+| Canonical | Normalise all layout | `artemis fmt -w`, `migrate`, Postman `generate` |
+
+A UI write therefore produces a diff touching only the lines the user actually
+changed, which is what makes the format reviewable in a pull request.
+
+### 2. The tree as JSON, both directions
+
+A UI manipulates structure, not text. The tree has a documented, versioned JSON
+encoding, and the mapping is total in both directions:
+
+```
+artemis ast -f checkout.art            # tree as JSON on stdout
+artemis ast --from-json < tree.json    # JSON back to .art source
+```
+
+Every node carries its span (`file`, `line`, `col`, `endLine`, `endCol`, `offset`)
+so the UI can map any widget to its source range and back. The encoding is
+versioned with a `schemaVersion` field, because a UI will be released and upgraded
+independently of the CLI.
+
+This is the same tree codegen consumes, so the UI, the interpreter and the three
+transpilers share one representation and cannot drift apart.
+
+### 3. Structured diagnostics
+
+The rendered caret output stays for terminals. For a UI it is unusable, so every
+diagnostic is also available as JSON with its span, code, message and hint:
+
+```
+artemis parse -f checkout.art --json
+```
+
+```json
+{"diagnostics": [
+  {"code": "unknown-field", "severity": "error",
+   "span": {"line": 12, "col": 10, "endLine": 12, "endCol": 15},
+   "message": "unknown field \"statu\"",
+   "hint": "did you mean \"status\"?",
+   "suggestions": [{"replace": "status"}]}
+]}
+```
+
+Stable machine-readable `code` values matter more than the message text: a UI
+keys its behaviour off them, and a message reworded for clarity should not break
+it. `suggestions` carries a mechanical fix where one exists, so the UI can offer
+a one-click correction.
+
+### 4. Enumerable choice points, with an escape hatch
+
+A form renders dropdowns, so the grammar's choice points must be finite and
+discoverable: methods, comparison operators, type names, retry fields. They are,
+and `artemis grammar --json` emits them so a UI populates its dropdowns from the
+binary rather than hardcoding a list that drifts.
+
+Expressions are the hard part for a form. In practice almost every assertion has
+the shape `<path> <operator> <literal>`, which is exactly three widgets. The
+checker therefore labels each `expect` as either:
+
+- **simple** — `<path> <op> <literal>`, `<path> exists`, `<path> is <type>`, and
+  the `not` form of each. The UI renders these as a path picker, an operator
+  dropdown and a value field.
+- **complex** — anything else (`and`/`or` chains, arithmetic, nested calls). The
+  UI renders a single raw expression text field with live validation.
+
+The classification is in the JSON encoding as a `form` hint, so this is a
+documented property of the tree rather than something each UI re-derives. No
+expression is unrepresentable in the UI; the complex ones simply degrade to text.
+
+Note that `"${url}/token"` means a UI's "URL" field contains a small expression
+language. That is deliberate: one field with validated interpolation beats a
+separate variable-binding widget, and the span data makes it possible to underline
+a bad `${` precisely.
+
+### Partial and invalid states
+
+A UI builds a scenario incrementally, so a half-finished step with no URL is a
+normal state and a strict parser rejects it. The resolution: **the UI owns
+incomplete state in its own memory and only ever serialises a complete tree.**
+The CLI is not asked to parse or represent a half-written file. Live validation is
+the UI calling the checker on a complete-but-wrong tree and rendering the
+diagnostics it gets back. This keeps the on-disk format strict, which is the
+property `artemis test` depends on.
+
 ## Architecture
 
 ```
 .art source
     |
     v
-pkg/dsl      lexer -> parser -> AST -> checker        (diagnostics)
+pkg/dsl      lexer -> parser -> tree (+trivia) -> checker    (diagnostics)
     |
     +--> pkg/dsl/lower   -> runtime scenario ----> pkg/executor (ART-15/16/17)
     |                                                   |
     |                                              pkg/result -> pkg/report
     |
     +--> pkg/codegen     -> python | go | js source files
+    |
+    +--> pkg/dsl/print   -> .art source      (preserving | canonical)
+    |
+    +--> pkg/dsl/encode  -> tree as JSON <-> tree          (UI)
 ```
 
 Parsing, checking and lowering are the only new things in the run path. Everything
@@ -310,14 +427,15 @@ below `pkg/executor` is unchanged.
 
 | Package | Responsibility |
 | --- | --- |
-| `pkg/dsl/token` | token kinds; `Position{File, Line, Col, Offset}` |
-| `pkg/dsl/lexer` | source bytes to tokens; every token carries a position span |
-| `pkg/dsl/ast` | node types; every node carries a span |
+| `pkg/dsl/token` | token kinds; `Span{File, Line, Col, EndLine, EndCol, Offset}`; trivia |
+| `pkg/dsl/lexer` | source bytes to tokens; **retains comments and blank lines as trivia** rather than discarding them |
+| `pkg/dsl/ast` | node types; every node carries a span and its leading/trailing trivia |
 | `pkg/dsl/parser` | recursive descent, precedence climbing for expressions |
-| `pkg/dsl/check` | name resolution, reserved words, type sanity, arity |
-| `pkg/dsl/diag` | `Diagnostic{Span, Message, Hint}`; rendering; multi-error collection |
-| `pkg/dsl/print` | AST to canonical source; the formatter, and the backend for `migrate` and Postman `generate` |
-| `pkg/dsl/lower` | AST to the runtime structures `pkg/executor` consumes |
+| `pkg/dsl/check` | name resolution, reserved words, type sanity, arity, `simple`/`complex` expression classification |
+| `pkg/dsl/diag` | `Diagnostic{Span, Code, Severity, Message, Hint, Suggestions}`; terminal rendering and JSON encoding; multi-error collection |
+| `pkg/dsl/print` | tree to source in preserving or canonical mode; the formatter, and the backend for `migrate` and Postman `generate` |
+| `pkg/dsl/encode` | versioned JSON encoding of the tree, both directions |
+| `pkg/dsl/lower` | tree to the runtime structures `pkg/executor` consumes |
 | `pkg/eval` | expression evaluation against a response plus scope |
 | `pkg/codegen` | `Target` interface and the three backends |
 
@@ -378,11 +496,13 @@ Requirements:
 | Command | Behaviour |
 | --- | --- |
 | `artemis test -f x.art` | Parse, check, lower, run. Unchanged reporting and exit codes. |
-| `artemis parse -f x.art` | Parse and check only. No requests. Non-zero if it would not run. |
+| `artemis parse -f x.art [--json]` | Parse and check only. No requests. Non-zero if it would not run. `--json` emits structured diagnostics. |
 | `artemis fmt [-w] x.art` | Canonical formatting via `pkg/dsl/print`. |
+| `artemis ast -f x.art` | Tree as JSON on stdout. |
+| `artemis ast --from-json` | JSON on stdin back to `.art` source. |
 | `artemis migrate -f old.yaml [-o new.art]` | One-shot YAML to DSL. The only remaining YAML reader. |
 | `artemis generate -f postman.json` | Postman to `.art`, retargeted onto the same printer. |
-| `artemis grammar` | Print the EBNF grammar. Exists so an agent can be handed the complete language in one command. |
+| `artemis grammar [--json]` | Print the EBNF grammar; `--json` emits the enumerable choice points (methods, operators, type names) so a UI populates dropdowns from the binary. Exists so an agent or a UI can be handed the complete language in one command. |
 
 ## Error handling
 
@@ -435,7 +555,9 @@ stated plainly in the output header so nobody treats it as a round trip.
 | --- | --- |
 | Lexer/parser | Unit tests including exact position assertions |
 | Diagnostics | A corpus of invalid files, each with its full expected diagnostic text as a golden. Written first; this is the feature. |
-| Formatter | Round trip: parse, print, parse yields an identical AST; printing is idempotent |
+| Formatter | Canonical printing is idempotent: parse, print, parse yields an identical tree |
+| **Lossless round trip** | For every valid fixture, `print(parse(src)) == src` **byte for byte** in preserving mode, including comments and blank lines. Property-tested over the fixture corpus and over fuzz-generated valid inputs. |
+| Tree JSON | `decode(encode(tree))` equals the original tree; `print(decode(encode(parse(src)))) == src`. The schema is snapshotted as a golden so an unintended change to the UI contract fails CI. |
 | Evaluator | Table-driven over every operator and type combination, including the error cases |
 | **Behaviour parity** | The seven existing fixtures in `pkg/cli/testdata` are migrated to `.art`. Their `.golden` outputs must be byte-identical except where the format intentionally changed. This is the strongest available proof the rewrite preserved behaviour. |
 | Codegen | Golden files per target. Plus an execution-parity test for Python: run the generated pytest against the same fixture server and assert the same pass/fail outcome. Skipped with a note if `python3` is absent, matching how `make lint` handles a missing linter. |
@@ -451,18 +573,24 @@ stated plainly in the output header so nobody treats it as a round trip.
 | Three codegen backends drift apart | Shared conformance corpus; Python execution-parity test |
 | Diagnostics under-built, which would forfeit the main win | Diagnostic goldens written before the parser is finished |
 | Silent behaviour change during the rewrite | Migrated fixtures must reproduce existing goldens byte for byte |
+| Trivia handling skipped under M1 time pressure, making a UI impossible later without a parser rewrite | Lossless round trip is an M1 acceptance test, not an M4 nice-to-have. The lexer retains trivia from its first commit. |
+| Tree JSON schema churn breaking a released UI | `schemaVersion` field; schema snapshotted as a CI golden; diagnostic `code` values stable independently of message text |
 
 ## Milestones
 
-1. **M1 Front end.** Lexer, parser, AST, checker, diagnostics, formatter.
-   `artemis parse` and `artemis fmt` work. Nothing executes yet.
+1. **M1 Front end.** Lexer (with trivia), parser, tree, checker, diagnostics,
+   printer in both modes. `artemis parse` and `artemis fmt` work. Lossless round
+   trip is an acceptance test of this milestone. Nothing executes yet.
 2. **M2 Execution parity.** Lowering, evaluator, `artemis test` on `.art`. The
    migrated fixtures reproduce the existing golden files.
 3. **M3 Migration and docs.** `artemis migrate`, Postman `generate` retargeted,
    YAML removed from the run path, README rewritten.
-4. **M4 Codegen.** Python first, then Go, then JS.
+4. **M4 UI contract.** `pkg/dsl/encode`, `artemis ast` both directions,
+   `--json` diagnostics, `artemis grammar --json`, schema goldens.
+5. **M5 Codegen.** Python first, then Go, then JS.
 
-M1 to M3 deliver the DSL. M4 delivers the escape hatch and native-stack
+M1 to M3 deliver the DSL. M4 is small because M1 did the structural work, and it
+is what any UI is built against. M5 delivers the escape hatch and native-stack
 integration, and can slip without blocking the rest.
 
 ## Non-goals
@@ -473,5 +601,9 @@ integration, and can slip without blocking the rest.
 - Agentic assertions (`ai`). Reserved, not implemented.
 - YAML as a runtime format. It survives only as a migration input.
 - Re-importing generated code.
+- **The UI application itself.** This spec guarantees a UI is buildable and
+  defines the contract it builds against (lossless round trip, tree JSON,
+  structured diagnostics, enumerable choice points). Building the editor is
+  separate work with its own design.
 - Machine-readable report formats (JUnit, JSON report). Still open, still unrelated
   to this change.
