@@ -45,7 +45,7 @@ steps:
 // This package cannot read the registry -- the executors import it -- so the
 // list is written out here, and models' own tests are what pin that Validate
 // uses whatever it is given.
-var knownTypes = []string{"api"}
+var knownTypes = []string{"api", "exec"}
 
 func parse(t *testing.T, yaml string) error {
 	t.Helper()

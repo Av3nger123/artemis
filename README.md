@@ -107,7 +107,7 @@ This configuration defines a basic API request to generate a token. It includes 
   `request`, `response`, `capture`, `retry` and `timeout` are all keys of a step,
   at the same indentation.
   - **name**: Name of the step.
-  - **type**: Type of the step (currently only `api`: REST APIs with JSON payloads).
+  - **type**: What kind of step it is. `api` is a REST call with a JSON payload; `exec` runs a command -- see [Running commands](#running-commands-the-exec-step). An `api` step reads `request:` and `response:`; an `exec` step reads `exec:` and `expect:`.
   - **request**
     - **url**: The URL endpoint for the request. `"{{url}}"` is replaced with the
       value of the variable named `url`.
@@ -211,8 +211,9 @@ steps:
 
 ## Placeholders
 
-Anywhere a step's `url`, `body` or a header value is written, `{{name}}` is
-replaced with the value of `name`. A name resolves against the scenario's
+Anywhere a step's `url`, `body` or a header value is written -- and in every
+field of an `exec` step's `command`, `args`, `cwd`, `env` and `stdin` --
+`{{name}}` is replaced with the value of `name`. A name resolves against the scenario's
 `variables:` and against anything an earlier step captured with `capture:`.
 Surrounding spaces are ignored, so `{{ url }}` and `{{url}}` are the same.
 
@@ -352,6 +353,95 @@ steps:
       delay: "2s"
     timeout: "10s"
 ```
+## Running commands: the `exec` step
+
+An `exec` step runs a command and asserts on what it did. It is the escape
+hatch: anything artemis has no step type for -- a CLI, a migration script, a
+health check that is a shell one-liner -- is an `exec` step.
+
+- **exec**: What to run. The counterpart of `request:` on an `api` step.
+  - **command**: The program to run. It is executed directly: there is no shell,
+    no word splitting and no globbing, so `command: "ls *.go"` looks for a
+    binary with a space in its name. To use a shell, name one:
+    `command: "sh"`, `args: ["-c", "ls *.go | wc -l"]`.
+  - **args**: The arguments, one list entry each. Quoting is yours to get right
+    only in the sense that each entry arrives at the command exactly as written.
+  - **cwd**: The directory to run in. Relative paths are relative to where
+    artemis itself was run from, not to the scenario file.
+  - **env**: Variables to add to the environment. They are layered on top of the
+    environment artemis was given, and a name set here wins over an inherited
+    one. There is no way to unset a variable.
+  - **stdin**: Text written to the command's standard input. A step that does
+    not set it gives the command a standard input that is immediately at end of
+    file, so a command that reads stdin cannot hang the run.
+- **expect**: What to expect of the run. The counterpart of `response:`.
+  - **exit_code**: The exit code the command must have. Omitted, it is **0**, so
+    a step that says nothing expects the command to succeed. There is no way to
+    say "any exit code".
+  - **stdout**, **stderr**: Checks against the stream as plain text, each one
+    assertion.
+    - **operator**: `contains` (the default), `equals`, `matches` or `empty`.
+    - **value**: The text, or for `matches` the regular expression. `empty`
+      takes no value.
+
+`contains` is the default rather than `equals` because almost every command ends
+its output with a newline, which makes an exact match the check that is right in
+theory and wrong in practice. `empty` is "nothing but whitespace", which is how
+you say *stderr was quiet*. A `matches` pattern is a Go regular expression and
+unanchored; `$` is end of output, so a pattern anchoring one line of many needs
+the inline `(?m)` flag.
+
+A command that ran and exited with the wrong code is a **failed assertion**. A
+command that could not be run at all -- not on the `PATH`, a `cwd` that does not
+exist -- is an **errored step**, because there was no exit code to compare. A
+wrong exit code does not stop the stream checks from being made: stderr is
+exactly what a failed command is diagnosed from.
+
+`capture:`, `retry:` and `timeout:` work as they do on any other step.
+`capture:` reads the command's standard output -- a JSON path when the command
+printed a JSON object, a regex against it as text. Each stream is kept up to 1
+MiB per attempt; a command that prints more than that has the rest dropped.
+
+```yaml
+name: "Release checks"
+variables:
+  - name: "tag"
+    value: "v1.4.0"
+type: functional
+steps:
+  - name: "Tag exists"
+    type: exec
+    exec:
+      command: "git"
+      args: ["rev-parse", "--verify", "{{tag}}^{commit}"]
+    expect:
+      exit_code: 0
+      stderr:
+        - operator: empty
+    capture:
+      sha: {regex: "^([0-9a-f]{40})"}
+    timeout: "5s"
+  - name: "Changelog mentions the tag"
+    type: exec
+    exec:
+      command: "sh"
+      args: ["-c", "grep -c '{{tag}}' CHANGELOG.md"]
+      cwd: "."
+    expect:
+      stdout:
+        - operator: matches
+          value: "^[1-9]"
+  - name: "The build is reproducible"
+    type: exec
+    exec:
+      command: "go"
+      args: ["build", "./..."]
+      env:
+        CGO_ENABLED: "0"
+    expect:
+      exit_code: 0
+```
+
 ## Environment support
 
 Environment variables are read in a variable's `value`, with `{{env.NAME}}`:
@@ -441,7 +531,8 @@ failing test, not a surprise for whoever copies it.
 - **Concurrent execution.** Steps run one after another, in the order they are
   written, and a scenario's steps share their captured variables. There is no way
   to ask for parallelism yet.
-- **Step types other than `api`.** `type:` accepts `api` and nothing else; any
-  other value is an error at load time.
+- **Step types other than `api` and `exec`.** `type:` accepts those two and
+  nothing else; any other value is an error at load time. `db` and `browser` are
+  what the executor interface was sized for, and neither exists yet.
 - **Machine-readable reports.** The terminal summary and the JSON log are the two
   outputs; there is no JUnit or JSON report format.

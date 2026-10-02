@@ -3,7 +3,6 @@ package models
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -111,15 +110,7 @@ func (c Capture) Pattern() (*regexp.Regexp, error) {
 // sorting is what keeps the assertions a failed run prints -- and the order the
 // values are read in -- the same on every run.
 func (s Step) CaptureKeys() []string {
-	if len(s.Capture) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(s.Capture))
-	for k := range s.Capture {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
+	return sortedKeys(s.Capture)
 }
 
 // isCaptureField reports whether key is a key a capture mapping may have.

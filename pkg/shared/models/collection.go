@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -43,6 +44,12 @@ type Step struct {
 	Type     string   `yaml:"type"`
 	Request  Request  `yaml:"request"`
 	Response Response `yaml:"response"`
+	// Exec and Expect are the `exec` step type's halves: what to run, and what
+	// to expect of the run. They sit beside Request and Response rather than
+	// replacing them because a Step is one struct for every type; which pair a
+	// step reads is decided by Type.
+	Exec   Exec   `yaml:"exec,omitempty"`
+	Expect Expect `yaml:"expect,omitempty"`
 	// Capture is what the step pulls out of whatever it produced, keyed by
 	// the name the steps after it reference the value by. It replaces the old
 	// `scripts:` list, which only the api step ever read.
@@ -176,6 +183,21 @@ func (r Retry) Wait() (time.Duration, error) {
 		return 0, fmt.Errorf("retry delay %q is negative", r.Delay)
 	}
 	return d, nil
+}
+
+// sortedKeys is the keys of m, sorted. A YAML mapping has no order once it is
+// decoded, so sorting is what keeps anything derived from one -- the assertions
+// a step prints, the environment a command is given -- the same on every run.
+func sortedKeys[V any](m map[string]V) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 type Config struct {

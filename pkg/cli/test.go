@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"time"
 
-	// Registers the "api" step type. The runner reaches it through the
-	// registry and never names it.
+	// Registers the step types. The runner reaches them through the registry
+	// and never names them; this is the one place the binary says which types
+	// it is built with.
+	_ "artemis/pkg/steps/execstep"
 	_ "artemis/pkg/steps/httpstep"
 
 	"github.com/spf13/cobra"

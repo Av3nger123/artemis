@@ -16,7 +16,7 @@ const readmePath = "../../README.md"
 // to carry. The test asserts it found at least this many, so an edit that
 // renames the fences or deletes the examples fails here instead of leaving a
 // test that passes on nothing.
-const wantScenarios = 4
+const wantScenarios = 5
 
 // readmeBlock is one fenced yaml block, with the 1-based README line its
 // opening fence sits on so a failure can be navigated to.
