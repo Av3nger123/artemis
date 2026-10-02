@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,15 +21,16 @@ var ErrUnknownStepType = errors.New("unknown step type")
 // pass: a step artemis cannot execute is the quiet failure this dispatch exists
 // to prevent. The caller -- the runner -- fails the step with it.
 //
-// Everything else Run does is hand the step and the scope straight through, so
-// the contract in Executor's doc comment is the contract here too: one attempt,
-// assertions on the returned result, an error only when the step could not run.
-func Run(reg *Registry, step models.Step, scope Scope) (*result.StepResult, error) {
+// Everything else Run does is hand the context, the step and the scope straight
+// through, so the contract in Executor's doc comment is the contract here too:
+// one attempt, assertions on the returned result, an error only when the step
+// could not run.
+func Run(ctx context.Context, reg *Registry, step models.Step, scope Scope) (*result.StepResult, error) {
 	e, ok := reg.Lookup(step.Type)
 	if !ok {
 		return nil, unknownStepTypeError(step.Type, reg.Types())
 	}
-	return e.Execute(step, scope)
+	return e.Execute(ctx, step, scope)
 }
 
 // unknownStepTypeError names the type that was asked for and the way out of it.

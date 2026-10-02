@@ -1,6 +1,7 @@
 package execstep
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -112,7 +113,7 @@ func step(name string, e models.Exec, expect models.Expect) models.Step {
 // accidentally waits on a command does not wait DefaultTimeout.
 func run(t *testing.T, s models.Step, sc executor.Scope) (*result.StepResult, error) {
 	t.Helper()
-	return Executor{Timeout: 20 * time.Second}.Execute(s, sc)
+	return Executor{Timeout: 20 * time.Second}.Execute(context.Background(), s, sc)
 }
 
 func scope() executor.Scope {
@@ -168,7 +169,7 @@ func TestItRunsThroughTheRegistry(t *testing.T) {
 	s := step("version", helper("stdout", "artemis 1.2.3"), models.Expect{
 		Stdout: []models.TextCheck{{Value: "artemis 1.2.3"}},
 	})
-	res, err := executor.Run(executor.Default(), s, scope())
+	res, err := executor.Run(context.Background(), executor.Default(), s, scope())
 	if err != nil {
 		t.Fatalf("Run() = %v, want nil", err)
 	}
@@ -336,7 +337,7 @@ func TestEnvIsLayeredOntoTheInheritedEnvironment(t *testing.T) {
 	})
 
 	ex := Executor{Timeout: 20 * time.Second, Env: append(os.Environ(), "ARTEMIS_AMBIENT=from the parent")}
-	res, err := ex.Execute(s, executor.ScopeOf(nil))
+	res, err := ex.Execute(context.Background(), s, executor.ScopeOf(nil))
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil", err)
 	}
@@ -353,7 +354,7 @@ func TestTheStepsEnvOverridesTheInheritedOne(t *testing.T) {
 		Stdout: []models.TextCheck{{Operator: "equals", Value: "the step's"}},
 	})
 	ex := Executor{Timeout: 20 * time.Second, Env: append(os.Environ(), "ARTEMIS_OVERRIDDEN=the parent's")}
-	res, err := ex.Execute(s, executor.ScopeOf(nil))
+	res, err := ex.Execute(context.Background(), s, executor.ScopeOf(nil))
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil", err)
 	}

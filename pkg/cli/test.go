@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
@@ -53,7 +55,7 @@ func runTest(cmd *cobra.Command) error {
 // in it is a run that passed, and the caller decides what that is worth.
 func executeSteps(reg *executor.Registry, config models.Config, filePath string, rep *report.Console) *result.RunResult {
 	run := result.NewRun()
-	executeScenario(reg, config, filePath, run, rep)
+	executeScenario(context.Background(), reg, config, filePath, run, rep)
 	run.Finish()
 	return run
 }
@@ -65,7 +67,7 @@ func executeSteps(reg *executor.Registry, config models.Config, filePath string,
 // knows nothing else about what a step is: no URLs, no response bodies, no
 // protocol. What it owns is the result tree and the per-step policy -- how many
 // attempts, how long between them, how long each may take.
-func executeScenario(reg *executor.Registry, config models.Config, filePath string, run *result.RunResult, rep *report.Console) {
+func executeScenario(ctx context.Context, reg *executor.Registry, config models.Config, filePath string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(config.Name, filePath)
 	rep.Scenario(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", config.Name))
@@ -85,7 +87,7 @@ func executeScenario(reg *executor.Registry, config models.Config, filePath stri
 		// -- and an assertion with no line of its own -- still points somewhere
 		// a reader can go (ART-12).
 		stepResult.Line = step.Line
-		runStep(reg, step, scope, stepResult)
+		runStep(ctx, reg, step, scope, stepResult)
 		logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", step.Name, stepResult.Duration))
 		// Every step that was reached gets a line, including one artemis could
 		// not execute: a step missing from the list is a step nobody questions.
@@ -105,7 +107,7 @@ var sleep = time.Sleep
 // A later attempt replaces an earlier one whole, so a recorded step is never a
 // mix of two tries. An attempt is one worth stopping on when it ran at all and
 // every assertion it made passed.
-func runStep(reg *executor.Registry, step models.Step, scope executor.Scope, stepResult *result.StepResult) {
+func runStep(ctx context.Context, reg *executor.Registry, step models.Step, scope executor.Scope, stepResult *result.StepResult) {
 	start := time.Now()
 
 	// Resolve the per-step policy before anything runs: a retry delay or a
@@ -128,7 +130,7 @@ func runStep(reg *executor.Registry, step models.Step, scope executor.Scope, ste
 	)
 	for i := 1; i <= attempts; i++ {
 		stepResult.Attempts = i
-		res, lastErr = executor.Run(reg, step, scope)
+		res, lastErr = executor.Run(ctx, reg, step, scope)
 		if lastErr == nil && res != nil && result.AllPassed(res.Assertions) {
 			break
 		}

@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -20,7 +21,7 @@ func TestRunDispatchesOnStepType(t *testing.T) {
 	scope := NewScope()
 	scope.Set("base", "http://localhost")
 
-	res, err := Run(reg, step, scope)
+	res, err := Run(context.Background(), reg, step, scope)
 	if err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
@@ -44,7 +45,7 @@ func TestRunRejectsAnUnregisteredType(t *testing.T) {
 	reg.Register("http", noop())
 	reg.Register("exec", noop())
 
-	res, err := Run(reg, models.Step{Name: "query", Type: "db"}, NewScope())
+	res, err := Run(context.Background(), reg, models.Step{Name: "query", Type: "db"}, NewScope())
 	if err == nil {
 		t.Fatal("Run() = nil error for a step type nothing is registered for")
 	}
@@ -67,7 +68,7 @@ func TestRunRejectsAnEmptyType(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register("http", noop())
 
-	_, err := Run(reg, models.Step{Name: "nameless"}, NewScope())
+	_, err := Run(context.Background(), reg, models.Step{Name: "nameless"}, NewScope())
 	if !errors.Is(err, ErrUnknownStepType) {
 		t.Fatalf("Run() error = %v, want ErrUnknownStepType", err)
 	}
@@ -77,7 +78,7 @@ func TestRunRejectsATypeThatDiffersOnlyInCase(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register("http", noop())
 
-	_, err := Run(reg, models.Step{Name: "login", Type: "HTTP"}, NewScope())
+	_, err := Run(context.Background(), reg, models.Step{Name: "login", Type: "HTTP"}, NewScope())
 	if !errors.Is(err, ErrUnknownStepType) {
 		t.Fatalf("Run() error = %v, want ErrUnknownStepType for a near-match", err)
 	}
@@ -86,7 +87,7 @@ func TestRunRejectsATypeThatDiffersOnlyInCase(t *testing.T) {
 // The message has to survive an empty registry -- which is what the default one
 // is until ART-16 -- without claiming the known types are "".
 func TestRunOnAnEmptyRegistrySaysSo(t *testing.T) {
-	_, err := Run(NewRegistry(), models.Step{Name: "login", Type: "http"}, NewScope())
+	_, err := Run(context.Background(), NewRegistry(), models.Step{Name: "login", Type: "http"}, NewScope())
 	if !errors.Is(err, ErrUnknownStepType) {
 		t.Fatalf("Run() error = %v, want ErrUnknownStepType", err)
 	}
@@ -100,11 +101,11 @@ func TestRunOnAnEmptyRegistrySaysSo(t *testing.T) {
 func TestRunPassesTheExecutorsErrorThrough(t *testing.T) {
 	want := errors.New("connection refused")
 	reg := NewRegistry()
-	reg.Register("http", Func(func(_ models.Step, _ Scope) (*result.StepResult, error) {
+	reg.Register("http", Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
 		return nil, want
 	}))
 
-	_, err := Run(reg, models.Step{Name: "login", Type: "http"}, NewScope())
+	_, err := Run(context.Background(), reg, models.Step{Name: "login", Type: "http"}, NewScope())
 	if !errors.Is(err, want) {
 		t.Errorf("Run() error = %v, want %v", err, want)
 	}
@@ -120,7 +121,7 @@ func TestRunMakesOneAttempt(t *testing.T) {
 	reg.Register("http", http)
 
 	step := models.Step{Name: "login", Type: "http", Retry: models.Retry{Times: 5}}
-	if _, err := Run(reg, step, NewScope()); err != nil {
+	if _, err := Run(context.Background(), reg, step, NewScope()); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 	if http.calls != 1 {
@@ -132,13 +133,13 @@ func TestRunMakesOneAttempt(t *testing.T) {
 // next step.
 func TestRunCapturesReachTheCaller(t *testing.T) {
 	reg := NewRegistry()
-	reg.Register("http", Func(func(_ models.Step, scope Scope) (*result.StepResult, error) {
+	reg.Register("http", Func(func(_ context.Context, _ models.Step, scope Scope) (*result.StepResult, error) {
 		scope.Set("token", "abc")
 		return &result.StepResult{}, nil
 	}))
 
 	scope := NewScope()
-	if _, err := Run(reg, models.Step{Name: "login", Type: "http"}, scope); err != nil {
+	if _, err := Run(context.Background(), reg, models.Step{Name: "login", Type: "http"}, scope); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 	if got, _ := scope.Get("token"); got != "abc" {

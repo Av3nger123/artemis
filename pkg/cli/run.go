@@ -6,6 +6,7 @@ import (
 	"artemis/pkg/result"
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -188,7 +189,7 @@ func runFiles(reg *executor.Registry, files []string, rep *report.Console) *resu
 			logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
 			continue
 		}
-		executeScenario(reg, config, file, run, rep)
+		executeScenario(context.Background(), reg, config, file, run, rep)
 	}
 	run.Finish()
 	return run

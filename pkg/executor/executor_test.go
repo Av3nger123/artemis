@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -20,7 +21,7 @@ type recorder struct {
 	calls int
 }
 
-func (r *recorder) Execute(step models.Step, scope Scope) (*result.StepResult, error) {
+func (r *recorder) Execute(_ context.Context, step models.Step, scope Scope) (*result.StepResult, error) {
 	r.step, r.scope, r.calls = step, scope, r.calls+1
 	res := &result.StepResult{}
 	res.Assert(result.Assertion{Kind: "recorded", Operator: "equals"}.Pass())
@@ -31,12 +32,12 @@ var _ Executor = (*recorder)(nil)
 
 func TestFuncIsAnExecutor(t *testing.T) {
 	var got models.Step
-	e := Func(func(step models.Step, _ Scope) (*result.StepResult, error) {
+	e := Func(func(_ context.Context, step models.Step, _ Scope) (*result.StepResult, error) {
 		got = step
 		return &result.StepResult{}, nil
 	})
 
-	if _, err := e.Execute(models.Step{Name: "login"}, NewScope()); err != nil {
+	if _, err := e.Execute(context.Background(), models.Step{Name: "login"}, NewScope()); err != nil {
 		t.Fatalf("Execute() error = %v, want nil", err)
 	}
 	if got.Name != "login" {
@@ -47,14 +48,14 @@ func TestFuncIsAnExecutor(t *testing.T) {
 // What the executor recorded is what the caller gets back: the runner copies
 // these assertions onto the tree, so nothing may be lost in between.
 func TestExecutorAssertionsComeBack(t *testing.T) {
-	e := Func(func(_ models.Step, _ Scope) (*result.StepResult, error) {
+	e := Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
 		res := &result.StepResult{}
 		res.Assert(result.Assertion{Step: "login", Kind: "status_code", Operator: "equals", Expected: 200, Actual: 200}.Pass())
 		res.Assert(result.Assertion{Step: "login", Kind: "body", Path: "$.id", Operator: "exists"}.Fail())
 		return res, nil
 	})
 
-	res, err := e.Execute(models.Step{Name: "login"}, NewScope())
+	res, err := e.Execute(context.Background(), models.Step{Name: "login"}, NewScope())
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil", err)
 	}
@@ -69,13 +70,13 @@ func TestExecutorAssertionsComeBack(t *testing.T) {
 // An executor writes a capture into the scope it was handed, and the caller --
 // which is to say the next step -- sees it.
 func TestExecutorCapturesIntoScope(t *testing.T) {
-	e := Func(func(_ models.Step, scope Scope) (*result.StepResult, error) {
+	e := Func(func(_ context.Context, _ models.Step, scope Scope) (*result.StepResult, error) {
 		scope.Set("token", "abc")
 		return &result.StepResult{}, nil
 	})
 
 	scope := NewScope()
-	if _, err := e.Execute(models.Step{Name: "login"}, scope); err != nil {
+	if _, err := e.Execute(context.Background(), models.Step{Name: "login"}, scope); err != nil {
 		t.Fatalf("Execute() error = %v, want nil", err)
 	}
 	if got, ok := scope.Get("token"); !ok || got != "abc" {
@@ -87,11 +88,11 @@ func TestExecutorCapturesIntoScope(t *testing.T) {
 // must not need one.
 func TestExecutorMayErrorWithNoResult(t *testing.T) {
 	want := errors.New("connection refused")
-	e := Func(func(_ models.Step, _ Scope) (*result.StepResult, error) {
+	e := Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
 		return nil, want
 	})
 
-	res, err := e.Execute(models.Step{Name: "login"}, NewScope())
+	res, err := e.Execute(context.Background(), models.Step{Name: "login"}, NewScope())
 	if !errors.Is(err, want) {
 		t.Errorf("Execute() error = %v, want %v", err, want)
 	}

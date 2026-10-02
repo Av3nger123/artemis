@@ -9,6 +9,8 @@
 package executor
 
 import (
+	"context"
+
 	"artemis/pkg/result"
 	"artemis/pkg/shared/models"
 )
@@ -37,19 +39,27 @@ import (
 // result. An executor that returns an error may return a nil result with it; the
 // runner fails the step with the error either way.
 //
+// The context is the fourth thing in this contract and the newest. It carries
+// the run's cancellation and, for a browser step, the session registry the
+// scenario's page lives in -- see sessions.go. An executor *borrows* a session
+// and never closes one: lifetime belongs to the registry, so a step that
+// panicked cannot leak a browser process. The http and terminal executors read
+// nothing off it but the deadline, which they make their own per-attempt
+// timeout a child of, so a cancelled run stops making requests.
+//
 // The result an executor returns is deliberately partial. It has assertions and
 // nothing else: no name, no duration, and Finish has not been called on it.
 // Returning result.StepResult rather than a narrower attempt type keeps one
 // shape for "what a step produced" instead of two.
 type Executor interface {
-	Execute(step models.Step, scope Scope) (*result.StepResult, error)
+	Execute(ctx context.Context, step models.Step, scope Scope) (*result.StepResult, error)
 }
 
 // Func adapts a plain function to Executor, for a trivial executor and for a
 // test that needs one.
-type Func func(step models.Step, scope Scope) (*result.StepResult, error)
+type Func func(ctx context.Context, step models.Step, scope Scope) (*result.StepResult, error)
 
 // Execute calls f.
-func (f Func) Execute(step models.Step, scope Scope) (*result.StepResult, error) {
-	return f(step, scope)
+func (f Func) Execute(ctx context.Context, step models.Step, scope Scope) (*result.StepResult, error) {
+	return f(ctx, step, scope)
 }

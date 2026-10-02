@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func noop() Executor {
-	return Func(func(_ models.Step, _ Scope) (*result.StepResult, error) {
+	return Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
 		return &result.StepResult{}, nil
 	})
 }

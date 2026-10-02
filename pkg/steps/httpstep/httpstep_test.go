@@ -1,6 +1,7 @@
 package httpstep
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -32,7 +33,7 @@ func step(name string, r models.Request, wantStatus int) models.Step {
 // run executes the step with a short default timeout, so a test that
 // accidentally waits on a server does not wait DefaultTimeout.
 func run(step models.Step, sc executor.Scope) (*result.StepResult, error) {
-	return Executor{Timeout: 2 * time.Second}.Execute(step, sc)
+	return Executor{Timeout: 2 * time.Second}.Execute(context.Background(), step, sc)
 }
 
 // serve answers every request with the given status and body.
@@ -338,7 +339,7 @@ func TestTheStepsTimeoutBoundsTheAttempt(t *testing.T) {
 	s.Timeout = "50ms"
 
 	start := time.Now()
-	res, err := Executor{Timeout: time.Hour}.Execute(s, scope())
+	res, err := Executor{Timeout: time.Hour}.Execute(context.Background(), s, scope())
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -370,7 +371,7 @@ func TestTheDefaultTimeoutAppliesWhenTheStepIsSilent(t *testing.T) {
 		t.Fatal("test is broken: the step must not set a timeout")
 	}
 
-	if _, err := (Executor{Timeout: 50 * time.Millisecond}).Execute(s, scope()); err == nil {
+	if _, err := (Executor{Timeout: 50 * time.Millisecond}).Execute(context.Background(), s, scope()); err == nil {
 		t.Fatal("Execute() = nil error, want the default deadline to have been applied")
 	}
 }
@@ -432,7 +433,7 @@ func TestTheConnectionIsReused(t *testing.T) {
 	e := Executor{Client: &http.Client{}, Timeout: 2 * time.Second}
 	s := step("ping", models.Request{URL: srv.URL, Method: http.MethodGet}, 200)
 	for i := 0; i < 3; i++ {
-		if _, err := e.Execute(s, scope()); err != nil {
+		if _, err := e.Execute(context.Background(), s, scope()); err != nil {
 			t.Fatalf("Execute() %d = %v, want nil", i, err)
 		}
 	}

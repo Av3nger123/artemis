@@ -88,7 +88,7 @@ func init() {
 // described -- runs the other way for a command, where stderr is exactly what a
 // failure is diagnosed from and a check on it is most worth making when the
 // command did not succeed.
-func (e Executor) Execute(step models.Step, scope executor.Scope) (*result.StepResult, error) {
+func (e Executor) Execute(ctx context.Context, step models.Step, scope executor.Scope) (*result.StepResult, error) {
 	timeout, err := step.AttemptTimeout(e.timeout())
 	if err != nil {
 		return nil, err
@@ -99,7 +99,9 @@ func (e Executor) Execute(step models.Step, scope executor.Scope) (*result.StepR
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// The step's deadline hangs off the one the run was given, so cancelling a
+	// run kills the command it is waiting on rather than waiting it out.
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	run, err := e.run(ctx, step, spec, timeout)

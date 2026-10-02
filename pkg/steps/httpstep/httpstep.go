@@ -68,13 +68,15 @@ func init() {
 // made only when the status matched -- a 500's body is not the body the scenario
 // described, and asserting against it would bury the one line that matters under
 // a dozen that do not.
-func (e Executor) Execute(step models.Step, scope executor.Scope) (*result.StepResult, error) {
+func (e Executor) Execute(ctx context.Context, step models.Step, scope executor.Scope) (*result.StepResult, error) {
 	timeout, err := step.AttemptTimeout(e.timeout())
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// The step's deadline hangs off the one the run was given, so cancelling a
+	// run stops the requests it has in flight rather than waiting them out.
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	req, err := e.build(ctx, step, scope)

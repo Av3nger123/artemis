@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1028,7 +1029,7 @@ func TestExecuteStepsDispatchesThroughTheRegistry(t *testing.T) {
 		calls int
 	}
 	reg := executor.NewRegistry()
-	reg.Register("probe", executor.Func(func(step models.Step, scope executor.Scope) (*result.StepResult, error) {
+	reg.Register("probe", executor.Func(func(_ context.Context, step models.Step, scope executor.Scope) (*result.StepResult, error) {
 		saw.step, saw.vars, saw.calls = step, scope.Vars(), saw.calls+1
 		scope.Set("probed", "yes")
 		res := &result.StepResult{}
@@ -1071,7 +1072,7 @@ func TestExecuteStepsAnExecutorThatReturnsNothingErrorsTheStep(t *testing.T) {
 	initLog(t)
 
 	reg := executor.NewRegistry()
-	reg.Register("broken", executor.Func(func(models.Step, executor.Scope) (*result.StepResult, error) {
+	reg.Register("broken", executor.Func(func(context.Context, models.Step, executor.Scope) (*result.StepResult, error) {
 		return nil, nil
 	}))
 
@@ -1094,7 +1095,7 @@ func TestExecuteStepsRetriesByCallingTheExecutorAgain(t *testing.T) {
 
 	calls := 0
 	reg := executor.NewRegistry()
-	reg.Register("flaky", executor.Func(func(_ models.Step, scope executor.Scope) (*result.StepResult, error) {
+	reg.Register("flaky", executor.Func(func(_ context.Context, _ models.Step, scope executor.Scope) (*result.StepResult, error) {
 		calls++
 		scope.Set("attempt", calls)
 		res := &result.StepResult{}
@@ -1136,7 +1137,7 @@ func TestExecuteStepsBadTimeoutFailsTheStepBeforeAnyAttempt(t *testing.T) {
 
 	calls := 0
 	reg := executor.NewRegistry()
-	reg.Register("probe", executor.Func(func(models.Step, executor.Scope) (*result.StepResult, error) {
+	reg.Register("probe", executor.Func(func(context.Context, models.Step, executor.Scope) (*result.StepResult, error) {
 		calls++
 		return &result.StepResult{}, nil
 	}))
