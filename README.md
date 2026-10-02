@@ -389,6 +389,8 @@ When running Artemis with the -e flag followed by the path to your environment f
 
 # Configuration
 
+> This section documents the YAML scenarios `artemis run` reads today. The language replacing it is specified in [SPEC.md](SPEC.md), which is normative; YAML becomes an input to `artemis migrate`.
+
 ## Basic YAML Config
 
 This configuration defines a basic API request to generate a token. It includes the following parameters:
