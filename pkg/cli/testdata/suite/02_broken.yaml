@@ -1,0 +1,13 @@
+# A file artemis cannot load. It is one errored scenario naming its path, and
+# the files after it still run.
+name: "broken"
+type: functional
+variables: []
+steps:
+  - name: "ping"
+    type: api
+    request:
+      url: "%SERVER%"
+      method: "GET"
+    respones:
+      status_code: 200

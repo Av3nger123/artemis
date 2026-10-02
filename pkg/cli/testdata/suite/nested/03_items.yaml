@@ -1,0 +1,17 @@
+# Found by the recursive walk, and run after the files above it.
+name: "items"
+type: functional
+variables:
+  - name: base
+    value: "%SERVER%"
+steps:
+  - name: "list items"
+    type: api
+    request:
+      url: "{{base}}/items"
+      method: "GET"
+    response:
+      status_code: 200
+      body:
+        - path: "$.items"
+          operator: exists

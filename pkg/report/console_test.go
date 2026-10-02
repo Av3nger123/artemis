@@ -36,6 +36,45 @@ func TestScenarioWithoutAFileOmitsTheParentheses(t *testing.T) {
 	}
 }
 
+// A scenario whose file would not load has no name: the walk never got far
+// enough to read one, so the path is what identifies it.
+func TestScenarioWithoutANamePrintsItsFile(t *testing.T) {
+	got := render(func(c *Console) {
+		c.Scenario(&result.ScenarioResult{File: "suite/broken.yaml"})
+	})
+
+	if want := "scenario: suite/broken.yaml\n"; got != want {
+		t.Errorf("Scenario() = %q, want %q", got, want)
+	}
+}
+
+func TestScenarioFailedPrintsWhyItNeverRan(t *testing.T) {
+	got := render(func(c *Console) {
+		c.ScenarioFailed(&result.ScenarioResult{
+			File:   "suite/broken.yaml",
+			Status: result.StatusError,
+			Error:  "parse suite/broken.yaml: field respones not found",
+		})
+	})
+
+	if want := "  ERROR parse suite/broken.yaml: field respones not found\n"; got != want {
+		t.Errorf("ScenarioFailed() = %q, want %q", got, want)
+	}
+}
+
+// A scenario that ran has no error to print, and its steps have already said
+// everything: ScenarioFailed must add nothing.
+func TestScenarioFailedPrintsNothingWithoutAnError(t *testing.T) {
+	got := render(func(c *Console) {
+		c.ScenarioFailed(&result.ScenarioResult{Name: "checkout", Status: result.StatusPass})
+		c.ScenarioFailed(nil)
+	})
+
+	if got != "" {
+		t.Errorf("ScenarioFailed() = %q, want nothing", got)
+	}
+}
+
 func TestStepPassingIsOneLine(t *testing.T) {
 	step := &result.StepResult{Name: "login", Status: result.StatusPass, Duration: 48 * time.Millisecond, Attempts: 1}
 	step.Assertions = []result.AssertionResult{{Kind: "status_code", Operator: "equals", Expected: 200, Actual: 200, Status: result.StatusPass}}

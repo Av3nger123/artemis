@@ -5,7 +5,7 @@ Artemis is a command-line tool for automated testing of REST APIs, built with Go
 ## Features
 
 - Easy-to-use command-line interface (CLI) powered by Cobra
-- REST API endpoints described as steps in a YAML file
+- REST API endpoints described as steps in a YAML file, run one file or a whole folder at a time
 - Assertions with real operators: `equals`, `contains`, `matches`, `exists`, `type`, `gt`/`gte`/`lt`/`lte`
 - Values captured from one response and templated into the next
 - A run summary on the terminal, plus an opt-in JSON log of every request, response and error
@@ -22,11 +22,23 @@ source ./install.sh
 
 ## Commands
 
-### Command for testing YAML file
+### Running scenarios
 
 ```sh
-artemis test -f sample.yaml
+artemis run sample.yaml      # one file
+artemis run ./suite          # every scenario under a folder
 ```
+
+`run` takes one path. A file is run on its own. A folder is walked recursively
+for `*.yaml` and `*.yml` files, which are run in path order -- the same order on
+every machine -- as **one run**: one summary, one exit code. Nothing is shared
+between files: each scenario gets its own variables, so what one file captures is
+invisible to the next.
+
+A path that holds no scenario file is an error, not an empty run that passes. A
+file artemis cannot load is reported as an errored scenario naming the file and
+the line, and the files after it still run -- one typo does not hide the rest of
+the suite.
 
 A run prints a line per step as it finishes, the checks that did not pass under
 the step that made them, and a summary. It exits 0 only if everything passed:
@@ -45,13 +57,35 @@ Assertions    3  (2 passed, 1 failed)
 FAIL in 8ms
 ```
 
+A folder run prints the same thing per file, with the file that would not load
+in its place:
+
+```
+scenario: login (suite/01_login.yaml)
+  ok    sign in                     12ms
+scenario: suite/02_broken.yaml
+  ERROR parse suite/02_broken.yaml: yaml: unmarshal errors:
+  line 12: field respones not found in type models.Step
+scenario: items (suite/nested/03_items.yaml)
+  ok    list items                   4ms
+
+Scenarios     3  (2 passed, 1 errored)
+Steps         2  (2 passed)
+Assertions    4  (4 passed)
+FAIL in 17ms
+```
+
+`artemis test -f sample.yaml` is the old name for a one-file run. It still works
+and still fails the process on a failing run, but it prints a deprecation line:
+use `artemis run`.
+
 ### Command for validating a YAML file without calling anything
 
 ```sh
 artemis parse -f sample.yaml
 ```
 
-`parse` loads the file exactly as `test` does -- strict decoding, so an unknown or
+`parse` loads the file exactly as `run` does -- strict decoding, so an unknown or
 misspelled key is an error naming its line, and every step type is checked --
 then prints the parsed scenario. It sends no requests, and exits non-zero if the
 file is not one artemis can run.
@@ -72,7 +106,7 @@ unless you ask for one. Pass `-l` or `--log` to also write a detailed JSON log o
 the run -- every request, every response and every error -- to that path:
 
 ```sh
-artemis test -f sample.yaml -l custom_log_file.log
+artemis run sample.yaml -l custom_log_file.log
 ```
 
 The log is appended to, so a path that already exists keeps its earlier runs. A
@@ -85,7 +119,7 @@ Artemis supports loading environment variables from a specified `.env` file. Thi
 For custom env file path:
 
 ```sh
-artemis test -f sample.yaml -l custom_log_file.log -e dev.env
+artemis run sample.yaml -l custom_log_file.log -e dev.env
 ```
 When running Artemis with the -e flag followed by the path to your environment file, Artemis will load the environment variables from that file and make them available during the execution of your tests. A file named with `-e` that cannot be loaded is warned about; the default `.env` is optional and its absence is silent.
 
@@ -518,7 +552,7 @@ git diff pkg/cli/testdata
 `pkg/shared/readme_test.go` parses the YAML in this file. Every fenced `yaml`
 block has to be well-formed YAML, and every block that is a whole scenario -- one
 with a top-level `steps:` -- is loaded through the same strict decoder and
-validator `artemis test` uses. An example here that artemis would reject is a
+validator `artemis run` uses. An example here that artemis would reject is a
 failing test, not a surprise for whoever copies it.
 
 ### CI

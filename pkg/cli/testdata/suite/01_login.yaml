@@ -1,0 +1,23 @@
+# The first file of the suite: a token captured here is not visible to any
+# other file.
+name: "login"
+type: functional
+variables:
+  - name: base
+    value: "%SERVER%"
+steps:
+  - name: "sign in"
+    type: api
+    request:
+      url: "{{base}}/login"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"user": "ada"}'
+    response:
+      status_code: 200
+      body:
+        - path: "$.token"
+          value: "t0ken"
+    capture:
+      token: "$.token"

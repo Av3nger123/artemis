@@ -5,10 +5,8 @@ import (
 	"artemis/pkg/report"
 	"artemis/pkg/result"
 	"artemis/pkg/shared"
-	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
-	"errors"
 	"fmt"
 	"time"
 
@@ -21,76 +19,53 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// testCmd is what `artemis run` replaces: the same run with the path read off a
+// flag instead of the command line. It is kept so that every README, script and
+// CI job written against the only runner artemis has ever had keeps working, and
+// cobra tells its users where to go. Delete it a release after `run` has shipped.
 var testCmd = &cobra.Command{
-	Use:   "test",
-	Short: "Test APIs defined in YAML file",
-	Long:  "Test APIs defined in YAML file and display the responses",
+	Use:        "test",
+	Short:      "Test APIs defined in YAML file (deprecated: use `artemis run`)",
+	Long:       "Test APIs defined in YAML file and display the responses.\n\nDeprecated: use `artemis run <path>`, which also takes a folder.",
+	Deprecated: "use `artemis run <path>` instead; it takes a folder as well as a file.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logFilePath, _ := cmd.Flags().GetString("log")
-		envFilePath, _ := cmd.Flags().GetString("env")
-		closer, err := logger.InitLog(logFilePath)
+		closer, err := initRunEnv(cmd)
 		if err != nil {
 			return err
 		}
 		defer closer.Close()
-		if err := env.InitEnv(envFilePath); err != nil {
-			logger.Logger.Warn("Could not load env file", "path", envFilePath, "error", err.Error())
-			// A missing .env is the normal case and not worth a line; a path the
-			// user named and that did not load is.
-			if cmd.Flags().Changed("env") {
-				// err already names the path.
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
-			}
-		}
 		return runTest(cmd)
 	},
 }
 
-// runTest loads the scenario, runs it, and returns an error if anything in it
-// failed -- that error is what makes the process exit non-zero.
+// runTest runs the one file named by --file. It is `artemis run <file>` with the
+// path read off a flag, and goes when the deprecated `test` command goes.
 func runTest(cmd *cobra.Command) error {
-	config, err := parseYAMLFile(cmd)
+	filePath, err := cmd.Flags().GetString("file")
 	if err != nil {
-		return err
+		return fmt.Errorf("reading --file flag: %w", err)
 	}
-	filePath, _ := cmd.Flags().GetString("file")
-
-	// cmd.OutOrStdout, not os.Stdout: a test captures the run's output by
-	// setting the command's writer.
-	rep := report.NewConsole(cmd.OutOrStdout())
-	run := executeSteps(executor.Default(), config, filePath, rep)
-	rep.Summary(run)
-	if !run.Passed() {
-		return runFailedError(run)
-	}
-	return nil
+	return reportRun(cmd, filePath)
 }
 
-// runFailedError states in one line what failed. The readable breakdown is the
-// console summary on stdout; this is the reason attached to a non-zero exit, and
-// it is what survives when only stderr is kept.
-func runFailedError(run *result.RunResult) error {
-	c := run.Counts()
-	msg := fmt.Sprintf("%d of %d steps failed", c.Steps.Failed+c.Steps.Errored, c.Steps.Total)
-	if c.Steps.Errored > 0 {
-		msg += fmt.Sprintf(" (%d errored)", c.Steps.Errored)
-	}
-	if c.Assertions.Total > 0 {
-		msg += fmt.Sprintf(", %d of %d assertions failed", c.Assertions.Failed+c.Assertions.Errored, c.Assertions.Total)
-	}
-	return errors.New(msg)
+// executeSteps runs one scenario as a whole run, for a caller that has a config
+// in hand and wants only its outcome. It never returns nil: a run with nothing
+// in it is a run that passed, and the caller decides what that is worth.
+func executeSteps(reg *executor.Registry, config models.Config, filePath string, rep *report.Console) *result.RunResult {
+	run := result.NewRun()
+	executeScenario(reg, config, filePath, run, rep)
+	run.Finish()
+	return run
 }
 
-// executeSteps runs every step of the scenario and returns the outcome. It never
-// returns nil: a run with nothing in it is a run that passed, and the caller
-// decides what that is worth.
+// executeScenario runs every step of config and appends the outcome to run, so
+// a run can hold a scenario per file.
 //
 // reg is where a step type is turned into something that can run it. The runner
 // knows nothing else about what a step is: no URLs, no response bodies, no
 // protocol. What it owns is the result tree and the per-step policy -- how many
 // attempts, how long between them, how long each may take.
-func executeSteps(reg *executor.Registry, config models.Config, filePath string, rep *report.Console) *result.RunResult {
-	run := result.NewRun()
+func executeScenario(reg *executor.Registry, config models.Config, filePath string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(config.Name, filePath)
 	rep.Scenario(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", config.Name))
@@ -113,10 +88,7 @@ func executeSteps(reg *executor.Registry, config models.Config, filePath string,
 		rep.Step(stepResult)
 	}
 	scenario.Finish(time.Since(scenarioStart))
-
-	run.Finish()
 	logger.Logger.Info("Testing ended")
-	return run
 }
 
 // sleep is how the retry loop waits between attempts. It is a variable so a

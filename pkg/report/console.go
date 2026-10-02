@@ -64,11 +64,26 @@ func (c *Console) Scenario(sc *result.ScenarioResult) {
 	if sc == nil {
 		return
 	}
-	if sc.File != "" {
+	switch {
+	case sc.Name == "":
+		// A scenario whose file would not load has no name to print: where it
+		// lives is all anyone knows about it.
+		fmt.Fprintf(c.out, "scenario: %s\n", sc.File)
+	case sc.File != "":
 		fmt.Fprintf(c.out, "scenario: %s (%s)\n", sc.Name, sc.File)
+	default:
+		fmt.Fprintf(c.out, "scenario: %s\n", sc.Name)
+	}
+}
+
+// ScenarioFailed prints why a scenario never ran a step -- a file artemis could
+// not load. Without it a folder run reports the failure only as a tally, and
+// the reader is left to guess which file and why.
+func (c *Console) ScenarioFailed(sc *result.ScenarioResult) {
+	if sc == nil || sc.Error == "" {
 		return
 	}
-	fmt.Fprintf(c.out, "scenario: %s\n", sc.Name)
+	fmt.Fprintf(c.out, "  %s %s\n", marker(sc.Status), sc.Error)
 }
 
 // Step prints one finished step, and under it whatever went wrong: the step's

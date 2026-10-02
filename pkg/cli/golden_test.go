@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -40,6 +41,9 @@ const durSentinel = "<dur>"
 // of the runner shows up as a diff a person can judge.
 type goldenCase struct {
 	name string
+	// dir makes the fixture a folder, testdata/<name>/, run with
+	// `artemis run <folder>` -- every scenario in it, as one run.
+	dir bool
 	// handler answers the scenario's requests. Nil for a case that fails
 	// before anything is sent.
 	handler http.HandlerFunc
@@ -87,7 +91,7 @@ func TestGolden(t *testing.T) {
 func runGolden(t *testing.T, c goldenCase) (string, error) {
 	t.Helper()
 	initOnce.Do(Init)
-	resetTestFlags(t)
+	resetRunFlags(t)
 
 	if c.noSleep {
 		orig := sleep
@@ -104,25 +108,10 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 		url = srv.URL
 	}
 
-	fixture := filepath.Join("testdata", c.name+".yaml")
-	raw, err := os.ReadFile(fixture)
-	if err != nil {
-		t.Fatalf("reading %s: %v", fixture, err)
-	}
-	if !strings.Contains(string(raw), serverPlaceholder) {
-		t.Fatalf("%s does not contain %s -- a fixture must not hardcode an address", fixture, serverPlaceholder)
-	}
-	scenario := strings.ReplaceAll(string(raw), serverPlaceholder, url)
-
-	// The scenario is rendered into a temp file because the server's port is
-	// only known now. Its path is scrubbed back to the fixture's.
-	path := filepath.Join(t.TempDir(), c.name+".yaml")
-	if err := os.WriteFile(path, []byte(scenario), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fixture, path := renderFixture(t, c, url)
 
 	var out strings.Builder
-	RootCmd.SetArgs([]string{"test", "-f", path})
+	RootCmd.SetArgs([]string{"run", path})
 	RootCmd.SetOut(&out)
 	RootCmd.SetErr(&out)
 	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
@@ -133,6 +122,72 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 		transcript += "\n--- exit error ---\n" + runErr.Error() + "\n"
 	}
 	return scrub(transcript, path, fixture, url), runErr
+}
+
+// renderFixture copies the case's fixture -- one file, or a whole folder for a
+// dir case -- into a temp location with the test server's address substituted
+// for %SERVER%, and returns the fixture path the transcript should name and the
+// temp path to run.
+//
+// The copy is needed because the server's port is only known now; the temp path
+// is scrubbed back to the fixture's, so the golden file reads as a run of the
+// committed suite.
+func renderFixture(t *testing.T, c goldenCase, url string) (fixture, path string) {
+	t.Helper()
+	if !c.dir {
+		fixture = filepath.Join("testdata", c.name+".yaml")
+		path = filepath.Join(t.TempDir(), c.name+".yaml")
+		writeRendered(t, fixture, path, url, true)
+		return fixture, path
+	}
+
+	fixture = filepath.Join("testdata", c.name)
+	path = filepath.Join(t.TempDir(), c.name)
+	substituted := false
+	err := filepath.WalkDir(fixture, func(src string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(fixture, src)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(path, rel)
+		if d.IsDir() {
+			return os.MkdirAll(dst, 0o750)
+		}
+		substituted = writeRendered(t, src, dst, url, false) || substituted
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("copying %s: %v", fixture, err)
+	}
+	if !substituted {
+		t.Fatalf("no file under %s contains %s -- a fixture must not hardcode an address", fixture, serverPlaceholder)
+	}
+	return fixture, path
+}
+
+// writeRendered copies src to dst with %SERVER% replaced by url, and reports
+// whether the placeholder was there. With must set, a file without it is a
+// fixture that hardcodes an address, and that fails the test.
+func writeRendered(t *testing.T, src, dst, url string, must bool) bool {
+	t.Helper()
+	raw, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("reading %s: %v", src, err)
+	}
+	found := strings.Contains(string(raw), serverPlaceholder)
+	if must && !found {
+		t.Fatalf("%s does not contain %s -- a fixture must not hardcode an address", src, serverPlaceholder)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte(strings.ReplaceAll(string(raw), serverPlaceholder, url)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return found
 }
 
 // durPattern matches what report.dur prints: a Go duration rounded to
@@ -247,6 +302,27 @@ func goldenCases(t *testing.T) []goldenCase {
 					fmt.Fprint(w, `{"id": 42}`)
 				default:
 					w.WriteHeader(http.StatusNotFound)
+				}
+			},
+		},
+		{
+			// A whole folder: discovery is recursive and in path order, the
+			// file that will not load is one errored scenario naming its
+			// path, and the files after it still run -- all of it one run
+			// with one summary and one exit code (ART-9).
+			name:    "suite",
+			dir:     true,
+			wantErr: true,
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/login":
+					fmt.Fprint(w, `{"token": "t0ken"}`)
+				case "/items":
+					fmt.Fprint(w, `{"items": []}`)
+				default:
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
 				}
 			},
 		},

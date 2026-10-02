@@ -20,6 +20,7 @@ import (
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
@@ -398,9 +399,10 @@ func execute(t *testing.T, yaml string) error {
 func executeFile(t *testing.T, path string) error {
 	t.Helper()
 	initOnce.Do(Init)
+	resetRunFlags(t)
 
 	dir := t.TempDir()
-	RootCmd.SetArgs([]string{"test", "-f", path, "-l", filepath.Join(dir, "app.log"), "-e", filepath.Join(dir, ".env")})
+	RootCmd.SetArgs([]string{"run", path, "-l", filepath.Join(dir, "app.log"), "-e", filepath.Join(dir, ".env")})
 	RootCmd.SetOut(os.Stderr)
 	return RootCmd.Execute()
 }
@@ -727,23 +729,36 @@ func TestExecuteStepsUnclosedTemplateInABodyFailsTheStep(t *testing.T) {
 // a package var shared by every test in this file, and cobra keeps whatever the
 // last Execute set, so a test about default behaviour has to start from the
 // defaults a fresh process would have.
-func resetTestFlags(t *testing.T) {
+// resetRunFlags puts the flags of every command that runs scenarios back to
+// their defaults. The commands are package-level values, so a flag one test set
+// is still set for the next one -- and `--env` in particular changes whether a
+// warning is printed.
+func resetRunFlags(t *testing.T) {
 	t.Helper()
-	testCmd.Flags().VisitAll(func(f *pflag.Flag) {
-		if err := f.Value.Set(f.DefValue); err != nil {
-			t.Fatalf("resetting --%s to %q: %v", f.Name, f.DefValue, err)
-		}
-		f.Changed = false
-	})
+	for _, cmd := range []*cobra.Command{runCmd, testCmd} {
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			if err := f.Value.Set(f.DefValue); err != nil {
+				t.Fatalf("resetting %s --%s to %q: %v", cmd.Name(), f.Name, f.DefValue, err)
+			}
+			f.Changed = false
+		})
+	}
 }
 
 // executeCapturing runs the real command on a scenario file and returns
-// everything it wrote to stdout, with no flags beyond --file: this is what a user
-// sees from `artemis test -f scenario.yaml`.
+// everything it wrote to stdout, with no flags at all: this is what a user sees
+// from `artemis run scenario.yaml`.
 func executeCapturing(t *testing.T, yaml string) (string, error) {
 	t.Helper()
+	return captureArgs(t, func(path string) []string { return []string{"run", path} }, yaml)
+}
+
+// captureArgs writes yaml to a temp file, runs the root command with the args
+// build gives for that path, and returns everything printed.
+func captureArgs(t *testing.T, build func(path string) []string, yaml string) (string, error) {
+	t.Helper()
 	initOnce.Do(Init)
-	resetTestFlags(t)
+	resetRunFlags(t)
 
 	path := filepath.Join(t.TempDir(), "scenario.yaml")
 	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
@@ -751,13 +766,43 @@ func executeCapturing(t *testing.T, yaml string) (string, error) {
 	}
 
 	var out bytes.Buffer
-	RootCmd.SetArgs([]string{"test", "-f", path})
+	RootCmd.SetArgs(build(path))
 	RootCmd.SetOut(&out)
 	RootCmd.SetErr(&out)
 	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
 
 	err := RootCmd.Execute()
 	return out.String(), err
+}
+
+// `test` is deprecated in favour of `run`, but it still has to run: every
+// README, script and CI job written against artemis so far says `test -f`.
+// Cobra prints where to go next; the run itself is the same one.
+func TestDeprecatedTestCommandStillRunsAndPointsAtRun(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	out, err := captureArgs(t, func(path string) []string { return []string{"test", "-f", path} },
+		scenarioYAML(srv.URL, 200, "ok"))
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil", err)
+	}
+	for _, want := range []string{"deprecated", "artemis run", "PASS in "} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output is missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// And it still fails the process when the run fails: a CI job that has not
+// moved to `run` yet must not start going green on a broken API.
+func TestDeprecatedTestCommandStillFailsTheProcess(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"pending"}`)
+
+	_, err := captureArgs(t, func(path string) []string { return []string{"test", "-f", path} },
+		scenarioYAML(srv.URL, 200, "ok"))
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error so the process exits non-zero")
+	}
 }
 
 func TestExecutePrintsStepsAndSummaryWithoutAnyFlags(t *testing.T) {
@@ -892,7 +937,7 @@ func TestExecuteWritesNoLogFileWithoutTheLogFlag(t *testing.T) {
 func TestExecuteWithTheLogFlagWritesTheLogFile(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	initOnce.Do(Init)
-	resetTestFlags(t)
+	resetRunFlags(t)
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "scenario.yaml")
@@ -928,7 +973,7 @@ func TestExecuteWithTheLogFlagWritesTheLogFile(t *testing.T) {
 func TestExecuteUnopenableLogFileReturnsError(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	initOnce.Do(Init)
-	resetTestFlags(t)
+	resetRunFlags(t)
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "scenario.yaml")

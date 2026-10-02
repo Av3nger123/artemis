@@ -20,7 +20,12 @@ func Init() {
 		slog.Error("Error marking flag as required", "error", err)
 	}
 
-	// Test command to actually test all apis
+	// Run command: the way to run scenarios -- a file or a folder.
+	RootCmd.AddCommand(runCmd)
+	runCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
+	runCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
+
+	// Deprecated: superseded by run, kept so the old invocation keeps working.
 	RootCmd.AddCommand(testCmd)
 	testCmd.Flags().StringP("file", "f", "", "Path to YAML file")
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
@@ -42,6 +47,6 @@ var RootCmd = &cobra.Command{
 	Long: `Artemis is a comprehensive CLI tool for API testing. 
     It provides functionalities to parse and validate YAML files containing API test cases.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Use 'artemis parse <file_path>' to parse and validate a yaml file")
+		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, and 'artemis parse -f <file>' to validate one without calling anything.")
 	},
 }

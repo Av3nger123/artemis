@@ -1,0 +1,16 @@
+scenario: login (testdata/suite/01_login.yaml)
+  ok    sign in                     <dur>
+scenario: testdata/suite/02_broken.yaml
+  ERROR parse testdata/suite/02_broken.yaml: yaml: unmarshal errors:
+  line 12: field respones not found in type models.Step
+scenario: items (testdata/suite/nested/03_items.yaml)
+  ok    list items                  <dur>
+
+Scenarios     3  (2 passed, 1 errored)
+Steps         2  (2 passed)
+Assertions    4  (4 passed)
+FAIL in <dur>
+
+--- exit error ---
+1 scenario could not run: parse testdata/suite/02_broken.yaml: yaml: unmarshal errors:
+  line 12: field respones not found in type models.Step
