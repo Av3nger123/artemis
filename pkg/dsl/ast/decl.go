@@ -1,0 +1,145 @@
+package ast
+
+import "artemis/pkg/dsl/token"
+
+// File is one .art file: zero or more scenarios.
+//
+// An empty file is a valid File with no scenarios, because the grammar is
+// `File = { Scenario }`. EOF is the stream's final token, kept because it
+// carries the file's trailing trivia -- the last newline, a closing comment --
+// and without it the round trip would lose the end of every file.
+//
+// Scenarios is []Decl rather than []*Scenario so that a top-level line that
+// did not parse can sit in it as a *Bad, which is what keeps Source exact for
+// a broken file.
+type File struct {
+	Scenarios []Decl
+	EOF       token.Token
+}
+
+func (f *File) Tokens(dst []token.Token) []token.Token {
+	for _, d := range f.Scenarios {
+		dst = appendNode(dst, d)
+	}
+	return appendTok(dst, f.EOF)
+}
+
+func (f *File) Span() token.Span { return spanOf(f) }
+
+// Scenario is `scenario "name" { ... }`.
+type Scenario struct {
+	Keyword token.Token // scenario
+	Name    token.Token // the String naming it
+	LBrace  token.Token
+	Body    []Decl // ConfigDecl, VarDecl, StepDecl, or Bad
+	RBrace  token.Token
+}
+
+func (s *Scenario) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, s.Keyword)
+	dst = appendTok(dst, s.Name)
+	dst = appendTok(dst, s.LBrace)
+	for _, d := range s.Body {
+		dst = appendNode(dst, d)
+	}
+	return appendTok(dst, s.RBrace)
+}
+
+func (s *Scenario) Span() token.Span { return spanOf(s) }
+func (s *Scenario) decl()            {}
+
+// ConfigDecl is `config browser { headless = true }`.
+//
+// Subject is the identifier after `config`, which decides what is being
+// configured. Only `browser` has settings today (token.ConfigBlocks); the
+// parser accepts any identifier and the checker rejects the rest, so a typo
+// gets a did-you-mean rather than a syntax error.
+type ConfigDecl struct {
+	Keyword token.Token // config
+	Subject token.Token // browser
+	Block   *Block
+}
+
+func (c *ConfigDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, c.Keyword)
+	dst = appendTok(dst, c.Subject)
+	return appendNode(dst, c.Block)
+}
+
+func (c *ConfigDecl) Span() token.Span { return spanOf(c) }
+func (c *ConfigDecl) decl()            {}
+
+// VarDecl is `var url = env("API_URL")`.
+type VarDecl struct {
+	Keyword token.Token // var
+	Name    token.Token // the Ident being bound
+	Assign  token.Token // =
+	Value   Expr
+}
+
+func (v *VarDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, v.Keyword)
+	dst = appendTok(dst, v.Name)
+	dst = appendTok(dst, v.Assign)
+	return appendNode(dst, v.Value)
+}
+
+func (v *VarDecl) Span() token.Span { return spanOf(v) }
+func (v *VarDecl) decl()            {}
+
+// StepDecl is `step "login" { <action> <stmt>... }`.
+//
+// This node is why the syntax is block-shaped. ART-1's result tree is run ->
+// scenario -> step -> assertion and the console report prints a line per named
+// step, so a step's name and its boundary have to be *syntactic*: Name is a
+// token in the file, not an inferred label, and ART-37 hands this node
+// straight to ART-15's Executor.
+//
+// Action is nil only in a file that already has a diagnostic -- a step with no
+// action block, which the parser reports as missing-action rather than failing
+// to parse. Body holds the statements in source order whether they came before
+// or after the action; action-not-first is a diagnostic, not a reordering.
+type StepDecl struct {
+	Keyword token.Token // step
+	Name    token.Token // the String naming it
+	LBrace  token.Token
+	Action  Action // nil on an erroring file
+	Body    []Stmt
+	RBrace  token.Token
+}
+
+// Tokens walks the step's items in source order, which is not the order of the
+// struct fields: a statement written above the action block has to be emitted
+// above it or Source would reorder the file. Order is the parse order recorded
+// in items.
+func (s *StepDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, s.Keyword)
+	dst = appendTok(dst, s.Name)
+	dst = appendTok(dst, s.LBrace)
+	for _, it := range s.items() {
+		dst = appendNode(dst, it)
+	}
+	return appendTok(dst, s.RBrace)
+}
+
+// items is the action and the statements in the order they appear in the
+// source, found by byte offset rather than remembered, so the ordering cannot
+// disagree with the spans.
+func (s *StepDecl) items() []Node {
+	out := make([]Node, 0, len(s.Body)+1)
+	if !isNil(s.Action) {
+		out = append(out, s.Action)
+	}
+	for _, st := range s.Body {
+		out = append(out, st)
+	}
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].Span().Offset < out[j-1].Span().Offset; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
+}
+
+func (s *StepDecl) Span() token.Span { return spanOf(s) }
+func (s *StepDecl) decl()            {}

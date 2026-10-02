@@ -40,6 +40,62 @@ const (
 	UnexpectedCharacter Code = "unexpected-character"
 )
 
+// The parser's codes. Everything here is a *shape* fault -- a token where
+// another was wanted, a block left open, a step with no action -- as against
+// the checker's codes below, which are name faults. The split is what decides
+// which stage reports a mistake: a field position accepts any identifier, so
+// `statu = 3` is UnknownField with a did-you-mean rather than a syntax error
+// with nothing to suggest.
+const (
+	// UnexpectedToken is the catch-all: a token where the grammar wanted
+	// something else. Its message names both what was found and what was
+	// expected, because "unexpected token" on its own tells an author nothing.
+	UnexpectedToken Code = "unexpected-token"
+
+	// MissingSeparator is two statements with nothing between them. Statements
+	// separate by newline and there are no semicolons, so this is almost
+	// always a line that ran on.
+	MissingSeparator Code = "missing-separator"
+
+	// UnclosedBlock is a "{", "(" or "[" the file ends without closing. The
+	// span points at the opener, not at end of file, because the opener is
+	// what the author has to go and look at.
+	UnclosedBlock Code = "unclosed-block"
+
+	// MissingAction is a step block with no action block in it. A step's type
+	// comes from its action, so a step without one has no type and nothing to
+	// run.
+	MissingAction Code = "missing-action"
+
+	// DuplicateAction is a second action block in one step. The span points at
+	// the second one, and the hint points back at the first.
+	DuplicateAction Code = "duplicate-action"
+
+	// ActionNotFirst is a step statement above the action block. The step
+	// still parses -- one precise diagnostic beats a cascade of unexpected
+	// tokens -- and this says what to move.
+	ActionNotFirst Code = "action-not-first"
+
+	// NonAssociativeOperator is a comparison chained with another, `a == b ==
+	// c`. The grammar permits at most one per expression, so this is reported
+	// rather than silently folded one way or the other.
+	NonAssociativeOperator Code = "non-associative-operator"
+
+	// NestingTooDeep is a file nested past the parser's limit. It is a
+	// resource bound rather than a grammar rule: recursive descent costs a
+	// stack frame per level, and without a limit a file of 100,000 open
+	// parentheses is a stack overflow -- which is a fatal runtime error, not
+	// a panic a caller can recover, so it would break the front end's promise
+	// that a malformed file yields diagnostics and never a stack trace.
+	NestingTooDeep Code = "nesting-too-deep"
+
+	// UnclosedInterpolationExpr is a `${` whose expression is followed by
+	// neither a `}` nor more string. It is the parser's counterpart to the
+	// lexer's UnclosedInterpolation: the lexer catches a `${` that reaches end
+	// of string, this catches one whose contents stop making sense first.
+	UnclosedInterpolationExpr Code = "unclosed-interpolation-expr"
+)
+
 // The checker's codes, named in docs/artemis-dsl-design.md. The stages that
 // emit them land in ART-31 and ART-33; the codes are declared here because the
 // registry is the contract, not the call site.
@@ -72,6 +128,15 @@ var registry = []CodeInfo{
 	{UnclosedInterpolation, Error, `a "${" in a string has no closing "}"`},
 	{InvalidEscape, Error, "a string literal contains an escape the language does not define"},
 	{UnexpectedCharacter, Error, "a byte in the source starts no token"},
+	{UnexpectedToken, Error, "a token appears where the grammar wanted another"},
+	{MissingSeparator, Error, "two statements run together with no newline or comma between them"},
+	{UnclosedBlock, Error, `a "{", "(" or "[" is never closed`},
+	{MissingAction, Error, "a step block contains no action block, so the step has no type"},
+	{DuplicateAction, Error, "a step block contains more than one action block"},
+	{ActionNotFirst, Error, "a step statement appears above the step's action block"},
+	{NonAssociativeOperator, Error, "a comparison operator is chained with another"},
+	{NestingTooDeep, Error, "a file nests deeper than the parser will descend"},
+	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 }

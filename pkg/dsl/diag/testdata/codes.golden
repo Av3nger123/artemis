@@ -1,7 +1,16 @@
+action-not-first	error	a step statement appears above the step's action block
+duplicate-action	error	a step block contains more than one action block
 invalid-escape	error	a string literal contains an escape the language does not define
+missing-action	error	a step block contains no action block, so the step has no type
+missing-separator	error	two statements run together with no newline or comma between them
+nesting-too-deep	error	a file nests deeper than the parser will descend
+non-associative-operator	error	a comparison operator is chained with another
 not-in-scope	error	a name is not bound in this step's type
+unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"
+unclosed-interpolation-expr	error	a "${" expression is followed by neither "}" nor more string
 unexpected-character	error	a byte in the source starts no token
+unexpected-token	error	a token appears where the grammar wanted another
 unknown-field	error	an identifier names no field of anything in scope
 unterminated-regex	error	a regex literal has no closing slash
 unterminated-string	error	a string literal has no closing quote
