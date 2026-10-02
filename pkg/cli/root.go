@@ -2,9 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/exp/slog"
 )
 
 func Init() {

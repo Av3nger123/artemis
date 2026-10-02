@@ -17,9 +17,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/oliveagle/jsonpath"
-
 	"artemis/pkg/result"
+	"artemis/pkg/shared/jsonpath"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 )
@@ -115,9 +114,12 @@ func read(c models.Capture, src Source) (any, error) {
 
 // readJSON reads the value at a JSON path out of decoded output.
 //
-// A panic from the jsonpath library is turned into an error: a path the library
-// chokes on must fail its step with a reason rather than taking the whole run
-// down with a stack trace. The value keeps the type encoding/json gave it.
+// The two ways this fails are kept apart, because they are different mistakes:
+// a path that is not a path at all, and a path that is one but names nothing in
+// this output. The recover is insurance -- the path library is not expected to
+// panic -- so that a path it chokes on fails its step with a reason rather than
+// taking the whole run down with a stack trace. The value keeps the type
+// encoding/json gave it.
 func readJSON(path string, data map[string]any) (val any, err error) {
 	if data == nil {
 		return nil, ErrNoJSON
@@ -128,9 +130,12 @@ func readJSON(path string, data map[string]any) (val any, err error) {
 		}
 	}()
 
-	val, err = jsonpath.JsonPathLookup(data, path)
+	val, err = jsonpath.Lookup(path, data)
+	if errors.Is(err, jsonpath.ErrNotFound) {
+		return nil, fmt.Errorf("path %q: %w", path, err)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("path %q not found in the output: %w", path, err)
+		return nil, fmt.Errorf("path %q is not a JSON path: %w", path, err)
 	}
 	return val, nil
 }

@@ -7,19 +7,19 @@
 // know, a regex that will not compile) is an errored assertion carrying the
 // reason, never a silent false.
 //
-// This package imports only models and result, so it can be tested without an
-// HTTP server.
+// This package imports only models, result and the shared jsonpath wrapper, so
+// it can be tested without an HTTP server.
 package assert
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"artemis/pkg/result"
+	"artemis/pkg/shared/jsonpath"
 	"artemis/pkg/shared/models"
-
-	"github.com/oliveagle/jsonpath"
 )
 
 // The operators a check may name.
@@ -85,9 +85,13 @@ func Check(stepName string, check models.BodyCheck, response map[string]any) (re
 	if op == OpExists {
 		return checkExists(a, lookupErr == nil, actual)
 	}
+	if errors.Is(lookupErr, jsonpath.ErrNotFound) {
+		return a.Errored(fmt.Errorf("path %s did not resolve", check.Path))
+	}
 	if lookupErr != nil {
 		return a.Errored(fmt.Errorf("path %s did not resolve: %v", check.Path, lookupErr))
 	}
+
 	a.Actual = actual
 
 	if op == OpType {

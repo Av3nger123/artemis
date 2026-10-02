@@ -1,6 +1,6 @@
 scenario: captures that cannot be read (testdata/bad_capture.yaml)
   ERROR login                       <dur>
-         authToken json: path "$.session.token" not found in the output: key error: session not found in object
+         authToken json: path "$.session.token": nothing is at that path
          requestId regex: regex "req-([0-9a-f]+)" matched nothing in the output
 
 Scenarios     1  (1 errored)
