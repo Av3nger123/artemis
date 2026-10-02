@@ -7,9 +7,16 @@ import (
 )
 
 // StepTypes are the step types artemis can execute, in the spelling a scenario
-// must use. The runner's executor switch has to agree with this list: a type
-// named here that nothing executes would be accepted at load time and then
-// error at run time, which is the quiet failure this list exists to prevent.
+// must use. A type named here that nothing executes would be accepted at load
+// time and then error at run time, which is the quiet failure this list exists
+// to prevent -- so the list and the executors have to agree.
+//
+// This is the declared half of that agreement; executor.Registry.Types() is the
+// registered half, and it is the one to derive this from rather than keeping two
+// lists in step. models cannot read it directly -- pkg/executor imports models,
+// so the import can only go one way -- which means the known types have to be
+// handed to Validate. Doing that is ART-16's job, when there is a first executor
+// registered to hand over.
 var StepTypes = []string{"api"}
 
 // IsKnownStepType reports whether t is a type artemis can execute. The match is
