@@ -37,25 +37,25 @@ type seen struct {
 }
 
 func TestCorpusCoversTheLanguage(t *testing.T) {
-	got := walkCorpus(t)
+	got := walkCorpus(t, corpusDir)
 
 	// Every root of every step type, so no step type's observation goes
 	// unexported.
 	for _, typ := range check.StepTypes() {
-		missing(t, "root of a "+typ.String()+" step", check.Roots(typ), got.idents)
+		missing(t, corpusDir, "root of a "+typ.String()+" step", check.Roots(typ), got.idents)
 	}
 	if members, ok := check.Members("page"); ok {
-		missing(t, "member of page", members, got.members)
+		missing(t, corpusDir, "member of page", members, got.members)
 	}
 
-	missing(t, "HTTP verb", token.Methods, got.methods)
-	missing(t, "action block", token.Actions, got.actions)
-	missing(t, "browser action", token.BrowserActions, got.acts)
-	missing(t, "comparison operator", token.Comparisons, got.ops)
-	missing(t, "word operator", token.WordOperators, got.ops)
-	missing(t, "type name", token.TypeNames, got.types)
-	missing(t, "builtin", token.Builtins, got.fns)
-	missing(t, "config subject", token.ConfigBlocks, got.settings)
+	missing(t, corpusDir, "HTTP verb", token.Methods, got.methods)
+	missing(t, corpusDir, "action block", token.Actions, got.actions)
+	missing(t, corpusDir, "browser action", token.BrowserActions, got.acts)
+	missing(t, corpusDir, "comparison operator", token.Comparisons, got.ops)
+	missing(t, corpusDir, "word operator", token.WordOperators, got.ops)
+	missing(t, corpusDir, "type name", token.TypeNames, got.types)
+	missing(t, corpusDir, "builtin", token.Builtins, got.fns)
+	missing(t, corpusDir, "config subject", token.ConfigBlocks, got.settings)
 
 	// Every field of every block, which is where a request, a run, a retry, a
 	// step and a config keep their settings.
@@ -63,13 +63,13 @@ func TestCorpusCoversTheLanguage(t *testing.T) {
 		token.RequestFields, token.RunFields, token.RetryFields,
 		token.StepFields, token.BrowserConfigFields,
 	} {
-		missing(t, "block field", fields, got.fields)
+		missing(t, corpusDir, "block field", fields, got.fields)
 	}
 
 	// The shapes with no entry in a token table: unary minus, an author's
 	// parentheses, the two composite literals, an interpolated string, a regex
 	// literal, a subscript and a dotted path.
-	missing(t, "expression shape", []string{
+	missing(t, corpusDir, "expression shape", []string{
 		"unary minus", "parentheses", "object", "array",
 		"interpolation", "regex", "index", "member",
 	}, got.shapes)
@@ -103,8 +103,8 @@ func TestEveryGoldenHasAFixture(t *testing.T) {
 	}
 }
 
-// missing reports every word of want the corpus does not use.
-func missing(t *testing.T, what string, want []string, have map[string]bool) {
+// missing reports every word of want the corpus in where does not use.
+func missing(t *testing.T, where, what string, want []string, have map[string]bool) {
 	t.Helper()
 	var absent []string
 	for _, w := range want {
@@ -115,12 +115,17 @@ func missing(t *testing.T, what string, want []string, have map[string]bool) {
 	if len(absent) > 0 {
 		sort.Strings(absent)
 		t.Errorf("the corpus uses no %s: %s -- add one to a fixture in %s",
-			what, strings.Join(absent, ", "), corpusDir)
+			what, strings.Join(absent, ", "), where)
 	}
 }
 
-// walkCorpus parses every fixture and records what it uses.
-func walkCorpus(t *testing.T) seen {
+// walkCorpus parses every fixture in each directory and records what it uses.
+//
+// It takes the directories rather than reading corpusDir, because two corpora
+// are checked against the token tables for different things: the python one for
+// the whole language, and parity_test.go's conformance one for every operator
+// over both non-browser step types.
+func walkCorpus(t *testing.T, dirs ...string) seen {
 	t.Helper()
 	got := seen{
 		methods: map[string]bool{}, actions: map[string]bool{}, acts: map[string]bool{},
@@ -128,13 +133,15 @@ func walkCorpus(t *testing.T) seen {
 		fields: map[string]bool{}, idents: map[string]bool{}, members: map[string]bool{},
 		shapes: map[string]bool{}, settings: map[string]bool{},
 	}
-	for _, name := range corpus(t) {
-		path := filepath.Join(corpusDir, name+artExt)
-		src, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
+	for _, dir := range dirs {
+		for _, name := range corpusIn(t, dir) {
+			path := filepath.Join(dir, name+artExt)
+			src, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ast.Inspect(parse(t, path, string(src)), func(n ast.Node) { record(&got, n) })
 		}
-		ast.Inspect(parse(t, path, string(src)), func(n ast.Node) { record(&got, n) })
 	}
 	return got
 }

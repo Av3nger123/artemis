@@ -23,6 +23,10 @@ all: vet lint test build
 build:
 	$(GOBUILD) -o $(BINARY_NAME) $(MAIN_PATH)
 
+# pkg/codegen's execution-parity test runs the generated pytest against the same
+# fixture server the interpreter's tests use. It skips with a note when python3,
+# pytest or requests is missing, the way lint skips a missing linter -- CI
+# installs all three, so that gate is real where it counts.
 test:
 	$(GOTEST) ./...
 
@@ -31,14 +35,16 @@ test-race:
 	$(GOTEST) -race ./...
 
 # The tests that need a real browser: pkg/steps/browserstep's driver over
-# Chromium, and pkg/cli's whole run against the local fixture server.
+# Chromium, pkg/cli's whole run against the local fixture server, and
+# pkg/codegen's browser execution-parity test -- which needs Playwright's python
+# package and its browsers as well, and skips with a note naming both.
 #
 # Not part of `test`, and not run in CI. CI has no browser, and the first run on
 # a cold machine downloads about 683 MB of Chromium -- see docs/browser-engine.md.
 # Everything below the browser is covered by the default suite against a fake
 # driver, which is what keeps CI honest about this code.
 test-browser:
-	$(GOTEST) -tags browser ./pkg/session ./pkg/steps/browserstep/... ./pkg/cli
+	$(GOTEST) -tags browser ./pkg/session ./pkg/steps/browserstep/... ./pkg/cli ./pkg/codegen
 
 # The flake check: ten consecutive browser runs. A browser suite that passes
 # once and fails one run in five is worse than no suite, so "not flaky" is a
@@ -48,7 +54,7 @@ test-browser:
 # named "Browser", and a flake check that silently matched none of them would be
 # the most expensive way to prove nothing.
 test-browser-repeat:
-	$(GOTEST) -tags browser -count=10 ./pkg/session ./pkg/steps/browserstep/... ./pkg/cli
+	$(GOTEST) -tags browser -count=10 ./pkg/session ./pkg/steps/browserstep/... ./pkg/cli ./pkg/codegen
 
 cover:
 	$(GOTEST) -coverprofile=$(COVERPROFILE) ./...

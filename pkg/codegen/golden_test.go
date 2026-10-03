@@ -116,12 +116,25 @@ func TestGeneratingTwiceIsIdentical(t *testing.T) {
 // corpus is the fixture names in testdata/python, sorted by the walk.
 func corpus(t *testing.T) []string {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(corpusDir, "*"+artExt))
+	return corpusIn(t, corpusDir)
+}
+
+// corpusIn is the .art file names in one corpus directory, without their
+// extension, sorted by the glob.
+//
+// Two corpora read it: testdata/python, whose fixtures have a golden beside
+// them, and testdata/conformance, whose scenarios are run both ways by
+// parity_test.go. A directory with no .art file in it is a mistake rather than
+// an empty corpus -- a renamed folder would otherwise assert nothing and say
+// nothing.
+func corpusIn(t *testing.T, dir string) []string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(dir, "*"+artExt))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(paths) == 0 {
-		t.Fatalf("no fixtures in %s", corpusDir)
+		t.Fatalf("no fixtures in %s", dir)
 	}
 	names := make([]string, 0, len(paths))
 	for _, p := range paths {
