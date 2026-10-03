@@ -79,6 +79,7 @@ FAIL in <dur>
           "attempts": 1,
           "line": 2,
           "error": "",
+          "screenshot": "",
           "assertions": [
             {
               "kind": "expect",
@@ -118,6 +119,7 @@ FAIL in <dur>
           "attempts": 1,
           "line": 2,
           "error": "",
+          "screenshot": "",
           "assertions": [
             {
               "kind": "expect",
@@ -148,6 +150,7 @@ FAIL in <dur>
           "attempts": 1,
           "line": 8,
           "error": "",
+          "screenshot": "",
           "assertions": [
             {
               "kind": "expect",
@@ -184,7 +187,8 @@ FAIL in <dur>
       "operator": "\u003e",
       "expected": 0,
       "actual": 0,
-      "error": ""
+      "error": "",
+      "screenshot": ""
     },
     {
       "file": "testdata/art/report_json/02_items.art",
@@ -197,7 +201,8 @@ FAIL in <dur>
       "operator": "==",
       "expected": 200,
       "actual": 404,
-      "error": ""
+      "error": "",
+      "screenshot": ""
     },
     {
       "file": "testdata/art/report_json/03_broken.art",
@@ -210,7 +215,8 @@ FAIL in <dur>
       "operator": "",
       "expected": null,
       "actual": null,
-      "error": "testdata/art/report_json/03_broken.art:6:5: unknown field \"timeot\""
+      "error": "testdata/art/report_json/03_broken.art:6:5: unknown field \"timeot\"",
+      "screenshot": ""
     }
   ]
 }

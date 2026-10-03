@@ -5,8 +5,10 @@ import (
 	"time"
 
 	// Registers the step types. The runner reaches them through the registry
-	// and never names them; this is the one place the binary says which types
-	// it is built with.
+	// and never names them -- bar the browser, whose assertions read a live
+	// page the registry cannot hand over; this is the one place the binary
+	// says which types it is built with.
+	_ "artemis/pkg/steps/browserstep"
 	_ "artemis/pkg/steps/execstep"
 	_ "artemis/pkg/steps/httpstep"
 
@@ -46,6 +48,14 @@ func runTest(cmd *cobra.Command) error {
 	return reportRun(cmd, filePath)
 }
 
-// sleep is how the retry loop waits between attempts. It is a variable so a
-// test can record the delays asked for instead of waiting them out.
+// sleep is how the retry loop waits between attempts and how a waiting
+// assertion waits between tries. It is a variable so a test can record the
+// delays asked for instead of waiting them out.
 var sleep = time.Sleep
+
+// now is the clock both loops read. It is a variable for the same reason sleep
+// is, and the two go together: a test that fakes only one of them either waits
+// out a real budget or spins against a clock that never moves. Faking both lets
+// the settle loop be tested on a virtual clock, in microseconds, with the
+// number of tries it made being the thing asserted.
+var now = time.Now

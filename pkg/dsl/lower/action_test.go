@@ -235,10 +235,9 @@ func TestABareRunLowers(t *testing.T) {
 	}
 }
 
-// A browser step is the node the registry will dispatch on, with its actions in
-// source order and no models action filled: nothing executes "browser" until
-// ART-47, and executor.Run reports an unregistered type as an error rather than
-// as a pass.
+// A browser step is the node the registry dispatches on, with its actions in
+// source order on models.Step.Browser and neither of the other two actions
+// filled.
 func TestABrowserStepsRuntimeShape(t *testing.T) {
 	sc, scope := bound(t, `scenario "s" {
   step "upgrade" {
@@ -285,6 +284,129 @@ func TestABrowserStepsRuntimeShape(t *testing.T) {
 	}
 	if model.Request.URL != "" || model.Exec.Command != "" {
 		t.Errorf("Model() filled a request or an exec: %#v %#v", model.Request, model.Exec)
+	}
+
+	// The acts, evaluated. This is the whole contract between this package and
+	// pkg/steps/browserstep: eight names, two already-rendered string
+	// arguments, and the order they were written in.
+	want := []models.Act{
+		{Name: "goto", Target: "/settings/billing", Line: 4},
+		{Name: "fill", Target: "#email", Value: "alice@example.com", Line: 5},
+		{Name: "click", Target: "text=Sign in", Line: 6},
+	}
+	if len(model.Browser.Acts) != len(want) {
+		t.Fatalf("Model() has %d acts, want %d", len(model.Browser.Acts), len(want))
+	}
+	for i, w := range want {
+		if model.Browser.Acts[i] != w {
+			t.Errorf("Model().Browser.Acts[%d] = %#v, want %#v", i, model.Browser.Acts[i], w)
+		}
+	}
+}
+
+// An act's arguments are expressions, evaluated here and never again. A
+// selector that came out of an interpolation is a selector by the time
+// browserstep sees it, which is the rule that lets a selector hold a brace.
+func TestActArgumentsAreEvaluatedOnce(t *testing.T) {
+	model := modelOf(t, `scenario "s" {
+  var plan = "pro"
+  var box = "#email"
+  step "upgrade" {
+    browser {
+      goto "/plans/${plan}"
+      click "text=${plan}"
+      fill "${box}" = "a@b.test {not a template}"
+      select "#plan" = plan
+      wait "250ms"
+    }
+  }
+}`)
+
+	want := []models.Act{
+		{Name: "goto", Target: "/plans/pro", Line: 6},
+		{Name: "click", Target: "text=pro", Line: 7},
+		{Name: "fill", Target: "#email", Value: "a@b.test {not a template}", Line: 8},
+		{Name: "select", Target: "#plan", Value: "pro", Line: 9},
+		{Name: "wait", Target: "250ms", Line: 10},
+	}
+	if len(model.Browser.Acts) != len(want) {
+		t.Fatalf("lowered %d acts, want %d", len(model.Browser.Acts), len(want))
+	}
+	for i, w := range want {
+		if model.Browser.Acts[i] != w {
+			t.Errorf("act %d = %#v, want %#v", i, model.Browser.Acts[i], w)
+		}
+	}
+}
+
+// An act whose argument will not evaluate names the action, and the acts after
+// it are not evaluated: they are a sequence with side effects, so one that
+// follows a broken one was never going to run.
+//
+// The fault here is the one an act can actually have at run time: an act
+// argument is rendered *before* the page is touched, so it cannot read the
+// page. The checker admits `text(".x")` in a browser step -- it is in scope
+// there -- and the env Model is given has no Elements, which is exactly right:
+// a selector that depended on the DOM would have to be evaluated against the
+// DOM the acts are about to change.
+func TestAnActThatWillNotResolveNamesItself(t *testing.T) {
+	sc, scope := bound(t, `scenario "s" {
+  var sel = ".x"
+  step "upgrade" {
+    browser {
+      goto "/ok"
+      click "text=${text(sel)}"
+      fill "#a" = "b"
+    }
+    expect page.url contains "/ok"
+  }
+}`)
+	_, err := sc.Steps[0].Model(envOf(scope))
+	if err == nil {
+		t.Fatal("Model() = nil, want an error naming the act that would not resolve")
+	}
+	if !strings.Contains(err.Error(), "click") {
+		t.Errorf("Model() = %v, want it to name the click", err)
+	}
+	if !strings.Contains(err.Error(), "needs a browser page") {
+		t.Errorf("Model() = %v, want it to say the act cannot read the page", err)
+	}
+}
+
+// The value side of a two-argument act, likewise: `fill "#a" = <expr>` names
+// the action and the selector, because the selector is what a reader goes
+// looking for in the file.
+func TestAnActValueThatWillNotResolveNamesTheSelector(t *testing.T) {
+	sc, scope := bound(t, `scenario "s" {
+  step "upgrade" {
+    browser {
+      fill "#email" = value("#other")
+    }
+    expect page.url contains "/"
+  }
+}`)
+	_, err := sc.Steps[0].Model(envOf(scope))
+	if err == nil {
+		t.Fatal("Model() = nil, want an error")
+	}
+	for _, want := range []string{"fill", "#email", "value"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Model() = %v, want it to mention %q", err, want)
+		}
+	}
+}
+
+// A browser step with no acts is not a thing a .art file can hold -- the block
+// is required -- but Model must not produce a nil-dereference for one, because
+// a tree built by hand (artemis ast --from-json, a UI) can.
+func TestAnEmptyBrowserBlockModelsCleanly(t *testing.T) {
+	var acts []*Act
+	got, err := browserModel(acts, envOf(executor.NewScope()))
+	if err != nil {
+		t.Fatalf("browserModel(nil) = %v, want nil", err)
+	}
+	if got.Acts != nil {
+		t.Errorf("browserModel(nil).Acts = %#v, want nil", got.Acts)
 	}
 }
 

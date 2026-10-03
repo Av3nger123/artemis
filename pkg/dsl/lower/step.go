@@ -71,10 +71,9 @@ type Step struct {
 	// Run is the action of a terminal step, nil otherwise.
 	Run *Run
 
-	// Acts are the actions of a browser step, nil otherwise. A browser step
-	// fills no models field: no executor is registered for "browser" until
-	// ART-47, and until then executor.Run reports it as an unknown step type,
-	// which is an error rather than a quiet pass.
+	// Acts are the actions of a browser step, nil otherwise. Model evaluates
+	// them onto models.Step.Browser, which pkg/steps/browserstep performs
+	// against the page the scenario's session owns.
 	Acts []*Act
 
 	// Expects are the step's `expect` statements in source order, one assertion
@@ -133,9 +132,13 @@ func (s *Step) Model(env *eval.Env) (models.Step, error) {
 		if out.Exec, err = s.Run.Model(env); err != nil {
 			return out, fmt.Errorf("step %q: %w", s.Name, err)
 		}
+	case s.Acts != nil:
+		if out.Browser, err = browserModel(s.Acts, env); err != nil {
+			return out, fmt.Errorf("step %q: %w", s.Name, err)
+		}
 	}
-	// A browser step fills neither: what it does lives in Acts, and the
-	// executor that reads them does not exist yet.
+	// Exactly one arm runs, and a step whose action did not parse runs none:
+	// TypeKey already refused it, so there is nothing here to guard.
 	return out, nil
 }
 

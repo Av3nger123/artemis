@@ -141,6 +141,14 @@ type StepResult struct {
 	Attempts int
 	// Assertions are the checks made against the final attempt.
 	Assertions []AssertionResult
+	// Screenshot is the path to a picture of what the step was looking at when
+	// it did not pass, and empty for every step that passed and every step
+	// type that has nothing to photograph. Only a browser step produces one;
+	// it is a field here rather than on a browser-shaped type because the
+	// result tree is the one thing pkg/report reads, and a report that had to
+	// know which step types have pictures would be a report that breaks on the
+	// next one that does.
+	Screenshot string
 	// Line is the 1-based line of the scenario file the step was written on,
 	// or zero when it is not known. It is what a step that could not run at all
 	// points at, and the fallback for an assertion with no line of its own.

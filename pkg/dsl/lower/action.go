@@ -67,13 +67,65 @@ type Run struct {
 //
 // Value is nil for the one-argument actions, which is the arity the checker has
 // already enforced. Nothing here interprets the name: what `click` does belongs
-// to the browser step (ART-46), and carrying the acts in source order is this
-// package's whole share of it.
+// to pkg/steps/browserstep, and carrying the acts in source order -- then
+// evaluating their arguments in Model -- is this package's whole share of it.
 type Act struct {
 	Name   string
 	Target ast.Expr
 	Value  ast.Expr
 	Line   int
+}
+
+// Model evaluates the act against env and returns what browserstep reads.
+//
+// Both arguments go through text, which is eval.Render over the evaluated
+// expression -- the same path a URL, a header value and a command name take --
+// so `click "text=${plan}"` arrives as `text=pro` and a selector is a string
+// and nothing else. The argument is not trimmed: leading space is meaningful in
+// a `fill` value, and a selector with a stray space is a selector the browser
+// will say it could not find, which is a better failure than a selector artemis
+// quietly changed.
+//
+// The error names the action and, for the two-argument actions, which argument
+// it was reading, because a browser block is many statements and "the step
+// could not resolve an expression" would not say which line to go to.
+func (a *Act) Model(env *eval.Env) (models.Act, error) {
+	out := models.Act{Name: a.Name, Line: a.Line}
+
+	target, err := text(a.Target, env)
+	if err != nil {
+		return out, fmt.Errorf("%s: %w", a.Name, err)
+	}
+	out.Target = target
+
+	if a.Value != nil {
+		if out.Value, err = text(a.Value, env); err != nil {
+			return out, fmt.Errorf("%s %q: value: %w", a.Name, target, err)
+		}
+	}
+	return out, nil
+}
+
+// browserModel evaluates every act of a browser step, in source order.
+//
+// It stops at the first act that will not resolve, rather than collecting the
+// rest: the acts are a sequence with side effects, so an act after a broken one
+// was never going to run, and reporting two failures would describe a step that
+// got further than it did.
+func browserModel(acts []*Act, env *eval.Env) (models.Browser, error) {
+	out := models.Browser{}
+	if len(acts) == 0 {
+		return out, nil
+	}
+	out.Acts = make([]models.Act, 0, len(acts))
+	for _, a := range acts {
+		m, err := a.Model(env)
+		if err != nil {
+			return out, err
+		}
+		out.Acts = append(out.Acts, m)
+	}
+	return out, nil
 }
 
 // Model evaluates the request against env and returns what httpstep reads.

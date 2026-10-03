@@ -4,8 +4,10 @@ import (
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
+	"artemis/pkg/session"
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
+	"artemis/pkg/steps/browserstep"
 	"context"
 	"errors"
 	"fmt"
@@ -96,7 +98,10 @@ func reportRun(cmd *cobra.Command, path string) error {
 	// Diagnostics go to stderr whatever the console does: a .art file that will
 	// not compile is reported with its caret gutter, and stdout stays exactly
 	// one document when --report asked for one.
-	run := runFiles(executor.Default(), files, rep, cmd.ErrOrStderr())
+	run := runFilesWith(&runtimeEnv{
+		reg:   executor.Default(),
+		shots: browserstep.NewShots(shotDir(cmd)),
+	}, files, rep, cmd.ErrOrStderr())
 	// Between the step lines and the tallies: the blocks are what a reader --
 	// or the agent that wrote the scenario -- acts on (ART-12), and the
 	// summary's verdict stays the last line a run writes.
@@ -196,13 +201,46 @@ func isScenarioFile(name string) bool {
 // skip: someone who types `artemis run login.yaml` and gets a passing run that
 // ran nothing has been told the opposite of the truth.
 func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagOut io.Writer) *result.RunResult {
+	return runFilesWith(&runtimeEnv{reg: reg}, files, rep, diagOut)
+}
+
+// runtimeEnv is what the runner needs besides the scenarios: the executors to
+// dispatch to, and where a failed browser step's screenshot goes.
+//
+// It is one value threaded down to runArtStep rather than two more parameters
+// on four functions, and it is where the next run-wide setting goes. A nil
+// shots is screenshots off, which is what every test that is not about them
+// gets.
+type runtimeEnv struct {
+	reg   *executor.Registry
+	shots *browserstep.Shots
+}
+
+// runFilesWith is runFiles with the run-wide settings given rather than
+// defaulted. `artemis run` goes through here; runFiles is the plain form, which
+// is what the tests that are not about screenshots use.
+//
+// session.Shutdown is deferred once for the whole run rather than per scenario.
+// The Playwright driver -- a Node process -- is per process; starting one per
+// scenario would cost an install check and a pipe each time. The *browser* is
+// what scenarios must not share, and that is the registry's business, closed at
+// each scenario boundary. Shutdown is a no-op when nothing ever opened a
+// session, which is the normal case and the reason it can be deferred
+// unconditionally: an api-only run does not have to know it had no browser.
+func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut io.Writer) *result.RunResult {
+	defer func() {
+		if err := session.Shutdown(); err != nil {
+			logger.Logger.Warn("Could not stop the browser driver", "error", err.Error())
+		}
+	}()
+
 	run := result.NewRun()
 	for _, file := range files {
 		if !isArtFile(file) {
 			failScenario(run, rep, file, notAScenarioError(file))
 			continue
 		}
-		runArtFile(context.Background(), reg, file, run, rep, diagOut)
+		runArtFile(context.Background(), rt, file, run, rep, diagOut)
 	}
 	run.Finish()
 	return run
@@ -286,4 +324,28 @@ func plural(n int, one, many string) string {
 		return fmt.Sprintf("%d %s", n, one)
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// screenshotsFlag is the flag naming where a failed browser step's screenshot
+// goes. Empty means do not take any.
+const screenshotsFlag = "screenshots"
+
+// shotDir is where a failed browser step's screenshot goes: --screenshots, or
+// the default.
+//
+// The empty string turns them off, which is why this reads the flag rather than
+// relying on its default -- an explicit `--screenshots ""` has to be
+// distinguishable from not passing it, and with cobra's own default it is: the
+// value is what the user said.
+//
+// A command with no such flag -- there is none today, but `test` grew its flags
+// separately once already -- gets the default rather than an error, because a
+// missing flag is a wiring mistake and failing a run over it would be the worst
+// possible report of one.
+func shotDir(cmd *cobra.Command) string {
+	dir, err := cmd.Flags().GetString(screenshotsFlag)
+	if err != nil {
+		return browserstep.DefaultDir
+	}
+	return dir
 }

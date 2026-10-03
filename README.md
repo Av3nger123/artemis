@@ -70,6 +70,7 @@ Five things in that file are the whole language:
 - Values captured from one step and used in the next, keeping their JSON type
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
+- `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
 - One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
 - A non-zero exit code whenever anything fails, and no third code to learn
@@ -719,6 +720,37 @@ Things worth knowing before you point a reporter at it:
 -- the same run as `report_json.golden`, for comparing the two -- and
 `pkg/report/junit.go` is where the dialect is defined.
 
+### Screenshots of a failed page
+
+A `browser` step that does not pass leaves a PNG of the page, and `--report json`
+names its path -- on the step, and on the matching `failures` entry, so an entry
+stands alone:
+
+```sh
+artemis run upgrade.art                       # artemis-screenshots/
+artemis run upgrade.art --screenshots shots   # shots/
+artemis run upgrade.art --screenshots ""      # none
+```
+
+```json
+{
+  "name": "check the receipt",
+  "status": "fail",
+  "screenshot": "artemis-screenshots/upgrade-to-pro-check-the-receipt.png",
+  "assertions": [ ... ]
+}
+```
+
+The file is `<scenario>-<step>.png`, lower-cased with everything that is not a
+letter or a digit collapsed to a hyphen, and it carries no timestamp: a rerun
+overwrites the one before it, so the path is predictable enough for a CI job to
+name the artifact it uploads. Two steps that share a name in one run get `-2`
+and `-3`.
+
+It is written after the last attempt -- the one the report describes -- and only
+for a step that did not pass. The folder is created on the first failure, so a
+suite of `api` steps never grows one.
+
 ### Logging
 
 The terminal output above is all a run writes by default: no log file is created
@@ -883,9 +915,6 @@ command makes -- so it stays an input the command can read.
 
 ## Not yet
 
-- **`browser` steps.** The action block, the element functions, `config browser`,
-  and the session that persists across a scenario's browser steps are designed
-  and specified, and not implemented. A scenario that uses one does not run.
 - **`db` steps.** Designed, not implemented.
 - **Control flow, functions, imports.** `if`, loops, `parallel`, `group`, `fn`,
   `import`, `setup`, `teardown` are reserved words, not features. Reuse is what a

@@ -35,6 +35,11 @@ type Diagnostic struct {
 	// Error is the reason, for a diagnostic with no assertion. An errored
 	// assertion carries its own reason on Assertion.Error.
 	Error string
+	// Screenshot is the step's picture, copied off it rather than looked up,
+	// because the point of this type is that an entry stands alone: something
+	// holding one diagnostic should not have to walk back up the tree to find
+	// the image of the page the failure is about. Empty when there is none.
+	Screenshot string
 }
 
 // Diagnostics is everything the run says to go and fix, in the order it
@@ -99,24 +104,26 @@ func stepDiagnostics(sc *ScenarioResult, step *StepResult) []Diagnostic {
 			continue
 		}
 		out = append(out, Diagnostic{
-			File:      sc.File,
-			Scenario:  sc.Name,
-			Step:      step.Name,
-			Line:      lineOf(a.Line, step.Line),
-			Status:    a.Status,
-			Assertion: &a,
+			File:       sc.File,
+			Scenario:   sc.Name,
+			Step:       step.Name,
+			Line:       lineOf(a.Line, step.Line),
+			Status:     a.Status,
+			Assertion:  &a,
+			Screenshot: step.Screenshot,
 		})
 	}
 	// Only when nothing above has already said what is wrong: a step that
 	// errored after an assertion errored has one reason, not two.
 	if len(out) == 0 && !step.Passed() {
 		out = append(out, Diagnostic{
-			File:     sc.File,
-			Scenario: sc.Name,
-			Step:     step.Name,
-			Line:     step.Line,
-			Status:   step.Status,
-			Error:    step.Error,
+			File:       sc.File,
+			Scenario:   sc.Name,
+			Step:       step.Name,
+			Line:       step.Line,
+			Status:     step.Status,
+			Error:      step.Error,
+			Screenshot: step.Screenshot,
 		})
 	}
 	return out

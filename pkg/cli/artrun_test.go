@@ -316,14 +316,23 @@ func TestArtRunBadPolicyFromAnExpressionStopsTheStep(t *testing.T) {
 	}
 }
 
-// A step type nothing can observe is an error, not a pass. `browser` parses,
-// checks and lowers today and has no executor until ART-47, which is exactly
-// the quiet failure this reports instead of.
-func TestArtRunBrowserStepIsNotAQuietPass(t *testing.T) {
+// A browser scenario whose `config browser` will not resolve is a failed
+// scenario with no steps, and -- the part that matters here -- no browser.
+//
+// Every test in this file runs through runFiles, which now wraps each scenario
+// in session.WithScenario. That is lazy, so nothing is downloaded or launched
+// unless a step actually asks for a page; a cli test that asked would download
+// 683 MB in CI. So the browser-shaped tests here are the ones that fail
+// *before* the first act, and the whole executor over a real page is
+// pkg/steps/browserstep's browser-tagged suite.
+func TestArtRunABrowserConfigThatWillNotResolveFailsTheScenario(t *testing.T) {
 	run, _ := runArt(t, `scenario "the app" {
+  var size = 1280
+  config browser { viewport = size, headless = "yes" }
+
   step "open it" {
     browser {
-      goto "/settings"
+      goto "http://127.0.0.1:1/settings"
     }
     expect page.url contains "/settings"
   }
@@ -331,14 +340,49 @@ func TestArtRunBrowserStepIsNotAQuietPass(t *testing.T) {
 `)
 
 	if run.Passed() {
-		t.Fatal("run passed, want a failure: nothing can run a browser step yet")
+		t.Fatal("run passed, want a failure: the browser config does not resolve")
+	}
+	sc := run.Scenarios[0]
+	if sc.Status != result.StatusError {
+		t.Errorf("scenario = %v, want errored", sc.Status)
+	}
+	if len(sc.Steps) != 0 {
+		t.Errorf("the scenario ran %d steps, want none: there was nowhere to run them", len(sc.Steps))
+	}
+	if !strings.Contains(sc.Error, "headless") {
+		t.Errorf("scenario error = %q, want it to name the setting", sc.Error)
+	}
+}
+
+// An act whose argument will not resolve fails the step before anything is
+// driven, so a selector that came out of a bad expression costs no browser
+// launch to discover -- the same rule as a bad `timeout` on an api step.
+func TestArtRunAnActThatWillNotResolveFailsBeforeTheBrowserOpens(t *testing.T) {
+	run, _ := runArt(t, `scenario "the app" {
+  var sel = ".x"
+
+  step "open it" {
+    browser {
+      goto "http://127.0.0.1:1/"
+      click "text=${text(sel)}"
+    }
+    expect page.url contains "/"
+  }
+}
+`)
+
+	if run.Passed() {
+		t.Fatal("run passed, want a failure")
 	}
 	step := run.Scenarios[0].Steps[0]
 	if step.Status != result.StatusError {
 		t.Errorf("step = %v, want errored", step.Status)
 	}
-	if !strings.Contains(step.Error, "browser") {
-		t.Errorf("step error = %q, want it to name the step type", step.Error)
+	if !strings.Contains(step.Error, "click") {
+		t.Errorf("step error = %q, want it to name the act", step.Error)
+	}
+	if step.Screenshot != "" {
+		t.Errorf("step screenshot = %q, want none: there was never a page", step.Screenshot)
 	}
 }
 
@@ -436,7 +480,7 @@ func TestArtRunHonoursTheContext(t *testing.T) {
 	cancel()
 
 	run := result.NewRun()
-	runArtFile(ctx, executor.Default(), path, run, report.Discard(), io.Discard)
+	runArtFile(ctx, &runtimeEnv{reg: executor.Default()}, path, run, report.Discard(), io.Discard)
 	run.Finish()
 
 	if run.Passed() {

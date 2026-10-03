@@ -13,8 +13,10 @@ import (
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
+	"artemis/pkg/session"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
+	"artemis/pkg/steps/browserstep"
 )
 
 // This file is the run path: compile a .art file, then run each scenario in
@@ -42,7 +44,7 @@ import (
 // --report json | jq` keeps working. What goes into the result tree is the
 // one-line reason, because report.Console.field trims each line of a value it
 // prints and would destroy a caret's alignment.
-func runArtFile(ctx context.Context, reg *executor.Registry, file string, run *result.RunResult, rep *report.Console, diagOut io.Writer) {
+func runArtFile(ctx context.Context, rt *runtimeEnv, file string, run *result.RunResult, rep *report.Console, diagOut io.Writer) {
 	scenarios, err := compileArt(file, diagOut)
 	if err != nil {
 		// No name to give it: the file did not compile, so all anyone knows
@@ -55,7 +57,7 @@ func runArtFile(ctx context.Context, reg *executor.Registry, file string, run *r
 		return
 	}
 	for _, sc := range scenarios {
-		executeArtScenario(ctx, reg, sc, file, run, rep)
+		executeArtScenario(ctx, rt, sc, file, run, rep)
 	}
 }
 
@@ -128,7 +130,7 @@ func firstError(diags []diag.Diagnostic) error {
 // executeArtScenario runs every step of one lowered scenario and appends the
 // outcome to run, so a run can hold a scenario per file -- and a file can hold
 // more than one.
-func executeArtScenario(ctx context.Context, reg *executor.Registry, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
+func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(sc.Name, file)
 	rep.Scenario(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", sc.Name))
@@ -151,20 +153,55 @@ func executeArtScenario(ctx context.Context, reg *executor.Registry, sc *lower.S
 		return
 	}
 
-	scenarioStart := time.Now()
-	for _, st := range sc.Steps {
-		stepResult := scenario.NewStep(st.Name)
-		// The line the step was written on, so a step that could not run at all
-		// -- and an assertion with no line of its own -- still points somewhere
-		// a reader can go (ART-12).
-		stepResult.Line = st.Line
-		runArtStep(ctx, reg, st, scope, stepResult)
-		logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, stepResult.Duration))
-		// Every step that was reached gets a line, including one artemis could
-		// not execute.
-		rep.Step(stepResult)
+	// `config browser`, resolved against the vars just bound: `viewport =
+	// env("SIZE")` is an expression and only the run could have known what it
+	// says. It is resolved for every scenario, browser step or not, and a
+	// config that will not resolve fails the scenario -- the same shape as
+	// Bind failing, and the alternative is a scenario that reaches its first
+	// browser step and only then discovers it cannot open one.
+	cfg, err := sc.Browser.Resolve(&eval.Env{Vars: scope.Vars()})
+	if err != nil {
+		scenario.Fail(0, err)
+		rep.ScenarioFailed(scenario)
+		logger.Logger.Error("Could not resolve a scenario's browser config", "file", file, "error", err.Error())
+		return
 	}
+
+	scenarioStart := time.Now()
+	// The scenario boundary: one browser for the scenario, opened lazily on
+	// its first browser step and closed when the scenario ends, pass, fail or
+	// panic. It is wrapped unconditionally because the registry is lazy --
+	// nothing is downloaded, launched or written unless a step asks -- so a
+	// run of api steps pays nothing for this line.
+	closeErr := session.WithScenario(ctx, session.Config{
+		Headless: cfg.Headless,
+		Viewport: cfg.Viewport,
+	}, func(ctx context.Context) error {
+		for _, st := range sc.Steps {
+			stepResult := scenario.NewStep(st.Name)
+			// The line the step was written on, so a step that could not run
+			// at all -- and an assertion with no line of its own -- still
+			// points somewhere a reader can go (ART-12).
+			stepResult.Line = st.Line
+			runArtStep(ctx, rt, sc.Name, st, scope, stepResult)
+			logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, stepResult.Duration))
+			// Every step that was reached gets a line, including one artemis
+			// could not execute.
+			rep.Step(stepResult)
+		}
+		return nil
+	})
 	scenario.Finish(time.Since(scenarioStart))
+	// A browser that would not close is the scenario's problem and nobody
+	// else's: the steps have already been reported, so this is folded into the
+	// scenario's own status rather than allowed to replace a step's reason.
+	// WithScenario reports it only when the body returned nil, which it always
+	// does -- a failed step is a status in the tree, not an error out of here.
+	if closeErr != nil {
+		scenario.Fail(time.Since(scenarioStart), closeErr)
+		rep.ScenarioFailed(scenario)
+		logger.Logger.Error("Could not close a scenario's browser", "file", file, "error", closeErr.Error())
+	}
 	logger.Logger.Info("Testing ended")
 }
 
@@ -175,7 +212,7 @@ func executeArtScenario(ctx context.Context, reg *executor.Registry, sc *lower.S
 // mix of two tries. An attempt is one worth stopping on when it ran at all and
 // every assertion it made -- every `expect`, and every `capture` that had to be
 // read -- passed.
-func runArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step, scope executor.Scope, stepResult *result.StepResult) {
+func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, stepResult *result.StepResult) {
 	start := time.Now()
 
 	// The step's own scope with no roots on it: a URL, a command or a retry
@@ -212,7 +249,7 @@ func runArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step, sco
 	)
 	for i := 1; i <= attempts; i++ {
 		stepResult.Attempts = i
-		asserts, lastErr = attemptArtStep(ctx, reg, st, model, scope, env)
+		asserts, lastErr = attemptArtStep(ctx, rt.reg, st, model, scope, env)
 		if lastErr == nil && result.AllPassed(asserts) {
 			break
 		}
@@ -225,12 +262,47 @@ func runArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step, sco
 	if lastErr != nil {
 		logger.Logger.Warn("Error while executing a step", "name", st.Name, "type", st.Type, "error", lastErr.Error())
 		stepResult.Fail(time.Since(start), lastErr)
+		// Before the early return: a step that could not run at all is the
+		// case a picture helps most -- a click that timed out says nothing
+		// about what the page was showing.
+		shoot(ctx, rt, scenario, st, stepResult)
 		return
 	}
 	for _, a := range asserts {
 		stepResult.Assert(a)
 	}
 	stepResult.Finish(time.Since(start))
+	if !stepResult.Passed() {
+		shoot(ctx, rt, scenario, st, stepResult)
+	}
+}
+
+// shoot photographs the page of a browser step that did not pass, and stamps
+// the path on the step for the report to name.
+//
+// After the last attempt, not per attempt: the result tree records the attempt
+// it stopped on, so a picture of a discarded one would show a page the report
+// does not describe. Nothing is written for a step that passed, for a step of
+// any other type, or for a run that turned screenshots off.
+//
+// A screenshot that could not be taken is logged and otherwise ignored. The
+// step has already got the news a reader acts on, and replacing "the receipt
+// never appeared" with "could not write a PNG" would bury it.
+func shoot(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, stepResult *result.StepResult) {
+	if rt.shots == nil || st.Type != browserstep.StepType {
+		return
+	}
+	page, err := browserstep.Open(ctx)
+	if err != nil {
+		// The session never opened, which is itself what failed the step.
+		return
+	}
+	path, err := rt.shots.On(page, scenario, st.Name)
+	if err != nil {
+		logger.Logger.Warn("Could not write a screenshot", "name", st.Name, "error", err.Error())
+		return
+	}
+	stepResult.Screenshot = path
 }
 
 // attemptArtStep makes one attempt: observe, then assert, then capture.
@@ -247,9 +319,35 @@ func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step,
 	if err != nil {
 		return nil, err
 	}
+	// The live page, for a browser step and for nothing else. It is what makes
+	// `text(".x")` resolve and what the settle loop re-reads the roots through;
+	// a nil one means there is nothing an assertion could wait for.
+	page := livePage(ctx, st.Type)
 	observed := &eval.Env{Roots: roots, Vars: base.Vars, Getenv: base.Getenv}
+	if page != nil {
+		observed.Elements = page.Elements()
+	}
 	// Assert before Apply: an expect reads what the step observed, and a
 	// capture writes into the scope the steps *after* this one read.
-	asserts := st.Assert(observed)
+	asserts := settle(ctx, st, observed, page)
 	return append(asserts, st.Apply(observed, scope)...), nil
+}
+
+// livePage is the page a browser step's assertions read, and nil for a step
+// type that has none.
+//
+// It goes through browserstep.Open, which is the same lookup Observe used, so
+// the assertions cannot read a different page from the one the actions drove.
+// The error is swallowed because reaching here means Observe already opened the
+// session successfully: a nil page then means "this is not a browser step",
+// which is exactly how the settle loop reads it.
+func livePage(ctx context.Context, stepType string) *browserstep.Bindings {
+	if stepType != browserstep.StepType {
+		return nil
+	}
+	page, err := browserstep.Open(ctx)
+	if err != nil {
+		return nil
+	}
+	return page
 }

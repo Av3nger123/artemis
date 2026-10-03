@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
+	"artemis/pkg/steps/browserstep"
+
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +48,8 @@ func Init() {
 	// rather than a second flag: --report json --report junit=junit.xml.
 	runCmd.Flags().StringArray(reportFlag, nil,
 		"Write a machine-readable report: "+strings.Join(reportFormats(), "|")+"[=path] (default: stdout, which moves the console report to stderr). Repeatable")
+	runCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
+		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off; the folder is created only when one fails")
 
 	// Deprecated: superseded by run, kept so the old invocation keeps working.
 	RootCmd.AddCommand(testCmd)
@@ -55,6 +59,11 @@ func Init() {
 	}
 	testCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
+	// On the deprecated command too, so a CI job that has not moved to `run`
+	// yet still gets the artifact rather than discovering the flag does not
+	// exist here.
+	testCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
+		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off")
 
 	// Migrate command: YAML in, .art out, once. The one remaining YAML reader
 	// in the binary, now that ART-40 has taken the format off the run path.

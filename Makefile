@@ -30,6 +30,26 @@ test:
 test-race:
 	$(GOTEST) -race ./...
 
+# The tests that need a real browser: pkg/steps/browserstep's driver over
+# Chromium, and pkg/cli's whole run against the local fixture server.
+#
+# Not part of `test`, and not run in CI. CI has no browser, and the first run on
+# a cold machine downloads about 683 MB of Chromium -- see docs/browser-engine.md.
+# Everything below the browser is covered by the default suite against a fake
+# driver, which is what keeps CI honest about this code.
+test-browser:
+	$(GOTEST) -tags browser ./pkg/session ./pkg/steps/browserstep/... ./pkg/cli
+
+# The flake check: ten consecutive browser runs. A browser suite that passes
+# once and fails one run in five is worse than no suite, so "not flaky" is a
+# thing to measure rather than hope for.
+#
+# No -run filter: the browser-tagged tests in pkg/steps/browserstep are not all
+# named "Browser", and a flake check that silently matched none of them would be
+# the most expensive way to prove nothing.
+test-browser-repeat:
+	$(GOTEST) -tags browser -count=10 ./pkg/session ./pkg/steps/browserstep/... ./pkg/cli
+
 cover:
 	$(GOTEST) -coverprofile=$(COVERPROFILE) ./...
 	$(GOCMD) tool cover -func=$(COVERPROFILE) | tail -1
@@ -82,4 +102,4 @@ clean:
 	$(GOCLEAN)
 	rm -f $(BINARY_NAME) $(COVERPROFILE)
 
-.PHONY: all build test test-race cover golden vet fmt fmt-check lint lint-strict clean
+.PHONY: all build test test-race test-browser test-browser-repeat cover golden vet fmt fmt-check lint lint-strict clean

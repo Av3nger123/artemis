@@ -364,14 +364,6 @@ scenario "upgrade to pro" {
 }
 ```
 
-> **Not running yet.** The language above is specified, compiled and formatted
-> today: `artemis parse`, `artemis fmt`, `artemis ast` and `artemis grammar`
-> all read a browser step, and so does every diagnostic in this section. What
-> does not exist yet is the executor, so `artemis run` reports
-> `unknown step type "browser" (known types: api, terminal)` for a scenario
-> that holds one. The step type is in this spec; the browser driving it is the
-> next piece of work.
-
 The block is **required** -- a browser step with no actions does nothing at all
 -- and it holds these eight statements, in any order and any number:
 
@@ -477,6 +469,26 @@ step is still signed in. A scenario with no browser step opens no browser.
 An assertion in a browser step has a default [`within`](#within) of **5s**,
 because a page settles asynchronously and an assertion that reads it once is a
 race. The other two step types have no default; see [`within`](#within).
+
+### When a browser step fails
+
+A browser step that does not pass leaves a **screenshot** of the page, and the
+[JSON report](#the-json-report) names its path on the step and on the matching
+`failures` entry. It is written after the last attempt, because that is the
+attempt the report describes.
+
+```
+artemis run upgrade.art                            # artemis-screenshots/
+artemis run upgrade.art --screenshots shots        # shots/
+artemis run upgrade.art --screenshots ""           # none
+```
+
+The name is `<scenario>-<step>.png`, lower-cased with everything that is not a
+letter or a digit collapsed to a hyphen, and it has no timestamp: a rerun
+overwrites the file from the run before it, so the path in the report is
+predictable enough for a CI job to name the artifact it is about to upload. Two
+steps that share a name in one run get `-2` and `-3`. The folder is created only
+when a browser step actually fails, so a suite of `api` steps never grows one.
 
 ---
 
@@ -773,6 +785,21 @@ condition has to settle.
 | `browser` | 5s |
 | `api`, `terminal` | none -- the assertion is evaluated once |
 
+**Spec decision.** An explicit `within` on an `api` or a `terminal` step is
+accepted and the assertion is still evaluated **once**. Those two observations
+are complete when the step returns -- a response has arrived, a command has
+exited -- so nothing a re-evaluation reads can have changed, and honouring the
+budget literally would make a failure exactly `within` slower and no more likely
+to pass. That is the same reason those types have no default. A budget that will
+not parse is still a fault either way: as a compile error for a literal, and as
+an errored assertion for one that came out of a `var`. What re-runs an `api` step
+that is not ready yet is [`retry`](#retry).
+
+In a browser step the waiting is real: the assertion is re-evaluated every 100ms
+until it holds or the budget expires, reading the page again each time. An
+assertion that is already true costs nothing -- the 5s default is a ceiling on a
+failure, not a delay on a pass.
+
 `within` and `retry` compose: a step may retry, and its assertions may wait.
 They are not the same thing -- see [the three timers](#retry-timeout-and-within).
 
@@ -843,7 +870,7 @@ scenario, so:
 | --- | --- | --- |
 | `retry { times, delay }` | Re-runs the **whole step**, action included | one attempt, no delay |
 | `timeout = "<duration>"` | Bounds **one attempt** of the step | `30s` |
-| `expect ... within "<duration>"` | Re-evaluates **one assertion** | none for `api` and `terminal`; 5s for `browser` |
+| `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api` and `terminal`; 5s for `browser` |
 
 ```art
 step "wait for the import" {
@@ -1145,6 +1172,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `expected`, `actual` | assertion, failure | The two sides as evaluated, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve |
 | `failures` | run | Everything the run says to go and fix, flat and in run order. One entry per failing assertion, per step that could not run, and per file that would not compile, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed |
 | `scenario`, `step` | failure | The names of the two things the failure sits under, repeated so the entry stands alone |
+| `screenshot` | step, failure | The path to a picture of the page, for a [browser step that did not pass](#when-a-browser-step-fails), and `""` for every other step. The path is as the run was given it -- relative to the working directory unless `--screenshots` named an absolute one -- so a CI job uploading it uses the string verbatim. Repeated on the failure entry so the entry stands alone |
 
 Every key is always present, with its zero value rather than omitted, so a `jq`
 expression never has to tell absent from empty. `expected` and `actual` are the

@@ -214,7 +214,7 @@ func TestBrowserPagePersistsAcrossSteps(t *testing.T) {
 			if err := page.Fill("#user", "alice"); err != nil {
 				return nil, err
 			}
-			return &result.StepResult{}, page.Click("#go")
+			return nil, page.Click("#go")
 		case "read it back":
 			// A different step, no navigation: it must see the DOM the first
 			// step left behind.
