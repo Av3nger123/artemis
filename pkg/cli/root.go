@@ -65,14 +65,18 @@ func Init() {
 	}
 	migrateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout")
 
+	// Generate command: a Postman collection in, .art out, once -- the other
+	// adoption path, onto the same printer as migrate (ART-41).
 	RootCmd.AddCommand(generateCmd)
-	generateCmd.Flags().StringP("file", "f", "", "Path to the postman collection JSON file")
+	generateCmd.Flags().StringP("file", "f", "", "Path to the Postman collection JSON file")
 	// On generateCmd, not testCmd: marking it on the wrong command left
 	// `artemis generate` with no required flag at all, so it passed validation
 	// and then failed opening "".
 	if err := generateCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
+	generateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout")
+	generateCmd.Flags().Bool(forceFlag, false, "Replace the file named by -o when it already exists")
 }
 
 var RootCmd = &cobra.Command{

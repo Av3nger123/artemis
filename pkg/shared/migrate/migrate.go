@@ -180,13 +180,20 @@ func request(w *writer, r Request) error {
 		return fmt.Errorf("url: %w", err)
 	}
 
-	fields := make([]string, 0, len(r.Headers)+1)
-	for _, key := range sortedKeys(r.Headers) {
-		value, err := templated(r.Headers[key])
+	fields := make([]string, 0, len(r.Headers)+len(r.HeaderList)+len(r.Query)+1)
+	for _, h := range headerParams(r) {
+		value, err := templated(h.Value)
 		if err != nil {
-			return fmt.Errorf("header %q: %w", key, err)
+			return fmt.Errorf("header %q: %w", h.Name, err)
 		}
-		fields = append(fields, "header "+quote(key)+" = "+value)
+		fields = append(fields, "header "+quote(h.Name)+" = "+value)
+	}
+	for _, q := range r.Query {
+		value, err := templated(q.Value)
+		if err != nil {
+			return fmt.Errorf("query %q: %w", q.Name, err)
+		}
+		fields = append(fields, "query "+quote(q.Name)+" = "+value)
 	}
 	if r.Body != "" {
 		body, err := requestBody(r.Body)
@@ -198,6 +205,23 @@ func request(w *writer, r Request) error {
 
 	w.block(verb+" "+url, fields)
 	return nil
+}
+
+// headerParams is the request's headers in the order they are emitted.
+//
+// HeaderList wins when it is set, because it is ordered and may repeat a name;
+// a repeated header is two headers on the wire and the map cannot hold both.
+// The map is sorted, which is what keeps two migrations of the same YAML file
+// identical -- a mapping has no order once yaml.v3 has decoded it.
+func headerParams(r Request) []Param {
+	if len(r.HeaderList) > 0 {
+		return r.HeaderList
+	}
+	out := make([]Param, 0, len(r.Headers))
+	for _, key := range sortedKeys(r.Headers) {
+		out = append(out, Param{Name: key, Value: r.Headers[key]})
+	}
+	return out
 }
 
 // run writes `run "sh" { args = [...] }`.
@@ -297,7 +321,7 @@ func retry(w *writer, r Retry) {
 func expects(w *writer, s Step) error {
 	switch s.Type {
 	case apiStep:
-		w.line("expect status == " + strconv.Itoa(s.Response.StatusCode))
+		w.line("expect status " + statusOp(s.Response.StatusOp) + " " + strconv.Itoa(s.Response.StatusCode))
 		for i, check := range s.Response.Body {
 			lines, err := bodyExpects(check)
 			if err != nil {
@@ -323,6 +347,16 @@ func expects(w *writer, s Step) error {
 		}
 	}
 	return nil
+}
+
+// statusOp is the comparison a status assertion is written with. A YAML
+// scenario's `status_code:` is always an equality, so an empty StatusOp is
+// "==".
+func statusOp(op string) string {
+	if op == "" {
+		return "=="
+	}
+	return op
 }
 
 // captures writes one `capture` per entry, in sorted key order -- the order

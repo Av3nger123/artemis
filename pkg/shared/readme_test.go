@@ -13,6 +13,11 @@ import (
 // readmePath is the README relative to this package's directory.
 const readmePath = "../../README.md"
 
+// knownTypes stands in for what the registry hands the loader in a real run.
+// This package cannot read the registry -- the executors import it -- so the
+// list is written out here.
+var knownTypes = []string{"api", "exec"}
+
 // wantREADMEScenarios is the number of whole-scenario examples the README is
 // expected to carry. The test asserts it found at least this many, so an edit
 // that renames the fences or deletes the examples fails here instead of leaving

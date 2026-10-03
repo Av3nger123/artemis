@@ -46,16 +46,48 @@ type BodyCheck struct {
 	Line int `yaml:"-"`
 }
 
+// Param is one name/value pair in the order it was written.
+//
+// It is what a Postman collection has and a YAML mapping does not: an ordered
+// list, in which a name may appear twice. `Accept: application/json` followed
+// by `Accept: text/csv` is two headers on the wire, and the DSL writes both --
+// so the importer cannot go through a map.
+type Param struct {
+	Name  string
+	Value string
+}
+
 type Request struct {
 	URL     string            `yaml:"url"`
 	Method  string            `yaml:"method"`
 	Headers map[string]string `yaml:"headers"`
 	Body    string            `yaml:"body"`
+
+	// HeaderList is the headers in source order, and is what request() emits
+	// when it is set -- Headers is used only when it is not. Query is the
+	// request's query parameters as their own `query` fields, which a YAML
+	// scenario wrote into the URL instead.
+	//
+	// Both are `yaml:"-"`: no scenario file can set either, and ParseYAMLFile's
+	// strict decode still rejects a `header_list:` key. They are here because
+	// Config is the shape Source translates, and `artemis generate` (ART-41)
+	// builds one from a Postman collection rather than from a file.
+	HeaderList []Param `yaml:"-"`
+	Query      []Param `yaml:"-"`
 }
 
 type Response struct {
 	StatusCode int         `yaml:"status_code"`
 	Body       []BodyCheck `yaml:"body,omitempty"`
+
+	// StatusOp is the comparison the status assertion is written with. Empty
+	// means "==", which is the only thing a YAML scenario can say: `status_code:
+	// 200` is an equality and nothing else. `artemis generate` sets "<" for a
+	// Postman request with no saved example response, where the honest
+	// assertion is `expect status < 400` rather than a guessed 200.
+	//
+	// `yaml:"-"`; see Request.HeaderList.
+	StatusOp string `yaml:"-"`
 
 	// StatusCodeLine is the line the `status_code:` key sits on, which is what
 	// a status mismatch should point at -- not the `response:` header above it.

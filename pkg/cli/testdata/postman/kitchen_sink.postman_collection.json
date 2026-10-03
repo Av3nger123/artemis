@@ -1,0 +1,136 @@
+{
+  "info": {
+    "_postman_id": "0d3f1e2a-0000-4000-8000-000000000001",
+    "name": "Orders API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access-token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base-url", "value": "https://api.example.com" },
+    { "key": "page_size", "value": "10" },
+    { "key": "retired", "value": "nothing", "disabled": true }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "ping",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "url": "{{base-url}}/ping"
+          },
+          "response": [{ "name": "pong", "code": 200, "status": "OK" }]
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Admin",
+          "item": [
+            {
+              "name": "list orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "X-Trace", "value": "on", "disabled": true }
+                ],
+                "url": {
+                  "raw": "{{base-url}}/orders?limit={{page_size}}&tag=new&cursor=abc",
+                  "protocol": "https",
+                  "host": ["{{base-url}}"],
+                  "path": ["orders"],
+                  "query": [
+                    { "key": "limit", "value": "{{page_size}}" },
+                    { "key": "tag", "value": "new" },
+                    { "key": "cursor", "value": "abc", "disabled": true }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "create order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base-url}}/orders",
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"sku\": \"A-1\",\n  \"qty\": 2,\n  \"note\": \"for {{operator}}\"\n}"
+            }
+          },
+          "response": [{ "name": "created", "code": 201 }]
+        },
+        {
+          "name": "amend order",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "ada" },
+                { "key": "password", "value": "lovelace" }
+              ]
+            },
+            "url": "{{base-url}}/orders/1",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "qty", "value": "3" },
+                { "key": "note", "value": "rush order" },
+                { "key": "void", "value": "1", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "search orders",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                { "key": "key", "value": "api_key" },
+                { "key": "value", "value": "{{access-token}}" },
+                { "key": "in", "value": "query" }
+              ]
+            },
+            "url": "{{base-url}}/orders/search",
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Orders($tag: String) {\n  orders(tag: $tag) { id }\n}",
+                "variables": "{\"tag\": \"new\"}"
+              }
+            }
+          },
+          "response": [{ "name": "ok", "code": 200 }]
+        }
+      ]
+    },
+    {
+      "name": "Legacy",
+      "item": [
+        {
+          "name": "raw header form",
+          "request": {
+            "method": "DELETE",
+            "header": "X-Legacy: 1\nAccept: text/plain",
+            "url": "{{base-url}}/orders/1"
+          }
+        }
+      ]
+    },
+    { "name": "Empty folder", "item": [] }
+  ]
+}
