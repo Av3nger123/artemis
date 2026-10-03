@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"artemis/pkg/result"
 	"artemis/pkg/shared/models"
 )
 
@@ -17,19 +16,12 @@ type observer struct {
 	err   error
 }
 
-func (o *observer) Execute(context.Context, models.Step, Scope) (*result.StepResult, error) {
-	return &result.StepResult{}, nil
-}
-
 func (o *observer) Observe(_ context.Context, step models.Step, _ Scope) (map[string]any, error) {
 	o.step = step
 	return o.roots, o.err
 }
 
-var (
-	_ Executor = (*observer)(nil)
-	_ Observer = (*observer)(nil)
-)
+var _ Executor = (*observer)(nil)
 
 func TestObserveDispatchesOnStepType(t *testing.T) {
 	api := &observer{roots: map[string]any{"status": float64(200)}}
@@ -63,40 +55,6 @@ func TestObserveUnknownStepType(t *testing.T) {
 	}
 }
 
-// A registered executor with no Observe is an error naming the types that can
-// be observed -- which is how "browser" reports itself until ART-47, rather
-// than quietly passing.
-func TestObserveExecutorThatCannotBeObserved(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("api", &observer{})
-	reg.Register("browser", Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
-		return &result.StepResult{}, nil
-	}))
-
-	_, err := Observe(context.Background(), reg, models.Step{Type: "browser"}, NewScope())
-	if !errors.Is(err, ErrNoObservation) {
-		t.Fatalf("Observe() error = %v, want ErrNoObservation", err)
-	}
-	if !strings.Contains(err.Error(), `"browser"`) || !strings.Contains(err.Error(), "these can: api") {
-		t.Errorf("error = %q, want it to name the type and the ones that can", err)
-	}
-}
-
-func TestObserveNoObservableTypesAtAll(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("browser", Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
-		return &result.StepResult{}, nil
-	}))
-
-	_, err := Observe(context.Background(), reg, models.Step{Type: "browser"}, NewScope())
-	if !errors.Is(err, ErrNoObservation) {
-		t.Fatalf("Observe() error = %v, want ErrNoObservation", err)
-	}
-	if !strings.Contains(err.Error(), "no step type can") {
-		t.Errorf("error = %q, want it to say no type can be observed", err)
-	}
-}
-
 // An error from the executor comes back as it is: a step that could not run is
 // the runner's to fail, not this dispatch's to interpret.
 func TestObserveErrorComesBack(t *testing.T) {
@@ -110,25 +68,5 @@ func TestObserveErrorComesBack(t *testing.T) {
 	}
 	if roots != nil {
 		t.Errorf("Observe() roots = %v, want nil alongside the error", roots)
-	}
-}
-
-func TestObservableIsSortedAndOnlyTheObservable(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("exec", &observer{})
-	reg.Register("api", &observer{})
-	reg.Register("browser", Func(func(context.Context, models.Step, Scope) (*result.StepResult, error) {
-		return nil, nil
-	}))
-
-	got := reg.Observable()
-	want := []string{"api", "exec"}
-	if len(got) != len(want) {
-		t.Fatalf("Observable() = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("Observable() = %v, want %v", got, want)
-		}
 	}
 }

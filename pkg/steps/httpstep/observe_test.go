@@ -148,10 +148,7 @@ func TestObserveDoesNotJudgeTheStatus(t *testing.T) {
 	srv := httptest.NewServer(jsonAt(http.StatusInternalServerError, `{"error": "boom"}`))
 	defer srv.Close()
 
-	step := models.Step{
-		Request:  models.Request{Method: "GET", URL: srv.URL},
-		Response: models.Response{StatusCode: 200},
-	}
+	step := models.Step{Request: models.Request{Method: "GET", URL: srv.URL}}
 	roots, err := observe(t, step)
 	if err != nil {
 		t.Fatalf("Observe() error = %v, want nil: a 500 is an answer", err)
@@ -160,7 +157,8 @@ func TestObserveDoesNotJudgeTheStatus(t *testing.T) {
 		t.Errorf("roots[status] = %v, want 500", roots[RootStatus])
 	}
 	// The body of an unexpected status is still observed, which is the rule the
-	// DSL changes: Execute suppresses the body checks, Observe reports the body.
+	// DSL changed: the YAML reader suppressed the body checks when the status
+	// did not match, and Observe reports the body whatever the status was.
 	if roots[RootBody] == nil {
 		t.Error("roots[body] = nil, want the 500's body: a .art step asserts on it itself")
 	}

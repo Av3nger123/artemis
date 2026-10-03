@@ -15,16 +15,15 @@ import (
 // registryKeys maps the step type the checker inferred to the type string an
 // executor is registered under.
 //
-// These are two namespaces, and the gap between them is deliberate. The checker,
-// the diagnostics and `artemis grammar` call a `run` step a *terminal* step,
-// which is the design document's word; pkg/steps/execstep registers itself as
-// "exec", which is the spelling every YAML scenario ever written uses. Renaming
-// the registration is ART-40's, paired with YAML leaving the run path. Until
-// then this table is where the two meet, and it is the only place in the front
-// end that knows a registry key at all.
+// They are two namespaces and the table stays, even though ART-40 closed the
+// last gap in it: pkg/steps/execstep registered itself as "exec" while a YAML
+// `type: exec` had to reach it, and became "terminal" when YAML left the run
+// path. This is still the only place in the front end that knows a registry
+// key at all, which is what keeps the checker free to name a step type
+// whatever reads best.
 var registryKeys = map[check.StepType]string{
 	check.API:      "api",
-	check.Terminal: "exec",
+	check.Terminal: "terminal",
 	check.Browser:  "browser",
 }
 
@@ -48,7 +47,8 @@ type Step struct {
 	// what the console report prints a line for.
 	Name string
 
-	// Type is the registry key: "api", "exec" or "browser". See registryKeys.
+	// Type is the registry key: "api", "terminal" or "browser". See
+	// registryKeys.
 	Type string
 
 	// Line is the line the `step` keyword sits on -- what a step that could not

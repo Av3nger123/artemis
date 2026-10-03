@@ -4,18 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/token"
 	"artemis/pkg/report"
-	"artemis/pkg/shared/assert"
+	"artemis/pkg/shared/migrate"
 )
 
 // specPath is SPEC.md relative to this package's directory, and goldenPath is
 // the whole JSON report document SPEC.md's schema section has to account for.
 const (
 	specPath   = "../../SPEC.md"
-	goldenPath = "../cli/testdata/report_json.golden"
+	goldenPath = "../cli/testdata/art/report_json.golden"
 )
 
 // wantSpecScenarios is the number of whole-scenario examples SPEC.md is expected
@@ -32,8 +34,8 @@ const wantSpecScenarios = 4
 //   - the examples, for the structural mistakes a reader would hit (unbalanced
 //     braces) and for having drifted back to the YAML format the DSL replaces;
 //   - the spec's own lists, against the code that already defines them -- the
-//     type names and operators in pkg/shared/assert, the report's schema version
-//     and its keys.
+//     type names token.TypeNames admits, the YAML operators pkg/shared/migrate
+//     still has to translate, and the report's schema version and its keys.
 //
 // When the front end lands, the lint below should be replaced by parsing every
 // example, which is strictly better and is what readme_test.go already does for
@@ -91,14 +93,20 @@ func TestSpecExamplesHaveNoYAMLisms(t *testing.T) {
 }
 
 // TestSpecTypeNamesMatchTheCode holds the six type names SPEC.md documents for
-// `is` to the list the assertion engine actually accepts. A seventh name in the
-// code and not in the spec is an undocumented feature; a name in the spec and
-// not in the code is a documented one that does not work.
+// `is` to the list the checker actually accepts. A seventh name in the code and
+// not in the spec is an undocumented feature; a name in the spec and not in the
+// code is a documented one that does not work.
+//
+// The list is token.TypeNames, which is what pkg/dsl/check validates the
+// right-hand side of `is` against. It was pkg/shared/assert's TypeNames until
+// ART-40 deleted that package; the two were identical, and migrate.TypeNames
+// is held to the same list below so a YAML `type: number` keeps meaning what
+// `is number` means.
 func TestSpecTypeNamesMatchTheCode(t *testing.T) {
 	spec := docText(t, specPath)
-	for _, name := range assert.TypeNames {
+	for _, name := range token.TypeNames {
 		if !strings.Contains(spec, "`"+name+"`") {
-			t.Errorf("SPEC.md does not document the type name %q, which assert.TypeNames accepts", name)
+			t.Errorf("SPEC.md does not document the type name %q, which token.TypeNames accepts", name)
 		}
 	}
 
@@ -106,43 +114,51 @@ func TestSpecTypeNamesMatchTheCode(t *testing.T) {
 	// scraped out of the prose: the point is that the two agree, and a scraper
 	// that silently matched nothing would pass whatever the spec said.
 	documented := []string{"string", "number", "boolean", "object", "array", "null"}
-	if len(documented) != len(assert.TypeNames) {
-		t.Errorf("SPEC.md documents %d type names, assert.TypeNames has %d: %v vs %v",
-			len(documented), len(assert.TypeNames), documented, assert.TypeNames)
+	if len(documented) != len(token.TypeNames) {
+		t.Errorf("SPEC.md documents %d type names, token.TypeNames has %d: %v vs %v",
+			len(documented), len(token.TypeNames), documented, token.TypeNames)
+	}
+
+	// The YAML `type:` a migration translates has to name the same six, or a
+	// scenario that loaded would migrate into one the checker rejects.
+	if !reflect.DeepEqual(migrate.TypeNames, token.TypeNames) {
+		t.Errorf("migrate.TypeNames = %v, token.TypeNames = %v; they have to be the same list", migrate.TypeNames, token.TypeNames)
 	}
 }
 
-// TestSpecCoversEveryOperator holds SPEC.md's operator table to the operators
-// the assertion engine implements.
+// TestSpecCoversEveryOperator holds SPEC.md's operator table to the operators a
+// YAML scenario could name, which pkg/shared/migrate is now the only thing that
+// knows about.
 //
 // The mapping is the table from the design document: the DSL replaces the
-// `operator:` name with a token or a predicate. Every operator the engine has,
-// including the text-only ones a terminal step used to name, has to be reachable
-// from SPEC.md -- `empty` by the pattern the spec says to write instead, since
-// the DSL has no `empty` operator.
+// `operator:` name with a token or a predicate. Every operator migration can
+// translate, including the text-only ones a terminal step used to name, has to
+// be reachable from SPEC.md -- `empty` by the pattern the spec says to write
+// instead, since the DSL has no `empty` operator. An operator with no row here
+// is one a migrated file would spell in a way the spec never defined.
 func TestSpecCoversEveryOperator(t *testing.T) {
 	spec := docText(t, specPath)
 
 	// Each entry is a YAML operator and what SPEC.md must contain to count as
 	// having specified it.
 	dsl := map[string]string{
-		assert.OpEquals:   "`==`",
-		assert.OpContains: "`contains`",
-		assert.OpMatches:  "`matches`",
-		assert.OpExists:   "`exists`",
-		assert.OpType:     "`is <type>`",
-		assert.OpGt:       "`>`",
-		assert.OpGte:      "`>=`",
-		assert.OpLt:       "`<`",
-		assert.OpLte:      "`<=`",
-		assert.OpEmpty:    `matches /^\s*$/`,
+		migrate.OpEquals:   "`==`",
+		migrate.OpContains: "`contains`",
+		migrate.OpMatches:  "`matches`",
+		migrate.OpExists:   "`exists`",
+		migrate.OpType:     "`is <type>`",
+		migrate.OpGt:       "`>`",
+		migrate.OpGte:      "`>=`",
+		migrate.OpLt:       "`<`",
+		migrate.OpLte:      "`<=`",
+		migrate.OpEmpty:    `matches /^\s*$/`,
 	}
 
-	for _, ops := range [][]string{assert.Operators, assert.TextOperators} {
+	for _, ops := range [][]string{migrate.Operators, migrate.TextOperators} {
 		for _, op := range ops {
 			want, known := dsl[op]
 			if !known {
-				t.Errorf("the code has an operator %q that SPEC.md's mapping does not know about -- add it to the spec and to this table", op)
+				t.Errorf("migrate has an operator %q that SPEC.md's mapping does not know about -- add it to the spec and to this table", op)
 				continue
 			}
 			if !strings.Contains(spec, want) {

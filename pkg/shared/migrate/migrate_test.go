@@ -6,12 +6,11 @@ import (
 
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/parser"
-	"artemis/pkg/shared/models"
 )
 
 // source is Source with the error folded into the test, because almost every
 // case here is about what came out and not whether anything did.
-func source(t *testing.T, config models.Config) string {
+func source(t *testing.T, config Config) string {
 	t.Helper()
 	src, err := Source(config, Comments{})
 	if err != nil {
@@ -37,12 +36,12 @@ func checks(t *testing.T, src string) []string {
 }
 
 // apiStepFor is the smallest api step worth migrating.
-func apiStepFor(name string) models.Step {
-	return models.Step{
+func apiStepFor(name string) Step {
+	return Step{
 		Name:     name,
 		Type:     apiStep,
-		Request:  models.Request{URL: "{{base}}/items", Method: "GET"},
-		Response: models.Response{StatusCode: 200},
+		Request:  Request{URL: "{{base}}/items", Method: "GET"},
+		Response: Response{StatusCode: 200},
 	}
 }
 
@@ -50,25 +49,25 @@ func apiStepFor(name string) models.Step {
 // body as an object literal, the assertions and the capture, in the layout the
 // canonical printer gives them.
 func TestSourceAPIScenario(t *testing.T) {
-	config := models.Config{
+	config := Config{
 		Name:      "item lifecycle",
 		Type:      "functional",
-		Variables: []models.Variable{{Name: "base", Value: "{{env.API_URL}}"}},
-		Steps: []models.Step{{
+		Variables: []Variable{{Name: "base", Value: "{{env.API_URL}}"}},
+		Steps: []Step{{
 			Name: "create item",
 			Type: apiStep,
-			Request: models.Request{
+			Request: Request{
 				URL:     "{{base}}/items",
 				Method:  "POST",
 				Headers: map[string]string{"Content-Type": "application/json", "Authorization": "Bearer {{token}}"},
 				Body:    `{"name": "widget"}`,
 			},
-			Response: models.Response{StatusCode: 201, Body: []models.BodyCheck{
+			Response: Response{StatusCode: 201, Body: []BodyCheck{
 				{Path: "$.id", Operator: "exists"},
 			}},
-			Capture: map[string]models.Capture{"itemId": {JSON: "$.id"}},
+			Capture: map[string]Capture{"itemId": {JSON: "$.id"}},
 			Timeout: "5s",
-			Retry:   models.Retry{Times: 3, Delay: "50ms"},
+			Retry:   Retry{Times: 3, Delay: "50ms"},
 		}},
 	}
 
@@ -97,23 +96,23 @@ func TestSourceAPIScenario(t *testing.T) {
 // An exec step, with both streams and a capture out of stdout. `run` is what
 // makes it a terminal step; there is no type key in the output at all.
 func TestSourceExecScenario(t *testing.T) {
-	config := models.Config{
+	config := Config{
 		Name: "api and terminal",
-		Steps: []models.Step{{
+		Steps: []Step{{
 			Name: "work out the path",
 			Type: execStep,
-			Exec: models.Exec{
+			Exec: Exec{
 				Command: "sh",
 				Args:    []string{"-c", "printf items"},
 				Cwd:     "/tmp",
 				Stdin:   "in",
 				Env:     map[string]string{"B": "2", "A": "1"},
 			},
-			Expect: models.Expect{
-				Stdout: []models.TextCheck{{Operator: "equals", Value: "items"}},
-				Stderr: []models.TextCheck{{Value: "nothing"}},
+			Expect: Expect{
+				Stdout: []TextCheck{{Operator: "equals", Value: "items"}},
+				Stderr: []TextCheck{{Value: "nothing"}},
 			},
-			Capture: map[string]models.Capture{
+			Capture: map[string]Capture{
 				"path":  {Regex: "items"},
 				"build": {JSON: "$.build"},
 			},
@@ -146,8 +145,8 @@ func TestSourceExecScenario(t *testing.T) {
 // whatever the scenario wrote. The migrated file reproduces the assertion the
 // run made, failure and all, rather than quietly dropping it.
 func TestSourceKeepsTheStatusAssertionAStepNeverWrote(t *testing.T) {
-	config := models.Config{Name: "n", Steps: []models.Step{{
-		Name: "ping", Type: apiStep, Request: models.Request{URL: "u", Method: "GET"},
+	config := Config{Name: "n", Steps: []Step{{
+		Name: "ping", Type: apiStep, Request: Request{URL: "u", Method: "GET"},
 	}}}
 	if got := source(t, config); !strings.Contains(got, "expect status == 0") {
 		t.Errorf("Source =\n%s\nwant it to hold `expect status == 0`", got)
@@ -156,9 +155,9 @@ func TestSourceKeepsTheStatusAssertionAStepNeverWrote(t *testing.T) {
 
 // An empty `method:` is a GET, because http.NewRequestWithContext sends one.
 func TestSourceAnEmptyMethodIsAGet(t *testing.T) {
-	config := models.Config{Name: "n", Steps: []models.Step{{
-		Name: "ping", Type: apiStep, Request: models.Request{URL: "u"},
-		Response: models.Response{StatusCode: 200},
+	config := Config{Name: "n", Steps: []Step{{
+		Name: "ping", Type: apiStep, Request: Request{URL: "u"},
+		Response: Response{StatusCode: 200},
 	}}}
 	if got := source(t, config); !strings.Contains(got, `get "u"`) {
 		t.Errorf("Source =\n%s\nwant it to hold `get \"u\"`", got)
@@ -178,10 +177,10 @@ func TestSourceBodies(t *testing.T) {
 		{`{"id": 12345678901234567890}`, `body = {"id": 12345678901234567890}`},
 	}
 	for _, c := range cases {
-		config := models.Config{Name: "n", Steps: []models.Step{{
+		config := Config{Name: "n", Steps: []Step{{
 			Name: "post it", Type: apiStep,
-			Request:  models.Request{URL: "u", Method: "POST", Body: c.body},
-			Response: models.Response{StatusCode: 200},
+			Request:  Request{URL: "u", Method: "POST", Body: c.body},
+			Response: Response{StatusCode: 200},
 		}}}
 		got := source(t, config)
 		if !strings.Contains(got, c.want) {
@@ -194,19 +193,19 @@ func TestSourceBodies(t *testing.T) {
 // duration the DSL accepts, so a bare `retry: 3` must not emit one.
 func TestSourceRetry(t *testing.T) {
 	cases := []struct {
-		retry models.Retry
+		retry Retry
 		want  string
 	}{
-		{models.Retry{}, ""},
-		{models.Retry{Times: 3}, "retry { times = 3 }"},
-		{models.Retry{Delay: "1s"}, `retry { delay = "1s" }`},
-		{models.Retry{Times: 3, Delay: "1s"}, `retry { times = 3, delay = "1s" }`},
+		{Retry{}, ""},
+		{Retry{Times: 3}, "retry { times = 3 }"},
+		{Retry{Delay: "1s"}, `retry { delay = "1s" }`},
+		{Retry{Times: 3, Delay: "1s"}, `retry { times = 3, delay = "1s" }`},
 	}
 	for _, c := range cases {
 		step := apiStepFor("ping")
 		step.Request.URL = "u"
 		step.Retry = c.retry
-		got := source(t, models.Config{Name: "n", Steps: []models.Step{step}})
+		got := source(t, Config{Name: "n", Steps: []Step{step}})
 		if c.want == "" {
 			if strings.Contains(got, "retry") {
 				t.Errorf("retry %#v migrated to\n%s\nwant no retry block", c.retry, got)
@@ -224,14 +223,14 @@ func TestSourceRetry(t *testing.T) {
 // hand-rolled emitter is most likely to get wrong.
 func TestSourceOutputPassesTheChecker(t *testing.T) {
 	first := apiStepFor("sign in")
-	first.Capture = map[string]models.Capture{"token": {JSON: "$.token"}}
+	first.Capture = map[string]Capture{"token": {JSON: "$.token"}}
 	second := apiStepFor("use it")
 	second.Request.URL = "{{base}}/items/{{token}}"
 
-	config := models.Config{
+	config := Config{
 		Name:      "scope",
-		Variables: []models.Variable{{Name: "base", Value: "%SERVER%"}},
-		Steps:     []models.Step{first, second},
+		Variables: []Variable{{Name: "base", Value: "%SERVER%"}},
+		Steps:     []Step{first, second},
 	}
 	if diags := checks(t, source(t, config)); len(diags) != 0 {
 		t.Errorf("migrated source has diagnostics: %v", diags)
@@ -241,28 +240,28 @@ func TestSourceOutputPassesTheChecker(t *testing.T) {
 func TestSourceRefusals(t *testing.T) {
 	cases := []struct {
 		name     string
-		step     models.Step
+		step     Step
 		mentions string
 	}{
 		{"a step type with no action block",
-			models.Step{Name: "n", Type: "browser"}, `step type "browser"`},
+			Step{Name: "n", Type: "browser"}, `step type "browser"`},
 		{"a method the DSL has no verb for",
-			models.Step{Name: "n", Type: apiStep, Request: models.Request{URL: "u", Method: "TRACE"}}, "TRACE"},
+			Step{Name: "n", Type: apiStep, Request: Request{URL: "u", Method: "TRACE"}}, "TRACE"},
 		{"an unclosed placeholder in a url",
-			models.Step{Name: "n", Type: apiStep, Request: models.Request{URL: "{{base", Method: "GET"}}, "unclosed"},
+			Step{Name: "n", Type: apiStep, Request: Request{URL: "{{base", Method: "GET"}}, "unclosed"},
 		{"`empty` on a stream",
-			models.Step{Name: "n", Type: execStep, Exec: models.Exec{Command: "sh"},
-				Expect: models.Expect{Stderr: []models.TextCheck{{Operator: "empty"}}}}, "empty"},
+			Step{Name: "n", Type: execStep, Exec: Exec{Command: "sh"},
+				Expect: Expect{Stderr: []TextCheck{{Operator: "empty"}}}}, "empty"},
 		{"a capture path that matches many",
-			models.Step{Name: "n", Type: apiStep, Request: models.Request{URL: "u", Method: "GET"},
-				Capture: map[string]models.Capture{"x": {JSON: "$..id"}}}, "recursive descent"},
+			Step{Name: "n", Type: apiStep, Request: Request{URL: "u", Method: "GET"},
+				Capture: map[string]Capture{"x": {JSON: "$..id"}}}, "recursive descent"},
 		{"a bare $ capture on a terminal step",
-			models.Step{Name: "n", Type: execStep, Exec: models.Exec{Command: "sh"},
-				Capture: map[string]models.Capture{"x": {JSON: "$"}}}, "unparsed text"},
+			Step{Name: "n", Type: execStep, Exec: Exec{Command: "sh"},
+				Capture: map[string]Capture{"x": {JSON: "$"}}}, "unparsed text"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := Source(models.Config{Name: "n", Steps: []models.Step{c.step}}, Comments{})
+			_, err := Source(Config{Name: "n", Steps: []Step{c.step}}, Comments{})
 			if err == nil {
 				t.Fatal("Source = nil error, want one")
 			}
@@ -283,8 +282,8 @@ func TestSourceRefusals(t *testing.T) {
 func TestSourceBareDollarOnAnAPIStep(t *testing.T) {
 	step := apiStepFor("ping")
 	step.Request.URL = "u"
-	step.Capture = map[string]models.Capture{"all": {JSON: "$"}}
-	if got := source(t, models.Config{Name: "n", Steps: []models.Step{step}}); !strings.Contains(got, "capture all = body") {
+	step.Capture = map[string]Capture{"all": {JSON: "$"}}
+	if got := source(t, Config{Name: "n", Steps: []Step{step}}); !strings.Contains(got, "capture all = body") {
 		t.Errorf("Source =\n%s\nwant it to hold `capture all = body`", got)
 	}
 }
@@ -338,7 +337,7 @@ func TestReadCommentsOnFilesWithNothingToRead(t *testing.T) {
 // Both blocks land where canonical layout puts a comment: above the scenario
 // and above the step.
 func TestSourceCarriesComments(t *testing.T) {
-	config := models.Config{Name: "n", Steps: []models.Step{apiStepFor("ping")}}
+	config := Config{Name: "n", Steps: []Step{apiStepFor("ping")}}
 	config.Steps[0].Request.URL = "u"
 	comments := Comments{File: "# what this file is for", Steps: []string{"# what this step does"}}
 
@@ -363,7 +362,7 @@ scenario "n" {
 // Text that was a comment in the YAML file cannot become source in the .art
 // one, whatever shape the comment field arrived in.
 func TestSourceCommentsAreAlwaysComments(t *testing.T) {
-	src, err := Source(models.Config{Name: "n"}, Comments{File: "no hash here"})
+	src, err := Source(Config{Name: "n"}, Comments{File: "no hash here"})
 	if err != nil {
 		t.Fatal(err)
 	}

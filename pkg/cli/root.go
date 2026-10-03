@@ -16,10 +16,16 @@ func Init() {
 
 	// Parse command: check a scenario file without running any of it.
 	RootCmd.AddCommand(parseCmd)
-	parseCmd.Flags().StringP("file", "f", "", "Path to the scenario file: a .art file, or a YAML one")
+	parseCmd.Flags().StringP("file", "f", "", "Path to the .art scenario file")
+	parseCmd.Flags().Bool(jsonFlag, false, "Write the diagnostics to stdout as one JSON document, for an editor or a UI, instead of a report on stderr")
 	if err := parseCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
+
+	// Grammar command: the language, for whatever is about to write some. No
+	// file and no arguments -- everything it prints is in the binary.
+	RootCmd.AddCommand(grammarCmd)
+	grammarCmd.Flags().Bool(jsonFlag, false, "Emit the enumerable choice points -- methods, browser actions, operators, type names, block fields -- instead of the EBNF")
 
 	// Ast command: the tree as JSON, and back. No required flag, because
 	// --from-json reads stdin and -f is the alternative to it rather than a
@@ -32,7 +38,7 @@ func Init() {
 	RootCmd.AddCommand(fmtCmd)
 	fmtCmd.Flags().BoolP(writeFlag, "w", false, "Rewrite the file in place instead of printing to stdout")
 
-	// Run command: the way to run scenarios -- a file or a folder.
+	// Run command: the way to run scenarios -- a .art file or a folder of them.
 	RootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	runCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
@@ -43,7 +49,7 @@ func Init() {
 
 	// Deprecated: superseded by run, kept so the old invocation keeps working.
 	RootCmd.AddCommand(testCmd)
-	testCmd.Flags().StringP("file", "f", "", "Path to the scenario file: a .art file, or a YAML one")
+	testCmd.Flags().StringP("file", "f", "", "Path to the .art scenario file")
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
@@ -51,7 +57,7 @@ func Init() {
 	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
 
 	// Migrate command: YAML in, .art out, once. The one remaining YAML reader
-	// once ART-40 takes the format off the run path.
+	// in the binary, now that ART-40 has taken the format off the run path.
 	RootCmd.AddCommand(migrateCmd)
 	migrateCmd.Flags().StringP("file", "f", "", "Path to the YAML scenario to convert")
 	if err := migrateCmd.MarkFlagRequired("file"); err != nil {
@@ -72,9 +78,10 @@ func Init() {
 var RootCmd = &cobra.Command{
 	Use:   "artemis",
 	Short: "Artemis is an API testing tool",
-	Long: `Artemis is a comprehensive CLI tool for API testing. 
-    It provides functionalities to parse and validate YAML files containing API test cases.`,
+	Long: `Artemis is a comprehensive CLI tool for API testing.
+    Scenarios are written in the Artemis DSL, in .art files: artemis parses,
+    checks and runs them, and converts an old YAML scenario with migrate.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one, and 'artemis grammar' for the language itself.")
 	},
 }

@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/token"
-	"artemis/pkg/shared/assert"
-	"artemis/pkg/shared/models"
 )
 
 // The operator mapping, which is this issue's substance.
@@ -16,7 +14,7 @@ import (
 // design document's table read on its own, because the table is a summary and
 // the runtime is the specification. Two places it matters:
 //
-//   - `operator: exists` returns at assert.Check's checkExists call *before*
+//   - `operator: exists` returns at Check's checkExists call *before*
 //     the `type:` key is ever looked at, so a check carrying both asserts
 //     existence only. Emitting an `is` beside it would add an assertion the
 //     YAML run never made.
@@ -30,7 +28,7 @@ import (
 
 // bodyExpects is the expect lines one `body:` check becomes, in the order they
 // should be written.
-func bodyExpects(check models.BodyCheck) ([]string, error) {
+func bodyExpects(check BodyCheck) ([]string, error) {
 	subject, err := pathExpr("body", check.Path)
 	if err != nil {
 		return nil, err
@@ -38,13 +36,13 @@ func bodyExpects(check models.BodyCheck) ([]string, error) {
 
 	op := check.Operator
 	if op == "" {
-		op = assert.OpEquals
+		op = OpEquals
 	}
 
 	switch op {
-	case assert.OpExists:
+	case OpExists:
 		return []string{existsExpect(subject, check.Value)}, nil
-	case assert.OpType:
+	case OpType:
 		name, ok := check.Value.(string)
 		if !ok {
 			return nil, fmt.Errorf("operator %s needs a type name in value:, found %v", op, check.Value)
@@ -86,9 +84,15 @@ func existsExpect(subject string, value any) string {
 	return "expect not " + subject + " exists"
 }
 
-// wantsPresent is assert's truthy, over the values a YAML scalar can be. It is
-// reimplemented rather than called because assert does not export it; the two
-// are pinned together by a table test.
+// wantsPresent reads an `operator: exists` check's value as the question it
+// was asking: is the path there, or is it absent?
+//
+// The rule is the one pkg/shared/assert applied before ART-40 deleted it, kept
+// verbatim so a migrated file asserts what the YAML one did. It is a strange
+// rule and it is deliberately not improved here: a missing value means
+// presence, a bool means itself, a string is read as a bool and anything that
+// will not parse as one -- `value: yes`, `value: ""` -- means presence, and a
+// number or a collection means presence. The table test below states it.
 func wantsPresent(v any) bool {
 	switch t := v.(type) {
 	case nil:
@@ -115,7 +119,7 @@ func isExpect(subject, name string) (string, error) {
 
 // comparisonExpect is the one expect line for an operator that compares.
 func comparisonExpect(subject, op string, value any) (string, error) {
-	if op == assert.OpMatches {
+	if op == OpMatches {
 		pattern, ok := value.(string)
 		if !ok {
 			return "", fmt.Errorf("operator %s needs a regular expression in value:, found %v", op, value)
@@ -129,7 +133,7 @@ func comparisonExpect(subject, op string, value any) (string, error) {
 
 	symbol, ok := comparisons[op]
 	if !ok {
-		return "", fmt.Errorf("unknown operator %q: expected one of %s", op, strings.Join(assert.Operators, ", "))
+		return "", fmt.Errorf("unknown operator %q: expected one of %s", op, strings.Join(Operators, ", "))
 	}
 	lit, err := plain(value)
 	if err != nil {
@@ -142,12 +146,12 @@ func comparisonExpect(subject, op string, value any) (string, error) {
 // right-hand side is an ordinary value. `exists`, `type` and `matches` are not
 // here because each needs its own shape.
 var comparisons = map[string]string{
-	assert.OpEquals:   "==",
-	assert.OpContains: "contains",
-	assert.OpGt:       ">",
-	assert.OpGte:      ">=",
-	assert.OpLt:       "<",
-	assert.OpLte:      "<=",
+	OpEquals:   "==",
+	OpContains: "contains",
+	OpGt:       ">",
+	OpGte:      ">=",
+	OpLt:       "<",
+	OpLte:      "<=",
 }
 
 // textExpect is the expect line one `expect.stdout` or `expect.stderr` check
@@ -155,32 +159,32 @@ var comparisons = map[string]string{
 // also the name of the YAML key the check was written under.
 //
 // A text check's operator defaults to `contains`, not `equals`, which is
-// assert.Text's default and the one a command's trailing newline makes right.
+// Text's default and the one a command's trailing newline makes right.
 // `empty` has no DSL spelling: `== ""` is a different assertion, because empty
 // is true of a stream holding only whitespace, so it is refused by name rather
 // than approximated.
-func textExpect(stream string, check models.TextCheck) (string, error) {
+func textExpect(stream string, check TextCheck) (string, error) {
 	op := check.Operator
 	if op == "" {
-		op = assert.OpContains
+		op = OpContains
 	}
 
 	switch op {
-	case assert.OpEquals:
+	case OpEquals:
 		return "expect " + stream + " == " + quote(check.Value), nil
-	case assert.OpContains:
+	case OpContains:
 		return "expect " + stream + " contains " + quote(check.Value), nil
-	case assert.OpMatches:
+	case OpMatches:
 		lit, err := regexLiteral(check.Value)
 		if err != nil {
 			return "", err
 		}
 		return "expect " + stream + " matches " + lit, nil
-	case assert.OpEmpty:
+	case OpEmpty:
 		return "", fmt.Errorf("operator %s on %s has no DSL spelling: it is true of a stream of whitespace, "+
 			"which `%s == \"\"` is not; rewrite the check", op, stream, stream)
 	default:
 		return "", fmt.Errorf("unknown operator %q on %s: expected one of %s",
-			op, stream, strings.Join(assert.TextOperators, ", "))
+			op, stream, strings.Join(TextOperators, ", "))
 	}
 }

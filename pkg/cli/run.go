@@ -23,9 +23,8 @@ var runCmd = &cobra.Command{
 	Short: "Run the scenarios in a file or a folder",
 	Long: `Run the scenarios artemis finds at <path>.
 
-A file is run on its own -- a .art file, or a YAML one. A folder is walked
-recursively for *.art, *.yaml and *.yml files, which are run in path order as
-one run: one summary, one exit code, whichever formats it holds.
+A file is run on its own. A folder is walked recursively for *.art files,
+which are run in path order as one run: one summary, one exit code.
 
 A .art file is lexed, parsed, name-checked and lowered before anything is sent.
 Every problem artemis finds is reported with the source line echoed, and a file
@@ -117,13 +116,15 @@ func reportRun(cmd *cobra.Command, path string) error {
 }
 
 // scenarioExts are the extensions a folder walk picks up. A file named outright
-// is run whatever it is called -- the user said which file they meant.
+// is opened whatever it is called -- the user said which file they meant, and
+// runFiles is what tells them it is not a scenario artemis can run.
 //
-// `.art` is here alongside the two YAML spellings rather than instead of them,
-// so a suite can be migrated a file at a time: a folder holding both runs both,
-// in one path order, as one run with one summary and one exit code. The two
-// formats leave together, when ART-40 takes YAML off the run path.
-var scenarioExts = []string{".yaml", ".yml", ".art"}
+// It was `.yaml`, `.yml`, `.art` while a suite was being migrated a file at a
+// time. ART-40 took YAML off the run path, so a folder that still holds
+// unconverted YAML runs the converted half and says nothing about the rest --
+// which is the right silence: the YAML files were never going to be found by a
+// walk again, and `artemis migrate` is how they come back.
+var scenarioExts = []string{".art"}
 
 // discover turns the path a user named into the list of scenario files to run.
 //
@@ -187,33 +188,47 @@ func isScenarioFile(name string) bool {
 //
 // A file artemis cannot load is recorded as an errored scenario and the rest
 // still run. Stopping at the first bad file would hide every other result of
-// the suite behind one typo. That holds for either format: a .art file with a
-// diagnostic is a file artemis cannot load.
+// the suite behind one typo. A .art file with a diagnostic is such a file, and
+// so is a file that is not .art at all.
 //
-// The dispatch is on the extension, which is the one place the run path knows
-// there are two formats. It goes with the YAML reader (ART-40).
+// Only a path the user named outright can reach that second branch, because the
+// folder walk picks up nothing else. It is an errored scenario rather than a
+// skip: someone who types `artemis run login.yaml` and gets a passing run that
+// ran nothing has been told the opposite of the truth.
 func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagOut io.Writer) *result.RunResult {
 	run := result.NewRun()
 	for _, file := range files {
-		if isArtFile(file) {
-			runArtFile(context.Background(), reg, file, run, rep, diagOut)
+		if !isArtFile(file) {
+			failScenario(run, rep, file, notAScenarioError(file))
 			continue
 		}
-		config, err := loadScenario(file)
-		if err != nil {
-			// No name to give it: the file would not parse, so all anyone
-			// knows about this scenario is where it lives.
-			scenario := run.NewScenario("", file)
-			rep.Scenario(scenario)
-			scenario.Fail(0, err)
-			rep.ScenarioFailed(scenario)
-			logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
-			continue
-		}
-		executeScenario(context.Background(), reg, config, file, run, rep)
+		runArtFile(context.Background(), reg, file, run, rep, diagOut)
 	}
 	run.Finish()
 	return run
+}
+
+// notAScenarioError is what a path artemis will not run says. It names the one
+// way out, with the command spelled for this file, because the reader's next
+// move is to run it.
+func notAScenarioError(file string) error {
+	if strings.EqualFold(filepath.Ext(file), ".yaml") || strings.EqualFold(filepath.Ext(file), ".yml") {
+		out := strings.TrimSuffix(file, filepath.Ext(file)) + artExt
+		return fmt.Errorf("%s: artemis no longer runs YAML scenarios -- convert it with \"artemis migrate -f %s -o %s\"", file, file, out)
+	}
+	return fmt.Errorf("%s: not a scenario file (artemis runs %s files)", file, artExt)
+}
+
+// failScenario records a file artemis could not load as one errored scenario.
+//
+// No name to give it: the file did not load, so all anyone knows about this
+// scenario is where it lives.
+func failScenario(run *result.RunResult, rep *report.Console, file string, err error) {
+	scenario := run.NewScenario("", file)
+	rep.Scenario(scenario)
+	scenario.Fail(0, err)
+	rep.ScenarioFailed(scenario)
+	logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
 }
 
 // runFailedError states in one line what failed. The readable breakdown is the

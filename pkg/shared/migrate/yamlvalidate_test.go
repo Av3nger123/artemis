@@ -1,11 +1,11 @@
-package models
+package migrate
 
 import (
 	"strings"
 	"testing"
 )
 
-func apiStep(name string) Step {
+func namedAPIStep(name string) Step {
 	return Step{Name: name, Type: "api"}
 }
 
@@ -13,7 +13,7 @@ func apiStep(name string) Step {
 var known = []string{"api"}
 
 func TestValidateAcceptsKnownStepTypes(t *testing.T) {
-	config := Config{Name: "orders", Steps: []Step{apiStep("login"), apiStep("fetch")}}
+	config := Config{Name: "orders", Steps: []Step{namedAPIStep("login"), namedAPIStep("fetch")}}
 
 	if err := config.Validate(known); err != nil {
 		t.Fatalf("Validate() = %v, want nil", err)
@@ -30,7 +30,7 @@ func TestValidateAcceptsAScenarioWithNoSteps(t *testing.T) {
 }
 
 func TestValidateRejectsUnknownStepType(t *testing.T) {
-	config := Config{Steps: []Step{apiStep("login"), {Name: "query", Type: "db"}}}
+	config := Config{Steps: []Step{namedAPIStep("login"), {Name: "query", Type: "db"}}}
 
 	err := config.Validate(known)
 	if err == nil {
@@ -66,7 +66,7 @@ func TestValidateRejectsAMisCasedStepType(t *testing.T) {
 func TestValidateReportsEveryBadStep(t *testing.T) {
 	config := Config{Steps: []Step{
 		{Name: "a", Type: "db"},
-		apiStep("b"),
+		namedAPIStep("b"),
 		{Name: "c", Type: "exec"},
 		{Name: "d"},
 	}}
@@ -111,7 +111,7 @@ func TestValidateMatchesTypesExactly(t *testing.T) {
 // still not pass validation against it -- and the message must not read
 // "known types: ".
 func TestValidateWithNothingRegisteredSaysSo(t *testing.T) {
-	err := Config{Steps: []Step{apiStep("login")}}.Validate(nil)
+	err := Config{Steps: []Step{namedAPIStep("login")}}.Validate(nil)
 	if err == nil {
 		t.Fatal("Validate(nil) = nil, want an error -- nothing can be executed")
 	}

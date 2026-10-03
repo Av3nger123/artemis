@@ -37,24 +37,32 @@ package migrate
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/print"
 	"artemis/pkg/dsl/token"
-	"artemis/pkg/shared/models"
 )
 
-// The step types migration knows how to translate, spelled as pkg/steps spells
-// them. They are written out rather than imported from httpstep and execstep so
-// that the YAML reader does not grow a dependency on the executors; the corpus
-// test migrates every registered type, which is what keeps the two in step.
+// The step types migration knows how to translate, spelled as a YAML scenario
+// spells them.
+//
+// They were validated against the registry's own list until ART-40: the YAML
+// reader was the run path's loader, so a `type:` nothing could execute had to
+// be refused before any request went out. It is migration's input now, and
+// what matters about a `type:` is whether this package can translate it --
+// which these two constants are the whole answer to. The registry is free to
+// rename its keys (`exec` became `terminal` in the same issue) without making
+// a file that loaded yesterday unmigratable today.
 const (
 	apiStep  = "api"
 	execStep = "exec"
 )
+
+// StepTypes is what ParseYAMLFile validates a scenario's `type:` against: the
+// types this package can translate, in the spelling a YAML file writes.
+var StepTypes = []string{apiStep, execStep}
 
 // Source is config as .art source.
 //
@@ -64,7 +72,7 @@ const (
 // An error means the scenario holds something with no DSL spelling, and names
 // the step it was in. A file that errors is not partially written: the caller
 // gets no source at all.
-func Source(config models.Config, comments Comments) (string, error) {
+func Source(config Config, comments Comments) (string, error) {
 	w := &writer{}
 	w.comment(comments.File)
 	w.line("scenario " + quote(config.Name) + " {")
@@ -114,7 +122,7 @@ func canonical(src string) (string, error) {
 // The order is the order a .art file reads in -- what it does, how long it may
 // take, what is expected of it, what is kept from it -- and is the order ART-38
 // wrote the hand-written fixtures in.
-func step(w *writer, s models.Step, i int, comment string) error {
+func step(w *writer, s Step, i int, comment string) error {
 	where := fmt.Sprintf("step %d %q", i+1, s.Name)
 
 	w.comment(comment)
@@ -143,7 +151,7 @@ func step(w *writer, s models.Step, i int, comment string) error {
 // action writes the step's action block, which is what gives the step its type:
 // an HTTP verb for an `api` step, `run` for an `exec` one. There is no type key
 // in the DSL, so `type:` becomes this line and disappears.
-func action(w *writer, s models.Step) error {
+func action(w *writer, s Step) error {
 	switch s.Type {
 	case apiStep:
 		return request(w, s.Request)
@@ -159,7 +167,7 @@ func action(w *writer, s models.Step) error {
 // An empty `method:` becomes `get`, because that is what net/http does with
 // one: http.NewRequestWithContext("") sends a GET, so a scenario that left the
 // method off was making a GET and the migrated file has to make the same one.
-func request(w *writer, r models.Request) error {
+func request(w *writer, r Request) error {
 	verb := strings.ToLower(strings.TrimSpace(r.Method))
 	if verb == "" {
 		verb = "get"
@@ -193,7 +201,7 @@ func request(w *writer, r models.Request) error {
 }
 
 // run writes `run "sh" { args = [...] }`.
-func run(w *writer, e models.Exec) error {
+func run(w *writer, e Exec) error {
 	command, err := templated(e.Command)
 	if err != nil {
 		return fmt.Errorf("command: %w", err)
@@ -264,7 +272,7 @@ func requestBody(body string) (string, error) {
 // the step asked for neither. Only the fields the scenario wrote are emitted:
 // `times` alone is `retry { times = 3 }`, because `delay = ""` is not a
 // duration the DSL accepts.
-func retry(w *writer, r models.Retry) {
+func retry(w *writer, r Retry) {
 	var fields []string
 	if r.Times != 0 {
 		fields = append(fields, "times = "+strconv.Itoa(r.Times))
@@ -286,7 +294,7 @@ func retry(w *writer, r models.Retry) {
 // the scenario wrote a `status_code:` -- so a step with no `response:` block
 // migrates to `expect status == 0`. That assertion always fails, which is what
 // the YAML run did; migration reproduces behaviour and does not fix scenarios.
-func expects(w *writer, s models.Step) error {
+func expects(w *writer, s Step) error {
 	switch s.Type {
 	case apiStep:
 		w.line("expect status == " + strconv.Itoa(s.Response.StatusCode))
@@ -303,7 +311,7 @@ func expects(w *writer, s models.Step) error {
 		w.line("expect exit_code == " + strconv.Itoa(s.Expect.ExitCode))
 		for _, stream := range []struct {
 			name   string
-			checks []models.TextCheck
+			checks []TextCheck
 		}{{"stdout", s.Expect.Stdout}, {"stderr", s.Expect.Stderr}} {
 			for i, check := range stream.checks {
 				line, err := textExpect(stream.name, check)
@@ -318,7 +326,7 @@ func expects(w *writer, s models.Step) error {
 }
 
 // captures writes one `capture` per entry, in sorted key order -- the order
-// models.Step.CaptureKeys reads them in, which is what keeps two migrations of
+// Step.CaptureKeys reads them in, which is what keeps two migrations of
 // the same file identical.
 //
 // The root a capture reads from is the step type's: an api step's JSON comes
@@ -326,7 +334,7 @@ func expects(w *writer, s models.Step) error {
 // `stdout`. A bare `$` is refused on an exec step: `$` is the whole parsed
 // document, and `stdout` is the unparsed text, so there is no expression that
 // means the same thing.
-func captures(w *writer, s models.Step) error {
+func captures(w *writer, s Step) error {
 	jsonRoot, textRoot := "body", "raw"
 	if s.Type == execStep {
 		jsonRoot, textRoot = "stdout", "stdout"
@@ -355,15 +363,4 @@ func captures(w *writer, s models.Step) error {
 		w.line("capture " + name + " = " + value)
 	}
 	return nil
-}
-
-// sortedKeys is the keys of m, sorted, so a mapping that has lost its order in
-// the decoder is emitted the same way every time.
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

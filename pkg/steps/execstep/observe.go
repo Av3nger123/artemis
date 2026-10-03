@@ -28,7 +28,7 @@ const (
 	RootStderr = "stderr"
 )
 
-var _ executor.Observer = Executor{}
+var _ executor.Executor = Executor{}
 
 // Observe runs the command once and reports what it did, leaving every
 // assertion to the caller.

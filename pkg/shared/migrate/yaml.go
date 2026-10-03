@@ -1,4 +1,4 @@
-package models
+package migrate
 
 import (
 	"fmt"
@@ -8,6 +8,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// This file is the YAML scenario model: the shape of a file `artemis migrate`
+// reads. It used to be pkg/shared/models, back when the same struct was both
+// the file format and the runtime step; ART-40 took YAML off the run path, so
+// the format now lives with its one remaining reader and models keeps only what
+// pkg/dsl/lower builds.
+//
+// Nothing here decides anything about how artemis runs. It decodes a file and
+// says what is wrong with it, and Source translates the result into `.art`.
+// Keeping the `yaml:` tags, the hand-written UnmarshalYAML methods and their
+// wording exactly as they were is the point: a file that loaded yesterday has
+// to migrate today, and a file that was rejected has to be rejected with the
+// same message.
+
 type Variable struct {
 	Name  string `yaml:"name"`
 	Value string `yaml:"value"`
@@ -16,10 +29,9 @@ type Variable struct {
 // BodyCheck is one assertion against a response body.
 //
 // Value keeps whatever type the YAML scalar had -- `value: 200` is an int,
-// `value: "200"` a string, `value: true` a bool -- because the assertion
-// engine compares against values that came out of encoding/json, where every
-// number is a float64. Operator names the comparison and defaults to "equals";
-// Type, when set, names the JSON type the value at Path must have.
+// `value: "200"` a string, `value: true` a bool. Operator names the comparison
+// and defaults to "equals"; Type, when set, names the JSON type the value at
+// Path must have.
 type BodyCheck struct {
 	Path     string `yaml:"path"`
 	Operator string `yaml:"operator,omitempty"`
@@ -28,9 +40,9 @@ type BodyCheck struct {
 
 	// Line is the 1-based line of the scenario file this check was written
 	// on -- the `path:` line, which is the one a reader goes and edits. It is
-	// stamped on after decoding by pkg/shared's annotateLines and is zero for
-	// a check that did not come from a file. `yaml:"-"` so a scenario cannot
-	// set it and the YAML generator does not emit it.
+	// stamped on after decoding by annotateLines and is zero for a check that
+	// did not come from a file. `yaml:"-"` so a scenario cannot set it and the
+	// YAML generator does not emit it.
 	Line int `yaml:"-"`
 }
 
@@ -51,6 +63,59 @@ type Response struct {
 	StatusCodeLine int `yaml:"-"`
 }
 
+// Exec is what an `exec` step runs: the `exec:` block, the counterpart of
+// `request:` on an `api` step.
+type Exec struct {
+	Command string            `yaml:"command"`
+	Args    []string          `yaml:"args,omitempty"`
+	Cwd     string            `yaml:"cwd,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`
+	Stdin   string            `yaml:"stdin,omitempty"`
+}
+
+// EnvKeys is the names in Env, sorted, so anything derived from the map comes
+// out the same on every run.
+func (e Exec) EnvKeys() []string {
+	return sortedKeys(e.Env)
+}
+
+// Expect is what an `exec` step expects of the run: the `expect:` block, the
+// counterpart of `response:` on an `api` step.
+//
+// ExitCode is asserted on always, and its zero value is the assertion a
+// scenario almost always wants -- a step that says nothing expects the command
+// to succeed. There is no way to say "any exit code", which is why Source
+// always emits an `expect exit_code == N`.
+type Expect struct {
+	ExitCode int         `yaml:"exit_code,omitempty"`
+	Stdout   []TextCheck `yaml:"stdout,omitempty"`
+	Stderr   []TextCheck `yaml:"stderr,omitempty"`
+
+	// ExitCodeLine is the line the `exit_code:` key sits on. Zero when the step
+	// did not write one. See BodyCheck.Line.
+	ExitCodeLine int `yaml:"-"`
+}
+
+// TextCheck is one assertion against a stream of plain text.
+//
+// It is the counterpart of BodyCheck for output that is not addressable by a
+// JSON path. There is no Path: the whole stream is the subject, and which
+// stream is said by where the check was written.
+//
+// Operator defaults to "contains", not "equals": nearly every command ends its
+// output with a newline, so an exact match is the check that is right in theory
+// and wrong in practice. Value is always a string -- there is nothing to infer
+// a type from, and a YAML scalar like `value: 200` is matched as the text
+// "200".
+type TextCheck struct {
+	Operator string `yaml:"operator,omitempty"`
+	Value    string `yaml:"value,omitempty"`
+
+	// Line is the line of the scenario file this check was written on. See
+	// BodyCheck.Line.
+	Line int `yaml:"-"`
+}
+
 type Step struct {
 	Name     string   `yaml:"name"`
 	Type     string   `yaml:"type"`
@@ -63,66 +128,22 @@ type Step struct {
 	Exec   Exec   `yaml:"exec,omitempty"`
 	Expect Expect `yaml:"expect,omitempty"`
 	// Capture is what the step pulls out of whatever it produced, keyed by
-	// the name the steps after it reference the value by. It replaces the old
-	// `scripts:` list, which only the api step ever read.
+	// the name the steps after it reference the value by.
 	Capture map[string]Capture `yaml:"capture,omitempty"`
 	Retry   Retry              `yaml:"retry,omitempty"`
 	// Timeout is how long one attempt of this step may take, as a Go duration
-	// string ("5s", "1m30s"). It is per attempt, not per step: a step with
-	// `retry: {times: 3}` and `timeout: "5s"` may take fifteen seconds. Absent,
-	// a default applies -- see AttemptTimeout -- because no deadline at all is
-	// how a run hangs until someone kills it.
+	// string ("5s", "1m30s").
 	Timeout string `yaml:"timeout,omitempty"`
 
-	// Line is the line the step's first key sits on, which is where a step that
-	// could not run at all points. See BodyCheck.Line.
+	// Line is the line the step's first key sits on. See BodyCheck.Line.
 	Line int `yaml:"-"`
-}
-
-// AttemptTimeout is how long one attempt of the step may take, falling back to
-// def when the step does not say. A duration that will not parse, or one that is
-// negative, is an error: it is the scenario's mistake and silently running
-// without a deadline is the one outcome worth refusing.
-//
-// Zero -- `timeout: "0s"` -- is also def rather than "no deadline". There is no
-// spelling of "wait forever", by design.
-func (s Step) AttemptTimeout(def time.Duration) (time.Duration, error) {
-	if s.Timeout == "" {
-		return def, nil
-	}
-	d, err := time.ParseDuration(s.Timeout)
-	if err != nil {
-		return 0, fmt.Errorf("timeout %q is not a duration (want something like \"500ms\" or \"5s\")", s.Timeout)
-	}
-	if d < 0 {
-		return 0, fmt.Errorf("timeout %q is negative", s.Timeout)
-	}
-	if d == 0 {
-		return def, nil
-	}
-	return d, nil
-}
-
-// CheckTimeout reports whether Timeout is a value an executor can use.
-//
-// It is what the runner asks before the first attempt, so a `timeout: "soon"`
-// costs no requests to discover. The runner has no business naming a default --
-// that belongs to the step type -- so the one passed here is inert: only the
-// error is read.
-func (s Step) CheckTimeout() error {
-	_, err := s.AttemptTimeout(time.Second)
-	return err
 }
 
 // Retry is how many times a step may be attempted and how long to wait between
 // attempts.
 //
 // Times is the total number of attempts, not the number of retries after the
-// first: `times: 3` sends at most three requests. An absent, zero or negative
-// Times means one attempt -- a step is never attempted zero times. Delay is a
-// Go duration string ("500ms", "2s", "1m30s"); absent, there is no sleep at
-// all, and whatever its value nothing is slept before the first attempt or
-// after the last.
+// first. Delay is a Go duration string.
 type Retry struct {
 	Times int    `yaml:"times,omitempty"`
 	Delay string `yaml:"delay,omitempty"`
@@ -154,8 +175,8 @@ func (r *Retry) UnmarshalYAML(node *yaml.Node) error {
 			}
 		}
 		// The alias avoids recursing back into this method.
-		type retry Retry
-		var full retry
+		type retryShape Retry
+		var full retryShape
 		if err := node.Decode(&full); err != nil {
 			return retryShapeError(node, err)
 		}
@@ -187,6 +208,11 @@ func (r Retry) Attempts() int {
 
 // Wait is how long to sleep between two attempts. An empty Delay is no wait; a
 // delay that will not parse, or one that is negative, is an error.
+//
+// Nothing in migration sleeps. It is kept because it is the one place left
+// that knows what a YAML `delay:` may say, and yamlretry_test.go pins it: a
+// delay the old runner accepted has to be one the emitted `.art` still
+// accepts.
 func (r Retry) Wait() (time.Duration, error) {
 	if r.Delay == "" {
 		return 0, nil
@@ -202,8 +228,9 @@ func (r Retry) Wait() (time.Duration, error) {
 }
 
 // sortedKeys is the keys of m, sorted. A YAML mapping has no order once it is
-// decoded, so sorting is what keeps anything derived from one -- the assertions
-// a step prints, the environment a command is given -- the same on every run.
+// decoded, so sorting is what keeps anything derived from one -- the headers a
+// migrated request writes, the order captures are emitted in -- the same on
+// every run.
 func sortedKeys[V any](m map[string]V) []string {
 	if len(m) == 0 {
 		return nil

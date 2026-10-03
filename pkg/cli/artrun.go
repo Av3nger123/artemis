@@ -17,26 +17,23 @@ import (
 	"artemis/pkg/shared/models"
 )
 
-// This file is the .art half of the run path, and it is written to be read
-// beside run.go's runFiles/executeScenario/runStep: the same order of
-// operations, the same names, the same rules, so a difference between the two
-// front ends is visible as a difference between the two files.
+// This file is the run path: compile a .art file, then run each scenario in
+// it. It sat beside a second, YAML runner in run.go until ART-40, written to
+// be read against it line for line; that one is gone, and what it did
+// differently is the design's and worth keeping on record.
 //
-// Two things genuinely differ, and both are the design's.
+// The assertions come from the step, not from the executor. A YAML step
+// carried its checks as data, so httpstep was the only thing that could
+// evaluate them. A .art step carries them as expressions, so the executor is
+// asked only what it observed -- executor.Observe -- and the step asserts
+// against it. Which means the status code stopped being special: the YAML path
+// suppressed body checks when the status did not match, and here `expect
+// status == 200` is one `expect` among its peers and every one of them is
+// evaluated.
 //
-// The assertions come from the step, not from the executor. A YAML step carries
-// its checks as data, so httpstep is the only thing that can evaluate them. A
-// .art step carries them as expressions, so the executor is asked only what it
-// observed -- executor.Observe -- and the step asserts against it. Which means
-// the status code stops being special: the YAML path suppresses body checks when
-// the status did not match, and here `expect status == 200` is one `expect`
-// among its peers and every one of them is evaluated.
-//
-// A file that does not compile is one errored scenario. runFiles already
-// contracts that "a file artemis cannot load is recorded as an errored scenario
-// and the rest still run", and a file with diagnostics is such a file, so a
-// folder holding a broken .art scenario behaves exactly as one holding a broken
-// .yaml scenario.
+// A file that does not compile is one errored scenario. runFiles contracts
+// that "a file artemis cannot load is recorded as an errored scenario and the
+// rest still run", and a file with diagnostics is such a file.
 
 // runArtFile compiles path and runs every scenario in it, appending to run.
 //
@@ -129,7 +126,8 @@ func firstError(diags []diag.Diagnostic) error {
 }
 
 // executeArtScenario runs every step of one lowered scenario and appends the
-// outcome to run. It is executeScenario for a .art scenario.
+// outcome to run, so a run can hold a scenario per file -- and a file can hold
+// more than one.
 func executeArtScenario(ctx context.Context, reg *executor.Registry, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(sc.Name, file)
 	rep.Scenario(scenario)
@@ -139,9 +137,9 @@ func executeArtScenario(ctx context.Context, reg *executor.Registry, sc *lower.S
 	// written over the top as the run goes on. Bind evaluates them in source
 	// order, so `var b = a` sees `a` only when `a` is above it.
 	//
-	// There is no SubstituteEnvVars here and there does not need to be: the
-	// process environment is reached through `env("NAME")`, which is an
-	// expression the evaluator resolves like any other.
+	// Nothing substitutes {{env.NAME}} here and nothing needs to: the process
+	// environment is reached through `env("NAME")`, which is an expression the
+	// evaluator resolves like any other.
 	scope := executor.NewScope()
 	if err := sc.Bind(scope); err != nil {
 		// A scenario whose variables do not resolve has nothing worth running,
@@ -170,9 +168,8 @@ func executeArtScenario(ctx context.Context, reg *executor.Registry, sc *lower.S
 	logger.Logger.Info("Testing ended")
 }
 
-// runArtStep attempts st until it passes or its attempts run out, and records on
-// stepResult what the attempt it stopped on produced. It is runStep for a
-// lowered step.
+// runArtStep attempts st until it passes or its attempts run out, and records
+// on stepResult what the attempt it stopped on produced.
 //
 // A later attempt replaces an earlier one whole, so a recorded step is never a
 // mix of two tries. An attempt is one worth stopping on when it ran at all and

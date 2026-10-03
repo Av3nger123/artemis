@@ -6,6 +6,7 @@ import (
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/parser"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,36 +47,82 @@ func frontEnd(file, src string) (*ast.File, *check.Info, *diag.Bag) {
 	return tree, info, bag
 }
 
-// loadArt reads path, runs the front end over it, and renders every diagnostic
-// it produced to the command's stderr.
+// artFile is one file after the front end has run over it: the source, the
+// tree, the checker's Info and every diagnostic, in file order.
+//
+// The two renderings -- diag.Terminal for a person, diag.JSON for a client --
+// are the only thing `artemis parse` and `artemis parse --json` do
+// differently, so they share everything up to this struct and differ after it.
+// A UI and a terminal reading different diagnostics about the same file would
+// be the worst possible failure of this contract.
+type artFile struct {
+	path  string
+	src   string
+	tree  *ast.File
+	info  *check.Info
+	diags []diag.Diagnostic
+	fatal bool // the bag holds an error, so the file does not compile
+}
+
+// readArt reads path and runs the front end over it, rendering nothing.
+//
+// A read failure is a plain error with no artFile: a file that is not there
+// has no contents to be diagnosed about.
+func readArt(path string) (*artFile, error) {
+	src, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named
+	if err != nil {
+		return nil, err
+	}
+	tree, info, bag := frontEnd(path, string(src))
+	return &artFile{
+		path:  path,
+		src:   string(src),
+		tree:  tree,
+		info:  info,
+		diags: bag.All(),
+		fatal: bag.HasErrors(),
+	}, nil
+}
+
+// err is the one-line failure for a file that does not compile, or nil.
+func (f *artFile) err() error {
+	if !f.fatal {
+		return nil
+	}
+	return errorsIn(f.path, f.diags)
+}
+
+// render writes the diagnostics the way a person reads them.
+//
+// stderr: stdout carries documents only -- fmt's output, parse's ok line,
+// `artemis ast`'s tree and `artemis parse --json`'s envelope -- so `artemis
+// fmt x.art > out.art` is a formatted file and never a file with an error
+// report on top of it.
+func (f *artFile) render(w io.Writer) error {
+	if len(f.diags) == 0 {
+		return nil
+	}
+	files := diag.NewFiles()
+	files.Add(f.path, f.src)
+	return diag.Terminal(w, files, f.diags)
+}
+
+// loadArt is readArt plus render: the path every command but `artemis parse
+// --json` takes.
 //
 // The tree and the checker's Info come back whatever happened, and the error is
 // non-nil exactly when the bag holds an error diagnostic -- so a caller that
 // only reports chooses the tree and a caller that writes to disk chooses the
-// error. A read failure is a plain error with no tree: a file that is not there
-// has no contents to be diagnosed about.
+// error.
 func loadArt(cmd *cobra.Command, path string) (*ast.File, *check.Info, error) {
-	src, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named
+	f, err := readArt(path)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	tree, info, bag := frontEnd(path, string(src))
-	diags := bag.All()
-	if len(diags) > 0 {
-		files := diag.NewFiles()
-		files.Add(path, string(src))
-		// stderr: stdout carries documents only -- fmt's output, parse's ok
-		// line, and later --json -- so `artemis fmt x.art > out.art` is a
-		// formatted file and never a file with an error report on top of it.
-		if err := diag.Terminal(cmd.ErrOrStderr(), files, diags); err != nil {
-			return tree, info, err
-		}
+	if err := f.render(cmd.ErrOrStderr()); err != nil {
+		return f.tree, f.info, err
 	}
-	if bag.HasErrors() {
-		return tree, info, errorsIn(path, diags)
-	}
-	return tree, info, nil
+	return f.tree, f.info, f.err()
 }
 
 // errorsIn is the one-line reason attached to a non-zero exit. The diagnostics

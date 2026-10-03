@@ -92,7 +92,7 @@ func TestTheWorkedExampleLowers(t *testing.T) {
 		name string
 		typ  string
 	}{
-		{"seed the database", "exec"},
+		{"seed the database", "terminal"},
 		{"login", "api"},
 		{"orders", "api"},
 		{"upgrade in the app", "browser"},
@@ -124,7 +124,7 @@ func TestTheTypeIsTheRegistryKey(t *testing.T) {
 		ok   bool
 	}{
 		{"api", check.API, "api", true},
-		{"terminal registers as exec", check.Terminal, "exec", true},
+		{"terminal", check.Terminal, "terminal", true},
 		{"browser", check.Browser, "browser", true},
 		{"a step with no action has no key", check.Unknown, "", false},
 	}

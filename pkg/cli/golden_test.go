@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -9,10 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
-	"sort"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -40,11 +36,18 @@ const durSentinel = "<dur>"
 
 // goldenCase is one whole run of artemis pinned to a file.
 //
-// Each case names testdata/<name>.yaml -- the scenario a user would write -- and
-// testdata/<name>.golden, which holds every byte the command printed plus the
-// error it exited with. The pair is the point: the YAML is readable as a
-// scenario and the golden is readable as a report, so a change to either side
-// of the runner shows up as a diff a person can judge.
+// Each case names testdata/art/<name>.art -- the scenario a user would write --
+// and testdata/art/<name>.golden, which holds every byte the command printed
+// plus the error it exited with. The pair is the point: the .art file is
+// readable as a scenario and the golden is readable as a report, so a change to
+// either side of the runner shows up as a diff a person can judge.
+//
+// There was a second, parallel corpus of testdata/*.yaml fixtures and their
+// goldens until ART-40, with TestGoldenParity arguing that a migrated scenario
+// was the same run. The YAML files are still there, because they are
+// `artemis migrate`'s corpus (migrate_test.go walks them); their run
+// transcripts are not, because a parity test needs two runners and there is
+// one.
 type goldenCase struct {
 	name string
 	// dir makes the fixture a folder, testdata/<name>/, run with
@@ -76,47 +79,10 @@ func (c goldenCase) fixtureName() string {
 	return c.name
 }
 
-func TestGolden(t *testing.T) {
-	for _, c := range goldenCases(t) {
-		t.Run(c.name, func(t *testing.T) {
-			out, runErr := runGoldenIn(t, "", c)
-
-			if c.wantErr && runErr == nil {
-				t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
-			}
-			if !c.wantErr && runErr != nil {
-				t.Errorf("Execute() = %v, want nil:\n%s", runErr, out)
-			}
-
-			path := filepath.Join("testdata", c.name+".golden")
-			if *update {
-				if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
-					t.Fatalf("writing %s: %v", path, err)
-				}
-				t.Logf("updated %s", path)
-				return
-			}
-			want, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("reading %s: %v (run `make golden` to create it)", path, err)
-			}
-			if got := out; got != string(want) {
-				t.Errorf("output does not match %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
-			}
-		})
-	}
-}
-
-// runGoldenIn runs one case through the real root command and returns the
+// runGolden runs one case through the real root command and returns the
 // scrubbed transcript: everything printed, then the error the command exited
 // with.
-//
-// dir is the corpus the fixture lives in, relative to testdata: "" for the
-// YAML fixtures and artDir for the DSL ones. It is a parameter rather than two
-// functions so that both corpora go through the same root command, the same
-// server, the same substitution and the same scrubbing -- which is what makes
-// the two transcripts comparable at all.
-func runGoldenIn(t *testing.T, dir string, c goldenCase) (string, error) {
+func runGolden(t *testing.T, c goldenCase) (string, error) {
 	t.Helper()
 	initOnce.Do(Init)
 	resetRunFlags(t)
@@ -136,7 +102,7 @@ func runGoldenIn(t *testing.T, dir string, c goldenCase) (string, error) {
 		url = srv.URL
 	}
 
-	fixture, path := renderFixture(t, dir, c, url)
+	fixture, path := renderFixture(t, c, url)
 
 	var out strings.Builder
 	RootCmd.SetArgs(append([]string{"run", path}, c.args...))
@@ -160,21 +126,17 @@ func runGoldenIn(t *testing.T, dir string, c goldenCase) (string, error) {
 // The copy is needed because the server's port is only known now; the temp path
 // is scrubbed back to the fixture's, so the golden file reads as a run of the
 // committed suite.
-func renderFixture(t *testing.T, dir string, c goldenCase, url string) (fixture, path string) {
+func renderFixture(t *testing.T, c goldenCase, url string) (fixture, path string) {
 	t.Helper()
 	name := c.fixtureName()
-	ext := ".yaml"
-	if dir == artDir {
-		ext = artExt
-	}
 	if !c.dir {
-		fixture = filepath.Join("testdata", dir, name+ext)
-		path = filepath.Join(t.TempDir(), name+ext)
+		fixture = filepath.Join("testdata", artDir, name+artExt)
+		path = filepath.Join(t.TempDir(), name+artExt)
 		writeRendered(t, fixture, path, url, true)
 		return fixture, path
 	}
 
-	fixture = filepath.Join("testdata", dir, name)
+	fixture = filepath.Join("testdata", artDir, name)
 	path = filepath.Join(t.TempDir(), name)
 	substituted := false
 	err := filepath.WalkDir(fixture, func(src string, d fs.DirEntry, err error) error {
@@ -283,8 +245,11 @@ func jsonHandler(status int, body string) http.HandlerFunc {
 	}
 }
 
-// goldenCases is the list of runs pinned to testdata. Keep a case's scenario in
-// its fixture and only what the server does here.
+// goldenCases is the list of runs pinned to testdata/art. Keep a case's
+// scenario in its fixture and only what the server does here.
+//
+// The names are the YAML corpus's, because each fixture is that scenario
+// migrated and `artemis migrate`'s own goldens are keyed on them.
 func goldenCases(t *testing.T) []goldenCase {
 	t.Helper()
 	return []goldenCase{
@@ -447,38 +412,35 @@ func reportFixtureHandler() http.HandlerFunc {
 	}
 }
 
-// -- the DSL corpus -------------------------------------------------------
+// -- the corpus's own directory -------------------------------------------
 //
-// testdata/art holds the same runs written in the DSL: one .art file (or
-// folder) per goldenCase, with its own .golden beside it. The tree is parallel
-// rather than mixed in with the YAML fixtures because a folder walk now picks
-// up both extensions, so a suite holding `01_login.yaml` and `01_login.art`
-// would run each scenario twice.
-//
-// Two tests use it, and the division is the point. TestGoldenArt pins what the
-// DSL prints, which is a diff a person reads. TestGoldenParity is the argument
-// that it is the same run as the YAML one -- see parityFields.
+// testdata/art holds one .art file (or folder) per goldenCase, with its own
+// .golden beside it. It stayed a subdirectory when ART-40 removed the YAML
+// corpus's goldens, because testdata/ still holds the .yaml files
+// `artemis migrate` is tested on and a folder walk must not pick those up.
 const artDir = "art"
 
-// artCase describes how a goldenCase differs in the DSL, which for most of them
-// is not at all.
+// artCase is a case's departure from the YAML scenario it was migrated from,
+// which for most of them is nothing at all. It is kept as the record of why
+// each fixture reads the way it does; the parity test that used to enforce it
+// went with the YAML runner.
 type artCase struct {
-	// noYAML is a case with no YAML fixture: it pins something the DSL has and
-	// YAML does not, so there is nothing to compare it with.
+	// noYAML is a case with no YAML original: it pins something the DSL has
+	// and YAML did not.
 	noYAML string
-	// changed is a case whose outcome changes by design, with the reason. It
-	// still has a golden -- what it prints is pinned -- but no parity claim.
+	// changed is a case whose outcome changes by design, with the reason.
 	changed string
 	// wantErr overrides the YAML case's, for a case whose exit changes.
 	wantErr *bool
-	// handler overrides the YAML case's, for a case the YAML corpus has no
+	// handler overrides the YAML case's, for a case the YAML corpus had no
 	// server behaviour for.
 	handler http.HandlerFunc
 }
 
 // artCases is every departure from the YAML corpus, in one table, each with the
-// reason it departs. A case that is not here runs the same scenario against the
-// same server and must produce the same outcome.
+// reason it departs. A case that is not here is the same scenario against the
+// same server, and was held to the same outcome by TestGoldenParity until
+// ART-40 deleted the runner it compared against.
 func artCases() map[string]artCase {
 	yes := true
 	return map[string]artCase{
@@ -544,7 +506,7 @@ func artGoldenCases(t *testing.T) []goldenCase {
 func TestGoldenArt(t *testing.T) {
 	for _, c := range artGoldenCases(t) {
 		t.Run(c.name, func(t *testing.T) {
-			out, runErr := runGoldenIn(t, artDir, c)
+			out, runErr := runGolden(t, c)
 
 			if c.wantErr && runErr == nil {
 				t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
@@ -600,297 +562,4 @@ func TestGoldenArtFixturesAreCanonical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walking %s: %v", root, err)
 	}
-}
-
-// -- behaviour parity -----------------------------------------------------
-//
-// This is the argument the whole issue is for: that a scenario migrated to the
-// DSL is the *same run*.
-//
-// It is made over the --report json documents rather than over the console
-// transcripts, because the transcripts cannot be byte-identical and the reason
-// they cannot is uninteresting. A heading names its fixture's path, a failure
-// block names its line, and an assertion's subject reads `body $.status equals`
-// in YAML and `expect body.status ==` in the DSL. Redacting those out of a text
-// diff would mean a regex that has to find the operands inside
-// `<subject> <expected>, got <actual>` -- and the operands are the part worth
-// pinning. The JSON report is the same result tree with every field named, so
-// the comparison can say exactly what the two languages may disagree about.
-//
-// What survives redaction, and therefore has to match: schema_version, the run
-// status and verdict, all nine tallies, every scenario's name and status, every
-// step's name, status and attempts, every assertion's expected, actual and
-// status, and the failures array's length, order, scenario, step, status,
-// expected and actual.
-
-// parityRedacted are the document keys the two formats may differ in, each with
-// the reason. Every other key must match exactly, at every level.
-//
-// A key is redacted wherever it appears, which is what makes the list short: an
-// assertion's `path` and the same assertion's `path` inside the flat failures
-// array are one rule, not two.
-var parityRedacted = map[string]string{
-	"started_at":  "when the run happened",
-	"duration_ms": "how long it took",
-	"file":        "the fixture's own path, and its extension",
-	"line":        "the line of a different file",
-	"kind":        `"body" or "status_code" against "expect": the YAML reader classified a check, the DSL has one statement for all of them`,
-	"path":        "`$.status` against `body.status`: the subject in each language's own syntax",
-	"operator":    "`equals` against `==`, `lte` against `<=`: the same comparison, spelled as the author wrote it",
-}
-
-// parityErroredOperands is why an errored assertion's two operands are redacted
-// as well.
-//
-// An errored assertion made no comparison -- an absent path, a regex that
-// matched nothing -- so neither operand describes anything that happened, and
-// the two readers fill them differently: pkg/shared/capture echoes the JSON path
-// into `expected`, and pkg/dsl/lower deliberately leaves both null, on the
-// grounds that a capture that compared nothing should not look as though it
-// did. The subject is already redacted under `path` and `operator` for the same
-// reason, so this is the same exception reaching one field further.
-//
-// It is narrow on purpose: `expected` and `actual` stay pinned on every
-// assertion that passed or failed, which is every assertion that compared
-// anything.
-const parityErroredOperands = "an errored assertion compared nothing"
-
-// parityErrorSentinel is what a non-empty error is replaced with. The text is
-// format-specific -- a YAML decoder's complaint against a diagnostic, and
-// `path "$.session.token": nothing is at that path` against the evaluator's
-// absent-path wording -- but *that* it errored, and that it gave a reason, is
-// pinned.
-const parityErrorSentinel = "<error>"
-
-// TestGoldenParity holds every migrated fixture to the same run as its YAML
-// original.
-func TestGoldenParity(t *testing.T) {
-	over := artCases()
-	for _, c := range artGoldenCases(t) {
-		a := over[c.name]
-		switch {
-		case a.noYAML != "":
-			t.Run(c.name, func(t *testing.T) { t.Skipf("no YAML fixture: %s", a.noYAML) })
-			continue
-		case a.changed != "":
-			t.Run(c.name, func(t *testing.T) { t.Skipf("changes by design: %s", a.changed) })
-			continue
-		case c.fixture != "":
-			// Two cases pinning two reports of one run. The run is compared
-			// once, under the case that owns the fixture.
-			continue
-		}
-		name := c.name
-		t.Run(name, func(t *testing.T) {
-			// A case per run, rebuilt: a handler may be stateful -- `retried`
-			// counts the calls it has answered -- so two runs sharing one
-			// handler is two runs sharing a counter, and the second would see a
-			// service that was already up.
-			yaml := runParityReport(t, "", namedCase(t, name))
-			art := runParityReport(t, artDir, namedCase(t, name))
-			if path, ok := firstDiff(nil, yaml, art); !ok {
-				t.Errorf("the .art run is not the same run as the YAML one, at %s\n--- yaml ---\n%s\n--- art ---\n%s",
-					path, reindent(yaml), reindent(art))
-			}
-		})
-	}
-}
-
-// namedCase rebuilds one case from the table, with a handler nothing else has
-// called yet.
-func namedCase(t *testing.T, name string) goldenCase {
-	t.Helper()
-	for _, c := range artGoldenCases(t) {
-		if c.name == name {
-			return c
-		}
-	}
-	t.Fatalf("no golden case named %q", name)
-	return goldenCase{}
-}
-
-// runParityReport runs one case and returns its --report json document with the
-// redacted keys removed.
-//
-// Always --report json, whatever the case's own args asked for: the document is
-// what is being compared, and a case that pins a *second* format pins nothing
-// extra about the run.
-func runParityReport(t *testing.T, dir string, c goldenCase) any {
-	t.Helper()
-	initOnce.Do(Init)
-	resetRunFlags(t)
-
-	if c.noSleep {
-		orig := sleep
-		sleep = func(time.Duration) {}
-		t.Cleanup(func() { sleep = orig })
-	}
-
-	url := "http://127.0.0.1:1"
-	if c.handler != nil {
-		srv := httptest.NewServer(c.handler)
-		t.Cleanup(srv.Close)
-		url = srv.URL
-	}
-	_, path := renderFixture(t, dir, c, url)
-
-	// stdout carries exactly the document, which is the invariant reportRun
-	// moves the console report to stderr for. Here it is what makes the
-	// document parseable without scrubbing a transcript apart.
-	var doc, discard strings.Builder
-	RootCmd.SetArgs(append([]string{"run", path, "--report", "json"}, withoutReport(c.args)...))
-	RootCmd.SetOut(&doc)
-	RootCmd.SetErr(&discard)
-	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
-	_ = RootCmd.Execute()
-
-	var parsed any
-	if err := json.Unmarshal([]byte(doc.String()), &parsed); err != nil {
-		t.Fatalf("the %s run did not write a JSON report: %v\n%s", or(dir, "yaml"), err, doc.String())
-	}
-	return redact(parsed)
-}
-
-// withoutReport drops a case's own --report flag and its value, so the parity
-// run writes one document and the case's other flags still apply.
-func withoutReport(args []string) []string {
-	out := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--report" {
-			i++ // and its value
-			continue
-		}
-		out = append(out, args[i])
-	}
-	return out
-}
-
-// redact removes every parityRedacted key and reduces every error to
-// empty-or-not, at every level of the document.
-func redact(v any) any {
-	switch v := v.(type) {
-	case map[string]any:
-		// See parityErroredOperands. The two operands are dropped only on a map
-		// that has them and that says it errored, which is an assertion or a
-		// failures entry and never a run, a scenario or a step.
-		errored := v["status"] == "error"
-		out := make(map[string]any, len(v))
-		for key, value := range v {
-			if _, skip := parityRedacted[key]; skip {
-				continue
-			}
-			if errored && (key == "expected" || key == "actual") {
-				continue
-			}
-			if key == "error" {
-				if text, ok := value.(string); ok && text != "" {
-					out[key] = parityErrorSentinel
-					continue
-				}
-			}
-			out[key] = redact(value)
-		}
-		return out
-	case []any:
-		out := make([]any, len(v))
-		for i := range v {
-			out[i] = redact(v[i])
-		}
-		return out
-	default:
-		return v
-	}
-}
-
-// firstDiff reports whether two redacted documents are equal, and where they
-// first differ when they are not.
-//
-// The path rather than a whole-document diff, because the documents are long
-// and the one field that moved is the whole finding: "counts.steps.errored: 0
-// against 1" is a sentence a reader acts on.
-func firstDiff(path []string, want, got any) (string, bool) {
-	at := strings.Join(path, ".")
-	if at == "" {
-		at = "the document"
-	}
-	switch want := want.(type) {
-	case map[string]any:
-		gotMap, ok := got.(map[string]any)
-		if !ok {
-			return fmt.Sprintf("%s: an object against %T", at, got), false
-		}
-		for _, key := range sortedKeys(want, gotMap) {
-			wantValue, inWant := want[key]
-			gotValue, inGot := gotMap[key]
-			if inWant != inGot {
-				return fmt.Sprintf("%s.%s: present in one document only", at, key), false
-			}
-			if where, ok := firstDiff(append(path, key), wantValue, gotValue); !ok {
-				return where, false
-			}
-		}
-		return "", true
-	case []any:
-		gotSlice, ok := got.([]any)
-		if !ok {
-			return fmt.Sprintf("%s: an array against %T", at, got), false
-		}
-		if len(want) != len(gotSlice) {
-			return fmt.Sprintf("%s: %d entries against %d", at, len(want), len(gotSlice)), false
-		}
-		for i := range want {
-			if where, ok := firstDiff(append(path, strconv.Itoa(i)), want[i], gotSlice[i]); !ok {
-				return where, false
-			}
-		}
-		return "", true
-	default:
-		if !reflect.DeepEqual(want, got) {
-			return fmt.Sprintf("%s: %v against %v", at, render(want), render(got)), false
-		}
-		return "", true
-	}
-}
-
-// sortedKeys is the union of two maps' keys, sorted, so a mismatch is reported
-// at the same key on every run.
-func sortedKeys(a, b map[string]any) []string {
-	seen := make(map[string]bool, len(a)+len(b))
-	out := make([]string, 0, len(a)+len(b))
-	for _, m := range []map[string]any{a, b} {
-		for key := range m {
-			if !seen[key] {
-				seen[key] = true
-				out = append(out, key)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// render is one value as it appears in the document, for a mismatch message.
-func render(v any) string {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return string(raw)
-}
-
-// reindent is a redacted document back as indented JSON, for the mismatch
-// message's two halves.
-func reindent(v any) string {
-	raw, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return string(raw)
-}
-
-func or(s, fallback string) string {
-	if s == "" {
-		return fallback
-	}
-	return s
 }

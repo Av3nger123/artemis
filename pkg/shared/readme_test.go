@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"artemis/pkg/shared/migrate"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,9 +32,14 @@ func TestREADMEYAMLBlocksAreWellFormed(t *testing.T) {
 }
 
 // TestREADMEScenariosParse runs every whole-scenario example in the README
-// through the loader `artemis run` uses: strict decoding plus validation. A
-// documented example that artemis would reject is a bug in the README, and this
-// is what keeps the two from drifting apart again.
+// through migrate.ParseYAMLFile: strict decoding plus validation. A documented
+// example that artemis would reject is a bug in the README, and this is what
+// keeps the two from drifting apart again.
+//
+// That loader is no longer `artemis run`'s -- ART-40 took YAML off the run path
+// -- so what this now asserts is that every YAML example in the README is one
+// `artemis migrate` can still convert. The README itself is rewritten for the
+// DSL in ART-42, and this test goes with its last YAML block.
 func TestREADMEScenariosParse(t *testing.T) {
 	scenarios := 0
 	for _, b := range docBlocks(t, readmePath, "yaml") {
@@ -45,7 +52,7 @@ func TestREADMEScenariosParse(t *testing.T) {
 		if err := os.WriteFile(path, []byte(b.body), 0o600); err != nil {
 			t.Fatalf("writing the example from README line %d: %v", b.line, err)
 		}
-		config, err := ParseYAMLFile(path, knownTypes)
+		config, err := migrate.ParseYAMLFile(path, knownTypes)
 		if err != nil {
 			t.Errorf("README line %d: artemis cannot load this example: %v\n%s", b.line, err, b.body)
 			continue

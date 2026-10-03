@@ -1,7 +1,0 @@
-scenario: wait for ready (testdata/retried.yaml)
-  ok    ping until ready            <dur>  (3 attempts)
-
-Scenarios     1  (1 passed)
-Steps         1  (1 passed)
-Assertions    2  (2 passed)
-PASS in <dur>

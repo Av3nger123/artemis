@@ -189,8 +189,8 @@ func TestATerminalStepsRuntimeShape(t *testing.T) {
   }
 }`)
 
-	if model.Type != "exec" {
-		t.Errorf("Type = %q, want exec -- the key execstep registers under", model.Type)
+	if model.Type != "terminal" {
+		t.Errorf("Type = %q, want terminal -- the key execstep registers under", model.Type)
 	}
 	if model.Exec.Command != "psql" {
 		t.Errorf("Command = %q, want psql", model.Exec.Command)

@@ -1,7 +1,6 @@
-package shared
+package migrate
 
 import (
-	"artemis/pkg/shared/models"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,120 +136,9 @@ func TestParseYAMLFileRejectsUnknownStepType(t *testing.T) {
 	}
 }
 
-// chdir moves to dir for the length of the test. testing.T.Chdir needs a newer
-// go directive than this module declares.
-func chdir(t *testing.T, dir string) {
-	t.Helper()
-	was, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chdir(was); err != nil {
-			t.Fatal(err)
-		}
-	})
-}
-
 func TestParseYAMLFileMissingFileErrorsAsNotExist(t *testing.T) {
 	_, err := ParseYAMLFile(filepath.Join(t.TempDir(), "nope.yaml"), knownTypes)
 	if !os.IsNotExist(err) {
 		t.Fatalf("ParseYAMLFile() = %v, want a not-exist error", err)
-	}
-}
-
-// A generated file has to pass the same validation a hand-written one does:
-// strict decoding and a known step type on every step.
-func TestConvertJsonToYamlProducesAParseableScenario(t *testing.T) {
-	// ConvertJsonToYaml writes the slugified name into the working directory
-	// (its filePath argument is unused), so the test has to move there.
-	chdir(t, t.TempDir())
-
-	collection := models.PostmanCollection{
-		Info:      models.Info{Name: "My Collection"},
-		Variables: []models.PostmanVariable{{Key: "url", Value: "https://api.example.com"}},
-		Items: []models.Item{{
-			Name: "login",
-			Request: models.PMRequest{
-				Method: "POST",
-				Url:    models.RawField{Raw: "https://api.example.com/token"},
-				Body:   models.RawField{Raw: `{"user":"u"}`},
-			},
-		}},
-	}
-
-	if err := ConvertJsonToYaml(collection, ""); err != nil {
-		t.Fatalf("ConvertJsonToYaml() = %v, want nil", err)
-	}
-
-	config, err := ParseYAMLFile("my-collection.yaml", knownTypes)
-	if err != nil {
-		t.Fatalf("ParseYAMLFile() on the generated file = %v, want nil", err)
-	}
-	if len(config.Steps) != 1 || config.Steps[0].Type != "api" {
-		t.Errorf("generated steps = %+v, want one api step", config.Steps)
-	}
-}
-
-// SubstituteEnvVars resolves {{env.NAME}} in a scenario's variables before any
-// step runs, so a token lives in the environment and not in the file.
-func TestSubstituteEnvVars(t *testing.T) {
-	t.Setenv("ARTEMIS_TEST_HOST", "api.example.com")
-	t.Setenv("ARTEMIS_TEST_TOKEN", "sekret")
-	t.Setenv("ARTEMIS_TEST_EMPTY", "")
-
-	cases := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"no placeholder", "https://api.example.com", "https://api.example.com"},
-		{"empty", "", ""},
-		{"whole value", "{{env.ARTEMIS_TEST_TOKEN}}", "sekret"},
-		{"inside text", "https://{{env.ARTEMIS_TEST_HOST}}/v1", "https://api.example.com/v1"},
-		{"two references", "{{env.ARTEMIS_TEST_HOST}}:{{env.ARTEMIS_TEST_TOKEN}}", "api.example.com:sekret"},
-		{"repeated reference", "{{env.ARTEMIS_TEST_TOKEN}}{{env.ARTEMIS_TEST_TOKEN}}", "sekretsekret"},
-		{"unset name is empty", "a{{env.ARTEMIS_TEST_UNSET}}b", "ab"},
-		{"set but empty", "a{{env.ARTEMIS_TEST_EMPTY}}b", "ab"},
-		{"a scenario variable is left for the templater", "{{token}}", "{{token}}"},
-		{"env and scenario placeholders together", "{{token}} {{env.ARTEMIS_TEST_TOKEN}}", "{{token}} sekret"},
-		{"scenario placeholder first", "{{other}}{{env.ARTEMIS_TEST_TOKEN}}", "{{other}}sekret"},
-		{"a stray close before a reference", "}}{{env.ARTEMIS_TEST_TOKEN}}", "}}sekret"},
-		{"unclosed reference is copied through", "a{{env.ARTEMIS_TEST_TOKEN", "a{{env.ARTEMIS_TEST_TOKEN"},
-		{"second reference unclosed", "{{env.ARTEMIS_TEST_TOKEN}}/{{env.X", "sekret/{{env.X"},
-		{"lone brace", "a{b", "a{b"},
-		{"prefix only", "{{env.", "{{env."},
-		{"empty name", "{{env.}}", ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got := SubstituteEnvVars(c.in)
-			if got != c.want {
-				t.Errorf("SubstituteEnvVars(%q) = %#v, want %q", c.in, got, c.want)
-			}
-		})
-	}
-}
-
-// A value that references itself used to spin forever, and a closing delimiter
-// before an opening one used to panic on a reversed slice. Neither is reachable
-// now that the scan only moves forward, and this is the test that says so.
-func TestSubstituteEnvVarsTerminatesAndNeverPanics(t *testing.T) {
-	t.Setenv("ARTEMIS_TEST_SELF", "{{env.ARTEMIS_TEST_SELF}}")
-
-	full := "}}a{{env.ARTEMIS_TEST_SELF}}b{{env.}}c{{other}}d{{env.X"
-	for i := 0; i <= len(full); i++ {
-		prefix := full[:i]
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Fatalf("SubstituteEnvVars(%q) panicked: %v", prefix, r)
-				}
-			}()
-			_ = SubstituteEnvVars(prefix)
-		}()
 	}
 }

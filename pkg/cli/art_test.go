@@ -94,7 +94,7 @@ func writeArt(t *testing.T, name, src string) string {
 // covers the commands that run scenarios.
 func resetFrontEndFlags(t *testing.T) {
 	t.Helper()
-	for _, cmd := range []*cobra.Command{parseCmd, astCmd, fmtCmd, migrateCmd, generateCmd} {
+	for _, cmd := range []*cobra.Command{parseCmd, astCmd, fmtCmd, grammarCmd, migrateCmd, generateCmd} {
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
 			if err := f.Value.Set(f.DefValue); err != nil {
 				t.Fatalf("resetting %s --%s to %q: %v", cmd.Name(), f.Name, f.DefValue, err)
@@ -254,38 +254,25 @@ func TestParseArtOnAMissingFile(t *testing.T) {
 	}
 }
 
-// The YAML branch is untouched. It goes with the rest of the YAML reader in
-// ART-40; until then `artemis parse` reads both formats, dispatching on the
-// extension.
-func TestParseStillReadsYAML(t *testing.T) {
+// The YAML branch is gone: `artemis parse` reads .art and nothing else
+// (ART-40). A YAML path is refused with the one way out, rather than lexed
+// into a page of diagnostics about a file that was never meant to be one.
+func TestParseRefusesYAMLAndNamesMigrate(t *testing.T) {
 	path := writeArt(t, "scenario.yaml", `name: "health"
 type: functional
-variables: []
-steps:
-  - name: "ping"
-    type: api
-    request:
-      method: GET
-      url: "http://127.0.0.1:1/health"
-    response:
-      status_code: 200
 `)
 
-	stdout, stderr, err := executeArgs(t, "parse", "-f", path)
-	if err != nil {
-		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
+	stdout, _, err := executeArgs(t, "parse", "-f", path)
+	if err == nil {
+		t.Fatalf("Execute() = nil, want a refusal\nstdout:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "health") {
-		t.Errorf("stdout = %q, want the parsed configuration", stdout)
+	for _, want := range []string{"scenario.yaml", "artemis migrate", "scenario.art"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
 	}
-}
-
-// A YAML file artemis does not understand still fails the way it always did.
-func TestParseStillRejectsBadYAML(t *testing.T) {
-	path := writeArt(t, "scenario.yaml", "name: [unterminated\n")
-
-	if _, _, err := executeArgs(t, "parse", "-f", path); err == nil {
-		t.Fatal("Execute() = nil, want an error for YAML that does not load")
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing: the file was not checked", stdout)
 	}
 }
 

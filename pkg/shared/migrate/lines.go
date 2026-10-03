@@ -1,8 +1,6 @@
-package shared
+package migrate
 
 import (
-	"artemis/pkg/shared/models"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -11,9 +9,9 @@ import (
 // to go and edit (ART-12).
 //
 // It is a second pass over the same document rather than an UnmarshalYAML on
-// models.Step, because a hand-written unmarshaller would have to reimplement the
+// Step, because a hand-written unmarshaller would have to reimplement the
 // strict known-fields check -- the decoder's KnownFields setting does not reach a
-// node decoded by hand, which is the hole models.Retry and models.Capture already
+// node decoded by hand, which is the hole Retry and Capture already
 // paper over -- and Step has eight fields across two step types. The walk cannot
 // weaken strict decoding because it does no decoding.
 //
@@ -22,7 +20,7 @@ import (
 // zero line is already the value for "artemis does not know": a step built in Go,
 // a scenario converted from a Postman collection. That is the whole reason this
 // is a walk and not a parser -- the worst it can do is tell a reader less.
-func annotateLines(config *models.Config, doc *yaml.Node) {
+func annotateLines(config *Config, doc *yaml.Node) {
 	steps := seqValue(mappingValue(document(doc), "steps"))
 	if steps == nil {
 		return
@@ -41,7 +39,7 @@ func annotateLines(config *models.Config, doc *yaml.Node) {
 // The step's own line is the mapping's, which yaml.v3 reports as the line of its
 // first key -- the `- name: ...` a reader's eye lands on, not the blank line
 // before it.
-func annotateStep(step *models.Step, node *yaml.Node) {
+func annotateStep(step *Step, node *yaml.Node) {
 	step.Line = node.Line
 
 	if response := mappingValue(node, "response"); response != nil {
@@ -59,7 +57,7 @@ func annotateStep(step *models.Step, node *yaml.Node) {
 // annotateBodyChecks walks a `body:` sequence index for index against the checks
 // decoded from it. A check's line is its own mapping's, which is the `path:` it
 // opens with in every spelling anyone writes.
-func annotateBodyChecks(checks []models.BodyCheck, seq *yaml.Node) {
+func annotateBodyChecks(checks []BodyCheck, seq *yaml.Node) {
 	for i := range checks {
 		if node := child(seq, i); node != nil {
 			checks[i].Line = node.Line
@@ -68,7 +66,7 @@ func annotateBodyChecks(checks []models.BodyCheck, seq *yaml.Node) {
 }
 
 // annotateTextChecks is annotateBodyChecks for an exec step's stdout and stderr.
-func annotateTextChecks(checks []models.TextCheck, seq *yaml.Node) {
+func annotateTextChecks(checks []TextCheck, seq *yaml.Node) {
 	for i := range checks {
 		if node := child(seq, i); node != nil {
 			checks[i].Line = node.Line
@@ -86,8 +84,8 @@ func annotateTextChecks(checks []models.TextCheck, seq *yaml.Node) {
 // the value's line is the `json:` below it.
 //
 // A map of structs is not addressable, so each value is read out, stamped and
-// put back. models.Capture's compiled pattern rides along in the copy.
-func annotateCaptures(captures map[string]models.Capture, node *yaml.Node) {
+// put back. Capture's compiled pattern rides along in the copy.
+func annotateCaptures(captures map[string]Capture, node *yaml.Node) {
 	if len(captures) == 0 || node == nil {
 		return
 	}

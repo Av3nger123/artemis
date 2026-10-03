@@ -34,7 +34,7 @@ const (
 	RootHeaders = "headers"
 )
 
-var _ executor.Observer = Executor{}
+var _ executor.Executor = Executor{}
 
 // Observe sends one request and reports what came back, leaving every assertion
 // to the caller.

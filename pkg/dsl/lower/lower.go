@@ -19,16 +19,17 @@
 // An executor takes a models.Step and that does not change here: ART-15's seam
 // and ART-16's HTTP step are downstream of the front end, and keeping their
 // input shape is the whole reason this package exists rather than a second
-// runtime. But a models.Step has no field for an expression assertion -- its
-// `Response.Body []BodyCheck` is a record of operator, path and value -- so the
-// half of a step that is expressions lives on a *Step and reaches the executor
-// through one bridge:
+// runtime. But a models.Step is what to *do* and nothing about what is
+// expected of it, so the half of a step that is expressions lives on a *Step
+// and reaches the executor through one bridge:
 //
 //	model, err := step.Model(env)   // the models.Step an Executor takes
 //
-// Replacing models.BodyCheck with compiled expressions is ART-40's, once ART-38
-// has proven parity. Doing it here would mean editing the YAML model while the
-// YAML front end is still the only one that runs.
+// models.Step used to carry the expectations too -- a status code, a
+// `Response.Body []BodyCheck` of operator, path and value -- because a YAML
+// step had nowhere else to put them. ART-40 deleted that half along with the
+// YAML front end, which is why Model now fills in only the action and the
+// per-step policy.
 //
 // # Expressions are kept, not evaluated
 //

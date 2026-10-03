@@ -67,15 +67,16 @@ func migrateFile(cmd *cobra.Command, path, out string) error {
 		return fmt.Errorf("artemis migrate writes %s files; -o %s is not one", artExt, out)
 	}
 
-	// The same loader `artemis parse` uses, so the two agree on what a valid
-	// YAML scenario is and migration cannot accept a file the runtime would
-	// have rejected.
-	config, err := loadScenario(path)
+	// The loader that was `artemis parse`'s until ART-40 took YAML off the run
+	// path: strict decoding, plus validation against the step types migration
+	// can translate, so a file it cannot convert is refused before anything is
+	// written.
+	config, err := migrate.ParseYAMLFile(path, migrate.StepTypes)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	raw, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named, and loadScenario has already read it
+	raw, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named, and ParseYAMLFile has already read it
 	if err != nil {
 		return err
 	}

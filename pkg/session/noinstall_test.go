@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"artemis/pkg/executor"
-	"artemis/pkg/result"
 	"artemis/pkg/shared/models"
 )
 
@@ -29,19 +28,19 @@ func TestAPIOnlyRunTouchesNoDriver(t *testing.T) {
 
 	reg := executor.NewRegistry()
 	ran := false
-	reg.Register("api", executor.Func(func(ctx context.Context, step models.Step, scope executor.Scope) (*result.StepResult, error) {
+	reg.Register("api", executor.Func(func(ctx context.Context, step models.Step, scope executor.Scope) (map[string]any, error) {
 		ran = true
 		// What an api step does with the context: reads the deadline, ignores
 		// the registry. It never calls executor.SessionsOf.
 		if _, hasDeadline := ctx.Deadline(); hasDeadline {
 			t.Log("the step saw a deadline, as an http step would")
 		}
-		return &result.StepResult{}, nil
+		return nil, nil
 	}))
 
 	err := WithScenario(context.Background(), Config{Headless: true, Viewport: "1280x720"},
 		func(ctx context.Context) error {
-			_, err := executor.Run(ctx, reg, models.Step{Name: "login", Type: "api"}, executor.NewScope())
+			_, err := executor.Observe(ctx, reg, models.Step{Name: "login", Type: "api"}, executor.NewScope())
 			return err
 		})
 	if err != nil {

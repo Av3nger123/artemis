@@ -29,7 +29,6 @@ import (
 	playwright "github.com/mxschmitt/playwright-go"
 
 	"artemis/pkg/executor"
-	"artemis/pkg/result"
 	"artemis/pkg/shared/models"
 )
 
@@ -196,7 +195,7 @@ func TestBrowserWithinLowersToATimeout(t *testing.T) {
 func TestBrowserPagePersistsAcrossSteps(t *testing.T) {
 	srv := fixtureServer(t)
 	reg := executor.NewRegistry()
-	reg.Register("browser", executor.Func(func(ctx context.Context, step models.Step, scope executor.Scope) (*result.StepResult, error) {
+	reg.Register("browser", executor.Func(func(ctx context.Context, step models.Step, scope executor.Scope) (map[string]any, error) {
 		sessions, ok := executor.SessionsOf(ctx)
 		if !ok {
 			return nil, errors.New("no session registry on the context")
@@ -226,14 +225,14 @@ func TestBrowserPagePersistsAcrossSteps(t *testing.T) {
 			if who != "alice" {
 				return nil, fmt.Errorf("the second step sees %q, want %q -- the page did not persist", who, "alice")
 			}
-			return &result.StepResult{}, nil
+			return nil, nil
 		}
 		return nil, fmt.Errorf("unexpected step %q", step.Name)
 	}))
 
 	err := WithScenario(context.Background(), Config{Headless: true}, func(ctx context.Context) error {
 		for _, name := range []string{"sign in", "read it back"} {
-			if _, err := executor.Run(ctx, reg, models.Step{Name: name, Type: "browser"}, executor.NewScope()); err != nil {
+			if _, err := executor.Observe(ctx, reg, models.Step{Name: name, Type: "browser"}, executor.NewScope()); err != nil {
 				return fmt.Errorf("step %q: %w", name, err)
 			}
 		}
