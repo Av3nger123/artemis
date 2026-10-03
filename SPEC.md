@@ -1218,6 +1218,7 @@ and their output.
 | `artemis fmt [-w] x.art` | The file in canonical layout. Layout only: no string requoted, no expression reassociated, no comment dropped |
 | `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
+| `artemis build --lang=python [-o dir]` | The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`: one scenario becomes one test function, a `capture` a local variable, an `expect` a bare assert, a `within` on a browser assertion playwright's own timeout. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `js` target is specified and not built; a `go` one is reserved and will not be |
 
 A scenario is converted into this language once, never translated on the fly:
 `artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f

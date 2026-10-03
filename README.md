@@ -72,6 +72,7 @@ Five things in that file are the whole language:
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
+- A one-way export to pytest (`artemis build --lang=python`), for a team whose tests live in another language
 - One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
 - A non-zero exit code whenever anything fails, and no third code to learn
 
@@ -536,6 +537,39 @@ Every one of those is read out of the table the parser and the checker
 themselves consult, so a word added to the language appears here without
 anything shipping. A client building a form reads it instead of hardcoding a
 list that drifts.
+
+### `artemis build`
+
+```sh
+artemis build --lang=python checkout.art              # to stdout
+artemis build --lang=python -o tests/ checkout.art    # tests/test_checkout.py
+```
+
+Exports the scenarios as tests for another runner, for a team whose tests live in
+another language. The `python` target emits pytest: `requests` for an api step,
+`subprocess` for a terminal step and `playwright.sync_api` for a browser step,
+with no artemis runtime beyond a handful of small helpers at the top of the file.
+
+One scenario becomes one test function with its steps as ordered statements, a
+`var` and a `capture` become local variables, an `expect` becomes a bare `assert`
+so pytest reports both operands, a `retry` becomes a loop around the step, and a
+`within` on a browser assertion becomes Playwright's own timeout -- `expect
+visible(".modal") within "5s"` is
+`expect(page.locator(".modal")).to_be_visible(timeout=5000)`. A browser scenario
+takes a fixture that gives it one page for the whole test.
+
+The export is **one way**. Artemis never reads generated code back: the `.art`
+file stays the source of truth, running the command again overwrites the output,
+and the header of every generated file says both, along with the few places the
+generated test and `artemis run` differ.
+
+`--lang` is required. A file that does not compile is reported and nothing is
+written. Without `-o` the module goes to stdout; with it, `-o` names a directory,
+created if it is not there, and each path written is printed. There is no
+`--force`: the output is derived, and regenerating it is the point.
+
+A JavaScript target is specified and not built yet; a Go one is reserved and will
+not be, because the `.art` file is already the Go-side source of truth.
 
 ### Machine-readable reports
 

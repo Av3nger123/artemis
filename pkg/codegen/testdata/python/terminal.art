@@ -1,0 +1,40 @@
+# A terminal step's whole action block, and the three roots it binds.
+scenario "the database agrees" {
+  var db = env("PGDATABASE")
+
+  step "seed it" {
+    run "psql" {
+      args = ["-v", "ON_ERROR_STOP=1", "-f", "seed.sql"]
+      cwd = "./fixtures"
+      stdin = ""
+      env {
+        PGDATABASE = db
+        PGPASSWORD = env("PGPASSWORD")
+      }
+    }
+    timeout = "30s"
+
+    expect exit_code == 0
+    expect stderr == ""
+  }
+
+  step "count the rows" {
+    run "psql" {
+      args = ["-tAc", "select count(*) from orders"]
+    }
+
+    expect exit_code == 0
+    expect stdout contains "3"
+    capture rows = match(stdout, /([0-9]+)/)
+  }
+
+  step "the count reached the next step" {
+    run "echo" {
+      args = ["rows=${rows}"]
+    }
+    retry { times = 2 }
+
+    expect exit_code == 0
+    expect stdout matches /rows=[0-9]+/
+  }
+}

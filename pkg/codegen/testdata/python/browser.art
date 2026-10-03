@@ -1,0 +1,39 @@
+# All eight browser actions, both members of `page`, all five element functions,
+# and `within` in both of its spellings -- a native playwright matcher where the
+# assertion has one, and the settle loop where it does not.
+scenario "the receipt renders" {
+  config browser {
+    headless = true
+    viewport = "1280x720"
+  }
+
+  var base = env("BASE_URL")
+
+  step "sign in and open the order" {
+    browser {
+      goto "${base}/sign-in"
+      fill "#email" = "alice@example.test"
+      fill "#password" = env("PASSWORD")
+      click "button[type=submit]"
+      goto "/orders/1"
+      hover ".order-row"
+      select "#currency" = "eur"
+      upload "#attachment" = "./fixtures/receipt.pdf"
+      press "Enter"
+      wait "250ms"
+    }
+    timeout = "15s"
+
+    expect page.url contains "/orders/1"
+    expect page.title == "Order 1"
+    expect visible(".receipt")
+    expect not visible(".spinner")
+    expect text(".receipt-total") contains "42.00"
+    expect value("#currency") == "eur"
+    expect count(".line-item") == 3
+    expect attr("#download", "href") == "/receipts/1.pdf"
+    expect text(".flash") is null within "2s"
+    expect count(".line-item") > 0 within "1s"
+    capture total = text(".receipt-total")
+  }
+}

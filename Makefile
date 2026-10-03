@@ -58,7 +58,8 @@ cover:
 # in pkg/cli/testdata/art, the rendered diagnostics in pkg/dsl/diag/testdata, the
 # invalid-file corpus in pkg/dsl/testdata/invalid, the canonical printer's
 # output in pkg/dsl/print/testdata/canon, and the tree encoding and its schema
-# in pkg/dsl/encode/testdata.
+# in pkg/dsl/encode/testdata, and the exported pytest modules in
+# pkg/codegen/testdata.
 # Read the diff before committing it: that is the whole point of them.
 #
 # The corpus's own -update leaves the fixtures waiting on a later stage alone --
@@ -69,6 +70,7 @@ golden:
 	$(GOTEST) ./pkg/dsl -update
 	$(GOTEST) ./pkg/dsl/print -update
 	$(GOTEST) ./pkg/dsl/encode -update
+	$(GOTEST) ./pkg/codegen -update
 
 vet:
 	$(GOVET) $(PKGS)

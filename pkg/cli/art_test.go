@@ -94,7 +94,7 @@ func writeArt(t *testing.T, name, src string) string {
 // covers the commands that run scenarios.
 func resetFrontEndFlags(t *testing.T) {
 	t.Helper()
-	for _, cmd := range []*cobra.Command{parseCmd, astCmd, fmtCmd, grammarCmd, migrateCmd, generateCmd} {
+	for _, cmd := range []*cobra.Command{parseCmd, astCmd, fmtCmd, grammarCmd, migrateCmd, generateCmd, buildCmd} {
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
 			if err := f.Value.Set(f.DefValue); err != nil {
 				t.Fatalf("resetting %s --%s to %q: %v", cmd.Name(), f.Name, f.DefValue, err)

@@ -1,0 +1,27 @@
+# Names that collide with something the export emits. A var or a capture keeps
+# its own name unless the generated file already uses it, and an identifier
+# resolves roots-before-vars per step -- so `status` is the response's status
+# inside an api step and the var everywhere else.
+scenario "names that collide" {
+  var status = "pending"
+  var resp = "ignored"
+  var class = "economy"
+
+  step "the api step sees the root" {
+    get "https://example.test/orders"
+
+    expect status == 200
+    capture body = raw
+    capture match = status
+  }
+
+  step "the terminal step sees the var" {
+    run "echo" {
+      args = [status, class]
+    }
+
+    expect exit_code == 0
+    expect stdout contains "pending"
+    capture int = exit_code
+  }
+}
