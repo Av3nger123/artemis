@@ -1,0 +1,9 @@
+# A run where the API answers, but with the wrong values.
+scenario "status check" {
+  step "ping" {
+    get "%SERVER%/ping"
+    expect status == 200
+    expect body.status == "ok"
+    expect body.count <= 2
+  }
+}

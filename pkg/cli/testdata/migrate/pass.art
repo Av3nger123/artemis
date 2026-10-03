@@ -1,0 +1,22 @@
+# A run that passes: create a thing, capture its id, read it back.
+scenario "item lifecycle" {
+  var base = "%SERVER%"
+
+  step "create item" {
+    post "${base}/items" {
+      header "Content-Type" = "application/json"
+      body = {"name": "widget"}
+    }
+    expect status == 201
+    expect body.id exists
+    expect body.name == "widget"
+    capture itemId = body.id
+  }
+
+  step "read it back" {
+    get "${base}/items/${itemId}"
+    expect status == 200
+    expect body.name contains "widg"
+    expect body.tags == ["a", "b"]
+  }
+}

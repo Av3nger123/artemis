@@ -50,6 +50,15 @@ func Init() {
 	testCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
 
+	// Migrate command: YAML in, .art out, once. The one remaining YAML reader
+	// once ART-40 takes the format off the run path.
+	RootCmd.AddCommand(migrateCmd)
+	migrateCmd.Flags().StringP("file", "f", "", "Path to the YAML scenario to convert")
+	if err := migrateCmd.MarkFlagRequired("file"); err != nil {
+		slog.Error("Error marking flag as required", "error", err)
+	}
+	migrateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout")
+
 	RootCmd.AddCommand(generateCmd)
 	generateCmd.Flags().StringP("file", "f", "", "Path to the postman collection JSON file")
 	// On generateCmd, not testCmd: marking it on the wrong command left
@@ -66,6 +75,6 @@ var RootCmd = &cobra.Command{
 	Long: `Artemis is a comprehensive CLI tool for API testing. 
     It provides functionalities to parse and validate YAML files containing API test cases.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one.")
 	},
 }
