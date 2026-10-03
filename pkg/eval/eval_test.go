@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/token"
 )
 
 // The seven things an operand can be. Every operator's table below has a row
@@ -493,5 +495,71 @@ func TestMatchExtraction(t *testing.T) {
 				t.Errorf("%s = %#v, want %#v", r.src, got, r.want)
 			}
 		})
+	}
+}
+
+// TestEveryComparisonIsImplemented walks token.Comparisons rather than listing
+// the operators, because compare's switch is the third copy of that set --
+// the parser and the checker now share token.IsComparison, but an evaluator
+// cannot be derived from a table and has to be reconciled with one instead.
+//
+// An operator added to Comparisons and not taught to compare would parse,
+// check, pass the checker's simple/complex classifier, reach a UI's operator
+// dropdown through `artemis grammar --json`, and then fail at run time with
+// "unknown operator". This is what stops that.
+//
+// Both operands are strings, which is the one pair every comparison in the
+// language accepts: ordering compares them as numbers only when they are
+// numbers, and `contains` and `matches` want text. What is asserted is that
+// the operator was *implemented*, not what it answered.
+func TestEveryComparisonIsImplemented(t *testing.T) {
+	for _, op := range token.Comparisons {
+		// The three operand pairs the language's comparisons are defined
+		// over, tried in turn: ordering wants numbers, `contains` wants text
+		// or a collection, `matches` wants a pattern. An operator is
+		// implemented if any pair gives it a true-or-false answer; the test
+		// is about reachability, not about which answer.
+		answered := false
+		for _, src := range []string{
+			"1 " + op + " 1",
+			`"a" ` + op + ` "a"`,
+			`"a" ` + op + ` /a/`,
+		} {
+			x, bag := parser.ParseExpr("t.art", src)
+			if bag.HasErrors() {
+				t.Errorf("%s: the parser rejected %q, which token.Comparisons says is an operator", op, src)
+				break
+			}
+			v, err := Eval(x, typesEnv())
+			if err != nil {
+				if strings.Contains(err.Error(), "unknown operator") {
+					t.Errorf("%s is in token.Comparisons but pkg/eval has no case for it: %v", op, err)
+					break
+				}
+				continue // a type mismatch: try the next pair.
+			}
+			if _, ok := v.(bool); ok {
+				answered = true
+				break
+			}
+			t.Errorf("%s: %q evaluated to %v (%T), want a boolean", op, src, v, v)
+		}
+		if !answered {
+			t.Errorf("%s answered none of the operand pairs; is it implemented?", op)
+		}
+	}
+}
+
+// TestUnknownOperatorIsReachableOnlyByABug pins the arm the test above exists
+// to keep unreachable, so that deleting it would be noticed.
+func TestUnknownOperatorIsReachableOnlyByABug(t *testing.T) {
+	b := &ast.Binary{
+		X:  &ast.Literal{Tok: token.Token{Kind: token.Number, Text: "1", Value: "1"}},
+		Op: token.Token{Kind: token.Ident, Text: "beside", Value: "beside"},
+		Y:  &ast.Literal{Tok: token.Token{Kind: token.Number, Text: "1", Value: "1"}},
+	}
+	_, err := compare(b, "beside", float64(1), float64(1))
+	if err == nil || !strings.Contains(err.Error(), "unknown operator") {
+		t.Errorf("compare with an invented operator = %v, want an unknown-operator error", err)
 	}
 }

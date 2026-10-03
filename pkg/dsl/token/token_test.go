@@ -134,7 +134,7 @@ func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 	live := [][]string{
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
-		ConfigBlocks, BrowserConfigFields, Builtins,
+		StepFields, ConfigBlocks, BrowserConfigFields, Builtins,
 	}
 	for _, table := range live {
 		for _, w := range table {
@@ -158,5 +158,51 @@ func TestTriviaKindStrings(t *testing.T) {
 	}
 	if got := TriviaKind(9).String(); got != "trivia(9)" {
 		t.Errorf("unnamed trivia kind = %q", got)
+	}
+}
+
+// TestIsComparisonAcceptsEveryComparison walks Comparisons rather than listing
+// the operators, so an operator added to the table and not taught to the
+// lexer, the parser or the checker fails here first.
+func TestIsComparisonAcceptsEveryComparison(t *testing.T) {
+	for _, c := range Comparisons {
+		var tok Token
+		if k, ok := kindOf(c); ok {
+			tok = Token{Kind: k, Text: c}
+		} else {
+			tok = Token{Kind: Ident, Text: c, Value: c}
+		}
+		if !IsComparison(tok) {
+			t.Errorf("IsComparison(%q) = false, want true: it is in Comparisons", c)
+		}
+	}
+}
+
+// TestComparisonsAreSymbolsOrWordOperators is the other half: an entry of
+// Comparisons that is neither a Kind the lexer produces nor a word operator
+// would be unreachable, because nothing would ever lex it.
+func TestComparisonsAreSymbolsOrWordOperators(t *testing.T) {
+	for _, c := range Comparisons {
+		if _, ok := kindOf(c); ok {
+			continue
+		}
+		if !IsWordOperator(c) {
+			t.Errorf("Comparisons has %q, which is neither a token kind's spelling nor a word operator, so nothing can lex it", c)
+		}
+	}
+}
+
+// TestIsComparisonRejectsTheRest pins what is deliberately not a BinOp: the
+// logical and postfix word operators, and `=`, which is assignment.
+func TestIsComparisonRejectsTheRest(t *testing.T) {
+	for _, w := range []string{"and", "or", "not", "exists", "is"} {
+		if IsComparison(Token{Kind: Ident, Text: w, Value: w}) {
+			t.Errorf("IsComparison(%q) = true; it is a word operator but not a comparison", w)
+		}
+	}
+	for _, k := range []Kind{Assign, Minus, Dot, Colon, Comma, Ident, Number, String} {
+		if IsComparison(Token{Kind: k}) {
+			t.Errorf("IsComparison(%s) = true, want false", k)
+		}
 	}
 }

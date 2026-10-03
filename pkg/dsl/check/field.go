@@ -22,6 +22,26 @@ const (
 	kindBlock                     // not a value at all: `env { ... }`, `retry { ... }`
 )
 
+// valueKindNames are the kinds as `artemis grammar --json` spells them, so a
+// UI knows to render a checkbox for `headless` and a duration field for
+// `delay`. A kind added above without a name here is caught by
+// TestEveryValueKindIsNamed.
+var valueKindNames = map[valueKind]string{
+	kindAny:      "any",
+	kindArray:    "array",
+	kindBool:     "boolean",
+	kindInt:      "integer",
+	kindDuration: "duration",
+	kindBlock:    "block",
+}
+
+func (k valueKind) String() string {
+	if n, ok := valueKindNames[k]; ok {
+		return n
+	}
+	return "unknown"
+}
+
 // fieldSpec is what one field name means in one block: whether it takes a
 // `"key"` before its `=`, and what its value has to be.
 type fieldSpec struct {
@@ -79,7 +99,7 @@ var (
 			"timeout": {kind: kindDuration},
 			"retry":   {kind: kindBlock},
 		},
-		names: []string{"timeout", "retry"},
+		names: token.StepFields,
 	}
 
 	browserConfigBlock = blockSpec{

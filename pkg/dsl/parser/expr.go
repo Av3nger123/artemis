@@ -42,18 +42,6 @@ func wordPrec(t token.Token) int {
 	return 0
 }
 
-// isComparison reports whether t is one of the grammar's BinOp: the six symbol
-// comparisons and the two word ones.
-func isComparison(t token.Token) bool {
-	switch t.Kind {
-	case token.Eq, token.Ne, token.Lt, token.Le, token.Gt, token.Ge:
-		return true
-	case token.Ident:
-		return t.Value == "contains" || t.Value == "matches"
-	}
-	return false
-}
-
 // isPredicate reports whether t opens a postfix predicate: `exists` or `is`.
 func isPredicate(t token.Token) bool {
 	return t.Kind == token.Ident && (t.Value == "exists" || t.Value == "is")
@@ -126,7 +114,7 @@ func (p *parser) parseCmp() ast.Expr {
 	}
 
 	switch {
-	case isComparison(p.peek()):
+	case token.IsComparison(p.peek()):
 		op := p.next()
 		x = &ast.Binary{X: x, Op: op, Y: p.parseUnary()}
 	case p.atWord("exists"):
@@ -138,7 +126,7 @@ func (p *parser) parseCmp() ast.Expr {
 		return x
 	}
 
-	for p.continues() && (isComparison(p.peek()) || isPredicate(p.peek())) {
+	for p.continues() && (token.IsComparison(p.peek()) || isPredicate(p.peek())) {
 		op := p.peek()
 		p.errorf(op, diag.NonAssociativeOperator,
 			"%s cannot be chained with another comparison", describe(op)).

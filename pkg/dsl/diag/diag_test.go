@@ -137,3 +137,22 @@ func TestSeverityNames(t *testing.T) {
 		t.Errorf("an unknown severity renders as %q", got)
 	}
 }
+
+// TestSeveritiesCoversSeverityNames fails if a severity is added without
+// reaching the enumerated set, which is what `artemis grammar --json` ships.
+func TestSeveritiesCoversSeverityNames(t *testing.T) {
+	got := Severities()
+	if len(got) != len(severityNames) {
+		t.Fatalf("Severities has %d entries, severityNames has %d", len(got), len(severityNames))
+	}
+	seen := map[Severity]bool{}
+	for _, s := range got {
+		if _, named := severityNames[s]; !named {
+			t.Errorf("Severities has %d, which has no name", s)
+		}
+		if seen[s] {
+			t.Errorf("Severities lists %s twice", s)
+		}
+		seen[s] = true
+	}
+}

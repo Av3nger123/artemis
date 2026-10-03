@@ -1,0 +1,573 @@
+{
+  "schemaVersion": 1,
+  "choices": {
+    "action": {
+      "doc": "The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step.",
+      "values": [
+        {
+          "value": "run"
+        },
+        {
+          "value": "browser"
+        }
+      ]
+    },
+    "browserAction": {
+      "doc": "The statements legal inside a browser block. takesValue is whether the action takes a value as well as a selector.",
+      "values": [
+        {
+          "value": "goto",
+          "example": "goto \"/orders\""
+        },
+        {
+          "value": "click",
+          "example": "click \"text=Sign in\""
+        },
+        {
+          "value": "fill",
+          "takesValue": true,
+          "example": "fill \"#email\" = \"alice@example.com\""
+        },
+        {
+          "value": "select",
+          "takesValue": true,
+          "example": "select \"#plan\" = \"pro\""
+        },
+        {
+          "value": "press",
+          "example": "press \"Enter\""
+        },
+        {
+          "value": "hover",
+          "example": "hover \".menu\""
+        },
+        {
+          "value": "upload",
+          "takesValue": true,
+          "example": "upload \"#avatar\" = \"me.png\""
+        },
+        {
+          "value": "wait",
+          "example": "wait \"1s\""
+        }
+      ]
+    },
+    "builtin": {
+      "doc": "The functions callable in an expression. Which are in scope depends on the step type; see stepType.",
+      "values": [
+        {
+          "value": "env"
+        },
+        {
+          "value": "match"
+        },
+        {
+          "value": "text"
+        },
+        {
+          "value": "value"
+        },
+        {
+          "value": "attr"
+        },
+        {
+          "value": "count"
+        },
+        {
+          "value": "visible"
+        }
+      ]
+    },
+    "comparison": {
+      "doc": "The grammar's BinOp: the operator dropdown of a simple assertion.",
+      "values": [
+        {
+          "value": "=="
+        },
+        {
+          "value": "!="
+        },
+        {
+          "value": "<"
+        },
+        {
+          "value": "<="
+        },
+        {
+          "value": ">"
+        },
+        {
+          "value": ">="
+        },
+        {
+          "value": "contains"
+        },
+        {
+          "value": "matches"
+        }
+      ]
+    },
+    "configBrowserField": {
+      "doc": "The settings of a config browser block.",
+      "values": [
+        {
+          "value": "headless",
+          "valueKind": "boolean"
+        },
+        {
+          "value": "viewport",
+          "valueKind": "any"
+        }
+      ]
+    },
+    "configSubject": {
+      "doc": "The subjects of a config declaration.",
+      "values": [
+        {
+          "value": "browser"
+        }
+      ]
+    },
+    "declaration": {
+      "doc": "The declarations a scenario body holds, plus scenario itself.",
+      "values": [
+        {
+          "value": "scenario"
+        },
+        {
+          "value": "config"
+        },
+        {
+          "value": "var"
+        },
+        {
+          "value": "step"
+        }
+      ]
+    },
+    "diagnosticCode": {
+      "doc": "Every code artemis parse --json can emit. These are stable independently of message text: key behaviour off the code, never off the message.",
+      "values": [
+        {
+          "value": "action-not-first",
+          "doc": "a step statement appears above the step's action block",
+          "severity": "error"
+        },
+        {
+          "value": "bad-arity",
+          "doc": "a call or a browser action has the wrong number of arguments",
+          "severity": "error"
+        },
+        {
+          "value": "bad-value",
+          "doc": "a value is the wrong kind for the position it is in",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-action",
+          "doc": "a step block contains more than one action block",
+          "severity": "error"
+        },
+        {
+          "value": "invalid-duration",
+          "doc": "a string in a duration position is not a duration",
+          "severity": "error"
+        },
+        {
+          "value": "invalid-escape",
+          "doc": "a string literal contains an escape the language does not define",
+          "severity": "error"
+        },
+        {
+          "value": "invalid-regex",
+          "doc": "a regex literal does not compile",
+          "severity": "error"
+        },
+        {
+          "value": "missing-action",
+          "doc": "a step block contains no action block, so the step has no type",
+          "severity": "error"
+        },
+        {
+          "value": "missing-separator",
+          "doc": "two statements run together with no newline or comma between them",
+          "severity": "error"
+        },
+        {
+          "value": "nesting-too-deep",
+          "doc": "a file nests deeper than the parser will descend",
+          "severity": "error"
+        },
+        {
+          "value": "non-associative-operator",
+          "doc": "a comparison operator is chained with another",
+          "severity": "error"
+        },
+        {
+          "value": "not-in-scope",
+          "doc": "a name is not bound in this step's type",
+          "severity": "error"
+        },
+        {
+          "value": "reserved-word",
+          "doc": "a word reserved for a later tier is used as a name",
+          "severity": "error"
+        },
+        {
+          "value": "unclosed-block",
+          "doc": "a \"{\", \"(\" or \"[\" is never closed",
+          "severity": "error"
+        },
+        {
+          "value": "unclosed-interpolation",
+          "doc": "a \"${\" in a string has no closing \"}\"",
+          "severity": "error"
+        },
+        {
+          "value": "unclosed-interpolation-expr",
+          "doc": "a \"${\" expression is followed by neither \"}\" nor more string",
+          "severity": "error"
+        },
+        {
+          "value": "unexpected-character",
+          "doc": "a byte in the source starts no token",
+          "severity": "error"
+        },
+        {
+          "value": "unexpected-token",
+          "doc": "a token appears where the grammar wanted another",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-config",
+          "doc": "a \"config\" names a subject the language does not configure",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-field",
+          "doc": "an identifier names no field of anything in scope",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-identifier",
+          "doc": "a name is bound nowhere in the file",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-type",
+          "doc": "the right-hand side of \"is\" is not a type name",
+          "severity": "error"
+        },
+        {
+          "value": "unterminated-regex",
+          "doc": "a regex literal has no closing slash",
+          "severity": "error"
+        },
+        {
+          "value": "unterminated-string",
+          "doc": "a string literal has no closing quote",
+          "severity": "error"
+        }
+      ]
+    },
+    "expectClass": {
+      "doc": "The label the checker puts on every expect. simple is <path> <op> <literal>, <path> exists, <path> is <type>, or the not of one of those, and renders as three widgets; complex renders as one raw expression field.",
+      "values": [
+        {
+          "value": "simple"
+        },
+        {
+          "value": "complex"
+        }
+      ]
+    },
+    "method": {
+      "doc": "The HTTP verbs. A step whose action opens with one is an api step.",
+      "values": [
+        {
+          "value": "get"
+        },
+        {
+          "value": "post"
+        },
+        {
+          "value": "put"
+        },
+        {
+          "value": "patch"
+        },
+        {
+          "value": "delete"
+        },
+        {
+          "value": "head"
+        },
+        {
+          "value": "options"
+        }
+      ]
+    },
+    "requestField": {
+      "doc": "The fields of an api step's action block.",
+      "values": [
+        {
+          "value": "header",
+          "valueKind": "any",
+          "needsKey": true
+        },
+        {
+          "value": "query",
+          "valueKind": "any",
+          "needsKey": true
+        },
+        {
+          "value": "body",
+          "valueKind": "any"
+        }
+      ]
+    },
+    "reservedWord": {
+      "doc": "Words a later tier of the language is holding. Using one as a name is an error, so a form must refuse them.",
+      "values": [
+        {
+          "value": "if",
+          "purpose": "reserved for a future conditional form"
+        },
+        {
+          "value": "else",
+          "purpose": "reserved for a future conditional form"
+        },
+        {
+          "value": "for",
+          "purpose": "reserved for a future loop form"
+        },
+        {
+          "value": "in",
+          "purpose": "reserved for a future loop form"
+        },
+        {
+          "value": "while",
+          "purpose": "reserved for a future loop form"
+        },
+        {
+          "value": "parallel",
+          "purpose": "reserved for a future parallel-execution form"
+        },
+        {
+          "value": "group",
+          "purpose": "reserved for a future step-grouping form"
+        },
+        {
+          "value": "fn",
+          "purpose": "reserved for a future function form"
+        },
+        {
+          "value": "return",
+          "purpose": "reserved for a future function form"
+        },
+        {
+          "value": "import",
+          "purpose": "reserved for a future module system"
+        },
+        {
+          "value": "use",
+          "purpose": "reserved for a future module system"
+        },
+        {
+          "value": "let",
+          "purpose": "reserved for a future local-binding form"
+        },
+        {
+          "value": "setup",
+          "purpose": "reserved for a future setup and teardown form"
+        },
+        {
+          "value": "teardown",
+          "purpose": "reserved for a future setup and teardown form"
+        },
+        {
+          "value": "ai",
+          "purpose": "reserved for a possible future agentic assertion"
+        }
+      ]
+    },
+    "retryField": {
+      "doc": "The fields of a retry block.",
+      "values": [
+        {
+          "value": "times",
+          "valueKind": "integer"
+        },
+        {
+          "value": "delay",
+          "valueKind": "duration"
+        }
+      ]
+    },
+    "runField": {
+      "doc": "The fields of a run block.",
+      "values": [
+        {
+          "value": "args",
+          "valueKind": "array"
+        },
+        {
+          "value": "cwd",
+          "valueKind": "any"
+        },
+        {
+          "value": "stdin",
+          "valueKind": "any"
+        },
+        {
+          "value": "env",
+          "valueKind": "block"
+        }
+      ]
+    },
+    "severity": {
+      "doc": "A diagnostic's severity. An error means the file does not compile.",
+      "values": [
+        {
+          "value": "error"
+        },
+        {
+          "value": "warning"
+        }
+      ]
+    },
+    "stepField": {
+      "doc": "The fields of a step itself, as against of its action block.",
+      "values": [
+        {
+          "value": "timeout",
+          "valueKind": "duration"
+        },
+        {
+          "value": "retry",
+          "valueKind": "block"
+        }
+      ]
+    },
+    "stepStatement": {
+      "doc": "The statements legal in a step after its action block.",
+      "values": [
+        {
+          "value": "expect"
+        },
+        {
+          "value": "capture"
+        },
+        {
+          "value": "retry"
+        },
+        {
+          "value": "timeout"
+        },
+        {
+          "value": "within"
+        }
+      ]
+    },
+    "stepType": {
+      "doc": "What a step does, inferred from its action block, with the names it binds. A root absent from members has no closed member set: its shape is a run-time fact.",
+      "values": [
+        {
+          "value": "api",
+          "roots": [
+            "status",
+            "body",
+            "raw",
+            "headers"
+          ],
+          "functions": [
+            "env",
+            "match"
+          ]
+        },
+        {
+          "value": "terminal",
+          "roots": [
+            "exit_code",
+            "stdout",
+            "stderr"
+          ],
+          "functions": [
+            "env",
+            "match"
+          ]
+        },
+        {
+          "value": "browser",
+          "roots": [
+            "page"
+          ],
+          "functions": [
+            "env",
+            "match",
+            "text",
+            "value",
+            "attr",
+            "count",
+            "visible"
+          ],
+          "members": {
+            "page": [
+              "url",
+              "title"
+            ]
+          }
+        }
+      ]
+    },
+    "typeName": {
+      "doc": "The right-hand side of is.",
+      "values": [
+        {
+          "value": "string"
+        },
+        {
+          "value": "number"
+        },
+        {
+          "value": "boolean"
+        },
+        {
+          "value": "object"
+        },
+        {
+          "value": "array"
+        },
+        {
+          "value": "null"
+        }
+      ]
+    },
+    "wordOperator": {
+      "doc": "The operators spelled as words: and, or and not are logical, contains and matches are comparisons, exists and is are postfix predicates.",
+      "values": [
+        {
+          "value": "and"
+        },
+        {
+          "value": "or"
+        },
+        {
+          "value": "not"
+        },
+        {
+          "value": "contains"
+        },
+        {
+          "value": "matches"
+        },
+        {
+          "value": "exists"
+        },
+        {
+          "value": "is"
+        }
+      ]
+    }
+  }
+}

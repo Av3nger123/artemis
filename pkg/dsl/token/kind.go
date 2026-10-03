@@ -108,3 +108,22 @@ func itoa(n int) string {
 	}
 	return string(b[i:])
 }
+
+// kinds is names reversed: the Kind a piece of punctuation spells. Only the
+// operators and delimiters are reachable through it -- Ident's "identifier"
+// and Number's "number" are the kind's own name and not source text -- which
+// is exactly what tables.go wants when it asks which entries of Comparisons
+// are symbols.
+var kinds = func() map[string]Kind {
+	m := make(map[string]Kind, len(names))
+	for k, n := range names {
+		m[n] = k
+	}
+	return m
+}()
+
+// kindOf is the Kind whose source spelling is s, and whether there is one.
+func kindOf(s string) (Kind, bool) {
+	k, ok := kinds[s]
+	return k, ok
+}

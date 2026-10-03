@@ -44,7 +44,7 @@ func isSimple(x ast.Expr) bool {
 		// A comparison. `and` and `or` are Binary too and are deliberately
 		// not here: an `and` chain is one assertion but it is not three
 		// widgets.
-		if !isComparison(x.Op) {
+		if !token.IsComparison(x.Op) {
 			return false
 		}
 		return isPath(x.X) && isLiteral(x.Y)
@@ -57,19 +57,6 @@ func isSimple(x ast.Expr) bool {
 		// diagnostic about it is a separate concern from how a form renders
 		// it.
 		return isPath(x.X)
-	}
-	return false
-}
-
-// isComparison reports whether a Binary's operator is one of the grammar's
-// BinOp. The word operators arrive as Ident tokens, because the grammar has no
-// lexical keywords, so this asks about both.
-func isComparison(op token.Token) bool {
-	switch op.Kind {
-	case token.Eq, token.Ne, token.Lt, token.Le, token.Gt, token.Ge:
-		return true
-	case token.Ident:
-		return op.Value == "contains" || op.Value == "matches"
 	}
 	return false
 }

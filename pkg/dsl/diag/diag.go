@@ -41,6 +41,12 @@ var severityNames = map[Severity]string{
 	Warning: "warning",
 }
 
+// Severities returns the severity set, most serious first, as the single
+// source for anything that has to enumerate it -- `artemis grammar --json`, a
+// UI's filter control. There are two and there is no plan for a third; it is a
+// function rather than a slice so that a caller cannot reorder it.
+func Severities() []Severity { return []Severity{Error, Warning} }
+
 // String is the name used in JSON and in terminal output, so the two never
 // disagree about what a severity is called.
 func (s Severity) String() string {

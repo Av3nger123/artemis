@@ -54,6 +54,12 @@ var (
 	// RetryFields are the fields of a `retry` block.
 	RetryFields = []string{"times", "delay"}
 
+	// StepFields are the fields of a step itself, as opposed to of its action
+	// block: `timeout = "5s"` and `retry { ... }`. They are listed here rather
+	// than in the checker so that every field set of the grammar is in one
+	// place and `artemis grammar --json` has nowhere else to look.
+	StepFields = []string{"timeout", "retry"}
+
 	// ConfigBlocks are the subjects of a `config` declaration. Only `browser`
 	// has settings today.
 	ConfigBlocks = []string{"browser"}
@@ -87,7 +93,28 @@ var (
 	wordOperators  = set(WordOperators)
 	builtins       = set(Builtins)
 	reserved       = set(Reserved)
+
+	// comparisonKinds and comparisonWords are Comparisons split by how a token
+	// spells each entry: the six symbols arrive with a Kind of their own, the
+	// two words arrive as Ident. Both halves are built from that one slice, so
+	// an operator added there is recognised by IsComparison with no second
+	// edit -- and an entry that is neither a known symbol nor a word operator
+	// is caught by TestComparisonsAreSymbolsOrWordOperators rather than by
+	// quietly never matching.
+	comparisonKinds, comparisonWords = splitComparisons()
 )
+
+func splitComparisons() (map[Kind]bool, map[string]bool) {
+	kindSet, wordSet := map[Kind]bool{}, map[string]bool{}
+	for _, c := range Comparisons {
+		if k, ok := kindOf(c); ok {
+			kindSet[k] = true
+			continue
+		}
+		wordSet[c] = true
+	}
+	return kindSet, wordSet
+}
 
 func set(words []string) map[string]bool {
 	m := make(map[string]bool, len(words))
@@ -117,3 +144,19 @@ func IsBuiltin(word string) bool { return builtins[word] }
 
 // IsReserved reports whether word is reserved for a later tier of the language.
 func IsReserved(word string) bool { return reserved[word] }
+
+// IsComparison reports whether t is one of the grammar's BinOp -- the six
+// symbol comparisons and the two word ones.
+//
+// It takes a whole Token rather than a string because the two halves of
+// Comparisons are not spelled alike: `==` is a Kind and carries no Value,
+// while `contains` is an Ident like every other word in this grammar. The
+// parser's Cmp rule and the checker's simple/complex classifier both ask this,
+// so the operator dropdown a UI renders and the operators the compiler accepts
+// are one set by construction.
+func IsComparison(t Token) bool {
+	if t.Kind == Ident {
+		return comparisonWords[t.Value]
+	}
+	return comparisonKinds[t.Kind]
+}

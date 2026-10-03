@@ -1,0 +1,62 @@
+scenario "checkout" {
+  config browser {
+    headless = true
+  }
+
+  var base = env("BASE_URL")
+
+  step "sign in" {
+    post "${base}/session" {
+      header "Content-Type" = "application/json"
+      body = {"email": env("EMAIL"), "password": env("PASSWORD")}
+    }
+    retry { times = 3, delay = "1s" }
+    timeout = "10s"
+
+    expect status == 200
+    expect body.token exists
+    # a capture is visible to every step below it
+    capture token = body.token
+  }
+
+  step "the order is there" {
+    get "${base}/orders" {
+      header "Authorization" = "Bearer ${token}"
+      query "limit" = 10
+    }
+
+    expect status == 200
+    expect body.orders is array
+    expect body.orders[0].total > 0
+    expect not body.error exists
+    expect headers["content-type"] contains "json"
+    capture order_id = match(body.orders[0].ref, /ORD-(\d+)/)
+  }
+
+  step "the row landed in the database" {
+    run "psql" {
+      args = ["-tAc", "select count(*) from orders where ref = '${order_id}'"]
+      cwd = "."
+      env {
+        PGDATABASE = "shop"
+      }
+    }
+
+    expect exit_code == 0
+    expect stdout contains "1"
+    expect stderr == ""
+  }
+
+  step "the receipt renders" {
+    browser {
+      goto "${base}/orders"
+      click "text=View receipt"
+      fill "#note" = "please gift wrap"
+      press "Enter"
+    }
+
+    expect page.url contains "/receipt" within "10s"
+    expect text("[role=status]") contains "Saved"
+    expect visible(".receipt-total")
+  }
+}

@@ -1,0 +1,61 @@
+LEXICAL TOKENS
+
+  Ident     a letter or _ followed by letters, digits and _. This grammar has
+            no lexical keywords: every word above lexes as an Ident and the
+            parser decides what it meant from its position. So `body`, `get`
+            and `contains` are all legal variable and capture names.
+  Number    123, 3.5, 1e9. No leading +.
+  String    "..." with \" \\ \n \r \t \$ as its escapes, and ${ Expr } for
+            interpolation: "${base}/orders/${id}". A ${ with no } is an error
+            with a span on the ${.
+  Regex     /pattern/, with \/ for a literal slash. Go regexp syntax. It must
+            compile, and that is checked when the file is parsed, not when it
+            runs.
+  Bool      true or false.
+  Comment   # to the end of the line. Comments and blank lines are retained:
+            `artemis fmt` and a UI writing a file back preserve them.
+
+SEPARATORS
+
+  Statements separate by a newline. A comma does as well, so a block may be
+  written on one line: `retry { times = 3, delay = "1s" }`. There are no
+  semicolons. A trailing comma is permitted in an object and in an array.
+
+PRECEDENCE, loosest first
+
+  or
+  and
+  not                      (prefix)
+  == != < <= > >=  contains  matches  exists  is    (non-associative)
+  -                        (prefix)
+  .  []                    (postfix)
+
+  `not` binds looser than `exists` and `is`, so `not body.x exists` means
+  `not (body.x exists)`. It binds tighter than `and` and `or`, so
+  `not a and b` means `(not a) and b`. A comparison does not chain:
+  `a == b == c` is an error rather than a guess.
+
+WHAT THE GRAMMAR DOES NOT SAY
+
+  Field names are checked after parsing, not during it, so a typo gets
+  "unknown field "quer": did you mean "query"?" with a one-click fix rather
+  than a syntax error. The same is true of a config subject, a browser
+  action's name, a type name after `is`, and a builtin's name.
+
+  A step's type comes from its action block -- an HTTP verb makes it api,
+  `run` makes it terminal, `browser` makes it browser -- and the type decides
+  which names resolve inside it. A step has exactly one action block and it
+  comes first.
+
+  `timeout` and a `retry` block bound the whole step. `within` bounds one
+  assertion: `expect text(".total") contains "Pro" within "10s"` re-evaluates
+  that one expression until it holds or the budget runs out. A browser step's
+  assertions default to a 5s `within`; api and terminal assertions are
+  evaluated once.
+
+  A duration is a string of a number and a unit: "30s", "500ms", "2m". A
+  string in a duration position that is not one is a compile error.
+
+  There is no control flow: no conditionals, no loops, no functions, no
+  imports. That is deliberate, and the Reserved list above is what keeps the
+  door open.
