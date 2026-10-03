@@ -1,15 +1,21 @@
 module artemis
 
-go 1.21.5
+go 1.22
 
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.8.0
 )
 
-require github.com/inconshreveable/mousetrap v1.1.0 // indirect
+require (
+	github.com/deckarep/golang-set/v2 v2.8.0 // indirect
+	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
+)
 
 require (
+	github.com/mxschmitt/playwright-go v0.6201.1
 	github.com/ohler55/ojg v1.28.7
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/yaml.v3 v3.0.1
