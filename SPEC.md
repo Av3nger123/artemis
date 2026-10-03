@@ -7,12 +7,16 @@ and then states the rules that example obeys.
 
 If this document and anything else disagree, this document is right.
 
-> **Status.** The language is designed and approved
-> (`docs/artemis-dsl-design.md`); the front end that reads it is subsystem A and
-> is not built yet. Until it lands, `artemis run` reads the YAML format the
-> [README](README.md) documents, and this document is what the front end is
-> implemented against. Three places where this spec decides something the design
-> left open are marked **spec decision**.
+> **Status.** `artemis run` reads this language. The front end -- lexer, parser,
+> checker, printer -- is built, and every example in this document is compiled by
+> `pkg/shared/spec_test.go` on every CI run: an example here either works or the
+> build is red.
+>
+> The language was designed and approved in `docs/artemis-dsl-design.md`; three
+> places where this spec decides something that design left open are marked
+> **spec decision**. `browser` steps are designed and not implemented yet -- see
+> [Not in this spec](#not-in-this-spec). YAML is not a runtime format: it is an
+> input to `artemis migrate`, and the [README](README.md) documents the commands.
 
 ---
 
@@ -554,8 +558,13 @@ A double-quoted string may hold `${ <expr> }`, with any expression inside:
 
 ```art
 var root = "${base}/${version}"
-get "${root}/orders/${body.data.id}?since=${since}"
-header "Authorization" = "Bearer ${token}"
+
+step "orders" {
+  get "${root}/orders/${orderId}?since=${since}" {
+    header "Authorization" = "Bearer ${token}"
+  }
+  expect status == 200
+}
 ```
 
 | | |
@@ -717,8 +726,8 @@ A duration string: `"500ms"`, `"5s"`, `"1m30s"`. It is **per attempt**, so a ste
 with `timeout = "5s"` and `retry { times = 3 }` may take fifteen seconds.
 
 There is no spelling of "wait forever", by design: a request with no deadline is
-how a CI job hangs until someone notices. `timeout = "0s"` is the default, not
-the absence of one.
+how a CI job hangs until someone notices. `timeout = "0s"` is not that spelling
+either -- zero means the 30s default, the same as writing no `timeout` at all.
 
 A step that runs out of time is an **errored step** with the deadline named --
 `no response within 5s` -- and is retried if the step asked for retries. A
@@ -920,8 +929,8 @@ so a reader can tell "nothing failed" from "nothing ran":
           "error": "",
           "assertions": [
             {
-              "kind": "api",
-              "path": "status == 200",
+              "kind": "expect",
+              "path": "status",
               "operator": "==",
               "expected": 200,
               "actual": 200,
@@ -930,8 +939,8 @@ so a reader can tell "nothing failed" from "nothing ran":
               "line": 11
             },
             {
-              "kind": "api",
-              "path": "body.data.state == \"ready\"",
+              "kind": "expect",
+              "path": "body.data.state",
               "operator": "==",
               "expected": "ready",
               "actual": "pending",
@@ -951,8 +960,8 @@ so a reader can tell "nothing failed" from "nothing ran":
       "scenario": "items",
       "step": "get item",
       "status": "fail",
-      "kind": "api",
-      "path": "body.data.state == \"ready\"",
+      "kind": "expect",
+      "path": "body.data.state",
       "operator": "==",
       "expected": "ready",
       "actual": "pending",
@@ -979,9 +988,9 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `attempts` | step | How many times the step was tried; `1` unless `retry` asked for more |
 | `line` | step, assertion, failure | The 1-based line of the scenario file it was written on, and `0` when artemis does not know |
 | `assertions` | step | One entry per `expect` the step evaluated, plus one per capture that failed, in the order they were made |
-| `kind` | assertion, failure | The step type the assertion was made in: `api`, `terminal`, `browser`, or `capture` for a capture that could not be read |
-| `path` | assertion, failure | The source text of the expression that was evaluated. For a capture, the name it captures under |
-| `operator` | assertion, failure | The expression's top-level comparison token -- `==`, `contains`, `exists` -- and `""` for an expression with no single one |
+| `kind` | assertion, failure | What made the assertion: `expect` for every `expect`, whatever its expression does, and `capture` for a capture that could not be read. There is no per-operator kind and no per-step-type one |
+| `path` | assertion, failure | The source text of what was inspected: `body.data.count`. For an expression with no single subject -- an `or` chain, a bare call -- the whole expression; for a capture, the name it captures under |
+| `operator` | assertion, failure | The expression's top-level comparison token -- `==`, `contains`, `exists`, `is`, or `not` prefixed to one of them -- and `""` for an expression with no single one |
 | `expected`, `actual` | assertion, failure | The two sides as evaluated, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve |
 | `failures` | run | Everything the run says to go and fix, flat and in run order. One entry per failing assertion, per step that could not run, and per file that would not compile, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed |
 | `scenario`, `step` | failure | The names of the two things the failure sits under, repeated so the entry stands alone |
@@ -993,9 +1002,17 @@ Every list is a list, empty rather than `null`.
 
 **Spec decision.** `kind`, `path` and `operator` are what they are above because
 an `expect` is an expression and has no single path or operator the way the old
-`operator:`/`value:`/`path:` record did. The schema does not change: a consumer
-reading `path` still gets the one string that identifies what was checked, and
-`operator` is still the comparison when there is exactly one.
+`operator:`/`value:`/`path:` record did. `kind` names the statement rather than
+the step type: a type is a property of the step, and repeating it on every
+assertion under that step says nothing new. `path` and `operator` are read off
+the expression -- the subject's source text, and the comparison when there is
+exactly one. The schema does not change: a consumer reading `path` still gets
+the one string that identifies what was checked.
+
+`pkg/cli/testdata/art/report_json.golden` is a whole document from a real run,
+and `pkg/shared/spec_test.go` holds this section to it -- both the keys and the
+`kind` vocabulary -- so a report that gained a key without gaining a row here
+fails the build.
 
 What is **not** in the document is anything artemis does not record: no request
 bodies, no response bodies and no headers. The line a failure came from it does
@@ -1005,6 +1022,28 @@ record.
 `<testsuite>` and a step is a `<testcase>` whose `classname` is the scenario's
 file. Its `time` attribute is in **seconds**, not the milliseconds of
 `duration_ms`. The [README](README.md#junit-xml) specifies that dialect.
+
+---
+
+## The toolchain
+
+Four commands read the language without running any of it, and they read it
+through the same front end `artemis run` does -- the same lexer, the same
+parser, the same checker -- so none of them can disagree with this document
+about what a file means. The [README](README.md#commands) specifies their flags
+and their output.
+
+| Command | What it does |
+| --- | --- |
+| `artemis parse -f x.art` | Every diagnostic the file produces, and a non-zero exit if any is an error. `--json` writes them as one document instead, for an editor or a UI |
+| `artemis fmt [-w] x.art` | The file in canonical layout. Layout only: no string requoted, no expression reassociated, no comment dropped |
+| `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
+| `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
+
+A scenario is converted into this language once, never translated on the fly:
+`artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
+collection.json` for a Postman collection. Both write through `artemis fmt`'s
+printer, so what they produce is already canonical.
 
 ---
 
@@ -1029,8 +1068,8 @@ Everything here is deliberate. A scenario that uses one of these does not run.
 ## Coming from YAML
 
 YAML survives as an input to `artemis migrate -f old.yaml -o new.art`, which is
-the only remaining YAML reader, and as what the [README](README.md) documents
-until the front end lands. Four habits do not carry over:
+the only YAML reader left in the binary. Nothing runs it. Six habits do not
+carry over:
 
 | In YAML | Here |
 | --- | --- |

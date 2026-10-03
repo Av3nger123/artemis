@@ -1,138 +1,540 @@
 # Artemis
 
-Artemis is a command-line tool for automated testing of REST APIs, built with Go and Cobra. It provides a convenient way to ensure the stability and correctness of your API endpoints through automated testing procedures.
+Artemis is a command-line test runner for things you check from the outside: a
+REST API, a CLI, a release gate. A scenario is a file of steps and what to
+expect of each one, written in the Artemis DSL -- `.art` -- and a run exits
+non-zero the moment anything does not hold, so a CI job goes red on a broken
+API.
+
+The language has one job: say what to do and what must be true, in a file that a
+person can read at a glance and an agent can write without guessing. It is
+parsed, not templated -- a mistyped field or an undeclared variable is a compile
+error with a caret under it, before a single request goes out.
+
+[SPEC.md](SPEC.md) is the normative reference for the language. This file
+documents the commands.
+
+## A scenario
+
+```art
+scenario "checkout" {
+  var url = env("API_URL")
+
+  step "get a token" {
+    post "${url}/token" {
+      header "Content-Type" = "application/json"
+      body = {"username": "alice", "password": env("API_PASSWORD")}
+    }
+    expect status == 200
+    capture token = body.data.access_token
+  }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+      query "limit" = 10
+    }
+    timeout = "5s"
+    retry { times = 3, delay = "2s" }
+
+    expect status == 200
+    expect body.data.count > 0
+    expect body.data.email matches /.+@.+/
+    expect body.data.roles contains "admin"
+    expect body.data.token exists
+  }
+}
+```
+
+Run it:
+
+```sh
+artemis run checkout.art
+```
+
+Five things in that file are the whole language:
+
+| | |
+| --- | --- |
+| `var` | A value the steps can name, evaluated once before the first step runs. `env("NAME")` reads the environment, or the `.env` file |
+| the action block | `post "..." { ... }` -- one per step, and it is what gives the step its type. There is no `type:` key |
+| `expect` | One assertion, written as an expression. One `expect` line is one assertion in the report, so the line you wrote and the failure you read about are one to one |
+| `capture` | A value pulled out of what the step produced, available by name in every later step |
+| `retry`, `timeout`, `within` | Three different clocks: retry the whole step, bound one attempt, or wait for one assertion to come true |
 
 ## Features
 
-- Easy-to-use command-line interface (CLI) powered by Cobra
-- REST API endpoints described as steps in a YAML file, run one file or a whole folder at a time
-- Assertions with real operators: `equals`, `contains`, `matches`, `exists`, `type`, `gt`/`gte`/`lt`/`lte`
-- Values captured from one response and templated into the next
-- A run summary on the terminal, plus an opt-in JSON log of every request, response and error
-- A block per failure naming the scenario file and line, the step, expected and actual -- output an agent can act on
-- `--report json`: the whole outcome of a run as one JSON document, for a CI job or an agent to read
-- `--report junit`: the same run as JUnit XML, so CI surfaces failures under the scenario they came from
-- A non-zero exit code whenever anything fails, so a CI job goes red on a broken API
-- Postman collections converted to Artemis YAML as a starting point
+- Scenarios in a real language: lexed, parsed and name-checked before anything runs, with compiler-grade diagnostics -- the source line, a caret, and `did you mean "status"?`
+- Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
+- Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
+- Values captured from one step and used in the next, keeping their JSON type
+- A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
+- `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
+- A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
+- One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
+- A non-zero exit code whenever anything fails, and no third code to learn
 
 ## Installation
 
-To install Artemis, make sure you have Go installed and then run:
+Make sure you have Go installed, then:
 
 ```bash
 source ./install.sh
 ```
 
-## Commands
+## Coming from Postman or YAML
 
-### Running scenarios
+Both conversions are one-shot: they read the old file, write `.art` source, and
+never touch the original. Nothing translates on the fly, because a format that
+is only ever read through a converter is a format nobody has to learn.
+
+Both write through the same printer `artemis fmt` uses, so what comes out is
+already canonically formatted and `artemis fmt` over it changes nothing.
+
+### A Postman collection
 
 ```sh
-artemis run sample.yaml      # one file
+artemis generate -f orders.postman_collection.json              # to stdout
+artemis generate -f orders.postman_collection.json -o orders.art
+```
+
+Folders nest to any depth and every request becomes one step named by its folder
+path -- `"Orders / Admin / list orders"`. Headers, `url.query` parameters and the
+body's mode are read as the collection wrote them: a raw JSON body becomes an
+object literal, a urlencoded body a string. A disabled header or parameter is
+left out, because the author switched it off.
+
+Auth at the collection and at the request both become a header: bearer, basic
+with literal credentials, and apikey in a header or the query. A request with a
+saved example response asserts that example's status; one without asserts
+`expect status < 400`, which is the strongest thing the collection actually
+says.
+
+A Postman variable whose key is not a DSL name is renamed -- `base-url` becomes
+`base_url` -- and every placeholder is rewritten to match. A `{{name}}` no
+variable defines becomes `var name = env("NAME")`. Both are noted in the comment
+above the scenario, so nothing is renamed silently:
+
+```art
+# Generated by artemis generate from kitchen_sink.postman_collection.json.
+# The Postman variable "access-token" is written access_token here, because a DSL name cannot hold "-".
+# The Postman variable "base-url" is written base_url here, because a DSL name cannot hold "-".
+# Read from the environment, because the collection used them without defining them: access_token from ACCESS_TOKEN.
+scenario "Orders API" {
+  var base_url = "https://api.example.com"
+  var page_size = "10"
+  var access_token = env("ACCESS_TOKEN")
+
+  step "Health / ping" {
+    get "${base_url}/ping"
+    expect status == 200
+  }
+
+  step "Orders / Admin / list orders" {
+    get "${base_url}/orders" {
+      header "Authorization" = "Bearer ${access_token}"
+      header "Accept" = "application/json"
+      query "limit" = "${page_size}"
+      query "tag" = "new"
+    }
+    expect status < 400
+  }
+
+  step "Orders / create order" {
+    post "${base_url}/orders" {
+      header "Authorization" = "Bearer ${access_token}"
+      header "Content-Type" = "application/json"
+      body = {"note": "rush", "qty": 2, "sku": "A-1"}
+    }
+    expect status == 201
+  }
+}
+```
+
+A construct with no DSL spelling is an error naming the request, and nothing is
+written: a formdata or file body, an auth type needing a signature, a dynamic
+variable like `{{$guid}}`. Pre-request and test scripts are not read at all --
+the DSL has no spelling for arbitrary JavaScript, and it is not going to grow
+one.
+
+With `-o`, a file that is already there is an error rather than an overwrite;
+`--force` replaces it.
+
+### An old YAML scenario
+
+`artemis migrate` is the only thing in artemis that still reads YAML. Nothing
+runs it.
+
+```sh
+artemis migrate -f checkout.yaml                 # to stdout
+artemis migrate -f checkout.yaml -o checkout.art
+```
+
+This is the input:
+
+```yaml
+# The scenario this README documented before the DSL landed.
+name: "API Collection"
+type: functional
+variables:
+  - name: "url"
+    value: "{{env.API_URL}}"
+steps:
+  - name: "Login"
+    type: api
+    request:
+      url: "{{url}}/token"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      body: '{"username":"alice","password":"s3cret"}'
+    response:
+      status_code: 200
+      body:
+        - path: "$.data.message"
+          value: "success"
+    capture:
+      token: "$.data.access_token"
+  - name: "Orders"
+    type: api
+    request:
+      url: "{{url}}/orders"
+      method: "GET"
+      headers:
+        Authorization: "Bearer {{token}}"
+    response:
+      status_code: 200
+      body:
+        - path: "$.data.count"
+          operator: gt
+          value: 0
+    retry:
+      times: 3
+      delay: "2s"
+    timeout: "5s"
+```
+
+And this is what `artemis migrate -f checkout.yaml` writes:
+
+```art
+# The scenario this README documented before the DSL landed.
+scenario "API Collection" {
+  var url = env("API_URL")
+
+  step "Login" {
+    post "${url}/token" {
+      header "Content-Type" = "application/json"
+      body = {"password": "s3cret", "username": "alice"}
+    }
+    expect status == 200
+    expect body.data.message == "success"
+    capture token = body.data.access_token
+  }
+
+  step "Orders" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    timeout = "5s"
+    retry { times = 3, delay = "2s" }
+    expect status == 200
+    expect body.data.count > 0
+  }
+}
+```
+
+The YAML file is checked as strictly as it ever was -- a strict decode, and
+every step type validated -- so a scenario artemis would have refused to run is
+refused here too and nothing is written. The comment above the file and the
+comment above each step are carried over; comments anywhere else are dropped,
+and how many is reported on stderr, because a sentence written above one body
+check has no line in the migrated file to belong to.
+
+A construct with no DSL spelling is an error naming the step it was in: a
+wildcard, a recursive descent or a filter in a JSON path, `operator: empty` on a
+stream, an unclosed `{{`. Migration will not guess at one. [SPEC.md's *Coming
+from YAML*](SPEC.md#coming-from-yaml) lists the habits that do not carry over
+and what to write instead.
+
+## Commands
+
+### `artemis run`
+
+```sh
+artemis run checkout.art     # one file
 artemis run ./suite          # every scenario under a folder
 ```
 
 `run` takes one path. A file is run on its own. A folder is walked recursively
-for `*.yaml` and `*.yml` files, which are run in path order -- the same order on
-every machine -- as **one run**: one summary, one exit code. Nothing is shared
-between files: each scenario gets its own variables, so what one file captures is
+for `*.art` files, which are run in path order -- the same order on every
+machine -- as **one run**: one summary, one exit code. Nothing is shared between
+files or between scenarios: each gets its own variables, so what one captures is
 invisible to the next.
 
 A path that holds no scenario file is an error, not an empty run that passes. A
-file artemis cannot load is reported as an errored scenario naming the file and
-the line, and the files after it still run -- one typo does not hide the rest of
-the suite.
+file that does not compile is reported as an errored scenario, with its
+diagnostics, and the files after it still run -- one typo does not hide the rest
+of the suite.
 
 A run prints a line per step as it finishes, the checks that did not pass under
-the step that made them, and a summary. It exits 0 only if everything passed:
+the step that made them, the blocks to go and fix, and a summary. It exits 0
+only if everything passed:
 
 ```
-scenario: checkout (checkout.yaml)
-  ok    login                         2ms
-  FAIL  orders                       <1ms
-         $.status equals ok, got pending
-  ERROR fetch order                  <1ms
-         error performing request: Get "http://127.0.0.1:1/orders": connection refused
+scenario: login (suite/01_login.art)
+  ok    get a token                   4ms
+scenario: items (suite/02_items.art)
+  FAIL  list items                   <1ms
+         body.data.count > 0, got 0
+  FAIL  missing route                <1ms
+         status == 200, got 404
+suite/nested/03_broken.art:4:5: unknown field "timeot"
+   4 |     timeot = "5s"
+     |     ^^^^^^
+   hint: did you mean "timeout"?
+scenario: suite/nested/03_broken.art
+  ERROR suite/nested/03_broken.art:4:5: unknown field "timeot"
 
-Scenarios     1  (1 errored)
-Steps         3  (1 passed, 1 failed, 1 errored)
-Assertions    3  (2 passed, 1 failed)
-FAIL in 8ms
-```
+3 failures:
 
-A folder run prints the same thing per file, with the file that would not load
-in its place:
-
-```
-scenario: login (suite/01_login.yaml)
-  ok    sign in                     12ms
-scenario: suite/02_broken.yaml
-  ERROR parse suite/02_broken.yaml: yaml: unmarshal errors:
-  line 12: field respones not found in type models.Step
-scenario: items (suite/nested/03_items.yaml)
-  ok    list items                   4ms
-
-Scenarios     3  (2 passed, 1 errored)
-Steps         2  (2 passed)
-Assertions    4  (4 passed)
-FAIL in 17ms
-```
-
-### Reading a failure
-
-Under the step list, a failing run prints one block per thing to go and fix. Each
-block stands alone -- it names the file and the line, the scenario and the step, so
-nothing above it has to be read -- because the reader is as often the agent that
-wrote the scenario as a person scrolling a CI log:
-
-```
-2 failures:
-
-1) suite/items.yaml:14
+1) suite/02_items.art:7
      scenario  items
      step      list items
-     assert    body $.total gt
+     assert    expect body.data.count >
      expected  0
      actual    0
 
-2) suite/items.yaml:22
+2) suite/02_items.art:12
      scenario  items
      step      missing route
-     assert    status_code equals
+     assert    expect status ==
      expected  200
      actual    404
+
+3) suite/nested/03_broken.art
+     error     suite/nested/03_broken.art:4:5: unknown field "timeot"
+
+Scenarios     3  (1 passed, 1 failed, 1 errored)
+Steps         3  (1 passed, 2 failed)
+Assertions    4  (2 passed, 2 failed)
+FAIL in 6ms
 ```
+
+`artemis test -f checkout.art` is the old name for a one-file run. It still
+works and still fails the process on a failing run, but it prints a deprecation
+line: use `artemis run`.
+
+### Reading a failure
+
+Under the step list, a failing run prints one block per thing to go and fix.
+Each block stands alone -- it names the file and the line, the scenario and the
+step, so nothing above it has to be read -- because the reader is as often the
+agent that wrote the scenario as a person scrolling a CI log.
 
 | Field | What it is |
 | --- | --- |
-| the heading | `file:line` -- the line of the scenario to edit: the check's `path:`, the `status_code:`, the `exit_code:`, the capture's name. A step that could not run at all points at its own first line. A line artemis does not know is left off rather than printed as `:0`. |
-| `scenario` | The scenario's name. Absent for a file that would not load: there was no name to read. |
-| `step` | The step's name. Absent for a file that would not load, which never ran one. |
-| `assert` | The check: its kind, what it addressed, and the comparison applied. |
-| `expected` / `actual` | The two values. A string is quoted and a number is not, so `"200"` and `200` do not read alike; when the two sides are different JSON types each is followed by its type. |
-| `error` | In place of `expected`/`actual` when there was nothing to compare: a path that did not resolve, a command that could not be started, a file that would not parse. |
+| the heading | `file:line` -- the line of the scenario to edit: the `expect` that failed, or the `capture` that could not be read. A step that could not run at all points at its own first line. A line artemis does not know is left off rather than printed as `:0`. |
+| `scenario` | The scenario's name. Absent for a file that would not compile: there was no name to read. |
+| `step` | The step's name. Absent for a file that would not compile, which never ran one. |
+| `assert` | What was checked: the statement it came from, the subject's source text, and the comparison applied -- `expect body.data.count >`. |
+| `expected` / `actual` | The two values as evaluated. A string is quoted and a number is not, so `"200"` and `200` do not read alike; when the two sides are different JSON types each is followed by its type. |
+| `error` | In place of `expected`/`actual` when there was nothing to compare: a path that did not resolve, `>` against an object, a command that could not be started, a file that would not compile. |
 
-A step that could not run, and a scenario whose file would not load, each get a
-block too:
+A step that could not run, and a scenario whose file would not compile, each get
+a block too:
 
 ```
-3) suite/login.yaml:8
-     scenario  login
-     step      sign in
-     error     rendering request url: unknown variable "host"
-
-4) suite/02_broken.yaml
-     error     parse suite/02_broken.yaml: yaml: unmarshal errors:
-               line 12: field respones not found in type models.Step
+1) refused.art:2
+     scenario  down
+     step      ping
+     error     performing request: Get "http://127.0.0.1:1/orders": dial tcp 127.0.0.1:1: connect: connection refused
 ```
+
+That distinction runs through everything artemis prints and everything it
+reports: **failure** is "it ran and gave the wrong answer", **error** is "it
+could not run at all". A flaky environment should not read as a broken API.
+[SPEC.md](SPEC.md#the-three-kinds-of-failure) specifies the three classes --
+compile error, step error, assertion failure -- and which of them is retried.
 
 The blocks come between the step list and the tallies, so the verdict line is
-still the last thing a run writes. The same list is in the JSON report, flat,
-as [`failures`](#the-document).
+still the last thing a run writes. The same list is in the JSON report, flat, as
+`failures`.
 
-`artemis test -f sample.yaml` is the old name for a one-file run. It still works
-and still fails the process on a failing run, but it prints a deprecation line:
-use `artemis run`.
+### `artemis parse`
+
+```sh
+artemis parse -f checkout.art
+```
+
+`parse` lexes, parses and name-checks the file and runs nothing: no request is
+sent, no command is run. It prints every problem it finds -- all of them, in
+file order, with the source line echoed -- and exits non-zero if any is an
+error:
+
+```
+suite/nested/03_broken.art:4:5: unknown field "timeot"
+   4 |     timeot = "5s"
+     |     ^^^^^^
+   hint: did you mean "timeout"?
+1 error in suite/nested/03_broken.art
+```
+
+A clean file says so, because a command whose only job is to tell you something
+has to say something when the answer is yes:
+
+```
+suite/01_login.art: ok
+```
+
+#### `--json`
+
+`artemis parse -f checkout.art --json` writes the same diagnostics to stdout as
+one document instead, which is what an editor or a UI reads:
+
+```json
+{
+  "diagnostics": [
+    {
+      "code": "unknown-field",
+      "severity": "error",
+      "span": {
+        "file": "suite/nested/03_broken.art",
+        "line": 4,
+        "col": 5,
+        "endLine": 4,
+        "endCol": 11,
+        "offset": 78
+      },
+      "message": "unknown field \"timeot\"",
+      "hint": "did you mean \"timeout\"?",
+      "suggestions": [
+        {
+          "replace": "timeout"
+        }
+      ]
+    }
+  ]
+}
+```
+
+The `code` is stable and the `message` is not, so key behaviour off the code.
+The span's `offset` and `endCol` locate the text to underline. A suggestion's
+`replace` is a mechanical fix, so a client can offer one-click correction. A
+clean file writes `{"diagnostics": []}`. The exit status is the same either way:
+`--json` is a way to read the diagnostics, not a way to make a broken file pass.
+`artemis grammar --json` lists every code that can appear here.
+
+### `artemis fmt`
+
+```sh
+artemis fmt checkout.art       # the formatted file on stdout
+artemis fmt -w checkout.art    # rewrite it in place
+```
+
+Canonical layout: two-space indentation, one space either side of an operator,
+one item per line in a block that does not fit inline, LF endings, one trailing
+newline.
+
+Formatting changes layout and nothing else. No string is requoted, no number
+reformatted, no expression reassociated, and no comment dropped. Running it
+twice changes nothing the second time, and `-w` over a file that is already
+formatted does not touch its mtime.
+
+A file artemis reports an error for is not formatted at all: the diagnostics are
+printed and the file is left exactly as it was. A formatter that rewrites a
+broken file is a formatter that loses someone's work.
+
+### `artemis ast`
+
+```sh
+artemis ast -f checkout.art          # the syntax tree as JSON
+artemis ast --from-json < tree.json  # that tree back to .art source
+```
+
+The same tree, from the same front end that runs the suite, so a UI, a
+transpiler and the runtime cannot drift apart. Every node carries its span --
+`file`, `line`, `col`, `endLine`, `endCol`, `offset` -- and the document carries
+a `schemaVersion`, because a UI ships and upgrades independently of the CLI:
+
+```json
+{
+  "schemaVersion": 1,
+  "file": "suite/01_login.art",
+  "scenarios": [
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"login\"",
+        "value": "login"
+      },
+      "body": [
+        {
+          "kind": "var",
+          "name": "url",
+          "value": {
+            "kind": "call",
+            "callee": "env",
+            "args": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"API_URL\"",
+                "value": "API_URL"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+The checker's conclusions travel with the nodes they are about: each step
+carries the type its action implies and the names resolvable inside it, and each
+`expect` carries the simple/complex label that decides whether a form renders
+three widgets or one expression field. Nothing re-derives them.
+
+A file artemis reports an error for produces no JSON. `--from-json` is a
+conversion and nothing else: it writes canonical source and exits zero whenever
+the document decodes, and refuses a tree holding a node that did not parse.
+
+### `artemis grammar`
+
+```sh
+artemis grammar          # the whole language as text
+artemis grammar --json   # its enumerable choice points
+```
+
+The plain form is the language in one piece: the production rules, the lexical
+tokens they treat as atoms, the precedence the productions only imply, the rules
+the checker enforces after parsing, what each step type binds, and one worked
+example that compiles. It is meant to be read once, or pasted whole into a
+prompt.
+
+The `--json` form is for a program: every finite option set in the language --
+HTTP methods, browser actions with their arity, comparison operators, type
+names, the fields of every block with the kind each takes, builtins, reserved
+words with what they are held for, step types with the names they bind, and the
+diagnostic codes `artemis parse --json` can emit:
+
+```json
+{
+  "schemaVersion": 1,
+  "choices": {
+    "action": {
+      "doc": "The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step.",
+      "values": [
+        { "value": "run" },
+        { "value": "browser" }
+      ]
+    }
+  }
+}
+```
+
+Every one of those is read out of the table the parser and the checker
+themselves consult, so a word added to the language appears here without
+anything shipping. A client building a form reads it instead of hardcoding a
+list that drifts.
 
 ### Machine-readable reports
 
@@ -174,49 +576,39 @@ included, so a reader can tell "nothing failed" from "nothing ran".
 {
   "schema_version": 1,
   "started_at": "2026-03-04T05:06:07Z",
-  "duration_ms": 14,
-  "status": "fail",
+  "duration_ms": 1.627,
+  "status": "error",
   "passed": false,
   "counts": {
-    "scenarios":  { "total": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0 },
-    "steps":      { "total": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0 },
-    "assertions": { "total": 2, "passed": 1, "failed": 1, "errored": 0, "skipped": 0 }
+    "scenarios":  { "total": 3, "passed": 1, "failed": 1, "errored": 1, "skipped": 0 },
+    "steps":      { "total": 3, "passed": 1, "failed": 2, "errored": 0, "skipped": 0 },
+    "assertions": { "total": 4, "passed": 2, "failed": 2, "errored": 0, "skipped": 0 }
   },
   "scenarios": [
     {
       "name": "items",
-      "file": "suite/items.yaml",
+      "file": "suite/02_items.art",
       "status": "fail",
-      "duration_ms": 13,
+      "duration_ms": 0.624,
       "error": "",
       "steps": [
         {
-          "name": "get item",
+          "name": "list items",
           "status": "fail",
-          "duration_ms": 12.5,
+          "duration_ms": 0.316,
           "attempts": 1,
-          "line": 5,
+          "line": 4,
           "error": "",
           "assertions": [
             {
-              "kind": "status_code",
-              "path": "",
-              "operator": "equals",
-              "expected": 200,
-              "actual": 200,
-              "status": "pass",
-              "error": "",
-              "line": 11
-            },
-            {
-              "kind": "body",
-              "path": "$.status",
-              "operator": "equals",
-              "expected": "ready",
-              "actual": "pending",
+              "kind": "expect",
+              "path": "body.data.count",
+              "operator": ">",
+              "expected": 0,
+              "actual": 0,
               "status": "fail",
               "error": "",
-              "line": 14
+              "line": 7
             }
           ]
         }
@@ -225,50 +617,36 @@ included, so a reader can tell "nothing failed" from "nothing ran".
   ],
   "failures": [
     {
-      "file": "suite/items.yaml",
-      "line": 14,
+      "file": "suite/02_items.art",
+      "line": 7,
       "scenario": "items",
-      "step": "get item",
+      "step": "list items",
       "status": "fail",
-      "kind": "body",
-      "path": "$.status",
-      "operator": "equals",
-      "expected": "ready",
-      "actual": "pending",
+      "kind": "expect",
+      "path": "body.data.count",
+      "operator": ">",
+      "expected": 0,
+      "actual": 0,
       "error": ""
     }
   ]
 }
 ```
 
-| Key | Where | Meaning |
-| --- | --- | --- |
-| `schema_version` | run | `1`. It goes up when a key is removed or its meaning changes; a new key does not change it. |
-| `started_at` | run | When the run began, RFC 3339. |
-| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. `fail` is "it ran and gave the wrong answer"; `error` is "it could not run at all". Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. |
-| `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary. |
-| `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. |
-| `counts` | run | Totals per level, so nobody has to walk the tree to say "2 of 5 assertions failed". |
-| `name` | scenario, step | As written in the scenario. A scenario whose file would not load has no name, so it is `""` and `file` is what identifies it. |
-| `file` | scenario | The path the scenario was read from. |
-| `error` | scenario, step, assertion | Why it could not run, or `""`. A scenario's error is a file that would not load, and such a scenario has no steps. |
-| `attempts` | step | How many times the step was tried; `1` unless `retry:` asked for more. |
-| `kind` | assertion | What sort of check it was: `status_code`, `body`, `exit_code`, `stdout`, `stderr`. |
-| `path` | assertion | What was inspected -- a JSON path for a body check, `""` for a check with nothing to address. |
-| `operator` | assertion | The comparison that was applied: `equals`, `contains`, `gt`, and the rest of [Operators](#operators). |
-| `expected` / `actual` | assertion, failure | The value the scenario asked for and the value that was there, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve. |
-| `line` | step, assertion, failure | The line of the scenario file it was written on, and `0` when artemis does not know -- a check with no line of its own, a scenario built from a Postman collection. |
-| `failures` | run | Everything the run says to go and fix, flat and in run order: the same list the terminal blocks are built from. One entry per failing assertion, per step that could not run, and per file that would not load, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed. A failure with no check behind it has `kind: ""` and `expected: null`; its `error` says why. |
+Every key is specified, one row each, in
+[SPEC.md's *The JSON report*](SPEC.md#the-json-report) -- the one place it is
+written down, so the two documents cannot come to disagree. In short: every key
+is always present with its zero value rather than omitted, so a `jq` expression
+never has to tell absent from empty; `expected` and `actual` are the exception
+and are `null`, because either may legitimately be any JSON type; and every list
+is a list, empty rather than `null`.
 
-Every key is always present, with its zero value rather than omitted, so a `jq`
-expression never has to tell absent from empty. `expected` and `actual` are the
-exception: they are `null`, because either may legitimately be any JSON type.
-Every list is a list, empty rather than `null`.
+What is *not* in the document is anything artemis does not record: no request
+bodies, no response bodies and no headers. The line a failure came from it does
+record.
 
-What is *not* in the document is anything artemis does not record today: no
-request or response bodies and no headers.
-`pkg/cli/testdata/report_json.golden` is a whole document from a real run, for
-reading; `pkg/report/json.go` is where the shape is defined.
+`pkg/cli/testdata/art/report_json.golden` is a whole document from a real run,
+for reading, and `pkg/report/json.go` is where the shape is defined.
 
 #### JUnit XML
 
@@ -292,21 +670,21 @@ UI lists failing steps under the scenario they came from with no configuration.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="artemis" tests="4" failures="2" errors="1" skipped="0" time="0.042" timestamp="2026-03-04T05:06:07Z">
-  <testsuite name="health" file="suite/01_health.yaml" tests="1" failures="0" errors="0" skipped="0" time="0.004">
-    <testcase name="ping" classname="suite/01_health.yaml" time="0.004"></testcase>
+<testsuites name="artemis" tests="4" failures="2" errors="1" skipped="0" time="0.002" timestamp="2026-03-04T05:06:07Z">
+  <testsuite name="login" file="suite/01_login.art" tests="1" failures="0" errors="0" skipped="0" time="0.001">
+    <testcase name="get a token" classname="suite/01_login.art" time="0.001"></testcase>
   </testsuite>
-  <testsuite name="items" file="suite/02_items.yaml" tests="2" failures="2" errors="0" skipped="0" time="0.031">
-    <testcase name="list items" classname="suite/02_items.yaml" time="0.012">
-      <failure message="$.total gt 0, got 0">$.total gt 0, got 0</failure>
+  <testsuite name="items" file="suite/02_items.art" tests="2" failures="2" errors="0" skipped="0" time="0.001">
+    <testcase name="list items" classname="suite/02_items.art" time="0.000">
+      <failure message="body.data.count &gt; 0, got 0">body.data.count &gt; 0, got 0</failure>
     </testcase>
-    <testcase name="missing route" classname="suite/02_items.yaml" time="0.019">
-      <failure message="status_code equals 200, got 404">status_code equals 200, got 404</failure>
+    <testcase name="missing route" classname="suite/02_items.art" time="0.000">
+      <failure message="status == 200, got 404">status == 200, got 404</failure>
     </testcase>
   </testsuite>
-  <testsuite name="suite/03_broken.yaml" file="suite/03_broken.yaml" tests="1" failures="0" errors="1" skipped="0" time="0.000">
-    <testcase name="could not load" classname="suite/03_broken.yaml" time="0.000">
-      <error message="parse suite/03_broken.yaml: yaml: line 10: field respones not found">parse suite/03_broken.yaml: yaml: line 10: field respones not found</error>
+  <testsuite name="suite/nested/03_broken.art" file="suite/nested/03_broken.art" tests="1" failures="0" errors="1" skipped="0" time="0.000">
+    <testcase name="could not load" classname="suite/nested/03_broken.art" time="0.000">
+      <error message="suite/nested/03_broken.art:4:5: unknown field &#34;timeot&#34;">suite/nested/03_broken.art:4:5: unknown field &#34;timeot&#34;</error>
     </testcase>
   </testsuite>
 </testsuites>
@@ -323,13 +701,13 @@ Things worth knowing before you point a reporter at it:
   `duration_ms` is milliseconds; do not confuse the two.
 - **`<failure>` versus `<error>`** is the distinction artemis draws everywhere:
   `failure` is "it ran and gave the wrong answer", `error` is "it could not run at
-  all" -- a refused connection, a template that would not resolve, a capture that
-  would not read. A flaky environment should not read as a broken API.
+  all" -- a refused connection, a file that would not compile, a capture that
+  would not read.
 - **One `<failure>` per step, not per assertion.** Several reporters render only
   the first `<failure>` child of a case, so every failing assertion of a step goes
   in one element: the `message` attribute is the first one plus `(+N more)`, and
   the element's text has them one per line. Nothing is dropped.
-- **A scenario whose file would not load** gets a suite holding one synthetic
+- **A scenario whose file would not compile** gets a suite holding one synthetic
   `could not load` case with the reason, because an empty suite is rendered as
   nothing much however high its `errors` count.
 - **`timestamp` is on `<testsuites>` only.** artemis records when the run began,
@@ -337,38 +715,18 @@ Things worth knowing before you point a reporter at it:
   than none.
 - The counts are of cases actually emitted, so they are what a reporter adds up.
 
-`pkg/cli/testdata/report_junit.golden` is a whole document from a real run --
-the same run as `report_json.golden`, for comparing the two -- and
+`pkg/cli/testdata/art/report_junit.golden` is a whole document from a real run
+-- the same run as `report_json.golden`, for comparing the two -- and
 `pkg/report/junit.go` is where the dialect is defined.
-
-### Command for validating a YAML file without calling anything
-
-```sh
-artemis parse -f sample.yaml
-```
-
-`parse` loads the file exactly as `run` does -- strict decoding, so an unknown or
-misspelled key is an error naming its line, and every step type is checked --
-then prints the parsed scenario. It sends no requests, and exits non-zero if the
-file is not one artemis can run.
-
-### Command to convert Postman collection to YAML format
-
-An additional feature that i shipped with this is to convert postman collection format to artemis yaml format for faster configuration
-
-```sh
-artemis generate -f postman_collection.json
-```
-**Note**: After generating a YAML file from a Postman collection, manual adjustments might be necessary to tailor the YAML file according to specific requirements. The generated file serves as a starting point and helps in maintaining the structure and format consistent with the original collection.
 
 ### Logging
 
 The terminal output above is all a run writes by default: no log file is created
-unless you ask for one. Pass `-l` or `--log` to also write a detailed JSON log of
-the run -- every request, every response and every error -- to that path:
+unless you ask for one. Pass `-l` or `--log` to also write a detailed JSON log
+of the run -- every request, every response and every error -- to that path:
 
 ```sh
-artemis run sample.yaml -l custom_log_file.log
+artemis run checkout.art -l run.log
 ```
 
 The log is appended to, so a path that already exists keeps its earlier runs. A
@@ -376,409 +734,94 @@ path that cannot be opened fails the command.
 
 ### Environment variables
 
-Artemis supports loading environment variables from a specified `.env` file. This allows you to store sensitive information or configuration-specific details outside of your main configuration files.
+`env("NAME")` is an ordinary expression and is legal wherever an expression is:
+in a `var`, in a URL, in a header, in a `body`, in an `expect`. An unset name is
+the empty string rather than an error -- an absent variable is how a scenario
+says "no token".
 
-For custom env file path:
+```art
+scenario "staging" {
+  var url    = env("API_URL")
+  var secret = env("API_PASSWORD")
 
-```sh
-artemis run sample.yaml -l custom_log_file.log -e dev.env
-```
-When running Artemis with the -e flag followed by the path to your environment file, Artemis will load the environment variables from that file and make them available during the execution of your tests. A file named with `-e` that cannot be loaded is warned about; the default `.env` is optional and its absence is silent.
-
-**Remember not to commit your environment files to version control systems like Git, as they may contain sensitive information.**
-
-# Configuration
-
-> This section documents the YAML scenarios `artemis run` reads today. The language replacing it is specified in [SPEC.md](SPEC.md), which is normative; YAML becomes an input to `artemis migrate`.
-
-## Basic YAML Config
-
-This configuration defines a basic API request to generate a token. It includes the following parameters:
-
-- **name**: Name of the scenario.
-- **type**: Recorded with the scenario and nothing more today; `functional` is what
-  the Postman importer writes and what the examples here use.
-- **variables**: Variables the steps can reference as `{{name}}`.
-  - **name**: Name of the variable.
-  - **value**: Value of the variable.
-- **steps**: The steps, executed in the order they are written. `name`, `type`,
-  `request`, `response`, `capture`, `retry` and `timeout` are all keys of a step,
-  at the same indentation.
-  - **name**: Name of the step.
-  - **type**: What kind of step it is. `api` is a REST call with a JSON payload; `exec` runs a command -- see [Running commands](#running-commands-the-exec-step). An `api` step reads `request:` and `response:`; an `exec` step reads `exec:` and `expect:`.
-  - **request**
-    - **url**: The URL endpoint for the request. `"{{url}}"` is replaced with the
-      value of the variable named `url`.
-    - **method**: HTTP method for the request (e.g., POST).
-    - **headers**: Headers to be included in the request.
-    - **body**: Request body, as a string.
-  - **response**
-    - **status_code**: The HTTP status code the step expects.
-
-```yaml
-name: "API Collection"
-variables:
-  - name: "url"
-    value: "https://api.example.com/v2"
-type: functional
-steps:
-  - name: "Login"
-    type: api
-    request:
-      url: "{{url}}/token"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: '{"username":"user_name","password":"password"}'
-    response:
-      status_code: 200
+  step "sign in" {
+    post "${url}/token" {
+      header "Content-Type" = "application/json"
+      body = {"secret": secret}
+    }
+    expect status == 200
+  }
+}
 ```
 
-## Capturing Values
-
-A step can pull values out of what it produced and leave them for the steps
-after it. Here the access token is captured under the name `token`, which later
-steps write as `{{token}}`.
-
-- **capture**: A map from the name a value is referenced by to where the value
-  comes from. Any step type can have one -- it is not an HTTP-only key.
-    - A plain string is a [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html)
-      into the step's output parsed as JSON: `token: "$.data.access_token"`.
-    - `{json: "..."}` is the same thing written out.
-    - `{regex: "..."}` matches the output as plain text, for output that is not
-      JSON at all. The value is capturing group 1 when the pattern has one, and
-      the whole match when it does not. Flags go inline: `(?s)`, `(?i)`.
-
-Exactly one of `json:` and `regex:` is given. Everything that can be checked
-without running anything is checked when the file is read, so a regex that will
-not compile, a capture with no path, and a key that is not `json` or `regex` are
-all load errors naming the line -- `artemis parse -f scenario.yaml` finds them
-without sending a request.
-
-```yaml
-name: "API Collection"
-variables:
-  - name: "url"
-    value: "https://api.example.com/v2"
-type: functional
-steps:
-  - name: "Login"
-    type: api
-    request:
-      url: "{{url}}/token"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: '{"username":"user_name","password":"password"}'
-    response:
-      status_code: 200
-    capture:
-      token: "$.data.token.access_token"
-```
-
-A capture that cannot be read is an errored assertion under its step, naming the
-key, and the step fails -- one per unreadable capture, so two mistyped paths take
-one run to find. A capture that is read writes nothing to the terminal: it is
-often a token.
-
-```yaml
-name: "API Collection"
-variables:
-  - name: "url"
-    value: "https://api.example.com/v2"
-type: functional
-steps:
-  - name: "Follow the redirect"
-    type: api
-    request:
-      url: "{{url}}/latest"
-      method: "GET"
-    response:
-      status_code: 200
-    capture:
-      itemId: {regex: "/items/([0-9]+)"}
-      name: {json: "$.name"}
-  - name: "Read it back"
-    type: api
-    request:
-      url: "{{url}}/items/{{itemId}}"
-      method: "GET"
-    response:
-      status_code: 200
-```
-
-## Placeholders
-
-Anywhere a step's `url`, `body` or a header value is written -- and in every
-field of an `exec` step's `command`, `args`, `cwd`, `env` and `stdin` --
-`{{name}}` is replaced with the value of `name`. A name resolves against the scenario's
-`variables:` and against anything an earlier step captured with `capture:`.
-Surrounding spaces are ignored, so `{{ url }}` and `{{url}}` are the same.
-
-A captured value does not have to be a string: a JSON-path capture keeps the
-type the response gave it. A number renders as it was written (`42`, not
-`42.000000`), a boolean as `true` or `false`, a null as `null`, and an object or
-array as compact JSON -- so a captured object can be templated straight into a
-body:
-
-```yaml
-body: '{"user": {{user}}}'
-```
-
-Two things are errors, and fail the step before any request goes out:
-
-- **An unknown name.** `{{tokn}}` is not quietly sent to the server as literal
-  braces; the step fails saying which variable is missing.
-- **An unclosed placeholder.** `{{token` with no `}}`, or `{{url}` with one
-  closing brace, fails naming the placeholder and its position.
-
-Substitution is single pass: a value that itself contains `{{x}}` is used as it
-is and not expanded again. There is no escape syntax -- `{{` always opens a
-placeholder, so a body that needs literal braces should keep them in a
-variable's value. To use an environment variable, reference it from a variable's
-value (`{{env.NAME}}`, below) rather than in a step.
-
-## Adding Assertions
-
-This configuration further enhances the API request by adding assertions to validate the response. It checks if the HTTP status code is 200.
-
-- **response**: Specifies assertions to be performed on the response.
-  - **status_code**: Expected HTTP status code.
-  - **body**: Expected values in response.
-    - **path**: The [JSON path](https://support.smartbear.com/alertsite/docs/monitors/api/endpoint/jsonpath.html) in the response body.
-    - **operator**: The comparison to make. Defaults to `equals`.
-    - **value**: Expected value. It keeps the type you write: `value: 200` is a number, `value: "200"` a string, `value: true` a boolean.
-    - **type**: Optional. The JSON type the value at **path** must have -- one of `string`, `number`, `boolean`, `object`, `array`, `null`. A value of another type fails the check.
-
-### Operators
-
-| Operator | Checks |
-| --- | --- |
-| `equals` (default) | The value equals **value**. Numbers compare as numbers whichever way they are written, and arrays and objects compare element by element. |
-| `contains` | A string contains **value** as a substring, an array has it as an element, or an object has it as a key. |
-| `matches` | The value, rendered as a string, matches the regular expression in **value**. Unanchored, so `"ok"` matches `"not ok"`. |
-| `exists` | The path resolves to a non-null value. `value: false` asserts the opposite -- the key must be absent. |
-| `type` | The value's JSON type is **value** -- `string`, `number`, `boolean`, `object`, `array` or `null`. |
-| `gt`, `gte`, `lt`, `lte` | The value is a number greater than, at least, less than or at most **value**. |
-
-A check that cannot be made at all -- a malformed path, a path that is not in the
-response, an operator Artemis does not know, a regular expression that will not
-compile, `gt` against an object -- is reported as an errored assertion with the
-reason, and fails the run.
-
-```yaml
-response:
-  status_code: 200
-  body:
-    - path: "$.data.message"
-      value: "success"
-    - path: "$.data.id"
-      operator: gt
-      value: 0
-    - path: "$.data.token"
-      operator: exists
-    - path: "$.data.roles"
-      operator: contains
-      value: "admin"
-    - path: "$.data.email"
-      operator: matches
-      value: ".+@.+"
-    - path: "$.data.count"
-      type: "number"
-      value: 3
-```
-
-```yaml
-name: "API Collection"
-variables:
-  - name: "url"
-    value: "https://api.example.com/v2"
-type: functional
-steps:
-  - name: "Login"
-    type: api
-    request:
-      url: "{{url}}/token"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: '{"username":"user_name","password":"password"}'
-    response:
-      status_code: 200
-      body:
-        - path: "$.data.message"
-          value: "success"
-          type: "string"
-```
-
-## Meta Section
-
-A step can be retried, which is how a scenario polls an API that is not ready
-yet.
-
-- **retry**: How many times a step may be attempted, and how long to wait between attempts.
-  - **times**: the total number of attempts, not the number of retries after the first — `times: 3` sends at most three requests. Omitted, zero or negative means one attempt; a step is never attempted zero times.
-  - **delay**: a duration string (`"500ms"`, `"2s"`, `"1m30s"`) slept *between* attempts — never before the first, never after the last. Omitted, there is no wait at all.
-
-  Retrying stops as soon as an attempt passes: the status code matched and every assertion held. The older scalar form `retry: 5` still works and means `times: 5`.
-
-- **timeout**: How long one attempt may take, as a duration string (`"5s"`, `"1m30s"`). Omitted, it is **30s**. There is no way to say "wait forever": a request with no deadline is how a CI job hangs until someone notices.
-
-  It is per attempt, not per step, so a step with `timeout: "5s"` and `retry: {times: 3}` may take fifteen seconds. A step that runs out of time fails with `no response within 5s`, which is a failed step like any other and is retried if the step asked for retries.
-```yaml
-name: "API Collection"
-variables:
-  - name: "url"
-    value: "https://api.example.com/v2"
-type: functional
-steps:
-  - name: "Login"
-    type: api
-    request:
-      url: "{{url}}/token"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: '{"username":"user_name","password":"password"}'
-    response:
-      status_code: 200
-      body:
-        - path: "$.data.message"
-          value: "success"
-          type: "string"
-    retry:
-      times: 5
-      delay: "2s"
-    timeout: "10s"
-```
-## Running commands: the `exec` step
-
-An `exec` step runs a command and asserts on what it did. It is the escape
-hatch: anything artemis has no step type for -- a CLI, a migration script, a
-health check that is a shell one-liner -- is an `exec` step.
-
-- **exec**: What to run. The counterpart of `request:` on an `api` step.
-  - **command**: The program to run. It is executed directly: there is no shell,
-    no word splitting and no globbing, so `command: "ls *.go"` looks for a
-    binary with a space in its name. To use a shell, name one:
-    `command: "sh"`, `args: ["-c", "ls *.go | wc -l"]`.
-  - **args**: The arguments, one list entry each. Quoting is yours to get right
-    only in the sense that each entry arrives at the command exactly as written.
-  - **cwd**: The directory to run in. Relative paths are relative to where
-    artemis itself was run from, not to the scenario file.
-  - **env**: Variables to add to the environment. They are layered on top of the
-    environment artemis was given, and a name set here wins over an inherited
-    one. There is no way to unset a variable.
-  - **stdin**: Text written to the command's standard input. A step that does
-    not set it gives the command a standard input that is immediately at end of
-    file, so a command that reads stdin cannot hang the run.
-- **expect**: What to expect of the run. The counterpart of `response:`.
-  - **exit_code**: The exit code the command must have. Omitted, it is **0**, so
-    a step that says nothing expects the command to succeed. There is no way to
-    say "any exit code".
-  - **stdout**, **stderr**: Checks against the stream as plain text, each one
-    assertion.
-    - **operator**: `contains` (the default), `equals`, `matches` or `empty`.
-    - **value**: The text, or for `matches` the regular expression. `empty`
-      takes no value.
-
-`contains` is the default rather than `equals` because almost every command ends
-its output with a newline, which makes an exact match the check that is right in
-theory and wrong in practice. `empty` is "nothing but whitespace", which is how
-you say *stderr was quiet*. A `matches` pattern is a Go regular expression and
-unanchored; `$` is end of output, so a pattern anchoring one line of many needs
-the inline `(?m)` flag.
-
-A command that ran and exited with the wrong code is a **failed assertion**. A
-command that could not be run at all -- not on the `PATH`, a `cwd` that does not
-exist -- is an **errored step**, because there was no exit code to compare. A
-wrong exit code does not stop the stream checks from being made: stderr is
-exactly what a failed command is diagnosed from.
-
-`capture:`, `retry:` and `timeout:` work as they do on any other step.
-`capture:` reads the command's standard output -- a JSON path when the command
-printed a JSON object, a regex against it as text. Each stream is kept up to 1
-MiB per attempt; a command that prints more than that has the rest dropped.
-
-```yaml
-name: "Release checks"
-variables:
-  - name: "tag"
-    value: "v1.4.0"
-type: functional
-steps:
-  - name: "Tag exists"
-    type: exec
-    exec:
-      command: "git"
-      args: ["rev-parse", "--verify", "{{tag}}^{commit}"]
-    expect:
-      exit_code: 0
-      stderr:
-        - operator: empty
-    capture:
-      sha: {regex: "^([0-9a-f]{40})"}
-    timeout: "5s"
-  - name: "Changelog mentions the tag"
-    type: exec
-    exec:
-      command: "sh"
-      args: ["-c", "grep -c '{{tag}}' CHANGELOG.md"]
-      cwd: "."
-    expect:
-      stdout:
-        - operator: matches
-          value: "^[1-9]"
-  - name: "The build is reproducible"
-    type: exec
-    exec:
-      command: "go"
-      args: ["build", "./..."]
-      env:
-        CGO_ENABLED: "0"
-    expect:
-      exit_code: 0
-```
-
-## Environment support
-
-Environment variables are read in a variable's `value`, with `{{env.NAME}}`:
-
-```yaml
-name: "API Collection"
-type: functional
-variables:
-  - name: "url"
-    value: "{{env.url}}"
-  - name: "secret"
-    value: "{{env.secret}}"
-steps:
-  - name: "Login"
-    type: api
-    request:
-      url: "{{url}}/token"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: '{"secret":"{{secret}}"}'
-    response:
-      status_code: 200
-```
-
-`{{env.url}}` and `{{env.secret}}` are replaced with the values of the `url` and
-`secret` environment variables, loaded from the `.env` file (or the file given
-with `-e`) and from the process environment:
+Names come from the process environment and from the `.env` file in the working
+directory, or from the file given with `-e`:
 
 ```dotenv
-url=https://localhost:8000
-secret=my_secret_key
+API_URL=https://localhost:8000
+API_PASSWORD=my_secret_key
 ```
 
-The steps then use `{{url}}` and `{{secret}}` like any other variable. `{{env.*}}`
-is resolved only in a variable's value, not inside a step, so a scenario has one
-place where its environment is wired up. A name that is not set becomes the empty
-string rather than failing the run: that is how a scenario says "no token".
+```sh
+artemis run checkout.art -e dev.env
+```
 
+A file named with `-e` that cannot be read is a warning; a missing default
+`.env` is silent.
+
+**Remember not to commit your environment files to version control systems like
+Git, as they may contain sensitive information.**
+
+## Checking a command, not an API
+
+A `terminal` step runs a command and asserts on what it did. It is the escape
+hatch: anything artemis has no step type for -- a CLI, a migration script, a
+release gate -- is a `terminal` step. The action is `run`, and `run` is what
+makes the step a terminal one:
+
+```art
+scenario "release checks" {
+  var tag = env("RELEASE_TAG")
+
+  step "the tag exists" {
+    run "git" { args = ["rev-parse", "--verify", "${tag}^{commit}"] }
+    expect exit_code == 0
+    expect stderr matches /^\s*$/
+    capture sha = match(stdout, /^([0-9a-f]{40})/)
+    timeout = "5s"
+  }
+
+  step "the changelog mentions it" {
+    run "sh" { args = ["-c", "grep -c '${tag}' CHANGELOG.md"] }
+    expect stdout matches /^[1-9]/
+  }
+
+  step "it builds" {
+    run "go" {
+      args = ["build", "./..."]
+      env { CGO_ENABLED = "0" }
+    }
+    expect exit_code == 0
+    expect stderr matches /^\s*$/
+  }
+}
+```
+
+**There is no shell.** The command is executed directly with its arguments: no
+word splitting, no globbing, no `~` expansion. `run "ls *.go"` looks for a
+binary with a space in its name and does not find one. A scenario that wants a
+pipeline or a glob names a shell itself, as the second step does. That is longer
+to write and impossible to misread.
+
+A command that ran and exited with the wrong code is a **failed assertion**; one
+that could not be run at all -- not on the `PATH`, a `cwd` that does not exist
+-- is an **errored step**, because there was no exit code to compare. A wrong
+exit code does not stop the `stderr` check from being made: stderr is exactly
+what a failed command is diagnosed from.
+
+[SPEC.md's *`terminal` steps*](SPEC.md#terminal-steps) specifies every field of
+the `run` block -- `args`, `cwd`, `stdin`, `env` -- and the 1 MiB per attempt
+each stream is kept up to.
 
 ## Development
 
@@ -802,7 +845,11 @@ It is skipped -- with a note, not an error -- when the linter is not on your PAT
 
 ### Golden-file tests
 
-`pkg/cli/testdata` holds whole runs: `<case>.yaml` is a scenario a user could have written, `<case>.golden` is every byte artemis printed for it plus the error it exited with. A fixture writes `%SERVER%` where the test's HTTP server goes, and the temp path, the server's port and every duration are normalised before comparison, so the files are stable across machines.
+`pkg/cli/testdata/art` holds whole runs: `<case>.art` is a scenario a user could
+have written, `<case>.golden` is every byte artemis printed for it plus the error
+it exited with. A fixture writes `%SERVER%` where the test's HTTP server goes,
+and the temp path, the server's port and every duration are normalised before
+comparison, so the files are stable across machines.
 
 When a change to the report or the runner is deliberate, regenerate them and read the diff:
 
@@ -811,27 +858,44 @@ make golden      # go test ./pkg/cli -run TestGolden -update
 git diff pkg/cli/testdata
 ```
 
-### README examples
+### The documentation tests
 
-`pkg/shared/readme_test.go` parses the YAML in this file. Every fenced `yaml`
-block has to be well-formed YAML, and every block that is a whole scenario -- one
-with a top-level `steps:` -- is loaded through the same strict decoder and
-validator `artemis run` uses. An example here that artemis would reject is a
-failing test, not a surprise for whoever copies it.
+`pkg/shared/readme_test.go` and `pkg/shared/spec_test.go` compile the examples in
+this file and in SPEC.md. Every fenced `art` block goes through the real front
+end -- `pkg/dsl/parser` and `pkg/dsl/check`, the same two the runner uses -- and
+every block that is a whole scenario has to name-check as well as parse: types
+inferred, every name resolvable, every field known. A fragment is wrapped in the
+part of a scenario its prose puts it in and has to parse there.
+
+So an example in either document that artemis would reject is a failing test,
+not a surprise for whoever copies it. The tests also hold the prose to the code:
+SPEC.md's type names against `token.TypeNames`, its operator table against what
+`artemis migrate` can translate, and its report schema against
+`pkg/cli/testdata/art/report_json.golden`.
+
+The one fenced `yaml` block left in this file is `artemis migrate`'s documented
+input, and it is loaded through `migrate.ParseYAMLFile` -- the same call the
+command makes -- so it stays an input the command can read.
 
 ### CI
 
 `.github/workflows/ci.yml` runs on every push and pull request: `go build ./...`, `go vet ./...`, a gofmt check, `go test -race -coverprofile=coverage.out ./...`, and golangci-lint. The same commands are available as make targets, so a red build is reproducible locally.
 
-
 ## Not yet
 
-- **Concurrent execution.** Steps run one after another, in the order they are
-  written, and a scenario's steps share their captured variables. There is no way
-  to ask for parallelism yet.
-- **Step types other than `api` and `exec`.** `type:` accepts those two and
-  nothing else; any other value is an error at load time. `db` and `browser` are
-  what the executor interface was sized for, and neither exists yet.
+- **`browser` steps.** The action block, the element functions, `config browser`,
+  and the session that persists across a scenario's browser steps are designed
+  and specified, and not implemented. A scenario that uses one does not run.
+- **`db` steps.** Designed, not implemented.
+- **Control flow, functions, imports.** `if`, loops, `parallel`, `group`, `fn`,
+  `import`, `setup`, `teardown` are reserved words, not features. Reuse is what a
+  host language is for, and code generation is the answer to "I need real
+  abstraction".
+- **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
+  valuable property is determinism, and an assertion that flakes for
+  unreproducible reasons is worse than a missing one.
+- **Concurrent execution.** Scenarios and steps run one after another, in the
+  order they are written. There is no way to ask for parallelism.
 - **Request and response detail in a report.** Neither report carries a request
   body, a response body or headers: the result model does not record them. The
   line a failure came from it does -- see [Reading a failure](#reading-a-failure).

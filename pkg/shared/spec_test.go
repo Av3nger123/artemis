@@ -26,38 +26,32 @@ const (
 // test that passes on nothing.
 const wantSpecScenarios = 4
 
-// SPEC.md specifies the `.art` DSL, which nothing parses yet: subsystem A is
-// what will read it. So its examples cannot be run through a loader the way the
-// README's are, and these tests check the two things that are checkable and are
-// exactly the two that rot:
+// SPEC.md specifies the `.art` DSL, and the front end that reads it exists, so
+// its examples are compiled rather than linted -- which is what the first draft
+// of this file said should replace its brace counting once there was a parser.
+// These tests check the three things that rot:
 //
-//   - the examples, for the structural mistakes a reader would hit (unbalanced
-//     braces) and for having drifted back to the YAML format the DSL replaces;
+//   - the examples, by running every one of them through the real front end;
+//   - the examples again, for having drifted back to the YAML format the DSL
+//     replaces, which no parse error would catch -- `{{name}}` is a perfectly
+//     good string literal;
 //   - the spec's own lists, against the code that already defines them -- the
 //     type names token.TypeNames admits, the YAML operators pkg/shared/migrate
 //     still has to translate, and the report's schema version and its keys.
-//
-// When the front end lands, the lint below should be replaced by parsing every
-// example, which is strictly better and is what readme_test.go already does for
-// the YAML.
 
-// TestSpecArtExamplesAreStructurallySound holds every fenced art block in
-// SPEC.md to balanced braces, and counts the whole scenarios among them.
+// TestSpecArtExamplesCompile holds every fenced art block in SPEC.md to the
+// language SPEC.md specifies, and counts the whole scenarios among them.
 //
-// Brace counting is a weak check and is meant to be: it catches the example that
-// lost a closing brace in an edit, which is the mistake a reader cannot work
-// around, without pretending to be a parser.
-func TestSpecArtExamplesAreStructurallySound(t *testing.T) {
+// A whole scenario is parsed and name-checked as the file it is; a fragment is
+// wrapped in the part of a scenario its prose puts it in and has to parse. See
+// compileBlock.
+func TestSpecArtExamplesCompile(t *testing.T) {
 	scenarios := 0
 	for _, b := range docBlocks(t, specPath, "art") {
-		if strings.HasPrefix(strings.TrimSpace(b.body), "scenario ") {
+		if isArtScenario(b) {
 			scenarios++
 		}
-		if depth, err := braceDepth(b.body); err != nil {
-			t.Errorf("SPEC.md line %d: %v\n%s", b.line, err, b.body)
-		} else if depth != 0 {
-			t.Errorf("SPEC.md line %d: %d brace(s) are never closed\n%s", b.line, depth, b.body)
-		}
+		compileBlock(t, specPath, b)
 	}
 
 	if scenarios < wantSpecScenarios {
@@ -67,12 +61,13 @@ func TestSpecArtExamplesAreStructurallySound(t *testing.T) {
 }
 
 // TestSpecExamplesHaveNoYAMLisms holds SPEC.md's examples to the format SPEC.md
-// specifies.
+// specifies, beyond what compiling them proves.
 //
 // The spec was rewritten from the YAML surface to the DSL, so the live risk is
 // an example that drifts back: a `{{name}}` placeholder where `"${name}"`
 // belongs, or a `type:` key on a step, which the DSL does not have at all. Both
-// are the sort of thing an agent copies without questioning.
+// are the sort of thing an agent copies without questioning, and neither is a
+// parse error -- `"{{name}}"` is a string with braces in it.
 func TestSpecExamplesHaveNoYAMLisms(t *testing.T) {
 	yamlisms := []struct {
 		substring string
@@ -192,6 +187,49 @@ func TestSpecDocumentsTheReportSchema(t *testing.T) {
 	}
 }
 
+// TestSpecDocumentsTheAssertionVocabulary holds the one part of the schema that
+// is a value rather than a key: what an assertion's `kind` can be.
+//
+// The first draft of SPEC.md predicted the step type there -- `kind: "api"` --
+// and the lowerer emits `expect` or `capture` instead, which is a thing a
+// consumer branches on and so is worth pinning. The constants are
+// pkg/dsl/lower's, read here through the golden rather than imported: this
+// package's tests are about the documents, and the document artemis wrote is
+// the better witness.
+func TestSpecDocumentsTheAssertionVocabulary(t *testing.T) {
+	spec := docText(t, specPath)
+
+	kinds := map[string]bool{}
+	collectKinds(goldenReport(t), kinds)
+	if len(kinds) == 0 {
+		t.Fatalf("%s holds no assertion with a kind -- did the golden's shape change?", goldenPath)
+	}
+	for kind := range kinds {
+		if !strings.Contains(spec, "`"+kind+"`") {
+			t.Errorf("SPEC.md does not document the assertion kind %q, which %s contains", kind, goldenPath)
+		}
+	}
+}
+
+// collectKinds gathers every non-empty "kind" value in a decoded report. A
+// failure entry for a file that would not compile has `kind: ""`, which is
+// documented as a key and is not a vocabulary word.
+func collectKinds(v any, into map[string]bool) {
+	switch t := v.(type) {
+	case map[string]any:
+		if kind, ok := t["kind"].(string); ok && kind != "" {
+			into[kind] = true
+		}
+		for _, child := range t {
+			collectKinds(child, into)
+		}
+	case []any:
+		for _, child := range t {
+			collectKinds(child, into)
+		}
+	}
+}
+
 // goldenReport is the JSON document out of the golden file.
 //
 // The golden holds a whole run -- the console report, then the JSON document on
@@ -243,22 +281,4 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
-}
-
-// braceDepth returns how many braces of body are still open at its end, and an
-// error for a closing brace with nothing to close.
-func braceDepth(body string) (int, error) {
-	depth := 0
-	for i, r := range body {
-		switch r {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth < 0 {
-				return 0, fmt.Errorf("a closing brace at offset %d has nothing to close", i)
-			}
-		}
-	}
-	return depth, nil
 }
