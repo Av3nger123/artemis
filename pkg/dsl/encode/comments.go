@@ -58,11 +58,6 @@ func nodeComments(own []token.Token, lbrace, rbrace token.Token) *obj {
 	return o
 }
 
-// stmtComments is nodeComments for a node with no braces of its own.
-func stmtComments(own []token.Token) *obj {
-	return nodeComments(own, token.Token{}, token.Token{})
-}
-
 // eofComments is the group on the document: the comments the end of the file is
 // carrying, which print.Canonical writes after the last scenario.
 func eofComments(eof token.Token) *obj {

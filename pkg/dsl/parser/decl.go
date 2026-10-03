@@ -189,9 +189,12 @@ func (p *parser) parseStep() ast.Decl {
 				// will look for it.
 				s.Body = append(s.Body, badOf(action))
 			}
-		} else if stmt := p.parseStepStmt(); stmt != nil {
+		} else {
+			// No nil check: every branch of parseStepStmt returns a node, and
+			// recoverTo is the one it returns when nothing parsed -- a Bad that
+			// has to reach the body or the file would not round-trip.
 			sawStmt = true
-			s.Body = append(s.Body, stmt)
+			s.Body = append(s.Body, p.parseStepStmt())
 		}
 
 		if p.i == before {

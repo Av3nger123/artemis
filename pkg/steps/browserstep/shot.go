@@ -21,9 +21,8 @@ import (
 // otherwise.
 //
 // A folder in the working directory rather than a temporary one: the reader is
-// either a person who wants to look at it or a CI job about to upload it as an
-// artifact, and neither is served by a path under /tmp that the next step
-// removes. It is created lazily -- on the first write -- so a suite of api
+// either a person who wants to look at it or a CI job about to upload it, and
+// neither is served by a path under /tmp that the next step removes. It is created lazily -- on the first write -- so a suite of api
 // steps never grows an empty folder.
 const DefaultDir = "artemis-screenshots"
 
@@ -84,7 +83,7 @@ func (s *Shots) On(b *Bindings, scenario, step string) (string, error) {
 // overwrites the file from the run before it, which is what a person comparing
 // two runs wants and what keeps a workspace from filling up; a timestamp would
 // make the path in the JSON report unpredictable, so nothing could assert on
-// it and a CI job could not name the artifact it was about to upload.
+// it and a CI job could not name the file it was about to upload.
 //
 // Uniqueness is still enforced, because two steps in one run may share a name:
 // the second gets `-2`, the third `-3`. Within a run, not across runs.

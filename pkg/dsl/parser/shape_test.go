@@ -199,19 +199,3 @@ func codes(bag *diag.Bag) []diag.Code {
 	}
 	return out
 }
-
-// firstExpect digs out the nth expect statement of the first step of the first
-// scenario, which is where most expression tests put their expression.
-func firstExpect(t *testing.T, f *ast.File, n int) *ast.Expect {
-	t.Helper()
-	var found []*ast.Expect
-	ast.Inspect(f, func(node ast.Node) {
-		if e, ok := node.(*ast.Expect); ok {
-			found = append(found, e)
-		}
-	})
-	if n >= len(found) {
-		t.Fatalf("wanted expect %d, found %d", n, len(found))
-	}
-	return found[n]
-}

@@ -16,6 +16,26 @@ import (
 // the mapping itself is what page_test.go -- `-tags browser` -- checks against
 // a real Chromium. There is no logic here worth testing in CI, which is the
 // point: the logic is in act.go and elements.go, over driver.
+//
+// # Locators, and the four calls that stay page-level
+//
+// Playwright deprecated its selector-taking Page methods in favour of locators,
+// so the acts below go through p.locator(selector) -- which is
+// page.Locator(sel).First(), because a locator is strict and would error on a
+// selector matching two elements where the method it replaces used the first.
+// `click ".row"` clicking the first row is the behaviour artemis shipped, and a
+// lint fix is not the place to change it.
+//
+// Four calls have no locator spelling that means the same thing, and each is
+// marked with the reason at its own call site:
+//
+//   - WaitForTimeout, whose deprecation is advice ("never wait for timeout in
+//     production") rather than a replacement. The DSL has `wait "250ms"`.
+//   - QuerySelector and the two reads off its handle, TextContent and
+//     InputValue. The whole point of the handle path is that QuerySelector
+//     answers nil with no delay for a selector matching nothing, which is what
+//     makes `expect text(".x") is null` an answer instead of a timeout. A
+//     locator read auto-waits and then errors.
 
 // pwPage is a playwright Page as a driver.
 type pwPage struct{ page playwright.Page }
@@ -73,21 +93,21 @@ func (p *pwPage) resolve(target string) (string, error) {
 }
 
 func (p *pwPage) Click(selector string) error {
-	if err := p.page.Click(selector); err != nil {
+	if err := p.locator(selector).Click(); err != nil {
 		return fmt.Errorf("click %s: %w", selector, err)
 	}
 	return nil
 }
 
 func (p *pwPage) Hover(selector string) error {
-	if err := p.page.Hover(selector); err != nil {
+	if err := p.locator(selector).Hover(); err != nil {
 		return fmt.Errorf("hover %s: %w", selector, err)
 	}
 	return nil
 }
 
 func (p *pwPage) Fill(selector, value string) error {
-	if err := p.page.Fill(selector, value); err != nil {
+	if err := p.locator(selector).Fill(value); err != nil {
 		return fmt.Errorf("fill %s: %w", selector, err)
 	}
 	return nil
@@ -97,7 +117,7 @@ func (p *pwPage) Fill(selector, value string) error {
 // and is why this is Values and not Labels: `select "#plan" = "pro"` means the
 // option whose value attribute is "pro", not the one whose text reads "pro".
 func (p *pwPage) Select(selector, value string) error {
-	if _, err := p.page.SelectOption(selector, playwright.SelectOptionValues{
+	if _, err := p.locator(selector).SelectOption(playwright.SelectOptionValues{
 		Values: &[]string{value},
 	}); err != nil {
 		return fmt.Errorf("select %s = %q: %w", selector, value, err)
@@ -110,7 +130,7 @@ func (p *pwPage) Select(selector, value string) error {
 // engine resolves it relative to its own working directory and duplicating that
 // rule would be a second answer to where a relative path points.
 func (p *pwPage) Upload(selector, path string) error {
-	if err := p.page.SetInputFiles(selector, path); err != nil {
+	if err := p.locator(selector).SetInputFiles(path); err != nil {
 		return fmt.Errorf("upload %s = %q: %w", selector, path, err)
 	}
 	return nil
@@ -132,8 +152,12 @@ func (p *pwPage) Press(key string) error {
 // Wait pauses. page.WaitForTimeout rather than time.Sleep so the pause happens
 // on the browser's clock with the page still being serviced -- a Go sleep would
 // block this goroutine while the driver connection sat idle.
+//
+// Playwright deprecates it as advice rather than in favour of anything: the DSL
+// has `wait "250ms"`, SPEC.md documents it, and a scenario that asks to wait is
+// asking for exactly this.
 func (p *pwPage) Wait(d time.Duration) {
-	p.page.WaitForTimeout(float64(d.Milliseconds()))
+	p.page.WaitForTimeout(float64(d.Milliseconds())) //nolint:staticcheck // SA1019: no replacement; see the package comment
 }
 
 // SetTimeout bounds every later call that waits.
@@ -165,7 +189,7 @@ func (p *pwPage) Text(selector string) (any, error) {
 	if el == nil || err != nil {
 		return nil, err
 	}
-	text, err := el.TextContent()
+	text, err := el.TextContent() //nolint:staticcheck // SA1019: a locator read auto-waits; see the package comment
 	if err != nil {
 		return nil, fmt.Errorf("text(%s): %w", selector, err)
 	}
@@ -178,7 +202,7 @@ func (p *pwPage) Value(selector string) (any, error) {
 	if el == nil || err != nil {
 		return nil, err
 	}
-	value, err := el.InputValue()
+	value, err := el.InputValue() //nolint:staticcheck // SA1019: a locator read auto-waits; see the package comment
 	if err != nil {
 		return nil, fmt.Errorf("value(%s): %w", selector, err)
 	}
@@ -231,7 +255,7 @@ func (p *pwPage) Count(selector string) (any, error) {
 // not an error -- when nothing matches. IsVisible is Playwright's own
 // non-waiting predicate and has exactly that behaviour.
 func (p *pwPage) Visible(selector string) (any, error) {
-	ok, err := p.page.IsVisible(selector)
+	ok, err := p.locator(selector).IsVisible()
 	if err != nil {
 		return nil, fmt.Errorf("visible(%s): %w", selector, err)
 	}
@@ -251,6 +275,14 @@ func (p *pwPage) Screenshot(path string) error {
 	return nil
 }
 
+// locator is the strict-free locator the acts use: Playwright's replacement for
+// the deprecated selector-taking Page methods, with First() so that a selector
+// matching two elements still acts on the first -- which is what the methods it
+// replaces did, and what artemis shipped.
+func (p *pwPage) locator(selector string) playwright.Locator {
+	return p.page.Locator(selector).First()
+}
+
 // query is the no-match-is-not-an-error read the three value functions share.
 //
 // A nil handle and a nil error is "nothing matched", which the callers turn
@@ -258,7 +290,7 @@ func (p *pwPage) Screenshot(path string) error {
 // one -- and that is a real fault worth reporting, because a selector artemis
 // cannot use will never match and reporting null would hide the typo.
 func (p *pwPage) query(selector string) (playwright.ElementHandle, error) {
-	el, err := p.page.QuerySelector(selector)
+	el, err := p.page.QuerySelector(selector) //nolint:staticcheck // SA1019: nil-with-no-delay is the behaviour; see the package comment
 	if err != nil {
 		return nil, fmt.Errorf("select %s: %w", selector, badSelector(err))
 	}

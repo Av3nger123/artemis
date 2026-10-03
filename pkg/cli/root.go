@@ -72,7 +72,7 @@ func Init() {
 	testCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	testCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
 	// On the deprecated command too, so a CI job that has not moved to `run`
-	// yet still gets the artifact rather than discovering the flag does not
+	// yet still gets the screenshots rather than discovering the flag does not
 	// exist here.
 	testCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
 		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off")

@@ -109,7 +109,7 @@ func reportRun(cmd *cobra.Command, path string) error {
 	rep.Summary(run)
 
 	// A report that could not be written wins over the run's own failure: the
-	// console has already said the run failed, and the missing artifact is the
+	// console has already said the run failed, and the missing report is the
 	// part the caller does not know about yet.
 	if err := writeReports(out, targets, run); err != nil {
 		return err

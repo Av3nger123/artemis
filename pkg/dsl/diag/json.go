@@ -113,7 +113,10 @@ func toJSONSuggestions(ss []Suggestion) []jsonSuggestion {
 	}
 	out := make([]jsonSuggestion, 0, len(ss))
 	for _, s := range ss {
-		out = append(out, jsonSuggestion{Replace: s.Replace})
+		// A conversion and not a struct literal: the two shapes differ only in
+		// the tag, and a field added to Suggestion should stop this compiling
+		// rather than be dropped from the wire format without anyone deciding.
+		out = append(out, jsonSuggestion(s))
 	}
 	return out
 }

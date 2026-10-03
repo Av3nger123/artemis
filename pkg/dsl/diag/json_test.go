@@ -100,7 +100,9 @@ func TestJSONIsDeterministic(t *testing.T) {
 	b := New()
 	b.Error(span("x.art", 1, 1, 1, 2, 0), UnknownField, "one").Suggest("a", "b")
 	b.Warn(span("x.art", 2, 1, 2, 2, 10), NotInScope, "two").Hintf("a hint")
-	if JSONString(b.All()) != JSONString(b.All()) {
-		t.Error("two renderings of the same diagnostics differ")
+	// Two separate calls, held in two variables: the comparison is the point,
+	first, again := JSONString(b.All()), JSONString(b.All())
+	if first != again {
+		t.Errorf("two renderings of the same diagnostics differ:\n%s\n%s", first, again)
 	}
 }
