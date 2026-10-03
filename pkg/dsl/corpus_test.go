@@ -22,9 +22,12 @@
 // were pkg/dsl/check's, and their goldens were written *before* the checker
 // was, because that is what stops diagnostics being under-built and an empty
 // golden with a note asserts nothing. The mechanism that held them is still
-// here, because the next stage to add fixtures ahead of itself -- ART-46's
-// browser scope cases, ART-44's --json shapes -- needs it. Such a fixture
-// declares what it is waiting for:
+// here, because the next stage to add fixtures ahead of itself needs it.
+// ART-46's browser scope cases and ART-44's --json shapes were the two
+// candidates named when this was written, and neither used it: ART-44's shapes
+// are pinned by pkg/dsl/diag's own JSON goldens, and the browser front end was
+// already built by the time ART-46 added its four fixtures, so they are live.
+// Such a fixture declares what it is waiting for:
 //
 //	# todo(ART-46): not-in-scope
 //

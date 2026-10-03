@@ -1,0 +1,23 @@
+# Two statements that are not browser actions.
+#
+# The parser owns this one, not the checker: it reports an unknown action
+# rather than a syntax error about an unexpected identifier, so the mistake
+# gets a did-you-mean against eight short words instead of a position.
+#
+# `clik` is one edit from `click` and gets the suggestion. `jump` is near
+# nothing -- diag.Nearest allows at most len(word)/3 edits -- so it gets the
+# eight actions listed instead, which is the more useful answer for a name that
+# was never nearly right. A transposition like `clcik` is two edits in
+# Levenshtein and also lands on the list; widening that threshold is a change to
+# pkg/dsl/diag and not to this stage.
+
+scenario "actions" {
+  step "upgrade" {
+    browser {
+      goto "/settings/billing"
+      clik "text=Upgrade"
+      jump "#plan"
+    }
+    expect page.title == "Billing"
+  }
+}

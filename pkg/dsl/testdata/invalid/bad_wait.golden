@@ -1,0 +1,14 @@
+=== terminal
+bad_wait.art:22:12: "soon" is not a duration
+   22 |       wait "soon"
+      |            ^^^^^^
+   hint: a duration is a number and a unit: "30s", "500ms", "2m"
+
+bad_wait.art:23:12: a duration is a string, not a number
+   23 |       wait 5
+      |            ^
+   hint: a duration is a number and a unit: "30s", "500ms", "2m"
+
+=== codes
+invalid-duration	error	22:12-22:18
+bad-value	error	23:12-23:13

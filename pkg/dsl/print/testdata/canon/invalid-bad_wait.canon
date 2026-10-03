@@ -1,0 +1,27 @@
+# `wait`'s argument, which is a duration.
+#
+# `wait` is the one browser action whose argument is not a selector, so it goes
+# through the same check `timeout` and `delay` do and gives the same two
+# faults: a string that is not a duration, and a value that is not a string at
+# all. bad_duration.art pins those two codes on a step's `timeout` and a
+# `retry`'s `delay`; this pins that a browser action reaches the same
+# validator, because one duration rule with one message is the point of having
+# it in one place.
+#
+# `wait "${pause}"` is deliberately absent: an interpolated budget's text is
+# not known until the run, and the checker skips it there as it does
+# everywhere.
+
+scenario "waiting" {
+  var pause = "250ms"
+
+  step "upgrade" {
+    browser {
+      goto "/settings/billing"
+      wait "${pause}"
+      wait "soon"
+      wait 5
+    }
+    expect page.title == "Billing"
+  }
+}

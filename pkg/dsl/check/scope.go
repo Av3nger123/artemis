@@ -108,6 +108,30 @@ var scopeHints = map[StepType]string{
 	Unknown: `a var's value may use env("NAME") and the vars above it`,
 }
 
+// scopeWhere is the position a not-in-scope message names, for the one
+// position that is not a step. `page.url` in a var's value is as much a scope
+// violation as `page.url` in a terminal step, but "in a unknown step" is not a
+// place an author can look for: the type is Unknown because a var's value has
+// no step at all.
+//
+// It is here and not on StepType because StepType.String() is also the wire
+// name -- `artemis ast`'s `type` on every step, `artemis grammar --json`'s
+// stepType choice point -- where "unknown" is right and "a var's value" would
+// be a lie.
+var scopeWhere = map[StepType]string{
+	Unknown: "a var's value",
+}
+
+// where is the position this view is of, in the words a not-in-scope message
+// uses: "an api step", "a browser step", "a var's value". It is the message
+// line's half of the sentence whose second half is hint().
+func (v *view) where() string {
+	if w, ok := scopeWhere[v.typ]; ok {
+		return w
+	}
+	return v.typ.article() + " " + v.typ.String() + " step"
+}
+
 // Roots returns the identifier roots a step of type t binds, for
 // `artemis grammar --json` and a UI's path picker. The slice is a copy.
 func Roots(t StepType) []string {
@@ -258,7 +282,7 @@ func (v *view) hint() string { return scopeHints[v.typ] }
 func (c *checker) notFound(span token.Span, name string, v *view) {
 	if t, ok := allRoots[name]; ok && t != v.typ {
 		c.bag.Error(span, diag.NotInScope,
-			"%q is not in scope in %s %s step", name, v.typ.article(), v.typ).
+			"%q is not in scope in %s", name, v.where()).
 			Hintf("%s", v.hint())
 		return
 	}
@@ -298,6 +322,6 @@ func inScope(candidates []string, v *view) string {
 // exists; it is this step type that cannot use it.
 func (c *checker) notInScopeFn(span token.Span, name string, v *view) {
 	c.bag.Error(span, diag.NotInScope,
-		"%q is not in scope in %s %s step", name+"()", v.typ.article(), v.typ).
+		"%q is not in scope in %s", name+"()", v.where()).
 		Hintf("%s", v.hint())
 }

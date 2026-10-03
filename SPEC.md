@@ -12,11 +12,12 @@ If this document and anything else disagree, this document is right.
 > `pkg/shared/spec_test.go` on every CI run: an example here either works or the
 > build is red.
 >
-> The language was designed and approved in `docs/artemis-dsl-design.md`; three
+> The language was designed and approved in `docs/artemis-dsl-design.md`; four
 > places where this spec decides something that design left open are marked
-> **spec decision**. `browser` steps are designed and not implemented yet -- see
-> [Not in this spec](#not-in-this-spec). YAML is not a runtime format: it is an
-> input to `artemis migrate`, and the [README](README.md) documents the commands.
+> **spec decision**. All three step types are specified here; `browser` steps
+> compile and format but do not run yet -- see [`browser` steps](#browser-steps).
+> YAML is not a runtime format: it is an input to `artemis migrate`, and the
+> [README](README.md) documents the commands.
 
 ---
 
@@ -150,7 +151,7 @@ evaluated. Both are compile errors.
 **Spec decision.** `config` takes the name of a step type and settings for it.
 No setting is defined for `api` or `terminal` scenarios; the only block with keys
 today is `config browser`, which belongs to the browser step type and is
-specified with it. A `config` block naming a step type that does not exist, or
+specified with it -- see [`config browser`](#config-browser). A `config` block naming a step type that does not exist, or
 setting a key that type does not define, is a compile error.
 
 ---
@@ -176,7 +177,7 @@ step "build it" {
 | --- | --- |
 | `get`, `post`, `put`, `patch`, `delete`, `head`, `options` | `api` |
 | `run "<command>" { ... }` | `terminal` |
-| `browser { ... }` | `browser` -- not in this spec, see [Not in this spec](#not-in-this-spec) |
+| `browser { ... }` | `browser` -- see [`browser` steps](#browser-steps) |
 
 A step with no action block, and a step with two, are both compile errors. The
 type is known before any name in the step is resolved, which is what makes
@@ -337,6 +338,148 @@ scenario "release checks" {
 
 ---
 
+## `browser` steps
+
+The action is `browser` and a block of what to do in the page:
+
+```art
+scenario "upgrade to pro" {
+  config browser { headless = true, viewport = "1280x720" }
+
+  var url = env("APP_URL")
+
+  step "upgrade the plan" {
+    browser {
+      goto "${url}/settings/billing"
+      fill "#email" = "alice@example.com"
+      select "#plan" = "pro"
+      click "text=Upgrade"
+      wait "1s"
+    }
+    expect page.url contains "/settings/billing"
+    expect text("[role=status]") contains "Pro" within "10s"
+    expect count(".invoice") > 0
+    capture plan = match(text(".plan-badge"), /plan: (\w+)/)
+  }
+}
+```
+
+> **Not running yet.** The language above is specified, compiled and formatted
+> today: `artemis parse`, `artemis fmt`, `artemis ast` and `artemis grammar`
+> all read a browser step, and so does every diagnostic in this section. What
+> does not exist yet is the executor, so `artemis run` reports
+> `unknown step type "browser" (known types: api, terminal)` for a scenario
+> that holds one. The step type is in this spec; the browser driving it is the
+> next piece of work.
+
+The block is **required** -- a browser step with no actions does nothing at all
+-- and it holds these eight statements, in any order and any number:
+
+| Action | Shape | What it does |
+| --- | --- | --- |
+| `goto` | `goto "/orders"` | Navigates to a URL. A relative one resolves against the page's current address |
+| `click` | `click "text=Sign in"` | Clicks the first element the selector matches |
+| `fill` | `fill "#email" = "alice@example.com"` | Replaces an input's value with the text |
+| `select` | `select "#plan" = "pro"` | Chooses an option of a `<select>`, by the option's value |
+| `press` | `press "Enter"` | Sends one key to whatever has focus |
+| `hover` | `hover ".plan-menu"` | Moves the pointer over the first match |
+| `upload` | `upload "#avatar" = "me.png"` | Attaches a file to a file input |
+| `wait` | `wait "1s"` | Waits for a fixed duration |
+
+Three of them -- `fill`, `select` and `upload` -- take a value after an `=`; the
+other five take a selector and nothing else. Writing the wrong shape is a
+compile error naming the action and showing the shape, rather than a syntax
+error about the `=`:
+
+```
+upgrade.art:9:7: "click" takes a selector and no value
+    9 |       click "text=Sign in" = "now"
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   hint: click "text=Sign in"
+```
+
+A statement that is not one of the eight is a compile error too, with a
+did-you-mean when it is nearly one of them and the eight listed when it is not.
+
+`wait`'s argument is a **duration**, the same `"30s"` / `"500ms"` / `"2m"` a
+`timeout` takes, and a string that is not one is a compile error. Waiting for a
+*condition* is not written here: it is [`within`](#within) on the assertion that
+names the condition, which is the only form that says what is being waited for.
+
+A selector is a string, and nothing in this language interprets it: it is passed
+through to the browser as written. So `"#email"`, `".invoice"`,
+`"[role=status]"` and `"text=Sign in"` are all just strings, and
+[interpolation](#interpolation) works in one as it does anywhere -- `click
+"text=${plan}"`.
+
+### What a browser step binds
+
+| Name | Type | What it is |
+| --- | --- | --- |
+| `page.url` | string | The page's current address, after any redirect or in-page navigation |
+| `page.title` | string | The document's title |
+
+`page` is the one root in the language whose members are a **closed set**, so
+`page.titl` is a compile error with the fix. A response's `body.datta` is not,
+because a response's shape is a run-time fact and checking it would reject
+correct files.
+
+The five **element functions** read the page. Each takes a selector, and `attr`
+takes an attribute name as well:
+
+| Function | Returns |
+| --- | --- |
+| `text("[role=status]")` | The first match's visible text, or `null` when nothing matches |
+| `value("#email")` | The first match's value as a form control |
+| `attr("#link", "href")` | The named attribute of the first match, or `null` when it has none |
+| `count(".invoice")` | How many elements the selector matches -- `0` and not an error when none do |
+| `visible(".modal")` | Whether the first match is visible |
+
+**Spec decision.** What an element function answers when the selector matches
+*nothing*: `count()` is `0`, `visible()` is `false`, and `text()`, `value()` and
+`attr()` are **`null`**. The design document specifies the five functions and
+their arities and leaves this open. They answer rather than erroring because
+`expect count(".invoice") == 0` and `expect text(".error") is null` are the
+assertions an author wants to be able to write, and a function that errored on
+no match would make the absence of a thing unassertable. An absent attribute on
+a present element is `null` for the same reason -- `exists` is the operator for
+asking, and [absent paths](#paths) already say what `null` means in an
+assertion.
+
+Browser actions themselves auto-wait: a `click` on an element that is about to
+appear waits for it, which is the browser's own behaviour and is inherited
+rather than reimplemented. So an action does not need a `wait` in front of it;
+`wait "1s"` is for a pause that has no element to wait on.
+
+They are functions and not roots, so `expect visible` is a compile error that
+names the call, and the wrong number of arguments is a compile error that shows
+the signature. They are in scope in a browser step and **nowhere else**: in an
+`api` step, in a `terminal` step or in a `var`'s value, each one is a compile
+error listing what *is* in scope there. The same holds the other way --
+`expect status == 200` in a browser step is an error naming `page.url`,
+`page.title` and the five functions.
+
+### `config browser`
+
+| Setting | Type | Default |
+| --- | --- | --- |
+| `headless` | boolean | `true` |
+| `viewport` | string, `"<width>x<height>"` | the browser's own default |
+
+```art
+config browser { headless = true, viewport = "1280x720" }
+```
+
+It is scenario-wide: one browser, one context, shared by every browser step of
+that scenario in the order they are written, so a step can sign in and the next
+step is still signed in. A scenario with no browser step opens no browser.
+
+An assertion in a browser step has a default [`within`](#within) of **5s**,
+because a page settles asynchronously and an assertion that reads it once is a
+race. The other two step types have no default; see [`within`](#within).
+
+---
+
 ## What is in scope
 
 An expression can name three things: the step's own observation, the scenario's
@@ -348,7 +491,7 @@ What the observation binds depends on the step's type:
 | --- | --- |
 | `api` | `status`, `body`, `raw`, `headers` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
-| `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [not in this spec](#not-in-this-spec) |
+| `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
 
 | Root | Type | What it is |
 | --- | --- | --- |
@@ -358,6 +501,8 @@ What the observation binds depends on the step's type:
 | `headers` | object | The response headers, keyed by name. Lookup is case-insensitive |
 | `exit_code` | number | The command's exit code |
 | `stdout`, `stderr` | string | The two streams, as text |
+| `page.url` | string | The page's current address |
+| `page.title` | string | The document's title |
 
 Naming a root that the step's type does not bind is a **compile error**, and the
 message lists the roots that are in scope:
@@ -471,6 +616,11 @@ Parentheses group: `expect (a == 1 or a == 2) and b exists`.
 | --- | --- |
 | `env("NAME")` | The environment variable `NAME`, or `""` when it is not set |
 | `match(<text>, /re/)` | The text the regex matched: capturing group 1 when the pattern has one, the whole match when it does not |
+| `text()`, `value()`, `attr()`, `count()`, `visible()` | What an element on the page says -- [in a `browser` step only](#what-a-browser-step-binds) |
+
+`env()` and `match()` are callable in every scope, including a `var`'s value.
+The five element functions are callable in a `browser` step and nowhere else:
+calling one anywhere else is a compile error naming what is in scope there.
 
 `env()` is an ordinary expression and is legal wherever an expression is -- in a
 `var`, in a URL, in a header, in a `body`, in an `expect`. An unset name is the
@@ -819,8 +969,9 @@ Array       = "[" [ Expr { "," Expr } ] "]" ;
 Comments are `#` to end of line. Trailing commas are permitted in objects and
 arrays. Statements separate by newline; no semicolons.
 
-`BrowserAct`'s semantics are specified with the browser step type, not here --
-see [Not in this spec](#not-in-this-spec).
+`BrowserAct`'s semantics -- which actions take a value, what `wait` waits for,
+what a selector means -- are specified with [`browser` steps](#browser-steps)
+and not here, because a grammar says the shape and not the meaning.
 
 ---
 
@@ -1053,13 +1204,12 @@ Everything here is deliberate. A scenario that uses one of these does not run.
 
 | | |
 | --- | --- |
-| **`browser` steps** | The action block, the element functions, `config browser`, and the session that persists across a scenario's browser steps. Designed, specified with the browser step type |
 | **`db` steps** | Designed, specified with the database step type |
 | **Control flow** | `if`, `else`, loops, data-driven tables, `parallel`, `group`. Reserved words, not features |
 | **Functions, imports, fixtures** | `fn`, `return`, `import`, `use`, `let`, `setup`, `teardown`. Reserved words. Reuse is what the host language is for, and `artemis build --lang=...` is the answer to "I need real abstraction" |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
-| **A `wait_until` statement** | Waiting is per assertion and is spelled [`within`](#within). There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |
+| **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |
 | **Request and response detail in a report** | Neither report carries a body or a header |
 | **YAML** | Not a runtime format. See below |
 

@@ -1,0 +1,20 @@
+# The browser vocabulary in a var's value, which is not a step at all.
+#
+# A `var` is evaluated before any step runs, so it binds no observation: only
+# `env()`, `match()` and the vars above it. `page` and `text()` are therefore
+# not-in-scope here for the same reason they are in a terminal step -- and the
+# message has to name a *position* rather than a step type, because there is no
+# step to name. "a var's value" is that position; printing the step type would
+# read "in a unknown step", which is nowhere an author can look.
+
+scenario "vars" {
+  var label = text(".plan-badge")
+  var here = page.url
+
+  step "upgrade" {
+    browser {
+      goto "/settings/billing"
+    }
+    expect visible(".plan-badge")
+  }
+}

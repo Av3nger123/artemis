@@ -104,8 +104,11 @@ func (p *parser) parseBrowserAct() ast.Stmt {
 	}
 	if !token.IsBrowserAction(t.Value) {
 		// Unknown rather than misshapen, so it gets a did-you-mean against
-		// eight short words -- `clcik` is the mistake, and a suggestion fixes
-		// it in one click.
+		// eight short words -- `clik` is the mistake, and a suggestion fixes
+		// it in one click. A name near nothing gets the eight listed instead,
+		// which is what `jump` and (because a transposition is two edits in
+		// Levenshtein and diag.Nearest allows len(word)/3) `clcik` get. Both
+		// are pinned by testdata/invalid/unknown_browser_act.art.
 		ref := p.errorf(t, diag.UnexpectedToken, "unknown browser action %s", describe(t))
 		if !ref.DidYouMean(t.Value, token.BrowserActions) {
 			ref.Hintf("a browser block holds: %s", list(token.BrowserActions))

@@ -264,7 +264,11 @@ func (g *gen) browser() {
 		`fill "#email" = "alice@example.com"`,
 		`press "Enter"`,
 		`hover ".row"`,
-		`wait ".done"`,
+		// A duration and not a selector: ART-46 made `wait`'s argument the
+		// duration every other table in the repo already spelled it as, and a
+		// generated file has to check clean for TestGeneratedFilesAreValid to
+		// mean anything.
+		`wait "250ms"`,
 		`select "#plan" = "pro"`,
 		`upload "#file" = "a.csv"`,
 	}

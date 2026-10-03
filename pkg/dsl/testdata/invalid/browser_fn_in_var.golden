@@ -1,0 +1,14 @@
+=== terminal
+browser_fn_in_var.art:11:15: "text()" is not in scope in a var's value
+   11 |   var label = text(".plan-badge")
+      |               ^^^^
+   hint: a var's value may use env("NAME") and the vars above it
+
+browser_fn_in_var.art:12:14: "page" is not in scope in a var's value
+   12 |   var here = page.url
+      |              ^^^^
+   hint: a var's value may use env("NAME") and the vars above it
+
+=== codes
+not-in-scope	error	11:15-11:19
+not-in-scope	error	12:14-12:18

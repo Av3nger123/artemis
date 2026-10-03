@@ -86,7 +86,10 @@ no `# todo` fixtures outstanding today.
 | `bad_object.art` | `unexpected-token` — a missing `:` in an object literal, and what it derails |
 | `bad_regex.art` | `invalid-regex` — `/order-(\d+/`, carrying Go's own compile error |
 | `bad_value.art` | `bad-value` ×5 — a bool, a call argument, a missing key, an int, an array |
+| `bad_wait.art` | `invalid-duration`, `bad-value` — `wait "soon"` and `wait 5`, a browser action reaching the one duration check |
 | `browser_fn_in_api.art` | `not-in-scope` ×2 — `page.url` and `text()` in an api step |
+| `browser_fn_in_var.art` | `not-in-scope` ×2 — `text()` and `page.url` in a `var`'s value, the position that is not a step |
+| `browser_in_terminal.art` | `not-in-scope` ×2 — `page.title` and `value()` in a terminal step |
 | `capture_same_step.art` | `unknown-identifier` — a capture read in the step that writes it |
 | `chained_compare.art` | `non-associative-operator` — `a == 1 == true` |
 | `many_errors.art` | four unrelated faults, all reported; also asserted by count in `TestAllErrorsReported` |
@@ -99,11 +102,20 @@ no `# todo` fixtures outstanding today.
 | `unclosed_interp.art` | `unclosed-interpolation` — a `${` still open at end of file |
 | `unclosed_interp_cascade.art` | the same typo mid-line: eleven diagnostics from one fault |
 | `unknown_block_field.art` | `unknown-field` ×3 — a near miss, and two names near nothing |
+| `unknown_browser_act.art` | `unexpected-token` ×2 — `clik` with the did-you-mean, `jump` with the eight listed |
 | `unknown_config.art` | `unknown-config` ×2 — `config browsr` and `config http` |
 | `unknown_field.art` | `unknown-field` — `expect statu == 200`, with the did-you-mean |
 | `unknown_function.art` | `unknown-identifier` ×2 — an unknown callee, and one named without its call |
 | `unknown_ident.art` | `unknown-identifier` then `unknown-field` — in a `${}` and in an expression |
 | `unknown_type.art` | `unknown-type` ×2 — `is numbr` and `is int` |
+
+The four not-in-scope fixtures are one matrix, not four cases:
+`out_of_scope_root.art` is an api root in a browser step,
+`browser_in_terminal.art` and `browser_fn_in_api.art` are the browser
+vocabulary in the other two step types, and `browser_fn_in_var.art` is it in a
+`var`'s value. The hint is what each one is really pinning -- the roots that
+*are* bound where the author is standing -- and there is one per position
+because each position's list is a different list.
 
 `unclosed_interp_cascade.art` is pinned, not suppressed. Eleven diagnostics from
 one typo is honest output from a recovering parser; narrowing it is a change to

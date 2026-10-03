@@ -134,6 +134,7 @@ func (c *checker) browser(b *ast.Browser, v *view) {
 		c.expr(act.Target, v)
 		c.expr(act.Value, v)
 		c.browserArity(act)
+		c.waitBudget(act)
 	}
 }
 
@@ -172,6 +173,26 @@ func (c *checker) browserArity(a *ast.BrowserAct) {
 		c.bag.Error(a.Span(), diag.BadArity, "%q takes a selector and a value", name).
 			Hintf("%s", actSignatures[name])
 	}
+}
+
+// waitBudget checks `wait "1s"`'s argument.
+//
+// `wait` is the one browser action whose argument is not a selector, and every
+// table in the repo already spells it as a duration -- actSignatures above,
+// `grammar --json`'s example, the design's own grammar -- so it goes through
+// the same c.duration as `timeout` and `delay` and gives the same
+// invalid-duration. An interpolated one (`wait "${pause}"`) is skipped there,
+// as a budget in a var always is.
+//
+// What a browser *does* with the budget is ART-47's; that it is a duration is
+// settled by what the examples say, and widening the rule later -- if `wait`
+// comes to take a selector too -- is additive where adding a check to a
+// shipped action is not.
+func (c *checker) waitBudget(a *ast.BrowserAct) {
+	if a.Name.Kind != token.Ident || a.Name.Value != "wait" {
+		return
+	}
+	c.duration(a.Target)
 }
 
 // config checks `config <subject> { ... }`.

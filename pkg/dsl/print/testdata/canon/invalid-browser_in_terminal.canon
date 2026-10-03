@@ -1,0 +1,17 @@
+# The browser vocabulary in a terminal step.
+#
+# browser_fn_in_api.art is this fault's other half: there, `page.url` and
+# `text()` are used in an api step. The third corner of the matrix is here
+# because the hint is the whole point of the code -- what an author needs is
+# the list of roots *this* step type binds, and a terminal step's list is a
+# different list from an api step's. Both names exist in the language, which is
+# what makes this not-in-scope rather than unknown.
+
+scenario "wrong step" {
+  step "deploy" {
+    run "./deploy.sh"
+    expect page.title contains "Deployed"
+    expect value("#build") == "ok"
+    expect exit_code == 0
+  }
+}
