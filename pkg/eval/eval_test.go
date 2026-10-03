@@ -405,3 +405,93 @@ func TestABrokenTreeIsAReasonAndNotAPanic(t *testing.T) {
 		t.Errorf("Assert of a half-parsed expression = %+v, want a reason", o)
 	}
 }
+
+// textEnv is a step whose body is not JSON at all: `raw` is the plain text
+// that arrived, `body` is null because it did not parse, and the only way to
+// read a value out of it is a regex. That is pkg/cli/testdata/regex_capture.yaml's
+// first step, which is what match() exists for.
+func textEnv() *Env {
+	return &Env{
+		Roots: map[string]any{
+			"status":  float64(200),
+			"body":    nil,
+			"raw":     "moved to /items/42",
+			"headers": Headers{"content-type": "text/plain"},
+		},
+		Vars: map[string]any{
+			"pat":    `/items/([0-9]+)`,
+			"two":    `(items|orders)/([0-9]+)`,
+			"padded": "id=007",
+		},
+	}
+}
+
+// TestMatchExtraction is the whole of match()'s contract, which SPEC.md
+// states and ART-48 and ART-50 port: which group, how many, what no match
+// does, and what type comes out.
+func TestMatchExtraction(t *testing.T) {
+	env := textEnv()
+	rows := []row{
+		// One capturing group gives group 1; none gives the whole match.
+		{src: `match(raw, /\/items\/([0-9]+)/)`, want: "42"},
+		{src: `match(raw, /\/items\/[0-9]+/)`, want: "/items/42"},
+		{src: `match(raw, /(?:items|orders)\/([0-9]+)/)`, want: "42"},
+
+		// A pattern may be a string, as it may be after `matches`, so it can
+		// live in a var.
+		{src: `match(raw, pat)`, want: "42"},
+
+		// The value is a string, always. Reading "007" as seven loses the
+		// zeros a zero-padded id depends on.
+		{src: `match(padded, /id=([0-9]+)/)`, want: "007"},
+		{src: `match(padded, /id=([0-9]+)/) is string`, want: true},
+		{src: `match(padded, /id=([0-9]+)/) is number`, want: false},
+		{src: `match(raw, /\/items\/([0-9]+)/) == "42"`, want: true},
+
+		// No match is a reason, not an empty string -- and not absent, so
+		// `exists` reports it rather than answering false.
+		{src: `match(raw, /\/orders\/([0-9]+)/)`,
+			errWant: `regex "/orders/([0-9]+)" matched nothing in raw`},
+		{src: `match(raw, /\/orders\/([0-9]+)/) exists`,
+			errWant: `matched nothing in raw`},
+
+		// Two capturing groups is a mistake, not a choice. The checker
+		// catches a literal pattern; this catches one out of a var.
+		{src: `match(raw, two)`,
+			errWant: `match() reads one capturing group, and regex "(items|orders)/([0-9]+)" has 2`},
+
+		// The arguments, each the wrong way round.
+		{src: `match(headers, /x/)`, errWant: "match()'s first argument must be a string, got object"},
+		{src: `match(raw, 1)`, errWant: "match()'s second argument must be a regular expression, got number"},
+		{src: `match(raw, "(a")`, errWant: `bad regular expression "(a"`},
+		{src: `match(raw)`, errWant: "match() takes 2 argument(s); this call has 1"},
+
+		// An argument that could not be evaluated is the reason, not a
+		// second one about match().
+		{src: `match(body.nope, /x/)`, errWant: "body.nope did not resolve", absent: true},
+	}
+	for _, r := range rows {
+		t.Run(r.src, func(t *testing.T) {
+			got, err := evalSrc(t, r.src, env)
+			if r.errWant != "" {
+				if err == nil {
+					t.Fatalf("%s = %#v, want the reason %q", r.src, got, r.errWant)
+				}
+				if !strings.Contains(err.Error(), r.errWant) {
+					t.Fatalf("%s errored %q, want it to contain %q", r.src, err.Error(), r.errWant)
+				}
+				if IsAbsent(err) != r.absent {
+					t.Errorf("%s: IsAbsent = %v, want %v -- a pattern that matched "+
+						"nothing is not an absent path", r.src, IsAbsent(err), r.absent)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("%s errored: %v", r.src, err)
+			}
+			if !reflect.DeepEqual(got, r.want) {
+				t.Errorf("%s = %#v, want %#v", r.src, got, r.want)
+			}
+		})
+	}
+}

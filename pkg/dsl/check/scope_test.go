@@ -181,6 +181,36 @@ func TestScopeRules(t *testing.T) {
 			want: []string{"reserved-word@4:12"},
 		},
 
+		// --- match(), the regex extraction a capture spells --------------
+		{
+			name: "match() resolves in an api step, against raw",
+			src:  step("api", `get "/x"`, `capture id = match(raw, /\/items\/([0-9]+)/)`),
+		},
+		{
+			name: "match() resolves in a terminal step, against stdout",
+			src:  step("terminal", `run "git rev-parse HEAD"`, `capture sha = match(stdout, /^([0-9a-f]{40})/)`),
+		},
+		{
+			name: "match() resolves in a browser step",
+			src:  step("browser", `browser { goto "/" }`, `capture t = match(page.title, /^([A-Z]\w+)/)`),
+		},
+		{
+			name: "match() resolves in a var's value, like env()",
+			src:  "scenario \"s\" {\n  var v = match(env(\"TAG\"), /v([0-9.]+)/)\n}\n",
+		},
+		{
+			name: "match() is an expression, not a capture-only form",
+			src:  step("api", `get "/x"`, `expect match(raw, /id=([0-9]+)/) == "42"`),
+		},
+		{
+			name: "a pattern may be a string, as it may be after matches",
+			src:  "scenario \"s\" {\n  var re = \"id=([0-9]+)\"\n  step \"t\" {\n    get \"/x\"\n    capture id = match(raw, re)\n  }\n}\n",
+		},
+		{
+			name: "non-capturing groups do not count",
+			src:  step("api", `get "/x"`, `capture id = match(raw, /(?:items|orders)\/([0-9]+)/)`),
+		},
+
 		// --- the two faults that move to compile time ---------------------
 		{
 			name: "a regex is compiled wherever it appears",

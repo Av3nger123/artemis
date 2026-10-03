@@ -61,10 +61,10 @@ var (
 	// BrowserConfigFields are what `config browser` accepts. Deliberately tiny.
 	BrowserConfigFields = []string{"headless", "viewport"}
 
-	// Builtins are the functions callable in any expression scope. env() is the
-	// only one everywhere; the rest are browser-scope element functions and the
-	// checker rejects them elsewhere.
-	Builtins = []string{"env", "text", "value", "attr", "count", "visible"}
+	// Builtins are the functions callable in any expression scope. env() and
+	// match() are the two that are everywhere; the rest are browser-scope
+	// element functions and the checker rejects them elsewhere.
+	Builtins = []string{"env", "match", "text", "value", "attr", "count", "visible"}
 
 	// Reserved words are a parse error wherever a name is expected, so that a
 	// later tier can add control flow, functions or agentic assertions without

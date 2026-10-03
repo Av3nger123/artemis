@@ -240,6 +240,125 @@ func TestScopeIsACopy(t *testing.T) {
 	}
 }
 
+// TestMatchDiagnostics pins what the checker says about the one builtin whose
+// arguments are not all strings.
+//
+// The four faults are the four things a `match()` call can get wrong, and
+// each is a compile error rather than a run-time surprise -- which is the
+// whole reason the regex extraction is a builtin with a signature rather than
+// a free-form string the runtime interprets.
+func TestMatchDiagnostics(t *testing.T) {
+	cases := []struct {
+		name    string
+		src     string
+		code    diag.Code
+		message string
+		hint    string
+	}{
+		{
+			name:    "one argument",
+			src:     step("api", `get "/x"`, `capture id = match(raw)`),
+			code:    diag.BadArity,
+			message: `match() takes two arguments; this call has one`,
+			hint:    `match(raw, /id=([0-9]+)/)`,
+		},
+		{
+			name:    "a number where the text goes",
+			src:     step("api", `get "/x"`, `capture id = match(1, /id=([0-9]+)/)`),
+			code:    diag.BadValue,
+			message: `match()'s first argument must be a string, not a number`,
+			hint:    `match(raw, /id=([0-9]+)/)`,
+		},
+		{
+			name:    "a number where the pattern goes",
+			src:     step("api", `get "/x"`, `capture id = match(raw, 1)`),
+			code:    diag.BadValue,
+			message: `match()'s second argument must be a regular expression, not a number`,
+			hint:    `match(raw, /id=([0-9]+)/)`,
+		},
+		{
+			name:    "two capturing groups",
+			src:     step("api", `get "/x"`, `capture id = match(raw, /(items|orders)\/([0-9]+)/)`),
+			code:    diag.BadValue,
+			message: `match() reads one capturing group, and this pattern has two`,
+			hint:    `make the groups you do not want non-capturing: (?:...)`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tree, parsed := parser.Parse("t.art", tc.src)
+			if parsed.HasErrors() {
+				t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+					render("t.art", tc.src, parsed))
+			}
+			_, bag := Check(tree)
+			all := bag.All()
+			if len(all) != 1 {
+				t.Fatalf("got %d diagnostics, want exactly 1 -- one mistake is one "+
+					"diagnostic:\n%s", len(all), render("t.art", tc.src, bag))
+			}
+			d := all[0]
+			if d.Code != tc.code {
+				t.Errorf("code = %s, want %s", d.Code, tc.code)
+			}
+			if d.Message != tc.message {
+				t.Errorf("message = %q, want %q", d.Message, tc.message)
+			}
+			if d.Hint != tc.hint {
+				t.Errorf("hint = %q, want %q", d.Hint, tc.hint)
+			}
+		})
+	}
+}
+
+// A pattern that does not compile is one diagnostic, not two: counting the
+// groups of a regex Go could not read would be a second complaint about one
+// mistake.
+func TestAnUncompilablePatternIsNotAlsoCounted(t *testing.T) {
+	src := step("api", `get "/x"`, `capture id = match(raw, /(a(b/)`)
+	tree, _ := parser.Parse("t.art", src)
+	_, bag := Check(tree)
+	all := bag.All()
+	if len(all) != 1 || all[0].Code != diag.InvalidRegex {
+		t.Fatalf("got %d diagnostics, want one invalid-regex:\n%s",
+			len(all), render("t.art", src, bag))
+	}
+}
+
+// Every builtin's parameter list is its arity, so the two tables cannot
+// disagree, and every builtin the language names is one the checker knows.
+func TestParamsAndBuiltinsAgree(t *testing.T) {
+	for name, ps := range params {
+		if got := arity[name]; got != len(ps) {
+			t.Errorf("%s(): arity %d, %d parameters", name, got, len(ps))
+		}
+		if !token.IsBuiltin(name) {
+			t.Errorf("%s() is in params and not in token.Builtins, so token.IsBuiltin "+
+				"disagrees with the checker about what is callable", name)
+		}
+		for i, p := range ps {
+			if p.want == "" || len(p.kinds) == 0 {
+				t.Errorf("%s()'s parameter %d says nothing about what it takes", name, i)
+			}
+		}
+	}
+}
+
+// match() is callable in every step type, like env(): it searches a string and
+// needs neither a page nor a response to be meaningful.
+func TestMatchIsCallableEverywhere(t *testing.T) {
+	for _, ty := range []StepType{API, Terminal, Browser, Unknown} {
+		fns := Functions(ty)
+		if !contains(fns, "match") {
+			t.Errorf("Functions(%s) = %v, and does not offer match()", ty, fns)
+		}
+		if !contains(fns, "env") {
+			t.Errorf("Functions(%s) = %v, and does not offer env()", ty, fns)
+		}
+	}
+}
+
 func readFixture(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "parser", "testdata", name))

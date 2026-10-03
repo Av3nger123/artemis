@@ -55,12 +55,19 @@ import (
 // checked.
 var arity = map[string]int{
 	"env":     1,
+	"match":   2,
 	"text":    1,
 	"value":   1,
 	"attr":    2,
 	"count":   1,
 	"visible": 1,
 }
+
+// maxGroups is how many capturing groups a match() pattern may have, which is
+// pkg/dsl/check's maxGroups. The checker counts a literal pattern and reports
+// it as a compile error; this counts whatever the pattern turned out to be,
+// which is the only count available when it came out of a var.
+const maxGroups = 1
 
 // Eval evaluates x and returns its value, or an *Error saying why it could not.
 //
@@ -503,8 +510,13 @@ func evalIndex(i *ast.Index, env *Env) (any, error) {
 	}
 }
 
-// evalCall calls a builtin: env() everywhere, and the element functions in a
-// browser step.
+// evalCall calls a builtin: env() and match() everywhere, and the element
+// functions in a browser step.
+//
+// match() is handled before the argument loop because it is the one builtin
+// whose arguments are not all strings: its second is a regex. Everything else
+// takes string arguments -- a variable name, a selector, an attribute name --
+// and a value of another type there is a mistake in the expression.
 func evalCall(c *ast.Call, env *Env) (any, error) {
 	if c.Callee == nil {
 		return nil, errorf(c.Span(), "this call has no function name")
@@ -516,6 +528,10 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 	}
 	if len(c.Args) != want {
 		return nil, errorf(c.Span(), "%s() takes %d argument(s); this call has %d", name, want, len(c.Args))
+	}
+
+	if name == "match" {
+		return evalMatch(c, env)
 	}
 
 	args := make([]string, 0, want)
@@ -550,6 +566,84 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		return page.Count(args[0])
 	default:
 		return page.Visible(args[0])
+	}
+}
+
+// evalMatch is `match(<text>, <pattern>)`: the regex extraction a capture off
+// a body that is not JSON needs.
+//
+// It is the DSL's spelling of what pkg/shared/capture.readRegex does for a
+// YAML `{regex: ...}` capture, with one rule tightened. The whole of the
+// contract, which SPEC.md states and ART-48 and ART-50 port:
+//
+//   - the value is capturing group 1 when the pattern has one and the whole
+//     match when it has none, so `id=([0-9]+)` needs no second argument
+//     saying which part was wanted;
+//   - two or more capturing groups is a mistake, not a choice. readRegex
+//     takes the first silently; here it is an error, because a pattern with
+//     two groups has an author who meant one of them. The checker catches a
+//     literal pattern; this catches one that came out of a var;
+//   - the value is always a **string**: the text that matched, not a guess at
+//     what it meant, because reading "007" as seven loses data;
+//   - a pattern that matches nothing is an *Error, not an empty string. It is
+//     not absent -- the text was there and the question was asked -- so a
+//     capture records one errored assertion and `exists` reports the reason
+//     rather than answering false.
+//
+// The pattern may be a regex literal or a string, through the same asRegexp
+// that `matches` uses, so a pattern can live in a var.
+func evalMatch(c *ast.Call, env *Env) (any, error) {
+	subject, err := Eval(c.Args[0].Value, env)
+	if err != nil {
+		return nil, err
+	}
+	in, ok := text(subject)
+	if !ok {
+		return nil, errorf(c.Args[0].Value.Span(),
+			"match()'s first argument must be a string, got %s at %s",
+			typeOf(subject), exprText(c.Args[0].Value))
+	}
+
+	pattern, err := Eval(c.Args[1].Value, env)
+	if err != nil {
+		return nil, err
+	}
+	re, err := matchPattern(c.Args[1].Value, pattern)
+	if err != nil {
+		return nil, err
+	}
+	if n := re.NumSubexp(); n > maxGroups {
+		return nil, errorf(c.Args[1].Value.Span(),
+			"match() reads one capturing group, and regex %q has %d", re.String(), n)
+	}
+
+	m := re.FindStringSubmatch(in)
+	if m == nil {
+		return nil, errorf(c.Span(), "regex %q matched nothing in %s", re.String(), exprText(c.Args[0].Value))
+	}
+	if re.NumSubexp() > 0 {
+		return m[1], nil
+	}
+	return m[0], nil
+}
+
+// matchPattern is asRegexp for a call rather than for a binary operator: the
+// same two accepted forms, with the spans and the wording a call's argument
+// wants.
+func matchPattern(x ast.Expr, v any) (*regexp.Regexp, error) {
+	switch p := v.(type) {
+	case Regexp:
+		return p.Regexp, nil
+	case string:
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, errorf(x.Span(), "bad regular expression %q: %v", p, err)
+		}
+		return re, nil
+	default:
+		return nil, errorf(x.Span(),
+			"match()'s second argument must be a regular expression, got %s at %s",
+			typeOf(v), exprText(x))
 	}
 }
 

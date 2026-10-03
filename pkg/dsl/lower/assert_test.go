@@ -1,6 +1,8 @@
 package lower
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -414,5 +416,99 @@ func TestTheExpectClassIsCarried(t *testing.T) {
 	}
 	if got := sc.Steps[0].Expects[1].Class; got != check.Complex {
 		t.Errorf("class of an and chain = %v, want %v", got, check.Complex)
+	}
+}
+
+// readLocalFixture reads a .art file from this package's own testdata.
+//
+// The package's other fixtures live in pkg/dsl/parser/testdata, because they
+// are the parser's and this package borrows them. regex_capture.art is this
+// issue's own: it is the DSL translation of pkg/cli/testdata/regex_capture.yaml,
+// and it exists so that ART-38 has a file to run.
+func readLocalFixture(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatalf("reading %s: %v", name, err)
+	}
+	return string(b)
+}
+
+// textRoots is an api step that answered with a body that is not JSON: `raw`
+// is the text that arrived and `body` is null, which is the only shape a
+// regex capture is for.
+func textRoots(raw string) map[string]any {
+	return map[string]any{
+		"status":  float64(200),
+		"body":    nil,
+		"raw":     raw,
+		"headers": eval.Headers{"Content-Type": "text/plain"},
+	}
+}
+
+// TestRegexCaptureFeedsTheNextStep is regex_capture.yaml's behaviour, in the
+// DSL, end to end: a value read off a body with no JSON in it, by group 1 of
+// a regex, and templated into the next step's URL.
+//
+// It is the behaviour ART-38 has to reproduce byte for byte against
+// regex_capture.golden, and it is asserted here rather than there because
+// nothing in this package runs an HTTP request: the observation is handed in,
+// as every test in this package hands one in.
+func TestRegexCaptureFeedsTheNextStep(t *testing.T) {
+	t.Setenv("SERVER", "https://api.test")
+	sc, scope := bound(t, readLocalFixture(t, "regex_capture.art"))
+
+	got := sc.Steps[0].Apply(observed(textRoots("moved to /items/42"), scope), scope)
+	if len(got) != 0 {
+		t.Fatalf("a capture that succeeded recorded %d assertion(s), want none: %+v", len(got), got)
+	}
+
+	// A string, not the number 42: match() reads the text that matched rather
+	// than guessing at what it meant.
+	if v, ok := scope.Vars()["itemId"]; !ok || v != "42" {
+		t.Fatalf("itemId = %#v, want the string \"42\"", v)
+	}
+
+	model, err := sc.Steps[1].Model(envOf(scope))
+	if err != nil {
+		t.Fatalf("Model() = %v, want nil", err)
+	}
+	if want := "https://api.test/items/42"; model.Request.URL != want {
+		t.Errorf("the next step's url = %q, want %q -- which is what proves the "+
+			"capture landed in the scenario's scope", model.Request.URL, want)
+	}
+}
+
+// A pattern that matches nothing is one errored assertion naming the capture,
+// and nothing is written. That is ART-18's adopted rule -- one errored
+// assertion per failed capture -- reached through the path every capture
+// already takes, so match() needed no change in the lowerer.
+func TestARegexThatMatchesNothingIsOneErroredAssertion(t *testing.T) {
+	t.Setenv("SERVER", "https://api.test")
+	sc, scope := bound(t, readLocalFixture(t, "regex_capture.art"))
+
+	got := sc.Steps[0].Apply(observed(textRoots("nothing moved"), scope), scope)
+	if len(got) != 1 {
+		t.Fatalf("got %d assertions, want exactly 1: %+v", len(got), got)
+	}
+	a := got[0]
+	if a.Status != result.StatusError {
+		t.Errorf("status = %s, want errored -- a capture that could not be read "+
+			"asked no question, so it is not a failure", a.Status)
+	}
+	if a.Kind != KindCapture || a.Path != "itemId" {
+		t.Errorf("kind/path = %q/%q, want %q/%q", a.Kind, a.Path, KindCapture, "itemId")
+	}
+	if want := `match(raw, /\/items\/([0-9]+)/)`; a.Operator != want {
+		t.Errorf("operator = %q, want %q -- the expression the value was read with", a.Operator, want)
+	}
+	if !strings.Contains(a.Error, "matched nothing") {
+		t.Errorf("message = %q, want it to say the pattern matched nothing", a.Error)
+	}
+
+	// Nothing written, so a later step naming it fails for the honest reason
+	// that the value was never captured.
+	if v, ok := scope.Vars()["itemId"]; ok {
+		t.Errorf("itemId = %#v, want it unset after a failed capture", v)
 	}
 }

@@ -493,9 +493,45 @@ capture itemId   = match(raw, /\/items\/([0-9]+)/)    # group 1
 capture whole    = match(stdout, /v[0-9.]+/)          # the whole match
 ```
 
+Five things about it, each settled here because the design document left the
+surface syntax unwritten:
+
+| | |
+| --- | --- |
+| Which group | **Group 1** when the pattern has one capturing group, the **whole match** when it has none |
+| More than one group | A **compile error**. Make the ones you do not want non-capturing: `(?:...)` |
+| No match | An **errored assertion** naming the pattern. Not an empty string, and not a panic |
+| Type | Always a **string** |
+| Where it is legal | Anywhere an expression is, exactly like `env()` |
+
+A pattern with two or more capturing groups has an author who meant one of
+them, and guessing which is how a capture goes quietly wrong -- so the checker
+rejects it rather than taking the first, and names the rewrite:
+
+```art
+capture id = match(raw, /\/(items|orders)\/([0-9]+)/)      # error: two groups
+capture id = match(raw, /\/(?:items|orders)\/([0-9]+)/)    # one group, group 1
+```
+
+The pattern is counted at compile time when it is a regex literal, which it
+almost always is. A pattern that arrives as a string in a variable is counted
+at run time and gives the same reason as an errored assertion.
+
 `match()` returns a string -- the text that matched, not a guess at what it
-meant, because reading `"007"` as seven loses data. A pattern that matches
-nothing is an errored assertion naming the pattern, not an empty string.
+meant, because reading `"007"` as seven loses data. So `capture itemId =
+match(raw, /\/items\/([0-9]+)/)` against `moved to /items/42` makes `itemId`
+the string `"42"`: `itemId is string` is true and `itemId is number` is false,
+and `"${itemId}"` renders `42` either way.
+
+A pattern that matches nothing is an evaluation that could not be performed, not
+a value: in a `capture` it is one errored assertion naming the capture, and in
+an `expect` it is an errored assertion naming the expression. It is not an
+*absent path*, so `expect match(raw, /x/) exists` reports the reason rather than
+answering false -- the text was there and the question was asked.
+
+The first argument is the text to search and the second is the pattern. The
+pattern may be a regex literal or a string, which is the same rule `matches`
+follows, so a pattern can live in a `var`.
 
 ### How a value renders
 
@@ -624,7 +660,8 @@ capture count = body.data.items[0].quantity
 
 A captured value **keeps its type**: a number stays a number, an object stays an
 object, so it can be compared with `>` or templated into a `body` as a value.
-`match()` is the exception and is always a string.
+[`match()`](#builtins) is the exception and is always a string, even when the
+text it matched is all digits.
 
 A capture is plumbing, not a check. One that succeeds records nothing -- a run
 that printed a line per captured token would bury the assertions that matter, and

@@ -35,16 +35,65 @@ var memberRoots = map[string][]string{
 // browser step.
 var elementFns = []string{"text", "value", "attr", "count", "visible"}
 
-// arity is how many arguments each builtin takes. env() is everywhere; the
-// rest are browser-only and rejected elsewhere by scope, not by arity.
-var arity = map[string]int{
-	"env":     1,
-	"text":    1,
-	"value":   1,
-	"attr":    2,
-	"count":   1,
-	"visible": 1,
+// param is one parameter of a builtin: what it wants, in the words a
+// diagnostic uses, and which literal kinds satisfy it.
+//
+// It exists because `match`'s second argument is a regex and every other
+// builtin's argument is a string, so "every parameter is a string" stopped
+// being true. Only *literals* are judged -- an identifier or an
+// interpolation could hold anything and this stage does not evaluate -- so a
+// param is a sentence plus a small set of token kinds.
+type param struct {
+	// want is the phrase after "must be": "a string", "a regular
+	// expression". The existing builtins' wording is unchanged by this
+	// table, which is what keeps the invalid-file corpus's goldens intact.
+	want string
+
+	// kinds are the literal kinds that satisfy it. A literal of any other
+	// kind is reported; a non-literal is left to run time.
+	kinds []token.Kind
 }
+
+// aString is the parameter every builtin but `match`'s pattern takes: a
+// variable name, a selector, an attribute name, the text to search.
+var aString = param{want: "a string", kinds: []token.Kind{token.String}}
+
+// aPattern is `match`'s second argument. A string is allowed as well as a
+// regex literal, which is the rule `matches` already follows, so a pattern
+// can live in a var.
+var aPattern = param{
+	want:  "a regular expression",
+	kinds: []token.Kind{token.Regex, token.String},
+}
+
+// params is what each builtin takes, in order. env() and match() are
+// everywhere; the rest are browser-only and rejected elsewhere by scope, not
+// by this table. Its length is the builtin's arity, so the two cannot
+// disagree.
+var params = map[string][]param{
+	"env":     {aString},
+	"match":   {aString, aPattern},
+	"text":    {aString},
+	"value":   {aString},
+	"attr":    {aString, aString},
+	"count":   {aString},
+	"visible": {aString},
+}
+
+// arity is how many arguments each builtin takes, derived from params so that
+// adding a builtin is one line rather than two that can drift.
+var arity = func() map[string]int {
+	m := make(map[string]int, len(params))
+	for name, ps := range params {
+		m[name] = len(ps)
+	}
+	return m
+}()
+
+// freeFns are the builtins callable in every scope, as against the browser
+// element functions. env() reads the process environment and match() reads a
+// string, and neither needs a page or a response to be meaningful.
+var freeFns = []string{"env", "match"}
 
 // scopeHints is the second line of a not-in-scope diagnostic: the roots that
 // *are* available, which is the whole reason the fault has its own code. The
@@ -67,10 +116,10 @@ func Roots(t StepType) []string {
 	return out
 }
 
-// Functions returns the builtins callable in a step of type t: env() always,
-// plus the element functions in a browser step.
+// Functions returns the builtins callable in a step of type t: env() and
+// match() always, plus the element functions in a browser step.
 func Functions(t StepType) []string {
-	out := []string{"env"}
+	out := append([]string{}, freeFns...)
 	if t == Browser {
 		out = append(out, elementFns...)
 	}
@@ -107,6 +156,15 @@ var allRoots = func() map[string]StepType {
 var elementFnOf = func() map[string]bool {
 	m := map[string]bool{}
 	for _, f := range elementFns {
+		m[f] = true
+	}
+	return m
+}()
+
+// freeFnOf reports whether word is a builtin callable in every scope.
+var freeFnOf = func() map[string]bool {
+	m := map[string]bool{}
+	for _, f := range freeFns {
 		m[f] = true
 	}
 	return m

@@ -14,6 +14,7 @@ import (
 // that shows the shape is worth more than one that restates the count.
 var signatures = map[string]string{
 	"env":     `env("API_URL")`,
+	"match":   `match(raw, /id=([0-9]+)/)`,
 	"text":    `text("[role=status]")`,
 	"value":   `value("#email")`,
 	"attr":    `attr("#link", "href")`,
@@ -47,6 +48,14 @@ func number(n int) string {
 // ordinals name an argument's position for a message about a call with more
 // than one.
 var ordinals = []string{"first", "second"}
+
+// maxGroups is how many capturing groups a `match()` pattern may have.
+//
+// One, because the value is group 1 and a pattern with two has an author who
+// meant one of them. Taking the first silently -- which the YAML front end's
+// pkg/shared/capture does -- is how a capture goes quietly wrong, and a group
+// that is only there to group rewrites to `(?:...)` with no change in meaning.
+const maxGroups = 1
 
 // expr checks one expression in the scope view v.
 //
@@ -180,11 +189,8 @@ func (c *checker) member(m *ast.Member, v *view) {
 }
 
 // call checks a builtin call: that the callee is one, that it is one *here*,
-// its arity, and that its arguments are strings.
-//
-// `env` is the one builtin everywhere, which is the design's whole point about
-// it: it is an ordinary expression legal wherever an expression is, rather
-// than a template form that only works inside a variable's value.
+// its arity, that each argument is the kind of value its parameter takes, and
+// -- for `match()` -- that its pattern has at most one capturing group.
 func (c *checker) call(x *ast.Call, v *view) {
 	for _, a := range x.Args {
 		c.expr(a.Value, v)
@@ -200,8 +206,12 @@ func (c *checker) call(x *ast.Call, v *view) {
 	}
 
 	switch {
-	case name == "env":
-		// Legal in every scope, including a var's value.
+	case freeFnOf[name]:
+		// env() and match() are legal in every scope, including a var's
+		// value. That is the design's whole point about env(): it is an
+		// ordinary expression legal wherever an expression is, rather than a
+		// template form that only works inside a variable's value. match()
+		// joins it because searching a string needs no page and no response.
 	case elementFnOf[name]:
 		if v.typ != Browser {
 			c.notInScopeFn(t.Span, name, v)
@@ -215,32 +225,75 @@ func (c *checker) call(x *ast.Call, v *view) {
 		return
 	}
 
-	want := arity[name]
-	if len(x.Args) != want {
+	ps := params[name]
+	if len(x.Args) != len(ps) {
 		c.bag.Error(x.Span(), diag.BadArity,
-			"%s() takes %s; this call has %s", name, count(want), number(len(x.Args))).
+			"%s() takes %s; this call has %s", name, count(len(ps)), number(len(x.Args))).
 			Hintf("%s", signatures[name])
 		return
 	}
-	// Every builtin's parameters are strings -- a variable name, a selector,
-	// an attribute name. Only a literal of the wrong kind is reported: an
-	// identifier or an interpolation could hold a string and this stage does
-	// not evaluate.
+	// Each parameter says what it takes -- a string for a variable name, a
+	// selector, an attribute name or the text to search; a regex or a string
+	// for `match()`'s pattern. Only a literal of the wrong kind is reported:
+	// an identifier or an interpolation could hold the right value and this
+	// stage does not evaluate.
 	for i, a := range x.Args {
 		lit, ok := a.Value.(*ast.Literal)
-		if !ok || lit == nil || lit.Kind() == token.String {
+		if !ok || lit == nil || ps[i].accepts(lit.Kind()) {
 			continue
 		}
-		// "argument 1" of a one-argument function is noise; `attr`'s second
-		// one is the only place the position is worth saying.
+		// "argument 1" of a one-argument function is noise; a second argument
+		// is the only place the position is worth saying.
 		which := ""
-		if want > 1 {
+		if len(ps) > 1 {
 			which = ordinals[i] + " "
 		}
 		c.bag.Error(lit.Span(), diag.BadValue,
-			"%s()'s %sargument must be a string, not %s", name, which, describeLiteral(lit)).
+			"%s()'s %sargument must be %s, not %s", name, which, ps[i].want, describeLiteral(lit)).
 			Hintf("%s", signatures[name])
 	}
+	if name == "match" && len(x.Args) == 2 {
+		c.groups(x.Args[1].Value)
+	}
+}
+
+// accepts reports whether a literal of kind k satisfies this parameter.
+func (p param) accepts(k token.Kind) bool {
+	for _, want := range p.kinds {
+		if k == want {
+			return true
+		}
+	}
+	return false
+}
+
+// groups rejects a `match()` pattern with more than one capturing group.
+//
+// Only a literal pattern is counted, because only a literal is known here. A
+// pattern that arrives as a string in a var is counted by pkg/eval at run
+// time and gives the same reason as an errored assertion -- which is the
+// usual split in this language: what is checked here is whichever half of the
+// rule can be settled here, not a different rule.
+//
+// A pattern that does not compile is already reported by literal() below, and
+// counting one that does not compile would be a second diagnostic about one
+// mistake.
+func (c *checker) groups(pattern ast.Expr) {
+	lit, ok := pattern.(*ast.Literal)
+	if !ok || lit == nil || lit.Kind() != token.Regex {
+		return
+	}
+	re, err := regexp.Compile(lit.Tok.Value)
+	if err != nil {
+		return
+	}
+	n := re.NumSubexp()
+	if n <= maxGroups {
+		return
+	}
+	c.bag.Error(lit.Span(), diag.BadValue,
+		"match() reads one capturing group, and this pattern has %s", number(n)).
+		Hintf("make the groups you do not want non-capturing: (?:...)")
 }
 
 // literal compiles a regex literal.
