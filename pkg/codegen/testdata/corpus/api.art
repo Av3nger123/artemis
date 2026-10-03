@@ -1,0 +1,58 @@
+# Every HTTP verb, every request field, and the four roots an api step binds.
+scenario "the orders api" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "create one" {
+    post "${base}/orders" {
+      header "Content-Type" = "application/json"
+      header "Authorization" = "Bearer ${env("TOKEN")}"
+      body = {"sku": "ART-1", "qty": 2, "gift": true, "note": null}
+    }
+    timeout = "10s"
+    retry { times = 3, delay = "1s" }
+
+    expect status == 201
+    capture id = body.id
+  }
+
+  step "read it back" {
+    get "${base}/orders/${id}" {
+      query "fields" = "id,total"
+      query "fields" = "sku"
+      query "page" = 2
+    }
+
+    expect status == 200
+    expect raw contains "ART-1"
+    expect headers["content-type"] contains "json"
+  }
+
+  step "replace it" {
+    put "${base}/orders/${id}" {
+      body = {"sku": "ART-2", "qty": 1}
+    }
+    expect status == 200
+  }
+
+  step "amend it" {
+    patch "${base}/orders/${id}" {
+      body = {"qty": 4}
+    }
+    expect status == 200
+  }
+
+  step "ask what it allows" {
+    options "${base}/orders/${id}"
+    expect status < 400
+  }
+
+  step "just the headers" {
+    head "${base}/orders/${id}"
+    expect status == 200
+  }
+
+  step "remove it" {
+    delete "${base}/orders/${id}"
+    expect status == 204
+  }
+}

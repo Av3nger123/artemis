@@ -1,0 +1,11 @@
+# Two action blocks in one step. A step is one observation, so two actions means
+# the author wanted two steps; the diagnostic points at the second and the hint
+# points back at the first.
+
+scenario "deploy" {
+  step "builds and deploys" {
+    get "/health"
+    run "echo deploy"
+    expect status == 200
+  }
+}

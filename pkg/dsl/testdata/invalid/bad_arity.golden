@@ -1,0 +1,20 @@
+=== terminal
+bad_arity.art:17:7: "click" takes a selector and no value
+   17 |       click "text=Sign in" = "now"
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   hint: click "text=Sign in"
+
+bad_arity.art:18:7: "fill" takes a selector and a value
+   18 |       fill "#email"
+      |       ^^^^^^^^^^^^^
+   hint: fill "#email" = "alice@example.com"
+
+bad_arity.art:20:12: attr() takes two arguments; this call has one
+   20 |     expect attr("#link") contains "/pro"
+      |            ^^^^^^^^^^^^^
+   hint: attr("#link", "href")
+
+=== codes
+bad-arity	error	17:7-17:35
+bad-arity	error	18:7-18:20
+bad-arity	error	20:12-20:25

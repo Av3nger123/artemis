@@ -1,0 +1,18 @@
+# Two unparseable durations. `timeout` and `retry`'s `delay` take a duration
+# string, and "5 secs" is the kind of thing a person writes once; today the
+# equivalent YAML fails at run time, and the design moves it to compile time.
+#
+# Both are well-formed syntax -- a string on the right of an `=` -- so the
+# parser has nothing to say, and the checker knows which fields are durations.
+
+scenario "timeouts" {
+  step "orders" {
+    get "/orders"
+    timeout = "5 secs"
+    retry {
+      times = 3
+      delay = "soon"
+    }
+    expect status == 200
+  }
+}

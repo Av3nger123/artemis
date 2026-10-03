@@ -1,16 +1,16 @@
 package executor
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
-	"artemis/pkg/result"
 	"artemis/pkg/shared/models"
 )
 
 func noop() Executor {
-	return Func(func(_ models.Step, _ Scope) (*result.StepResult, error) {
-		return &result.StepResult{}, nil
+	return Func(func(context.Context, models.Step, Scope) (map[string]any, error) {
+		return nil, nil
 	})
 }
 

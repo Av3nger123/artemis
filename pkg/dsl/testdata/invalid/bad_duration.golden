@@ -1,0 +1,14 @@
+=== terminal
+bad_duration.art:11:15: "5 secs" is not a duration
+   11 |     timeout = "5 secs"
+      |               ^^^^^^^^
+   hint: a duration is a number and a unit: "30s", "500ms", "2m"
+
+bad_duration.art:14:15: "soon" is not a duration
+   14 |       delay = "soon"
+      |               ^^^^^^
+   hint: a duration is a number and a unit: "30s", "500ms", "2m"
+
+=== codes
+invalid-duration	error	11:15-11:23
+invalid-duration	error	14:15-14:21

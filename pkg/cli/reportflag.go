@@ -105,7 +105,7 @@ func anyToStdout(targets []reportTarget) bool {
 // at the first one that fails.
 //
 // A report that cannot be written fails the command even when the run passed: a
-// CI job whose artifact silently vanished is worse off than one that went red.
+// CI job whose report silently vanished is worse off than one that went red.
 func writeReports(stdout io.Writer, targets []reportTarget, run *result.RunResult) error {
 	for _, t := range targets {
 		write := reportWriters[t.format]

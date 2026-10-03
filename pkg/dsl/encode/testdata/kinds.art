@@ -1,0 +1,43 @@
+# Every node kind the encoding has, once each, in as few lines as the grammar
+# allows -- so that the golden pinning the UI contract is a file somebody can
+# actually read. `bad` is the exception: it is only produced by a file that did
+# not parse, and parser-recover.json covers it.
+scenario "kinds" {
+  config browser { headless = true }
+
+  var num = -1
+  var re = /.+@.+/
+  var nothing = null
+  var obj = {"a": [1, "two"], "b": {}}
+  var url = "${num}/x"
+
+  step "api" {
+    get "${url}/orders" {
+      header "Accept" = "application/json"
+      body = {"q": 1}
+    }
+    timeout = "5s"
+    retry { times = 2, delay = "1s" }
+    expect status == 200 within "10s"
+    expect not (body.items[0].id exists) and body.count is number
+    capture id = body.items[0].id
+  }
+
+  step "terminal" {
+    # above the run
+    run "psql" { # opening the run block
+      args = ["-f", "seed.sql"]
+      env { PGHOST = "localhost" }
+    }
+    expect stdout contains "COPY"
+  }
+
+  step "browser" {
+    browser { # opening the browser block
+      goto "/a" # trailing a browser action
+      fill "#email" = "a@b.c"
+      # above the browser block's closing brace
+    }
+    expect text("[role=status]") contains "Pro"
+  }
+}

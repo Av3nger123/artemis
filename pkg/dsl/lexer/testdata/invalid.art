@@ -1,0 +1,9 @@
+# Every lexical error the lexer knows, except the two that swallow the rest of
+# the file by design -- an unterminated string, and the unclosed "${" below,
+# which has to come last for that reason.
+scenario "invalid" {
+  step "errors" {
+    header "A" = "bad escape: \q"
+    header "B" = /unterminated regex
+    header "C" = 1 ! 2
+    get "${ unclosed

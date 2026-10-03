@@ -1,0 +1,14 @@
+=== terminal
+unknown_browser_act.art:18:7: unknown browser action "clik"
+   18 |       clik "text=Upgrade"
+      |       ^^^^
+   hint: did you mean "click"?
+
+unknown_browser_act.art:19:7: unknown browser action "jump"
+   19 |       jump "#plan"
+      |       ^^^^
+   hint: a browser block holds: goto, click, fill, select, press, hover, upload, wait
+
+=== codes
+unexpected-token	error	18:7-18:11	suggest: "click"
+unexpected-token	error	19:7-19:11

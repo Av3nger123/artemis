@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"artemis/pkg/dsl/print"
 )
 
 // -update rewrites the golden files from what the runner actually prints:
@@ -34,11 +36,18 @@ const durSentinel = "<dur>"
 
 // goldenCase is one whole run of artemis pinned to a file.
 //
-// Each case names testdata/<name>.yaml -- the scenario a user would write -- and
-// testdata/<name>.golden, which holds every byte the command printed plus the
-// error it exited with. The pair is the point: the YAML is readable as a
-// scenario and the golden is readable as a report, so a change to either side
-// of the runner shows up as a diff a person can judge.
+// Each case names testdata/art/<name>.art -- the scenario a user would write --
+// and testdata/art/<name>.golden, which holds every byte the command printed
+// plus the error it exited with. The pair is the point: the .art file is
+// readable as a scenario and the golden is readable as a report, so a change to
+// either side of the runner shows up as a diff a person can judge.
+//
+// There was a second, parallel corpus of testdata/*.yaml fixtures and their
+// goldens until ART-40, with TestGoldenParity arguing that a migrated scenario
+// was the same run. The YAML files are still there, because they are
+// `artemis migrate`'s corpus (migrate_test.go walks them); their run
+// transcripts are not, because a parity test needs two runners and there is
+// one.
 type goldenCase struct {
 	name string
 	// dir makes the fixture a folder, testdata/<name>/, run with
@@ -68,37 +77,6 @@ func (c goldenCase) fixtureName() string {
 		return c.fixture
 	}
 	return c.name
-}
-
-func TestGolden(t *testing.T) {
-	for _, c := range goldenCases(t) {
-		t.Run(c.name, func(t *testing.T) {
-			out, runErr := runGolden(t, c)
-
-			if c.wantErr && runErr == nil {
-				t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
-			}
-			if !c.wantErr && runErr != nil {
-				t.Errorf("Execute() = %v, want nil:\n%s", runErr, out)
-			}
-
-			path := filepath.Join("testdata", c.name+".golden")
-			if *update {
-				if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
-					t.Fatalf("writing %s: %v", path, err)
-				}
-				t.Logf("updated %s", path)
-				return
-			}
-			want, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("reading %s: %v (run `make golden` to create it)", path, err)
-			}
-			if got := out; got != string(want) {
-				t.Errorf("output does not match %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
-			}
-		})
-	}
 }
 
 // runGolden runs one case through the real root command and returns the
@@ -152,13 +130,13 @@ func renderFixture(t *testing.T, c goldenCase, url string) (fixture, path string
 	t.Helper()
 	name := c.fixtureName()
 	if !c.dir {
-		fixture = filepath.Join("testdata", name+".yaml")
-		path = filepath.Join(t.TempDir(), name+".yaml")
+		fixture = filepath.Join("testdata", artDir, name+artExt)
+		path = filepath.Join(t.TempDir(), name+artExt)
 		writeRendered(t, fixture, path, url, true)
 		return fixture, path
 	}
 
-	fixture = filepath.Join("testdata", name)
+	fixture = filepath.Join("testdata", artDir, name)
 	path = filepath.Join(t.TempDir(), name)
 	substituted := false
 	err := filepath.WalkDir(fixture, func(src string, d fs.DirEntry, err error) error {
@@ -267,8 +245,11 @@ func jsonHandler(status int, body string) http.HandlerFunc {
 	}
 }
 
-// goldenCases is the list of runs pinned to testdata. Keep a case's scenario in
-// its fixture and only what the server does here.
+// goldenCases is the list of runs pinned to testdata/art. Keep a case's
+// scenario in its fixture and only what the server does here.
+//
+// The names are the YAML corpus's, because each fixture is that scenario
+// migrated and `artemis migrate`'s own goldens are keyed on them.
 func goldenCases(t *testing.T) []goldenCase {
 	t.Helper()
 	return []goldenCase{
@@ -428,5 +409,157 @@ func reportFixtureHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
 		}
+	}
+}
+
+// -- the corpus's own directory -------------------------------------------
+//
+// testdata/art holds one .art file (or folder) per goldenCase, with its own
+// .golden beside it. It stayed a subdirectory when ART-40 removed the YAML
+// corpus's goldens, because testdata/ still holds the .yaml files
+// `artemis migrate` is tested on and a folder walk must not pick those up.
+const artDir = "art"
+
+// artCase is a case's departure from the YAML scenario it was migrated from,
+// which for most of them is nothing at all. It is kept as the record of why
+// each fixture reads the way it does; the parity test that used to enforce it
+// went with the YAML runner.
+type artCase struct {
+	// noYAML is a case with no YAML original: it pins something the DSL has
+	// and YAML did not.
+	noYAML string
+	// changed is a case whose outcome changes by design, with the reason.
+	changed string
+	// wantErr overrides the YAML case's, for a case whose exit changes.
+	wantErr *bool
+	// handler overrides the YAML case's, for a case the YAML corpus had no
+	// server behaviour for.
+	handler http.HandlerFunc
+}
+
+// artCases is every departure from the YAML corpus, in one table, each with the
+// reason it departs. A case that is not here is the same scenario against the
+// same server, and was held to the same outcome by TestGoldenParity until
+// ART-40 deleted the runner it compared against.
+func artCases() map[string]artCase {
+	yes := true
+	return map[string]artCase{
+		// The two compile errors. In YAML both of these are run-time step
+		// errors; the checker resolves names and parses durations, so in the
+		// DSL the file never runs. The design calls for the first and names
+		// "bad duration" in the same compile-error class as the second.
+		"template_error": {changed: "an unresolvable placeholder is a compile error"},
+		"bad_retry":      {changed: "a delay that is not a duration is a compile error"},
+
+		// Not a departure at all, recorded here because the design document
+		// says it is one: it describes bad_capture as pinning "an empty
+		// capture path", which was already a YAML load error. What the fixture
+		// pins is a path that resolves to nothing and a regex that matches
+		// nothing, and a response's shape is not something a checker can know,
+		// so both stay run-time errored captures and the case is a parity case.
+
+		// The DSL-only fixtures.
+		"status_and_body": {
+			noYAML:  "a wrong status no longer suppresses the expects after it",
+			wantErr: &yes,
+			handler: jsonHandler(http.StatusInternalServerError, `{"error": "boom"}`),
+		},
+		"terminal": {
+			noYAML:  "api and terminal in one scenario, and two scenarios in one file",
+			wantErr: &yes,
+			handler: jsonHandler(http.StatusOK, `{"items": []}`),
+		},
+	}
+}
+
+// artGoldenCases is the YAML corpus plus the DSL-only cases, each adjusted by
+// artCases.
+func artGoldenCases(t *testing.T) []goldenCase {
+	t.Helper()
+	over := artCases()
+	cases := goldenCases(t)
+	for i := range cases {
+		a := over[cases[i].name]
+		if a.wantErr != nil {
+			cases[i].wantErr = *a.wantErr
+		}
+		if a.handler != nil {
+			cases[i].handler = a.handler
+		}
+	}
+	// In the order they are declared in artCases, which map iteration does not
+	// give, so the DSL-only ones are listed here explicitly.
+	for _, name := range []string{"status_and_body", "terminal"} {
+		a := over[name]
+		cases = append(cases, goldenCase{
+			name:    name,
+			handler: a.handler,
+			wantErr: a.wantErr != nil && *a.wantErr,
+		})
+	}
+	return cases
+}
+
+// TestGoldenArt is TestGolden over the DSL corpus: the same runs, the same
+// server behaviour, and a golden per case holding every byte the command
+// printed plus the error it exited with.
+func TestGoldenArt(t *testing.T) {
+	for _, c := range artGoldenCases(t) {
+		t.Run(c.name, func(t *testing.T) {
+			out, runErr := runGolden(t, c)
+
+			if c.wantErr && runErr == nil {
+				t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
+			}
+			if !c.wantErr && runErr != nil {
+				t.Errorf("Execute() = %v, want nil:\n%s", runErr, out)
+			}
+
+			path := filepath.Join("testdata", artDir, c.name+".golden")
+			if *update {
+				if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+					t.Fatalf("writing %s: %v", path, err)
+				}
+				t.Logf("updated %s", path)
+				return
+			}
+			want, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading %s: %v (run `make golden` to create it)", path, err)
+			}
+			if got := out; got != string(want) {
+				t.Errorf("output does not match %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
+			}
+		})
+	}
+}
+
+// Every .art file in the corpus is already in canonical form, so the fixtures
+// read as the formatter would write them and a reviewer never has to wonder
+// whether a layout is deliberate. A file that does not compile is skipped,
+// which is `artemis fmt`'s own rule: it does not format a file it has errors
+// for, because rewriting a broken file is how a formatter loses someone's work.
+func TestGoldenArtFixturesAreCanonical(t *testing.T) {
+	root := filepath.Join("testdata", artDir)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".art") {
+			return err
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		tree, _, bag := frontEnd(path, string(src))
+		if bag.HasErrors() {
+			return nil
+		}
+		if got := print.Canonical(tree); got != string(src) {
+			t.Errorf("%s is not in canonical form; run `artemis fmt -w %s`\n--- want ---\n%s\n--- got ---\n%s",
+				path, path, src, got)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", root, err)
 	}
 }

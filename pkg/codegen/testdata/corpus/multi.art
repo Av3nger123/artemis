@@ -1,0 +1,24 @@
+# Two scenarios in one file become two test functions in one module, and two
+# names that slug alike are kept apart rather than one silently replacing the
+# other.
+scenario "sign in" {
+  step "post the form" {
+    post "https://example.test/session" {
+      body = {"email": "alice@example.test"}
+    }
+    expect status == 200
+  }
+}
+
+scenario "sign-in" {
+  step "post the form again" {
+    post "https://example.test/session" {
+      body = {"email": "bob@example.test"}
+    }
+    expect status == 200
+  }
+}
+
+# A scenario with nothing in it is still a test function.
+scenario "nothing to do yet" {
+}

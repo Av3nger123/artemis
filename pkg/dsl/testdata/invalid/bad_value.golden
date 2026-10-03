@@ -1,0 +1,32 @@
+=== terminal
+bad_value.art:10:31: "headless" must be true or false, not a string
+   10 |   config browser { headless = "yes" }
+      |                               ^^^^^
+   hint: headless = true
+
+bad_value.art:12:20: env()'s argument must be a string, not a number
+   12 |   var region = env(42)
+      |                    ^^
+   hint: env("API_URL")
+
+bad_value.art:16:7: "header" needs a name before its value
+   16 |       header = "application/json"
+      |       ^^^^^^
+   hint: header "Content-Type" = "application/json"
+
+bad_value.art:18:21: "times" must be a whole number, not a string
+   18 |     retry { times = "3" }
+      |                     ^^^
+   hint: times = 3
+
+bad_value.art:24:14: "args" must be an array, not a string
+   24 |       args = "seed.sql"
+      |              ^^^^^^^^^^
+   hint: args = ["-f", "seed.sql"]
+
+=== codes
+bad-value	error	10:31-10:36
+bad-value	error	12:20-12:22
+bad-value	error	16:7-16:13
+bad-value	error	18:21-18:24
+bad-value	error	24:14-24:24

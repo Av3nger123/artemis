@@ -1,0 +1,2 @@
+go test fuzz v1
+string("scenario\"\"{step\"\"{get\"\"A=0.A[0.A expect 00.A0\"\"},0")

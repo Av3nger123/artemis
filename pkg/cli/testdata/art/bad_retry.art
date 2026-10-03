@@ -1,0 +1,18 @@
+# A retry delay that is not a duration.
+#
+# A third golden that changes by design, which the issue did not predict: the
+# design's compile-error class names "bad duration" explicitly, and
+# pkg/dsl/testdata/invalid/bad_duration.art already pins `delay = "soon"` as
+# invalid-duration -- "today the equivalent YAML fails at run time, and the
+# design moves it to compile time". So the step never runs and no attempt is
+# wasted finding out.
+scenario "bad retry delay" {
+  step "ping" {
+    get "%SERVER%/ping"
+    retry {
+      times = 3
+      delay = "soon"
+    }
+    expect status == 200
+  }
+}

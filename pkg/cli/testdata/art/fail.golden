@@ -1,0 +1,28 @@
+scenario: status check (testdata/art/fail.art)
+  FAIL  ping                        <dur>
+         body.status == ok, got pending
+         body.count <= 2, got 3
+
+2 failures:
+
+1) testdata/art/fail.art:10
+     scenario  status check
+     step      ping
+     assert    expect body.status ==
+     expected  "ok"
+     actual    "pending"
+
+2) testdata/art/fail.art:11
+     scenario  status check
+     step      ping
+     assert    expect body.count <=
+     expected  2
+     actual    3
+
+Scenarios     1  (1 failed)
+Steps         1  (1 failed)
+Assertions    3  (1 passed, 2 failed)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed, 2 of 3 assertions failed

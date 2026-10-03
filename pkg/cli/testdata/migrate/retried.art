@@ -1,0 +1,9 @@
+# A service that is not up yet: two attempts fail, the third passes.
+scenario "wait for ready" {
+  step "ping until ready" {
+    get "%SERVER%/ready"
+    retry { times = 3, delay = "50ms" }
+    expect status == 200
+    expect body.status == "ok"
+  }
+}

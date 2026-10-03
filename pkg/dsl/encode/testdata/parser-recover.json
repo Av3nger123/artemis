@@ -1,0 +1,623 @@
+{
+  "schemaVersion": 1,
+  "file": "../parser/testdata/recover.art",
+  "scenarios": [
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"good one\"",
+        "value": "good one"
+      },
+      "body": [
+        {
+          "kind": "var",
+          "name": "url",
+          "value": {
+            "kind": "call",
+            "callee": "env",
+            "args": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"API_URL\"",
+                "value": "API_URL",
+                "span": {
+                  "file": "../parser/testdata/recover.art",
+                  "line": 6,
+                  "col": 17,
+                  "endLine": 6,
+                  "endCol": 26,
+                  "offset": 250
+                }
+              }
+            ],
+            "span": {
+              "file": "../parser/testdata/recover.art",
+              "line": 6,
+              "col": 13,
+              "endLine": 6,
+              "endCol": 27,
+              "offset": 246
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/recover.art",
+            "line": 6,
+            "col": 3,
+            "endLine": 6,
+            "endCol": 27,
+            "offset": 236
+          }
+        },
+        {
+          "kind": "bad",
+          "source": "\n  nonsense here",
+          "span": {
+            "file": "../parser/testdata/recover.art",
+            "line": 7,
+            "col": 3,
+            "endLine": 7,
+            "endCol": 16,
+            "offset": 263
+          }
+        },
+        {
+          "kind": "var",
+          "name": "kept",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "1",
+            "value": "1",
+            "span": {
+              "file": "../parser/testdata/recover.art",
+              "line": 9,
+              "col": 14,
+              "endLine": 9,
+              "endCol": 15,
+              "offset": 291
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/recover.art",
+            "line": 9,
+            "col": 3,
+            "endLine": 9,
+            "endCol": 15,
+            "offset": 280
+          },
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"survives a bad statement\"",
+            "value": "survives a bad statement"
+          },
+          "action": {
+            "kind": "request",
+            "method": "get",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "url",
+                    "span": {
+                      "file": "../parser/testdata/recover.art",
+                      "line": 12,
+                      "col": 12,
+                      "endLine": 12,
+                      "endCol": 15,
+                      "offset": 341
+                    }
+                  }
+                }
+              ],
+              "end": "}/orders\"",
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 12,
+                "col": 9,
+                "endLine": 12,
+                "endCol": 24,
+                "offset": 338
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/recover.art",
+              "line": 12,
+              "col": 5,
+              "endLine": 12,
+              "endCol": 24,
+              "offset": 334
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 13,
+                    "col": 12,
+                    "endLine": 13,
+                    "endCol": 18,
+                    "offset": 365
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "200",
+                  "value": "200",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 13,
+                    "col": 22,
+                    "endLine": 13,
+                    "endCol": 25,
+                    "offset": 375
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/recover.art",
+                  "line": 13,
+                  "col": 12,
+                  "endLine": 13,
+                  "endCol": 25,
+                  "offset": 365
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 13,
+                "col": 5,
+                "endLine": 13,
+                "endCol": 25,
+                "offset": 358
+              },
+              "class": "simple"
+            },
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "bad",
+                "source": "==",
+                "span": {
+                  "file": "../parser/testdata/recover.art",
+                  "line": 14,
+                  "col": 12,
+                  "endLine": 14,
+                  "endCol": 14,
+                  "offset": 390
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 14,
+                "col": 5,
+                "endLine": 14,
+                "endCol": 14,
+                "offset": 383
+              },
+              "class": "complex"
+            },
+            {
+              "kind": "bad",
+              "source": "=",
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 14,
+                "col": 14,
+                "endLine": 14,
+                "endCol": 15,
+                "offset": 392
+              }
+            },
+            {
+              "kind": "capture",
+              "name": "token",
+              "value": {
+                "kind": "member",
+                "x": {
+                  "kind": "member",
+                  "x": {
+                    "kind": "ident",
+                    "name": "body",
+                    "span": {
+                      "file": "../parser/testdata/recover.art",
+                      "line": 15,
+                      "col": 21,
+                      "endLine": 15,
+                      "endCol": 25,
+                      "offset": 414
+                    }
+                  },
+                  "name": "data",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 15,
+                    "col": 21,
+                    "endLine": 15,
+                    "endCol": 30,
+                    "offset": 414
+                  }
+                },
+                "name": "token",
+                "span": {
+                  "file": "../parser/testdata/recover.art",
+                  "line": 15,
+                  "col": 21,
+                  "endLine": 15,
+                  "endCol": 36,
+                  "offset": 414
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 15,
+                "col": 5,
+                "endLine": 15,
+                "endCol": 36,
+                "offset": 398
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/recover.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 16,
+            "endCol": 4,
+            "offset": 296
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "url",
+            "kept"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"survives a bad field\"",
+            "value": "survives a bad field"
+          },
+          "action": {
+            "kind": "request",
+            "method": "post",
+            "url": {
+              "kind": "literal",
+              "literal": "string",
+              "text": "\"/x\"",
+              "value": "/x",
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 19,
+                "col": 10,
+                "endLine": 19,
+                "endCol": 14,
+                "offset": 476
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "header",
+                  "key": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"A\"",
+                    "value": "A",
+                    "span": {
+                      "file": "../parser/testdata/recover.art",
+                      "line": 20,
+                      "col": 14,
+                      "endLine": 20,
+                      "endCol": 17,
+                      "offset": 496
+                    }
+                  },
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"b\"",
+                    "value": "b",
+                    "span": {
+                      "file": "../parser/testdata/recover.art",
+                      "line": 20,
+                      "col": 20,
+                      "endLine": 20,
+                      "endCol": 23,
+                      "offset": 502
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 20,
+                    "col": 7,
+                    "endLine": 20,
+                    "endCol": 23,
+                    "offset": 489
+                  }
+                },
+                {
+                  "kind": "bad",
+                  "source": "\n      query\n      body = {\"ok\": true}",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 21,
+                    "col": 7,
+                    "endLine": 22,
+                    "endCol": 26,
+                    "offset": 512
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 19,
+                "col": 15,
+                "endLine": 23,
+                "endCol": 6,
+                "offset": 481
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/recover.art",
+              "line": 19,
+              "col": 5,
+              "endLine": 23,
+              "endCol": 6,
+              "offset": 471
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 24,
+                    "col": 12,
+                    "endLine": 24,
+                    "endCol": 18,
+                    "offset": 561
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "201",
+                  "value": "201",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 24,
+                    "col": 22,
+                    "endLine": 24,
+                    "endCol": 25,
+                    "offset": 571
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/recover.art",
+                  "line": 24,
+                  "col": 12,
+                  "endLine": 24,
+                  "endCol": 25,
+                  "offset": 561
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 24,
+                "col": 5,
+                "endLine": 24,
+                "endCol": 25,
+                "offset": 554
+              },
+              "class": "simple"
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/recover.art",
+            "line": 18,
+            "col": 3,
+            "endLine": 25,
+            "endCol": 4,
+            "offset": 437
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "url",
+            "kept",
+            "token"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/recover.art",
+        "line": 5,
+        "col": 1,
+        "endLine": 26,
+        "endCol": 2,
+        "offset": 212
+      },
+      "comments": {
+        "above": [
+          {
+            "text": "# Bad lines between good ones. Every scenario, step and statement that is"
+          },
+          {
+            "text": "# well-formed here must survive the ones that are not: recovery at statement"
+          },
+          {
+            "text": "# boundaries is what keeps one mistake from costing a file."
+          }
+        ],
+        "blankAbove": true
+      }
+    },
+    {
+      "kind": "bad",
+      "source": "\n\nnot a scenario at all",
+      "span": {
+        "file": "../parser/testdata/recover.art",
+        "line": 28,
+        "col": 1,
+        "endLine": 28,
+        "endCol": 22,
+        "offset": 582
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"also good\"",
+        "value": "also good"
+      },
+      "body": [
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"still parsed\"",
+            "value": "still parsed"
+          },
+          "action": {
+            "kind": "run",
+            "command": {
+              "kind": "literal",
+              "literal": "string",
+              "text": "\"echo hi\"",
+              "value": "echo hi",
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 32,
+                "col": 9,
+                "endLine": 32,
+                "endCol": 18,
+                "offset": 660
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/recover.art",
+              "line": 32,
+              "col": 5,
+              "endLine": 32,
+              "endCol": 18,
+              "offset": 656
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "exit_code",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 33,
+                    "col": 12,
+                    "endLine": 33,
+                    "endCol": 21,
+                    "offset": 681
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "0",
+                  "value": "0",
+                  "span": {
+                    "file": "../parser/testdata/recover.art",
+                    "line": 33,
+                    "col": 25,
+                    "endLine": 33,
+                    "endCol": 26,
+                    "offset": 694
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/recover.art",
+                  "line": 33,
+                  "col": 12,
+                  "endLine": 33,
+                  "endCol": 26,
+                  "offset": 681
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/recover.art",
+                "line": 33,
+                "col": 5,
+                "endLine": 33,
+                "endCol": 26,
+                "offset": 674
+              },
+              "class": "simple"
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/recover.art",
+            "line": 31,
+            "col": 3,
+            "endLine": 34,
+            "endCol": 4,
+            "offset": 630
+          },
+          "stepType": "terminal",
+          "scope": [
+            "exit_code",
+            "stdout",
+            "stderr"
+          ]
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/recover.art",
+        "line": 30,
+        "col": 1,
+        "endLine": 35,
+        "endCol": 2,
+        "offset": 605
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    }
+  ]
+}

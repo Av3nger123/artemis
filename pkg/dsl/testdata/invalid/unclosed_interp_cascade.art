@@ -1,0 +1,16 @@
+# An unclosed "${" in the middle of a line -- the realistic typo, and the one
+# that cascades. The interpolation scanner reaches the end of the line looking
+# for "}", the "/" starts a regex literal that cannot span lines, and everything
+# after it is read as part of a string that never closes -- so one typo produces
+# eleven diagnostics. That cascade is pinned here deliberately: it is honest
+# output from a recovering parser, narrowing it is a change to pkg/dsl/parser,
+# and this golden is the evidence for whoever takes that on.
+
+scenario "unclosed interpolation" {
+  var base = "https://api.example.com"
+
+  step "orders" {
+    get "${base/orders"
+    expect status == 200
+  }
+}

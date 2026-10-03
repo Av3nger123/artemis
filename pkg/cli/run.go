@@ -4,8 +4,11 @@ import (
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
+	"artemis/pkg/session"
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
+	"artemis/pkg/steps/browserstep"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -22,8 +25,12 @@ var runCmd = &cobra.Command{
 	Short: "Run the scenarios in a file or a folder",
 	Long: `Run the scenarios artemis finds at <path>.
 
-A file is run on its own. A folder is walked recursively for *.yaml and *.yml
-files, which are run in path order as one run: one summary, one exit code.`,
+A file is run on its own. A folder is walked recursively for *.art files,
+which are run in path order as one run: one summary, one exit code.
+
+A .art file is lexed, parsed, name-checked and lowered before anything is sent.
+Every problem artemis finds is reported with the source line echoed, and a file
+that does not compile is one errored scenario: the files after it still run.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		closer, err := initRunEnv(cmd)
@@ -88,7 +95,13 @@ func reportRun(cmd *cobra.Command, path string) error {
 	}
 
 	rep := report.NewConsole(consoleOut)
-	run := runFiles(executor.Default(), files, rep)
+	// Diagnostics go to stderr whatever the console does: a .art file that will
+	// not compile is reported with its caret gutter, and stdout stays exactly
+	// one document when --report asked for one.
+	run := runFilesWith(&runtimeEnv{
+		reg:   executor.Default(),
+		shots: browserstep.NewShots(shotDir(cmd)),
+	}, files, rep, cmd.ErrOrStderr())
 	// Between the step lines and the tallies: the blocks are what a reader --
 	// or the agent that wrote the scenario -- acts on (ART-12), and the
 	// summary's verdict stays the last line a run writes.
@@ -96,7 +109,7 @@ func reportRun(cmd *cobra.Command, path string) error {
 	rep.Summary(run)
 
 	// A report that could not be written wins over the run's own failure: the
-	// console has already said the run failed, and the missing artifact is the
+	// console has already said the run failed, and the missing report is the
 	// part the caller does not know about yet.
 	if err := writeReports(out, targets, run); err != nil {
 		return err
@@ -108,8 +121,15 @@ func reportRun(cmd *cobra.Command, path string) error {
 }
 
 // scenarioExts are the extensions a folder walk picks up. A file named outright
-// is run whatever it is called -- the user said which file they meant.
-var scenarioExts = []string{".yaml", ".yml"}
+// is opened whatever it is called -- the user said which file they meant, and
+// runFiles is what tells them it is not a scenario artemis can run.
+//
+// It was `.yaml`, `.yml`, `.art` while a suite was being migrated a file at a
+// time. ART-40 took YAML off the run path, so a folder that still holds
+// unconverted YAML runs the converted half and says nothing about the rest --
+// which is the right silence: the YAML files were never going to be found by a
+// walk again, and `artemis migrate` is how they come back.
+var scenarioExts = []string{".art"}
 
 // discover turns the path a user named into the list of scenario files to run.
 //
@@ -173,25 +193,80 @@ func isScenarioFile(name string) bool {
 //
 // A file artemis cannot load is recorded as an errored scenario and the rest
 // still run. Stopping at the first bad file would hide every other result of
-// the suite behind one typo.
-func runFiles(reg *executor.Registry, files []string, rep *report.Console) *result.RunResult {
+// the suite behind one typo. A .art file with a diagnostic is such a file, and
+// so is a file that is not .art at all.
+//
+// Only a path the user named outright can reach that second branch, because the
+// folder walk picks up nothing else. It is an errored scenario rather than a
+// skip: someone who types `artemis run login.yaml` and gets a passing run that
+// ran nothing has been told the opposite of the truth.
+func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagOut io.Writer) *result.RunResult {
+	return runFilesWith(&runtimeEnv{reg: reg}, files, rep, diagOut)
+}
+
+// runtimeEnv is what the runner needs besides the scenarios: the executors to
+// dispatch to, and where a failed browser step's screenshot goes.
+//
+// It is one value threaded down to runArtStep rather than two more parameters
+// on four functions, and it is where the next run-wide setting goes. A nil
+// shots is screenshots off, which is what every test that is not about them
+// gets.
+type runtimeEnv struct {
+	reg   *executor.Registry
+	shots *browserstep.Shots
+}
+
+// runFilesWith is runFiles with the run-wide settings given rather than
+// defaulted. `artemis run` goes through here; runFiles is the plain form, which
+// is what the tests that are not about screenshots use.
+//
+// session.Shutdown is deferred once for the whole run rather than per scenario.
+// The Playwright driver -- a Node process -- is per process; starting one per
+// scenario would cost an install check and a pipe each time. The *browser* is
+// what scenarios must not share, and that is the registry's business, closed at
+// each scenario boundary. Shutdown is a no-op when nothing ever opened a
+// session, which is the normal case and the reason it can be deferred
+// unconditionally: an api-only run does not have to know it had no browser.
+func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut io.Writer) *result.RunResult {
+	defer func() {
+		if err := session.Shutdown(); err != nil {
+			logger.Logger.Warn("Could not stop the browser driver", "error", err.Error())
+		}
+	}()
+
 	run := result.NewRun()
 	for _, file := range files {
-		config, err := loadScenario(file)
-		if err != nil {
-			// No name to give it: the file would not parse, so all anyone
-			// knows about this scenario is where it lives.
-			scenario := run.NewScenario("", file)
-			rep.Scenario(scenario)
-			scenario.Fail(0, err)
-			rep.ScenarioFailed(scenario)
-			logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
+		if !isArtFile(file) {
+			failScenario(run, rep, file, notAScenarioError(file))
 			continue
 		}
-		executeScenario(reg, config, file, run, rep)
+		runArtFile(context.Background(), rt, file, run, rep, diagOut)
 	}
 	run.Finish()
 	return run
+}
+
+// notAScenarioError is what a path artemis will not run says. It names the one
+// way out, with the command spelled for this file, because the reader's next
+// move is to run it.
+func notAScenarioError(file string) error {
+	if strings.EqualFold(filepath.Ext(file), ".yaml") || strings.EqualFold(filepath.Ext(file), ".yml") {
+		out := strings.TrimSuffix(file, filepath.Ext(file)) + artExt
+		return fmt.Errorf("%s: artemis no longer runs YAML scenarios -- convert it with \"artemis migrate -f %s -o %s\"", file, file, out)
+	}
+	return fmt.Errorf("%s: not a scenario file (artemis runs %s files)", file, artExt)
+}
+
+// failScenario records a file artemis could not load as one errored scenario.
+//
+// No name to give it: the file did not load, so all anyone knows about this
+// scenario is where it lives.
+func failScenario(run *result.RunResult, rep *report.Console, file string, err error) {
+	scenario := run.NewScenario("", file)
+	rep.Scenario(scenario)
+	scenario.Fail(0, err)
+	rep.ScenarioFailed(scenario)
+	logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
 }
 
 // runFailedError states in one line what failed. The readable breakdown is the
@@ -249,4 +324,28 @@ func plural(n int, one, many string) string {
 		return fmt.Sprintf("%d %s", n, one)
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// screenshotsFlag is the flag naming where a failed browser step's screenshot
+// goes. Empty means do not take any.
+const screenshotsFlag = "screenshots"
+
+// shotDir is where a failed browser step's screenshot goes: --screenshots, or
+// the default.
+//
+// The empty string turns them off, which is why this reads the flag rather than
+// relying on its default -- an explicit `--screenshots ""` has to be
+// distinguishable from not passing it, and with cobra's own default it is: the
+// value is what the user said.
+//
+// A command with no such flag -- there is none today, but `test` grew its flags
+// separately once already -- gets the default rather than an error, because a
+// missing flag is a wiring mistake and failing a run over it would be the worst
+// possible report of one.
+func shotDir(cmd *cobra.Command) string {
+	dir, err := cmd.Flags().GetString(screenshotsFlag)
+	if err != nil {
+		return browserstep.DefaultDir
+	}
+	return dir
 }

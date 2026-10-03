@@ -1,0 +1,9 @@
+=== terminal
+out_of_scope_root.art:11:12: "status" is not in scope in a browser step
+   11 |     expect status == 200
+      |            ^^^^^^
+   hint: a browser step binds page.url, page.title, text(), value(),
+         attr(), count(), visible()
+
+=== codes
+not-in-scope	error	11:12-11:18

@@ -1,0 +1,20 @@
+# Misspelled and invented field names in two different blocks.
+#
+# This is the half of the parser/checker split the parser's own comment names:
+# a field position accepts any identifier, so `heade "X" = v` parses into an
+# ast.Field and the checker reports the name with a mechanical fix. Rejecting
+# it in the parser would leave an author with "unexpected token" and nothing to
+# act on.
+#
+# The two shapes of hint are both here. `heade` and `delya` are one edit from a
+# real field, so they get a suggestion. `attempts` is a word from a different
+# tool entirely -- it is what this project's own YAML called it -- and is near
+# nothing, so the diagnostic lists what the block actually holds.
+
+scenario "fields" {
+  step "orders" {
+    get "/orders" { heade "Content-Type" = "application/json" }
+    retry { attempts = 3, delya = "1s" }
+    expect status == 200
+  }
+}

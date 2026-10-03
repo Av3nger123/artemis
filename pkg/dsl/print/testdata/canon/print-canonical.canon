@@ -1,0 +1,41 @@
+# A file already in canonical form. Formatting it must change nothing at all,
+# which is the anchor the idempotence test rests on: if this file's golden is
+# not identical to the file itself, canonical mode has a rule that does not
+# agree with its own output.
+
+scenario "already canonical" {
+  config browser { headless = true, viewport = "1280x720" }
+
+  var url = env("API_URL")
+
+  step "fetch the orders" {
+    get "${url}/orders" {
+      header "Accept" = "application/json"
+      query "limit" = 10
+    }
+    timeout = "5s"
+    retry { times = 3, delay = "2s" }
+
+    expect status == 200
+    expect body.data.count > 0
+    capture first = body.data.items[0].id
+  }
+
+  step "seed" {
+    run "psql" {
+      args = ["-f", "seed.sql"]
+      cwd = "db"
+      env { PGPASSWORD = "x" }
+    }
+    expect exit_code == 0
+  }
+
+  step "the app" {
+    browser {
+      goto "${url}/settings"
+      fill "#email" = "alice@example.com"
+      click "text=Sign in"
+    }
+    expect page.url contains "/settings" within "10s"
+  }
+}

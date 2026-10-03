@@ -1,0 +1,15 @@
+# A placeholder naming a variable nothing declares or captures.
+#
+# This is one of the two goldens the design says change by design: in YAML it
+# is a step error at run time, after the request has been built and before it
+# is sent. Here the checker resolves names, so it is a compile error -- the
+# file never runs, nothing is sent, and the diagnostic points at the name
+# inside the interpolation rather than at an offset in a rendered string.
+scenario "undeclared variable" {
+  step "ping" {
+    post "%SERVER%/ping" {
+      body = {"token": "${tokn}"}
+    }
+    expect status == 200
+  }
+}

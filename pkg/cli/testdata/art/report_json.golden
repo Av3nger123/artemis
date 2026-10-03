@@ -1,0 +1,225 @@
+scenario: health (testdata/art/report_json/01_health.art)
+  ok    ping                        <dur>
+scenario: items (testdata/art/report_json/02_items.art)
+  FAIL  list items                  <dur>
+         body.total > 0, got 0
+  FAIL  missing route               <dur>
+         status == 200, got 404
+testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+   6 |     timeot = "5s"
+     |     ^^^^^^
+   hint: did you mean "timeout"?
+scenario: testdata/art/report_json/03_broken.art
+  ERROR testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+
+3 failures:
+
+1) testdata/art/report_json/02_items.art:5
+     scenario  items
+     step      list items
+     assert    expect body.total >
+     expected  0
+     actual    0
+
+2) testdata/art/report_json/02_items.art:10
+     scenario  items
+     step      missing route
+     assert    expect status ==
+     expected  200
+     actual    404
+
+3) testdata/art/report_json/03_broken.art
+     error     testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+
+Scenarios     3  (1 passed, 1 failed, 1 errored)
+Steps         3  (1 passed, 2 failed)
+Assertions    5  (3 passed, 2 failed)
+FAIL in <dur>
+{
+  "schema_version": 1,
+  "started_at": "1970-01-01T00:00:00Z",
+  "duration_ms": 0,
+  "status": "error",
+  "passed": false,
+  "counts": {
+    "scenarios": {
+      "total": 3,
+      "passed": 1,
+      "failed": 1,
+      "errored": 1,
+      "skipped": 0
+    },
+    "steps": {
+      "total": 3,
+      "passed": 1,
+      "failed": 2,
+      "errored": 0,
+      "skipped": 0
+    },
+    "assertions": {
+      "total": 5,
+      "passed": 3,
+      "failed": 2,
+      "errored": 0,
+      "skipped": 0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "health",
+      "file": "testdata/art/report_json/01_health.art",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": "",
+      "steps": [
+        {
+          "name": "ping",
+          "status": "pass",
+          "duration_ms": 0,
+          "attempts": 1,
+          "line": 2,
+          "error": "",
+          "screenshot": "",
+          "assertions": [
+            {
+              "kind": "expect",
+              "path": "status",
+              "operator": "==",
+              "expected": 200,
+              "actual": 200,
+              "status": "pass",
+              "error": "",
+              "line": 4
+            },
+            {
+              "kind": "expect",
+              "path": "body.status",
+              "operator": "==",
+              "expected": "ok",
+              "actual": "ok",
+              "status": "pass",
+              "error": "",
+              "line": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "items",
+      "file": "testdata/art/report_json/02_items.art",
+      "status": "fail",
+      "duration_ms": 0,
+      "error": "",
+      "steps": [
+        {
+          "name": "list items",
+          "status": "fail",
+          "duration_ms": 0,
+          "attempts": 1,
+          "line": 2,
+          "error": "",
+          "screenshot": "",
+          "assertions": [
+            {
+              "kind": "expect",
+              "path": "status",
+              "operator": "==",
+              "expected": 200,
+              "actual": 200,
+              "status": "pass",
+              "error": "",
+              "line": 4
+            },
+            {
+              "kind": "expect",
+              "path": "body.total",
+              "operator": "\u003e",
+              "expected": 0,
+              "actual": 0,
+              "status": "fail",
+              "error": "",
+              "line": 5
+            }
+          ]
+        },
+        {
+          "name": "missing route",
+          "status": "fail",
+          "duration_ms": 0,
+          "attempts": 1,
+          "line": 8,
+          "error": "",
+          "screenshot": "",
+          "assertions": [
+            {
+              "kind": "expect",
+              "path": "status",
+              "operator": "==",
+              "expected": 200,
+              "actual": 404,
+              "status": "fail",
+              "error": "",
+              "line": 10
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "",
+      "file": "testdata/art/report_json/03_broken.art",
+      "status": "error",
+      "duration_ms": 0,
+      "error": "testdata/art/report_json/03_broken.art:6:5: unknown field \"timeot\"",
+      "steps": []
+    }
+  ],
+  "failures": [
+    {
+      "file": "testdata/art/report_json/02_items.art",
+      "line": 5,
+      "scenario": "items",
+      "step": "list items",
+      "status": "fail",
+      "kind": "expect",
+      "path": "body.total",
+      "operator": "\u003e",
+      "expected": 0,
+      "actual": 0,
+      "error": "",
+      "screenshot": ""
+    },
+    {
+      "file": "testdata/art/report_json/02_items.art",
+      "line": 10,
+      "scenario": "items",
+      "step": "missing route",
+      "status": "fail",
+      "kind": "expect",
+      "path": "status",
+      "operator": "==",
+      "expected": 200,
+      "actual": 404,
+      "error": "",
+      "screenshot": ""
+    },
+    {
+      "file": "testdata/art/report_json/03_broken.art",
+      "line": 0,
+      "scenario": "",
+      "step": "",
+      "status": "error",
+      "kind": "",
+      "path": "",
+      "operator": "",
+      "expected": null,
+      "actual": null,
+      "error": "testdata/art/report_json/03_broken.art:6:5: unknown field \"timeot\"",
+      "screenshot": ""
+    }
+  ]
+}
+
+--- exit error ---
+2 of 3 steps failed, 2 of 5 assertions failed; 1 scenario could not run: testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"

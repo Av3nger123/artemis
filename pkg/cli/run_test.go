@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,20 +48,21 @@ func rel(t *testing.T, root string, paths []string) []string {
 	return out
 }
 
-// Discovery is recursive, takes both extensions, and is in path order: a suite
-// that runs in a different order on another machine is a suite whose transcript
-// cannot be compared with yesterday's.
+// Discovery is recursive and in path order: a suite that runs in a different
+// order on another machine is a suite whose transcript cannot be compared with
+// yesterday's.
 func TestDiscoverWalksAFolderInPathOrder(t *testing.T) {
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"02_second.yaml":        "",
-		"01_first.yml":          "",
-		"nested/04_deep.yaml":   "",
-		"nested/03_deep.yaml":   "",
-		"alpha/05_alpha.yaml":   "",
-		"notes.md":              "",
-		"collection.json":       "",
-		".hidden/06_skip.yaml":  "",
-		"nested/.git/07_x.yaml": "",
+		"02_second.art":        "",
+		"01_first.art":         "",
+		"nested/04_deep.art":   "",
+		"nested/03_deep.art":   "",
+		"alpha/05_alpha.art":   "",
+		"notes.md":             "",
+		"collection.json":      "",
+		"legacy.yaml":          "",
+		".hidden/06_skip.art":  "",
+		"nested/.git/07_x.art": "",
 	})
 
 	got, err := discover(root)
@@ -68,11 +70,11 @@ func TestDiscoverWalksAFolderInPathOrder(t *testing.T) {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
 	want := []string{
-		"01_first.yml",
-		"02_second.yaml",
-		"alpha/05_alpha.yaml",
-		"nested/03_deep.yaml",
-		"nested/04_deep.yaml",
+		"01_first.art",
+		"02_second.art",
+		"alpha/05_alpha.art",
+		"nested/03_deep.art",
+		"nested/04_deep.art",
 	}
 	if diff := rel(t, root, got); !reflect.DeepEqual(diff, want) {
 		t.Errorf("discover() = %v, want %v", diff, want)
@@ -103,7 +105,7 @@ func TestDiscoverEmptyFolderIsAnError(t *testing.T) {
 	if err == nil {
 		t.Fatal("discover() = nil, want an error for a folder with no scenarios")
 	}
-	for _, want := range []string{root, ".yaml", ".yml"} {
+	for _, want := range []string{root, ".art"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to contain %q", err, want)
 		}
@@ -121,15 +123,15 @@ func TestRunFilesAggregatesEveryFileIntoOneRun(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"a.yaml": namedScenarioYAML("first", srv.URL, "ok"),
-		"b.yaml": namedScenarioYAML("second", srv.URL, "ok"),
+		"a.art": namedScenarioArt("first", srv.URL, "ok"),
+		"b.art": namedScenarioArt("second", srv.URL, "ok"),
 	})
 
 	files, err := discover(root)
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	if !run.Passed() {
 		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
@@ -151,16 +153,16 @@ func TestRunFilesKeepsGoingPastAFileThatWillNotLoad(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"1_ok.yaml":     namedScenarioYAML("first", srv.URL, "ok"),
-		"2_broken.yaml": namedScenarioYAML("broken", srv.URL, "ok") + "varaibles: []\n",
-		"3_ok.yaml":     namedScenarioYAML("third", srv.URL, "ok"),
+		"1_ok.art":     namedScenarioArt("first", srv.URL, "ok"),
+		"2_broken.art": brokenArt(srv.URL),
+		"3_ok.art":     namedScenarioArt("third", srv.URL, "ok"),
 	})
 
 	files, err := discover(root)
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for a file that would not load")
@@ -172,11 +174,11 @@ func TestRunFilesKeepsGoingPastAFileThatWillNotLoad(t *testing.T) {
 	if broken.Status != result.StatusError {
 		t.Errorf("broken scenario status = %q, want %q", broken.Status, result.StatusError)
 	}
-	if !strings.Contains(broken.File, "2_broken.yaml") {
-		t.Errorf("broken scenario file = %q, want it to name 2_broken.yaml", broken.File)
+	if !strings.Contains(broken.File, "2_broken.art") {
+		t.Errorf("broken scenario file = %q, want it to name 2_broken.art", broken.File)
 	}
-	if !strings.Contains(broken.Error, "varaibles") {
-		t.Errorf("broken scenario error = %q, want it to name the unknown key", broken.Error)
+	if !strings.Contains(broken.Error, "timeot") {
+		t.Errorf("broken scenario error = %q, want it to name the misspelled field", broken.Error)
 	}
 	if run.Scenarios[2].Name != "third" || !run.Scenarios[2].Passed() {
 		t.Errorf("scenario after the broken one = %+v, want the third file, passed", run.Scenarios[2])
@@ -188,19 +190,19 @@ func TestRunFilesKeepsGoingPastAFileThatWillNotLoad(t *testing.T) {
 // counting its steps would say "0 of 0 steps failed".
 func TestRunFailedErrorNamesAFileThatWouldNotLoad(t *testing.T) {
 	initLog(t)
-	root := writeTree(t, t.TempDir(), map[string]string{"broken.yaml": "name: [\n"})
+	root := writeTree(t, t.TempDir(), map[string]string{"broken.art": "scenario \"x\" {\n"})
 
 	files, err := discover(root)
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	got := runFailedError(run).Error()
 	if !strings.Contains(got, "1 scenario could not run") {
 		t.Errorf("error = %q, want it to say one scenario could not run", got)
 	}
-	if !strings.Contains(got, "broken.yaml") {
+	if !strings.Contains(got, "broken.art") {
 		t.Errorf("error = %q, want it to name the file", got)
 	}
 	if strings.Contains(got, "0 of 0 steps") {
@@ -216,86 +218,124 @@ func TestRunFilesDoesNotLeakCapturesBetweenFiles(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 200, `{"token":"abc"}`)
 
-	capturing := fmt.Sprintf(`name: "capture"
-type: functional
-variables: []
-steps:
-  - name: "login"
-    type: api
-    request:
-      url: "%s"
-      method: "GET"
-    response:
-      status_code: 200
-    capture:
-      token: "$.token"
+	capturing := fmt.Sprintf(`scenario "capture" {
+  step "login" {
+    get %q
+    expect status == 200
+    capture token = body.token
+  }
+}
 `, srv.URL)
-	using := fmt.Sprintf(`name: "use"
-type: functional
-variables: []
-steps:
-  - name: "me"
-    type: api
-    request:
-      url: "%s/{{token}}"
-      method: "GET"
-    response:
-      status_code: 200
+	using := fmt.Sprintf(`scenario "use" {
+  step "me" {
+    get "%s/${token}"
+    expect status == 200
+  }
+}
 `, srv.URL)
 
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"1_capture.yaml": capturing,
-		"2_use.yaml":     using,
+		"1_capture.art": capturing,
+		"2_use.art":     using,
 	})
 	files, err := discover(root)
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	if run.Scenarios[0].Status != result.StatusPass {
 		t.Fatalf("the capturing scenario = %q, want it to pass: %s", run.Scenarios[0].Status, runFailedError(run))
 	}
-	second := run.Scenarios[1].Steps[0]
+	// In the DSL an unknown name is a compile error, so the second file never
+	// runs at all: it is one errored scenario with no steps, which is the same
+	// shape as any other file that would not load.
+	second := run.Scenarios[1]
 	if second.Status != result.StatusError {
-		t.Fatalf("the second file's step = %q (%s), want %q: a capture from another file must not resolve",
+		t.Fatalf("the second file = %q (%s), want %q: a capture from another file must not resolve",
 			second.Status, second.Error, result.StatusError)
 	}
 	if !strings.Contains(second.Error, "token") {
-		t.Errorf("step error = %q, want it to name the unresolved variable", second.Error)
+		t.Errorf("scenario error = %q, want it to name the unresolved variable", second.Error)
 	}
 }
 
-// namedScenarioYAML is one passing GET step, with the scenario's name set so a
+// brokenArt is a scenario with a misspelled step field, which the checker
+// rejects: a file artemis cannot load.
+func brokenArt(url string) string {
+	return fmt.Sprintf(`scenario "broken" {
+  step "ping" {
+    get %q
+    timeot = "5s"
+    expect status == 200
+  }
+}
+`, url)
+}
+
+// A path the user named outright that artemis will not run is one errored
+// scenario naming the way out, not a skip: someone who types
+// `artemis run login.yaml` and gets a passing run that ran nothing has been
+// told the opposite of the truth.
+func TestRunFilesRefusesAYAMLFileAndNamesMigrate(t *testing.T) {
+	initLog(t)
+	root := writeTree(t, t.TempDir(), map[string]string{"login.yaml": "name: \"x\"\n"})
+	path := filepath.Join(root, "login.yaml")
+
+	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
+
+	if run.Passed() {
+		t.Fatal("run.Passed() = true, want false for a file artemis will not run")
+	}
+	if len(run.Scenarios) != 1 {
+		t.Fatalf("run has %d scenarios, want 1", len(run.Scenarios))
+	}
+	got := run.Scenarios[0].Error
+	for _, want := range []string{"login.yaml", "artemis migrate", "login.art"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("error = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+// Anything else named outright says what artemis does run, without pretending
+// it was a YAML scenario.
+func TestRunFilesRefusesANonScenarioFile(t *testing.T) {
+	initLog(t)
+	root := writeTree(t, t.TempDir(), map[string]string{"notes.md": "hello"})
+
+	run := runFiles(executor.Default(), []string{filepath.Join(root, "notes.md")}, report.Discard(), io.Discard)
+
+	got := run.Scenarios[0].Error
+	if !strings.Contains(got, "not a scenario file") || !strings.Contains(got, ".art") {
+		t.Errorf("error = %q, want it to say what artemis runs", got)
+	}
+}
+
+// namedScenarioArt is one passing GET step, with the scenario's name set so a
 // test can tell the files of a folder run apart.
-func namedScenarioYAML(name, url, wantBody string) string {
-	return fmt.Sprintf(`name: "%s"
-type: functional
-variables: []
-steps:
-  - name: "ping"
-    type: api
-    request:
-      url: "%s"
-      method: "GET"
-    response:
-      status_code: 200
-      body:
-        - path: "$.status"
-          value: "%s"
+func namedScenarioArt(name, url, wantBody string) string {
+	return fmt.Sprintf(`scenario %q {
+  step "ping" {
+    get %q
+    expect status == 200
+    expect body.status == %q
+  }
+}
 `, name, url, wantBody)
 }
 
-// runStreams writes yaml to a temp file, runs `artemis run <file>` with extra
-// args, and returns stdout and stderr separately. The separation is the point:
-// `--report json` is only useful if stdout holds the document and nothing else.
-func runStreams(t *testing.T, yaml string, args ...string) (stdout, stderr string, err error) {
+// runStreams writes src to a temp .art file, runs `artemis run <file>` with
+// extra args, and returns stdout and stderr separately. The separation is the
+// point: `--report json` is only useful if stdout holds the document and
+// nothing else.
+func runStreams(t *testing.T, src string, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	initOnce.Do(Init)
 	resetRunFlags(t)
 
-	path := filepath.Join(t.TempDir(), "scenario.yaml")
-	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+	path := filepath.Join(t.TempDir(), "scenario.art")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -315,7 +355,7 @@ func runStreams(t *testing.T, yaml string, args ...string) (stdout, stderr strin
 func TestReportJSONPutsOneDocumentOnStdoutAndTheConsoleOnStderr(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 
-	stdout, stderr, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json")
+	stdout, stderr, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "json")
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
@@ -342,7 +382,7 @@ func TestReportJSONPutsOneDocumentOnStdoutAndTheConsoleOnStderr(t *testing.T) {
 func TestReportJSONCarriesTheWholeTree(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"pending"}`)
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json")
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "json")
 	if err == nil {
 		t.Fatal("Execute() = nil, want an error: the body assertion does not match")
 	}
@@ -380,7 +420,7 @@ func TestReportJSONCarriesTheWholeTree(t *testing.T) {
 		t.Fatalf("document = %+v, want one scenario of one step", doc)
 	}
 	sc := doc.Scenarios[0]
-	if sc.Name != "health" || !strings.HasSuffix(sc.File, "scenario.yaml") {
+	if sc.Name != "health" || !strings.HasSuffix(sc.File, "scenario.art") {
 		t.Errorf("scenario = %q (%q), want it named and its file given", sc.Name, sc.File)
 	}
 	step := sc.Steps[0]
@@ -390,12 +430,15 @@ func TestReportJSONCarriesTheWholeTree(t *testing.T) {
 	if len(step.Assertions) != 2 {
 		t.Fatalf("got %d assertions, want the passing status check and the failing body check: %+v", len(step.Assertions), step.Assertions)
 	}
-	if step.Assertions[0].Kind != "status_code" || step.Assertions[0].Status != "pass" {
-		t.Errorf("first assertion = %+v, want a passing status_code check", step.Assertions[0])
+	// Every assertion a .art step makes is one `expect`, named by the
+	// expression's subject: the YAML reader's "status_code" and "body" kinds
+	// have no counterpart (ART-40).
+	if step.Assertions[0].Kind != "expect" || step.Assertions[0].Path != "status" || step.Assertions[0].Status != "pass" {
+		t.Errorf("first assertion = %+v, want a passing expect on status", step.Assertions[0])
 	}
 	body := step.Assertions[1]
-	if body.Path != "$.status" || body.Status != "fail" || body.Expected != "ok" || body.Actual != "pending" {
-		t.Errorf("second assertion = %+v, want $.status expected ok, actual pending, failed", body)
+	if body.Path != "body.status" || body.Status != "fail" || body.Expected != "ok" || body.Actual != "pending" {
+		t.Errorf("second assertion = %+v, want body.status expected ok, actual pending, failed", body)
 	}
 }
 
@@ -405,7 +448,7 @@ func TestReportJSONToAFileLeavesTheConsoleOnStdout(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	path := filepath.Join(t.TempDir(), "results.json")
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json="+path)
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "json="+path)
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\n%s", err, stdout)
 	}
@@ -435,7 +478,7 @@ func TestReportJSONIsWrittenForAFailingRun(t *testing.T) {
 	srv := okServer(t, 500, `{"status":"boom"}`)
 	path := filepath.Join(t.TempDir(), "results.json")
 
-	_, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json="+path)
+	_, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "json="+path)
 	if err == nil {
 		t.Fatal("Execute() = nil, want an error")
 	}
@@ -456,7 +499,7 @@ func TestReportJUnitToAFile(t *testing.T) {
 	srv := okServer(t, 500, `{"status":"boom"}`)
 	path := filepath.Join(t.TempDir(), "junit.xml")
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "junit="+path)
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "junit="+path)
 	if err == nil {
 		t.Fatalf("Execute() = nil, want an error for a failing run\n%s", stdout)
 	}
@@ -496,7 +539,7 @@ func TestReportJUnitToAFile(t *testing.T) {
 	if len(one) != 1 || one[0].Failure == nil {
 		t.Fatalf("want one failing case, got %+v\n%s", one, raw)
 	}
-	if !strings.Contains(one[0].Failure.Message, "status_code") {
+	if !strings.Contains(one[0].Failure.Message, "status == 200") {
 		t.Errorf("message = %q, want the assertion that failed", one[0].Failure.Message)
 	}
 }
@@ -507,7 +550,7 @@ func TestReportJSONAndJUnitTogether(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	path := filepath.Join(t.TempDir(), "junit.xml")
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"),
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"),
 		"--report", "json", "--report", "junit="+path)
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\n%s", err, stdout)
@@ -534,7 +577,7 @@ func TestReportThatCannotBeWrittenFailsAPassingRun(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	path := filepath.Join(t.TempDir(), "no-such-dir", "results.json")
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json="+path)
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "json="+path)
 	if err == nil {
 		t.Fatalf("Execute() = nil, want an error\n%s", stdout)
 	}
@@ -551,7 +594,7 @@ func TestReportThatCannotBeWrittenFailsAPassingRun(t *testing.T) {
 func TestReportWithAnUnknownFormatRunsNothing(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "yaml")
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "yaml")
 	if err == nil {
 		t.Fatal("Execute() = nil, want an error")
 	}
@@ -571,20 +614,13 @@ func TestReportWithAnUnknownFormatRunsNothing(t *testing.T) {
 func TestRunPrintsAFailureBlockNamingTheFileAndLine(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"pending"}`)
 
-	stdout, _, err := runStreams(t, `name: "status check"
-type: functional
-variables: []
-steps:
-  - name: "ping"
-    type: api
-    request:
-      url: "`+srv.URL+`/ping"
-      method: "GET"
-    response:
-      status_code: 200
-      body:
-        - path: "$.status"
-          value: "ok"
+	stdout, _, err := runStreams(t, `scenario "status check" {
+  step "ping" {
+    get "`+srv.URL+`/ping"
+    expect status == 200
+    expect body.status == "ok"
+  }
+}
 `)
 	if err == nil {
 		t.Fatalf("Execute() = nil, want an error:\n%s", stdout)
@@ -592,7 +628,7 @@ steps:
 
 	// The scenario is written to a temp file, so only the line and the basename
 	// are ours to assert on.
-	if !strings.Contains(stdout, "scenario.yaml:13") {
+	if !strings.Contains(stdout, "scenario.art:5") {
 		t.Errorf("output does not point at the failing check's line:\n%s", stdout)
 	}
 	for _, want := range []string{"1 failure:", "step      ping", `expected  "ok"`, `actual    "pending"`} {
@@ -610,7 +646,7 @@ steps:
 func TestRunPrintsNoFailureBlocksWhenEverythingPassed(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 
-	stdout, _, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"))
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"))
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil:\n%s", err, stdout)
 	}
@@ -624,22 +660,64 @@ func TestRunPrintsNoFailureBlocksWhenEverythingPassed(t *testing.T) {
 func TestFailureBlocksFollowTheConsoleToStderr(t *testing.T) {
 	srv := okServer(t, 500, `{}`)
 
-	stdout, stderr, err := runStreams(t, namedScenarioYAML("health", srv.URL, "ok"), "--report", "json")
+	stdout, stderr, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--report", "json")
 	if err == nil {
 		t.Fatalf("Execute() = nil, want an error:\n%s", stderr)
 	}
-	if !strings.Contains(stderr, "1 failure:") {
-		t.Errorf("stderr does not carry the failure block:\n%s", stderr)
+	// Two, not one: the 500 fails `expect status == 200` and the body it
+	// answered with has no `status` field, so the second expect errors. A
+	// wrong status no longer suppresses the expects after it, which is the one
+	// behaviour the DSL deliberately changed.
+	if !strings.Contains(stderr, "2 failures:") {
+		t.Errorf("stderr does not carry the failure blocks:\n%s", stderr)
 	}
 	var doc map[string]any
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
 	}
 	failures, ok := doc["failures"].([]any)
-	if !ok || len(failures) != 1 {
-		t.Fatalf("failures = %v, want one entry", doc["failures"])
+	if !ok || len(failures) != 2 {
+		t.Fatalf("failures = %v, want two entries", doc["failures"])
 	}
 	if first := failures[0].(map[string]any); first["step"] == "" || first["line"] == 0.0 {
 		t.Errorf("failures[0] = %v, want a step and a line", first)
+	}
+}
+
+// Discovery takes .art and nothing else. A folder that still holds unconverted
+// YAML runs its converted half and walks past the rest: ART-40 took the format
+// off the run path, and `artemis migrate` is how those files come back.
+func TestDiscoverTakesArtFilesOnly(t *testing.T) {
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01_first.art":       "",
+		"02_second.yaml":     "",
+		"03_third.yml":       "",
+		"nested/04_deep.art": "",
+		"notes.md":           "",
+		"collection.postman": "",
+		"05_upper.ART":       "",
+	})
+
+	files, err := discover(root)
+	if err != nil {
+		t.Fatalf("discover() error = %v", err)
+	}
+	want := []string{"01_first.art", "05_upper.ART", "nested/04_deep.art"}
+	if got := rel(t, root, files); !reflect.DeepEqual(got, want) {
+		t.Errorf("discover() = %v, want %v", got, want)
+	}
+}
+
+// A folder with nothing artemis can run names every extension it looked for,
+// so the message says what to rename rather than only that it found nothing.
+func TestDiscoverEmptyFolderNamesTheArtExtension(t *testing.T) {
+	root := writeTree(t, t.TempDir(), map[string]string{"notes.md": ""})
+
+	_, err := discover(root)
+	if err == nil {
+		t.Fatal("discover() error = nil, want one for a folder with no scenarios")
+	}
+	if !strings.Contains(err.Error(), ".art") {
+		t.Errorf("error = %q, want it to name .art", err)
 	}
 }

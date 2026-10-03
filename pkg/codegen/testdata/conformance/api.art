@@ -1,0 +1,71 @@
+# The api half of the conformance corpus: every comparison operator and every
+# word operator, against the fixture server's own pages.
+#
+# `body` is null throughout, because the fixture serves HTML -- which is itself
+# worth asserting, since a backend that decoded a non-JSON body into something
+# other than null would be a backend whose `expect body is null` disagreed with
+# the interpreter's.
+
+# conformance: pass
+scenario "the query reaches the page" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "ask for the done page with a user" {
+    get "${base}/done" {
+      query "user" = "alice"
+      query "plan" = "pro"
+      query "settle" = 0
+    }
+    timeout = "10s"
+
+    expect status == 200
+    expect status >= 200 and status < 400
+    expect status <= 200 or status == 201
+    expect not (status == 404)
+    expect raw contains "alice"
+    expect raw matches /plan: pro/
+    expect headers["Content-Type"] contains "utf-8"
+    expect headers["Content-Type"] exists
+    expect body is null
+    capture who = match(raw, /id="who">(\w+)/)
+  }
+
+  step "the capture reached the next step" {
+    get "${base}/never"
+    timeout = "10s"
+
+    expect status == 200
+    expect who == "alice"
+    expect who != "bob"
+    expect raw contains "Nothing settles here"
+  }
+}
+
+# conformance: pass
+scenario "the form echoes what it was posted" {
+  step "post the form" {
+    post "${env("ARTEMIS_BASE_URL")}/done?settle=0" {
+      header "Content-Type" = "application/x-www-form-urlencoded"
+      body = "user=bob&plan=free"
+    }
+    timeout = "10s"
+
+    expect status == 200
+    expect raw contains "id=\"who\">bob"
+    expect raw contains "plan: free"
+    expect raw matches /invoice 3/
+  }
+}
+
+# A declared failure, and not decoration: without one the harness could pass by
+# never detecting a failure at all. /done is there, so it is not a 404 -- and
+# both backends have to say so.
+# conformance: fail
+scenario "a page that is there is not a 404" {
+  step "ask for the form" {
+    get "${env("ARTEMIS_BASE_URL")}/"
+    timeout = "10s"
+
+    expect status == 404
+  }
+}

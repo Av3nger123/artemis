@@ -1,0 +1,24 @@
+interp.art:6:10: unclosed "${": the interpolation is missing its "}"
+   6 |     get "${ host
+     |          ^^
+
+lexical.art:6:31: unknown escape "\\q"; the escapes are \" \\ \/ \$ \n \r \t and \uXXXX
+   6 |     header "A" = "bad escape: \q"
+     |                               ^^
+
+lexical.art:7:18: unterminated regex: a "/" literal cannot span lines
+   7 |     header "B" = /unterminated regex
+     |                  ^^^^^^^^^^^^^^^^^^^
+
+lexical.art:8:20: unexpected character "!" in a scenario file
+   8 |     header "C" = 1 ! 2
+     |                    ^
+
+lexical.art:9:18: unterminated string: missing the closing '"'
+    9 |     header "D" = "no closing quote
+      |                  ^^^^^^^^^^^^^^^^^
+   10 |   }
+      |   ^
+   11 | }
+      | ^
+   12 |

@@ -1,0 +1,17 @@
+# Two captures that cannot be read: a JSON path that is not in this body, and a
+# regex that matches nothing in it. The step's request succeeds, so what is being
+# pinned is that each unreadable capture is its own errored assertion under the
+# step -- not a crash, not a silent pass, and not one error standing in for both.
+#
+# A capture that is unreadable before anything runs -- an empty path, a regex
+# that will not compile -- is a load error instead, and never gets this far; see
+# models.Capture's tests.
+scenario "captures that cannot be read" {
+  step "login" {
+    post "%SERVER%/login" { body = {"user": "ada"} }
+    expect status == 200
+    expect body.token exists
+    capture authToken = body.session.token
+    capture requestId = match(raw, /req-([0-9a-f]+)/)
+  }
+}

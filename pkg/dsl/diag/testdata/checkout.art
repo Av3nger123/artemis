@@ -1,0 +1,34 @@
+# A scenario carrying the two mistakes the design document's Diagnostics
+# section prints, indented so they land on the line and column it prints:
+# the unknown field at 12:10, the out-of-scope name at 31:10.
+scenario "checkout" {
+  var url = env("API_URL")
+  var app = env("APP_URL")
+
+  step "login" {
+  post "${url}/token" {
+    header "Content-Type" = "application/json"
+  }
+  expect statu == 200
+  capture token = body.data.access_token
+  }
+
+  step "orders" {
+  get "${url}/orders" {
+    header "Authorization" = "Bearer ${token}"
+    query "limit" = 10
+  }
+  expect status == 200
+  expect body.data.count > 0
+  }
+
+  step "upgrade in the app" {
+  browser {
+    goto "${app}/settings/billing"
+    fill "#email" = "alice@example.com"
+    click "text=Sign in"
+  }
+  expect status == 200
+  expect text("[role=status]") contains "Pro"
+  }
+}

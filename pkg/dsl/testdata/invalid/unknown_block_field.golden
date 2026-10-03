@@ -1,0 +1,20 @@
+=== terminal
+unknown_block_field.art:17:7: unknown field "heade"
+   17 |       heade "Content-Type" = "application/json"
+      |       ^^^^^
+   hint: did you mean "header"?
+
+unknown_block_field.art:20:7: unknown field "attempts"
+   20 |       attempts = 3
+      |       ^^^^^^^^
+   hint: a retry block holds: times, delay
+
+unknown_block_field.art:21:7: unknown field "delya"
+   21 |       delya = "1s"
+      |       ^^^^^
+   hint: a retry block holds: times, delay
+
+=== codes
+unknown-field	error	17:7-17:12	suggest: "header"
+unknown-field	error	20:7-20:15
+unknown-field	error	21:7-21:12

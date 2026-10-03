@@ -1,0 +1,1335 @@
+{
+  "schemaVersion": 1,
+  "file": "testdata/kinds.art",
+  "scenarios": [
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"kinds\"",
+        "value": "kinds"
+      },
+      "body": [
+        {
+          "kind": "config",
+          "subject": "browser",
+          "block": {
+            "kind": "block",
+            "fields": [
+              {
+                "kind": "field",
+                "name": "headless",
+                "value": {
+                  "kind": "literal",
+                  "literal": "boolean",
+                  "text": "true",
+                  "value": "true",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 6,
+                    "col": 31,
+                    "endLine": 6,
+                    "endCol": 35,
+                    "offset": 333
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 6,
+                  "col": 20,
+                  "endLine": 6,
+                  "endCol": 35,
+                  "offset": 322
+                }
+              }
+            ],
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 6,
+              "col": 18,
+              "endLine": 6,
+              "endCol": 37,
+              "offset": 320
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 6,
+            "col": 3,
+            "endLine": 6,
+            "endCol": 37,
+            "offset": 305
+          }
+        },
+        {
+          "kind": "var",
+          "name": "num",
+          "value": {
+            "kind": "unary",
+            "op": "-",
+            "x": {
+              "kind": "literal",
+              "literal": "number",
+              "text": "1",
+              "value": "1",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 8,
+                "col": 14,
+                "endLine": 8,
+                "endCol": 15,
+                "offset": 354
+              }
+            },
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 8,
+              "col": 13,
+              "endLine": 8,
+              "endCol": 15,
+              "offset": 353
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 8,
+            "col": 3,
+            "endLine": 8,
+            "endCol": 15,
+            "offset": 343
+          },
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "var",
+          "name": "re",
+          "value": {
+            "kind": "literal",
+            "literal": "regex",
+            "text": "/.+@.+/",
+            "value": ".+@.+",
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 9,
+              "col": 12,
+              "endLine": 9,
+              "endCol": 19,
+              "offset": 367
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 9,
+            "col": 3,
+            "endLine": 9,
+            "endCol": 19,
+            "offset": 358
+          }
+        },
+        {
+          "kind": "var",
+          "name": "nothing",
+          "value": {
+            "kind": "literal",
+            "literal": "null",
+            "text": "null",
+            "value": "null",
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 10,
+              "col": 17,
+              "endLine": 10,
+              "endCol": 21,
+              "offset": 391
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 10,
+            "col": 3,
+            "endLine": 10,
+            "endCol": 21,
+            "offset": 377
+          }
+        },
+        {
+          "kind": "var",
+          "name": "obj",
+          "value": {
+            "kind": "object",
+            "entries": [
+              {
+                "key": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"a\"",
+                  "value": "a",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 11,
+                    "col": 14,
+                    "endLine": 11,
+                    "endCol": 17,
+                    "offset": 409
+                  }
+                },
+                "value": {
+                  "kind": "array",
+                  "elems": [
+                    {
+                      "kind": "literal",
+                      "literal": "number",
+                      "text": "1",
+                      "value": "1",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 11,
+                        "col": 20,
+                        "endLine": 11,
+                        "endCol": 21,
+                        "offset": 415
+                      }
+                    },
+                    {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"two\"",
+                      "value": "two",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 11,
+                        "col": 23,
+                        "endLine": 11,
+                        "endCol": 28,
+                        "offset": 418
+                      }
+                    }
+                  ],
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 11,
+                    "col": 19,
+                    "endLine": 11,
+                    "endCol": 29,
+                    "offset": 414
+                  }
+                }
+              },
+              {
+                "key": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"b\"",
+                  "value": "b",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 11,
+                    "col": 31,
+                    "endLine": 11,
+                    "endCol": 34,
+                    "offset": 426
+                  }
+                },
+                "value": {
+                  "kind": "object",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 11,
+                    "col": 36,
+                    "endLine": 11,
+                    "endCol": 38,
+                    "offset": 431
+                  }
+                }
+              }
+            ],
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 11,
+              "col": 13,
+              "endLine": 11,
+              "endCol": 39,
+              "offset": 408
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 11,
+            "endCol": 39,
+            "offset": 398
+          }
+        },
+        {
+          "kind": "var",
+          "name": "url",
+          "value": {
+            "kind": "interp",
+            "segments": [
+              {
+                "delim": "\"${",
+                "expr": {
+                  "kind": "ident",
+                  "name": "num",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 12,
+                    "col": 16,
+                    "endLine": 12,
+                    "endCol": 19,
+                    "offset": 450
+                  }
+                }
+              }
+            ],
+            "end": "}/x\"",
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 12,
+              "col": 13,
+              "endLine": 12,
+              "endCol": 23,
+              "offset": 447
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 12,
+            "col": 3,
+            "endLine": 12,
+            "endCol": 23,
+            "offset": 437
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"api\"",
+            "value": "api"
+          },
+          "action": {
+            "kind": "request",
+            "method": "get",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "url",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 15,
+                      "col": 12,
+                      "endLine": 15,
+                      "endCol": 15,
+                      "offset": 485
+                    }
+                  }
+                }
+              ],
+              "end": "}/orders\"",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 15,
+                "col": 9,
+                "endLine": 15,
+                "endCol": 24,
+                "offset": 482
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "header",
+                  "key": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"Accept\"",
+                    "value": "Accept",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 16,
+                      "col": 14,
+                      "endLine": 16,
+                      "endCol": 22,
+                      "offset": 513
+                    }
+                  },
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"application/json\"",
+                    "value": "application/json",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 16,
+                      "col": 25,
+                      "endLine": 16,
+                      "endCol": 43,
+                      "offset": 524
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 16,
+                    "col": 7,
+                    "endLine": 16,
+                    "endCol": 43,
+                    "offset": 506
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "body",
+                  "value": {
+                    "kind": "object",
+                    "entries": [
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"q\"",
+                          "value": "q",
+                          "span": {
+                            "file": "testdata/kinds.art",
+                            "line": 17,
+                            "col": 15,
+                            "endLine": 17,
+                            "endCol": 18,
+                            "offset": 557
+                          }
+                        },
+                        "value": {
+                          "kind": "literal",
+                          "literal": "number",
+                          "text": "1",
+                          "value": "1",
+                          "span": {
+                            "file": "testdata/kinds.art",
+                            "line": 17,
+                            "col": 20,
+                            "endLine": 17,
+                            "endCol": 21,
+                            "offset": 562
+                          }
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 17,
+                      "col": 14,
+                      "endLine": 17,
+                      "endCol": 22,
+                      "offset": 556
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 17,
+                    "col": 7,
+                    "endLine": 17,
+                    "endCol": 22,
+                    "offset": 549
+                  }
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 15,
+                "col": 25,
+                "endLine": 18,
+                "endCol": 6,
+                "offset": 498
+              }
+            },
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 15,
+              "col": 5,
+              "endLine": 18,
+              "endCol": 6,
+              "offset": 478
+            }
+          },
+          "body": [
+            {
+              "kind": "field",
+              "name": "timeout",
+              "value": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"5s\"",
+                "value": "5s",
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 19,
+                  "col": 15,
+                  "endLine": 19,
+                  "endCol": 19,
+                  "offset": 585
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 19,
+                "col": 5,
+                "endLine": 19,
+                "endCol": 19,
+                "offset": 575
+              }
+            },
+            {
+              "kind": "field",
+              "name": "retry",
+              "block": {
+                "kind": "block",
+                "fields": [
+                  {
+                    "kind": "field",
+                    "name": "times",
+                    "value": {
+                      "kind": "literal",
+                      "literal": "number",
+                      "text": "2",
+                      "value": "2",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 20,
+                        "col": 21,
+                        "endLine": 20,
+                        "endCol": 22,
+                        "offset": 610
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 20,
+                      "col": 13,
+                      "endLine": 20,
+                      "endCol": 23,
+                      "offset": 602
+                    }
+                  },
+                  {
+                    "kind": "field",
+                    "name": "delay",
+                    "value": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"1s\"",
+                      "value": "1s",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 20,
+                        "col": 32,
+                        "endLine": 20,
+                        "endCol": 36,
+                        "offset": 621
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 20,
+                      "col": 24,
+                      "endLine": 20,
+                      "endCol": 36,
+                      "offset": 613
+                    }
+                  }
+                ],
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 20,
+                  "col": 11,
+                  "endLine": 20,
+                  "endCol": 38,
+                  "offset": 600
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 20,
+                "col": 5,
+                "endLine": 20,
+                "endCol": 38,
+                "offset": 594
+              }
+            },
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 21,
+                    "col": 12,
+                    "endLine": 21,
+                    "endCol": 18,
+                    "offset": 639
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "200",
+                  "value": "200",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 21,
+                    "col": 22,
+                    "endLine": 21,
+                    "endCol": 25,
+                    "offset": 649
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 21,
+                  "col": 12,
+                  "endLine": 21,
+                  "endCol": 25,
+                  "offset": 639
+                }
+              },
+              "budget": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"10s\"",
+                "value": "10s",
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 21,
+                  "col": 33,
+                  "endLine": 21,
+                  "endCol": 38,
+                  "offset": 660
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 21,
+                "col": 5,
+                "endLine": 21,
+                "endCol": 38,
+                "offset": 632
+              },
+              "class": "simple"
+            },
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "and",
+                "x": {
+                  "kind": "unary",
+                  "op": "not",
+                  "x": {
+                    "kind": "paren",
+                    "x": {
+                      "kind": "exists",
+                      "x": {
+                        "kind": "member",
+                        "x": {
+                          "kind": "index",
+                          "x": {
+                            "kind": "member",
+                            "x": {
+                              "kind": "ident",
+                              "name": "body",
+                              "span": {
+                                "file": "testdata/kinds.art",
+                                "line": 22,
+                                "col": 17,
+                                "endLine": 22,
+                                "endCol": 21,
+                                "offset": 682
+                              }
+                            },
+                            "name": "items",
+                            "span": {
+                              "file": "testdata/kinds.art",
+                              "line": 22,
+                              "col": 17,
+                              "endLine": 22,
+                              "endCol": 27,
+                              "offset": 682
+                            }
+                          },
+                          "index": {
+                            "kind": "literal",
+                            "literal": "number",
+                            "text": "0",
+                            "value": "0",
+                            "span": {
+                              "file": "testdata/kinds.art",
+                              "line": 22,
+                              "col": 28,
+                              "endLine": 22,
+                              "endCol": 29,
+                              "offset": 693
+                            }
+                          },
+                          "span": {
+                            "file": "testdata/kinds.art",
+                            "line": 22,
+                            "col": 17,
+                            "endLine": 22,
+                            "endCol": 30,
+                            "offset": 682
+                          }
+                        },
+                        "name": "id",
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 22,
+                          "col": 17,
+                          "endLine": 22,
+                          "endCol": 33,
+                          "offset": 682
+                        }
+                      },
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 22,
+                        "col": 17,
+                        "endLine": 22,
+                        "endCol": 40,
+                        "offset": 682
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 22,
+                      "col": 16,
+                      "endLine": 22,
+                      "endCol": 41,
+                      "offset": 681
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 22,
+                    "col": 12,
+                    "endLine": 22,
+                    "endCol": 41,
+                    "offset": 677
+                  }
+                },
+                "y": {
+                  "kind": "isType",
+                  "x": {
+                    "kind": "member",
+                    "x": {
+                      "kind": "ident",
+                      "name": "body",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 22,
+                        "col": 46,
+                        "endLine": 22,
+                        "endCol": 50,
+                        "offset": 711
+                      }
+                    },
+                    "name": "count",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 22,
+                      "col": 46,
+                      "endLine": 22,
+                      "endCol": 56,
+                      "offset": 711
+                    }
+                  },
+                  "type": "number",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 22,
+                    "col": 46,
+                    "endLine": 22,
+                    "endCol": 66,
+                    "offset": 711
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 22,
+                  "col": 12,
+                  "endLine": 22,
+                  "endCol": 66,
+                  "offset": 677
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 22,
+                "col": 5,
+                "endLine": 22,
+                "endCol": 66,
+                "offset": 670
+              },
+              "class": "complex"
+            },
+            {
+              "kind": "capture",
+              "name": "id",
+              "value": {
+                "kind": "member",
+                "x": {
+                  "kind": "index",
+                  "x": {
+                    "kind": "member",
+                    "x": {
+                      "kind": "ident",
+                      "name": "body",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 23,
+                        "col": 18,
+                        "endLine": 23,
+                        "endCol": 22,
+                        "offset": 749
+                      }
+                    },
+                    "name": "items",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 23,
+                      "col": 18,
+                      "endLine": 23,
+                      "endCol": 28,
+                      "offset": 749
+                    }
+                  },
+                  "index": {
+                    "kind": "literal",
+                    "literal": "number",
+                    "text": "0",
+                    "value": "0",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 23,
+                      "col": 29,
+                      "endLine": 23,
+                      "endCol": 30,
+                      "offset": 760
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 23,
+                    "col": 18,
+                    "endLine": 23,
+                    "endCol": 31,
+                    "offset": 749
+                  }
+                },
+                "name": "id",
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 23,
+                  "col": 18,
+                  "endLine": 23,
+                  "endCol": 34,
+                  "offset": 749
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 23,
+                "col": 5,
+                "endLine": 23,
+                "endCol": 34,
+                "offset": 736
+              }
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 14,
+            "col": 3,
+            "endLine": 24,
+            "endCol": 4,
+            "offset": 461
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "num",
+            "re",
+            "nothing",
+            "obj",
+            "url"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"terminal\"",
+            "value": "terminal"
+          },
+          "action": {
+            "kind": "run",
+            "command": {
+              "kind": "literal",
+              "literal": "string",
+              "text": "\"psql\"",
+              "value": "psql",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 28,
+                "col": 9,
+                "endLine": 28,
+                "endCol": 15,
+                "offset": 819
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "args",
+                  "value": {
+                    "kind": "array",
+                    "elems": [
+                      {
+                        "kind": "literal",
+                        "literal": "string",
+                        "text": "\"-f\"",
+                        "value": "-f",
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 29,
+                          "col": 15,
+                          "endLine": 29,
+                          "endCol": 19,
+                          "offset": 866
+                        }
+                      },
+                      {
+                        "kind": "literal",
+                        "literal": "string",
+                        "text": "\"seed.sql\"",
+                        "value": "seed.sql",
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 29,
+                          "col": 21,
+                          "endLine": 29,
+                          "endCol": 31,
+                          "offset": 872
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 29,
+                      "col": 14,
+                      "endLine": 29,
+                      "endCol": 32,
+                      "offset": 865
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 29,
+                    "col": 7,
+                    "endLine": 29,
+                    "endCol": 32,
+                    "offset": 858
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "env",
+                  "block": {
+                    "kind": "block",
+                    "fields": [
+                      {
+                        "kind": "field",
+                        "name": "PGHOST",
+                        "value": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"localhost\"",
+                          "value": "localhost",
+                          "span": {
+                            "file": "testdata/kinds.art",
+                            "line": 30,
+                            "col": 22,
+                            "endLine": 30,
+                            "endCol": 33,
+                            "offset": 905
+                          }
+                        },
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 30,
+                          "col": 13,
+                          "endLine": 30,
+                          "endCol": 33,
+                          "offset": 896
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 30,
+                      "col": 11,
+                      "endLine": 30,
+                      "endCol": 35,
+                      "offset": 894
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 30,
+                    "col": 7,
+                    "endLine": 30,
+                    "endCol": 35,
+                    "offset": 890
+                  }
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 28,
+                "col": 16,
+                "endLine": 31,
+                "endCol": 6,
+                "offset": 826
+              },
+              "comments": {
+                "open": [
+                  "# opening the run block"
+                ]
+              }
+            },
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 28,
+              "col": 5,
+              "endLine": 31,
+              "endCol": 6,
+              "offset": 815
+            },
+            "comments": {
+              "above": [
+                {
+                  "text": "# above the run"
+                }
+              ]
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "contains",
+                "x": {
+                  "kind": "ident",
+                  "name": "stdout",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 32,
+                    "col": 12,
+                    "endLine": 32,
+                    "endCol": 18,
+                    "offset": 936
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"COPY\"",
+                  "value": "COPY",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 32,
+                    "col": 28,
+                    "endLine": 32,
+                    "endCol": 34,
+                    "offset": 952
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 32,
+                  "col": 12,
+                  "endLine": 32,
+                  "endCol": 34,
+                  "offset": 936
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 32,
+                "col": 5,
+                "endLine": 32,
+                "endCol": 34,
+                "offset": 929
+              },
+              "class": "simple"
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 26,
+            "col": 3,
+            "endLine": 33,
+            "endCol": 4,
+            "offset": 773
+          },
+          "stepType": "terminal",
+          "scope": [
+            "exit_code",
+            "stdout",
+            "stderr",
+            "num",
+            "re",
+            "nothing",
+            "obj",
+            "url",
+            "id"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"browser\"",
+            "value": "browser"
+          },
+          "action": {
+            "kind": "browser",
+            "acts": [
+              {
+                "kind": "browserAct",
+                "name": "goto",
+                "target": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"/a\"",
+                  "value": "/a",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 37,
+                    "col": 12,
+                    "endLine": 37,
+                    "endCol": 16,
+                    "offset": 1036
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 37,
+                  "col": 7,
+                  "endLine": 37,
+                  "endCol": 16,
+                  "offset": 1031
+                },
+                "comments": {
+                  "after": [
+                    "# trailing a browser action"
+                  ]
+                }
+              },
+              {
+                "kind": "browserAct",
+                "name": "fill",
+                "target": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"#email\"",
+                  "value": "#email",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 38,
+                    "col": 12,
+                    "endLine": 38,
+                    "endCol": 20,
+                    "offset": 1080
+                  }
+                },
+                "value": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"a@b.c\"",
+                  "value": "a@b.c",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 38,
+                    "col": 23,
+                    "endLine": 38,
+                    "endCol": 30,
+                    "offset": 1091
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 38,
+                  "col": 7,
+                  "endLine": 38,
+                  "endCol": 30,
+                  "offset": 1075
+                }
+              }
+            ],
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 36,
+              "col": 5,
+              "endLine": 40,
+              "endCol": 6,
+              "offset": 987
+            },
+            "comments": {
+              "open": [
+                "# opening the browser block"
+              ],
+              "beforeClose": [
+                {
+                  "text": "# above the browser block's closing brace"
+                }
+              ]
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "contains",
+                "x": {
+                  "kind": "call",
+                  "callee": "text",
+                  "args": [
+                    {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"[role=status]\"",
+                      "value": "[role=status]",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 41,
+                        "col": 17,
+                        "endLine": 41,
+                        "endCol": 32,
+                        "offset": 1169
+                      }
+                    }
+                  ],
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 41,
+                    "col": 12,
+                    "endLine": 41,
+                    "endCol": 33,
+                    "offset": 1164
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"Pro\"",
+                  "value": "Pro",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 41,
+                    "col": 43,
+                    "endLine": 41,
+                    "endCol": 48,
+                    "offset": 1195
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 41,
+                  "col": 12,
+                  "endLine": 41,
+                  "endCol": 48,
+                  "offset": 1164
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 41,
+                "col": 5,
+                "endLine": 41,
+                "endCol": 48,
+                "offset": 1157
+              },
+              "class": "simple"
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 35,
+            "col": 3,
+            "endLine": 42,
+            "endCol": 4,
+            "offset": 966
+          },
+          "stepType": "browser",
+          "scope": [
+            "page",
+            "num",
+            "re",
+            "nothing",
+            "obj",
+            "url",
+            "id"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        }
+      ],
+      "span": {
+        "file": "testdata/kinds.art",
+        "line": 5,
+        "col": 1,
+        "endLine": 43,
+        "endCol": 2,
+        "offset": 284
+      },
+      "comments": {
+        "above": [
+          {
+            "text": "# Every node kind the encoding has, once each, in as few lines as the grammar"
+          },
+          {
+            "text": "# allows -- so that the golden pinning the UI contract is a file somebody can"
+          },
+          {
+            "text": "# actually read. `bad` is the exception: it is only produced by a file that did"
+          },
+          {
+            "text": "# not parse, and parser-recover.json covers it."
+          }
+        ]
+      }
+    }
+  ]
+}

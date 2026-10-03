@@ -1,0 +1,20 @@
+scenario: status code (testdata/art/wrong_status.art)
+  FAIL  ping                        <dur>
+         status == 200, got 500
+
+1 failure:
+
+1) testdata/art/wrong_status.art:11
+     scenario  status code
+     step      ping
+     assert    expect status ==
+     expected  200
+     actual    500
+
+Scenarios     1  (1 failed)
+Steps         1  (1 failed)
+Assertions    1  (1 failed)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed, 1 of 1 assertions failed

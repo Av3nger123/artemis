@@ -1,0 +1,10 @@
+# A step with no action block. A step's type comes from its action, so this one
+# has no type and nothing to run -- which is why it is an error rather than a
+# step that trivially passes.
+
+scenario "checkout" {
+  step "asserts nothing in particular" {
+    expect status == 200
+    capture token = body.data.token
+  }
+}

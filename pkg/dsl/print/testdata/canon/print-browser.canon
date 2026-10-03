@@ -1,0 +1,46 @@
+# The browser step type's whole vocabulary, once each: the eight actions, the
+# five element functions, both `config browser` settings, a `within` and a
+# capture over an element function.
+#
+# It exists because `select`, `press`, `hover`, `upload` and `wait` appeared in
+# no .art file in the repo until ART-46, so the lossless round trip had never
+# run over them. Nothing here is invalid -- the faults are
+# ../../testdata/invalid's -- and nothing here is laid out unusually except the
+# comments, which are inside the browser block on purpose: an act's trailing
+# comment and a comment above the closing brace are the two places a block's
+# trivia can be lost.
+scenario "the browser step" {
+  config browser { headless = true, viewport = "1280x720" }
+
+  var url = env("APP_URL")
+
+  # above the step
+  step "upgrade to pro" {
+    browser { # trailing the browser block's brace
+      goto "${url}/settings/billing"
+      fill "#email" = "alice@example.com"
+      select "#plan" = "pro"
+      press "Enter"
+      hover ".plan-menu"
+      upload "#avatar" = "me.png"
+      click "text=Upgrade" # trailing a browser action
+      wait "1s"
+      # above the browser block's closing brace
+    }
+
+    expect page.url contains "/settings/billing"
+    expect page.title == "Billing"
+    expect text("[role=status]") contains "Pro" within "10s"
+    expect value("#email") == "alice@example.com"
+    expect attr("#invoice-link", "href") contains "/invoices"
+    expect count(".invoice") > 0
+    expect visible(".plan-badge")
+    capture plan = match(text(".plan-badge"), /plan: (\w+)/)
+  }
+
+  step "the receipt is there" {
+    get "${url}/invoices?plan=${plan}"
+    expect status == 200
+    expect body.items[0].plan == "pro"
+  }
+}

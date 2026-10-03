@@ -1,0 +1,13 @@
+# `status` exists in the language; it is not bound in a browser step. That is a
+# different fault from an unknown name and gets a different code, because the
+# useful hint is the list of roots this step type *does* bind -- which is what
+# tells the author to write `expect page.title contains "Orders"` instead.
+
+scenario "sign in" {
+  step "loads the orders page" {
+    browser {
+      goto "/orders"
+    }
+    expect status == 200
+  }
+}

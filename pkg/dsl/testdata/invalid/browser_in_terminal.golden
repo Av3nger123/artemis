@@ -1,0 +1,14 @@
+=== terminal
+browser_in_terminal.art:13:12: "page" is not in scope in a terminal step
+   13 |     expect page.title contains "Deployed"
+      |            ^^^^
+   hint: a terminal step binds exit_code, stdout, stderr
+
+browser_in_terminal.art:14:12: "value()" is not in scope in a terminal step
+   14 |     expect value("#build") == "ok"
+      |            ^^^^^
+   hint: a terminal step binds exit_code, stdout, stderr
+
+=== codes
+not-in-scope	error	13:12-13:16
+not-in-scope	error	14:12-14:17

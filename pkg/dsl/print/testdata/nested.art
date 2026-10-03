@@ -1,0 +1,16 @@
+# Nesting at every depth the grammar reaches, and the object and array literals
+# that stay inline however deep they go.
+scenario "nested" {
+  var payload = {"user": {"name": "alice", "roles": ["admin", "ops"], "meta": {"tier": 2, "flags": [true, false, null]}}}
+
+  step "post it" {
+    post "/orders" {
+      body = {"payload": payload, "items": [{"sku": "a", "qty": 1}, {"sku": "b", "qty": 2}]}
+      header "Content-Type" = "application/json"
+    }
+    retry { times = 2, delay = "1s" }
+    expect status == 200 and (body.data.count > 0 or body.data.count == 0)
+    expect not body.errors exists
+    capture deep = body.data.items[0].links["self"]
+  }
+}

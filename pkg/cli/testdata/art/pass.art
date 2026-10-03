@@ -1,0 +1,28 @@
+# A run that passes: create a thing, capture its id, read it back.
+#
+# It is pass.yaml migrated, and the three assertions per step are the same
+# three: the status, that the id is there, and the name. The YAML check on
+# `$.id` also carried `type: number`, which was part of that one assertion
+# rather than a second one; in the DSL that is `expect body.id is number`, a
+# separate `expect`, so it is left out here to keep the two runs comparable.
+scenario "item lifecycle" {
+  var base = "%SERVER%"
+
+  step "create item" {
+    post "${base}/items" {
+      header "Content-Type" = "application/json"
+      body = {"name": "widget"}
+    }
+    expect status == 201
+    expect body.id exists
+    expect body.name == "widget"
+    capture itemId = body.id
+  }
+
+  step "read it back" {
+    get "${base}/items/${itemId}"
+    expect status == 200
+    expect body.name contains "widg"
+    expect body.tags == ["a", "b"]
+  }
+}

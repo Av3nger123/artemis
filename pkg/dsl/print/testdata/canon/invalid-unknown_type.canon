@@ -1,0 +1,14 @@
+# Two bad right-hand sides of `is`.
+#
+# The grammar fixes the six type names, and the parser accepts any identifier
+# there so that a typo gets a did-you-mean against six short words. `numbr` is
+# one edit from `number`; `int` is a name from another language and is near
+# none of them, so it gets the list.
+
+scenario "types" {
+  step "orders" {
+    get "/orders"
+    expect body.data.count is numbr
+    expect body.data.total is int
+  }
+}

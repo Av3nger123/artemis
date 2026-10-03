@@ -1,0 +1,23 @@
+block.art:7:14: a body block is not an object literal
+    7 |       body = {
+      |              ^
+    8 |         "sku": "A-1",
+      |         ^^^^^^^^^^^^^
+    9 |         "qty": 2
+      |         ^^^^^^^^
+   10 |       }
+      |       ^
+   hint: write the fields as `body { "sku" = "A-1" }`
+
+block.art:17:14: every element of args must be a string
+   17 |       args = [
+      |              ^
+   18 |         "build",
+      |         ^^^^^^^^
+   19 |         "test",
+      |         ^^^^^^^
+   20 |         "lint",
+      |         ^^^^^^^
+  ...
+   24 |       ]
+      |       ^

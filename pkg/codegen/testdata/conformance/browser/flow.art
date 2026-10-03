@@ -1,0 +1,63 @@
+# The browser flow of the conformance corpus, run both ways by
+# parity_browser_test.go behind the `browser` build tag: the Go side needs a real
+# Chromium and the Python side needs Playwright's own browsers, which is the
+# 683 MB docs/browser-engine.md keeps out of CI.
+#
+# It is the same flow pkg/cli/browser_test.go drives -- the fixture's form, the
+# page it posts to, and the [role=status] banner that settles late -- because
+# that is the flow whose semantics the three Playwright bindings have to agree
+# about.
+
+# conformance: pass
+scenario "the form leads to the done page" {
+  config browser {
+    headless = true
+    viewport = "1280x720"
+  }
+
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "sign in" {
+    browser {
+      goto "${base}/"
+      fill "#user" = "alice"
+      select "#plan" = "pro"
+      click "#go"
+    }
+    timeout = "30s"
+
+    expect page.url contains "/done"
+    expect page.title == "Welcome"
+    expect text("#who") == "alice"
+    expect text(".plan-badge") contains "pro"
+    expect count(".invoice") == 3
+    expect visible("[role=status]")
+    expect text("[role=status]") contains "Pro" within "10s"
+    capture plan = match(text(".plan-badge"), /plan: (\w+)/)
+  }
+
+  step "and the page remembers where it is" {
+    browser {
+      goto "/never"
+    }
+    timeout = "30s"
+
+    expect page.title == "Never"
+    expect plan == "pro"
+    expect text("#still") contains "Nothing settles"
+  }
+}
+
+# The browser half's declared failure: /never grows no #settled element, so the
+# budget expires on both backends rather than on one slow machine.
+# conformance: fail
+scenario "nothing settles on the never page" {
+  step "wait for something that never comes" {
+    browser {
+      goto "${env("ARTEMIS_BASE_URL")}/never"
+    }
+    timeout = "30s"
+
+    expect visible("#settled") within "500ms"
+  }
+}

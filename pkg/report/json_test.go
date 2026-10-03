@@ -104,6 +104,7 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
           "attempts": 1,
           "line": 5,
           "error": "",
+          "screenshot": "",
           "assertions": [
             {
               "kind": "status_code",
@@ -142,7 +143,8 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
       "operator": "equals",
       "expected": "ready",
       "actual": "pending",
-      "error": ""
+      "error": "",
+      "screenshot": ""
     }
   ]
 }

@@ -1,0 +1,16 @@
+# A misspelled element function, and one named without its call.
+#
+# `tex` is one edit from `text`, so it gets the suggestion. `visible` with no
+# parentheses is a different mistake: the name is right and the call is what is
+# missing, so a did-you-mean against the step's roots would be the wrong
+# advice, and the hint shows the call instead.
+
+scenario "functions" {
+  step "upgrade" {
+    browser {
+      goto "/settings/billing"
+    }
+    expect tex("[role=status]") contains "Pro"
+    expect visible
+  }
+}

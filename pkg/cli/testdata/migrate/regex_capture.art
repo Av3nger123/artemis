@@ -1,0 +1,19 @@
+# A capture off a body that is not JSON at all. The first step's response is
+# plain text, so there is no path to read -- the regex reads the bytes -- and the
+# value is templated into the second step's url, which is what proves a capture
+# landed in the scenario's scope.
+scenario "regex capture" {
+  var base = "%SERVER%"
+
+  step "read the redirect" {
+    get "${base}/redirect"
+    expect status == 200
+    capture itemId = match(raw, /\/items\/([0-9]+)/)
+  }
+
+  step "read the item back" {
+    get "${base}/items/${itemId}"
+    expect status == 200
+    expect body.id == 42
+  }
+}

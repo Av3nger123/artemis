@@ -1,0 +1,10 @@
+checkout.art:12:10: unknown field "statu"
+   12 |   expect statu == 200
+      |          ^^^^^
+   hint: did you mean "status"?
+
+checkout.art:31:10: "status" is not in scope in a browser step
+   31 |   expect status == 200
+      |          ^^^^^^
+   hint: a browser step binds page.url, page.title, text(), value(),
+         attr(), count(), visible()

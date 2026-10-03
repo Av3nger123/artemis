@@ -1,0 +1,535 @@
+{
+  "schemaVersion": 1,
+  "file": "../print/testdata/comments.art",
+  "scenarios": [
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"comments everywhere\"",
+        "value": "comments everywhere"
+      },
+      "body": [
+        {
+          "kind": "config",
+          "subject": "browser",
+          "block": {
+            "kind": "block",
+            "fields": [
+              {
+                "kind": "field",
+                "name": "headless",
+                "value": {
+                  "kind": "literal",
+                  "literal": "boolean",
+                  "text": "true",
+                  "value": "true",
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 6,
+                    "col": 31,
+                    "endLine": 6,
+                    "endCol": 35,
+                    "offset": 257
+                  }
+                },
+                "span": {
+                  "file": "../print/testdata/comments.art",
+                  "line": 6,
+                  "col": 20,
+                  "endLine": 6,
+                  "endCol": 35,
+                  "offset": 246
+                }
+              }
+            ],
+            "span": {
+              "file": "../print/testdata/comments.art",
+              "line": 6,
+              "col": 18,
+              "endLine": 6,
+              "endCol": 37,
+              "offset": 244
+            },
+            "comments": {
+              "afterClose": [
+                "# trailing the config"
+              ]
+            }
+          },
+          "span": {
+            "file": "../print/testdata/comments.art",
+            "line": 6,
+            "col": 3,
+            "endLine": 6,
+            "endCol": 37,
+            "offset": 229
+          },
+          "comments": {
+            "above": [
+              {
+                "text": "# above the config"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "var",
+          "name": "url",
+          "value": {
+            "kind": "call",
+            "callee": "env",
+            "args": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"API_URL\"",
+                "value": "API_URL",
+                "span": {
+                  "file": "../print/testdata/comments.art",
+                  "line": 8,
+                  "col": 17,
+                  "endLine": 8,
+                  "endCol": 26,
+                  "offset": 303
+                }
+              }
+            ],
+            "span": {
+              "file": "../print/testdata/comments.art",
+              "line": 8,
+              "col": 13,
+              "endLine": 8,
+              "endCol": 27,
+              "offset": 299
+            }
+          },
+          "span": {
+            "file": "../print/testdata/comments.art",
+            "line": 8,
+            "col": 3,
+            "endLine": 8,
+            "endCol": 27,
+            "offset": 289
+          },
+          "comments": {
+            "blankAbove": true,
+            "after": [
+              "# trailing a var"
+            ]
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"one\"",
+            "value": "one"
+          },
+          "action": {
+            "kind": "request",
+            "method": "get",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "url",
+                    "span": {
+                      "file": "../print/testdata/comments.art",
+                      "line": 13,
+                      "col": 12,
+                      "endLine": 13,
+                      "endCol": 15,
+                      "offset": 428
+                    }
+                  }
+                }
+              ],
+              "end": "}/a\"",
+              "span": {
+                "file": "../print/testdata/comments.art",
+                "line": 13,
+                "col": 9,
+                "endLine": 13,
+                "endCol": 19,
+                "offset": 425
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "query",
+                  "key": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"q\"",
+                    "value": "q",
+                    "span": {
+                      "file": "../print/testdata/comments.art",
+                      "line": 15,
+                      "col": 13,
+                      "endLine": 15,
+                      "endCol": 16,
+                      "offset": 503
+                    }
+                  },
+                  "value": {
+                    "kind": "literal",
+                    "literal": "number",
+                    "text": "1",
+                    "value": "1",
+                    "span": {
+                      "file": "../print/testdata/comments.art",
+                      "line": 15,
+                      "col": 19,
+                      "endLine": 15,
+                      "endCol": 20,
+                      "offset": 509
+                    }
+                  },
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 15,
+                    "col": 7,
+                    "endLine": 15,
+                    "endCol": 20,
+                    "offset": 497
+                  },
+                  "comments": {
+                    "above": [
+                      {
+                        "text": "# above a field"
+                      }
+                    ],
+                    "after": [
+                      "# trailing a field"
+                    ]
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "header",
+                  "key": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"Accept\"",
+                    "value": "Accept",
+                    "span": {
+                      "file": "../print/testdata/comments.art",
+                      "line": 16,
+                      "col": 14,
+                      "endLine": 16,
+                      "endCol": 22,
+                      "offset": 543
+                    }
+                  },
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"text/plain\"",
+                    "value": "text/plain",
+                    "span": {
+                      "file": "../print/testdata/comments.art",
+                      "line": 16,
+                      "col": 25,
+                      "endLine": 16,
+                      "endCol": 37,
+                      "offset": 554
+                    }
+                  },
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 16,
+                    "col": 7,
+                    "endLine": 16,
+                    "endCol": 37,
+                    "offset": 536
+                  }
+                }
+              ],
+              "span": {
+                "file": "../print/testdata/comments.art",
+                "line": 13,
+                "col": 20,
+                "endLine": 18,
+                "endCol": 6,
+                "offset": 436
+              },
+              "comments": {
+                "open": [
+                  "# trailing the request's brace"
+                ],
+                "beforeClose": [
+                  {
+                    "text": "# above the closing brace of the block"
+                  }
+                ],
+                "afterClose": [
+                  "# trailing the block's closing brace"
+                ]
+              }
+            },
+            "span": {
+              "file": "../print/testdata/comments.art",
+              "line": 13,
+              "col": 5,
+              "endLine": 18,
+              "endCol": 6,
+              "offset": 421
+            },
+            "comments": {
+              "above": [
+                {
+                  "text": "# above the action"
+                }
+              ]
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 21,
+                    "col": 12,
+                    "endLine": 21,
+                    "endCol": 18,
+                    "offset": 690
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "200",
+                  "value": "200",
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 21,
+                    "col": 22,
+                    "endLine": 21,
+                    "endCol": 25,
+                    "offset": 700
+                  }
+                },
+                "span": {
+                  "file": "../print/testdata/comments.art",
+                  "line": 21,
+                  "col": 12,
+                  "endLine": 21,
+                  "endCol": 25,
+                  "offset": 690
+                }
+              },
+              "span": {
+                "file": "../print/testdata/comments.art",
+                "line": 21,
+                "col": 5,
+                "endLine": 21,
+                "endCol": 25,
+                "offset": 683
+              },
+              "class": "simple",
+              "comments": {
+                "above": [
+                  {
+                    "text": "# above the expect",
+                    "blank": true
+                  }
+                ],
+                "after": [
+                  "# trailing the expect"
+                ]
+              }
+            },
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "member",
+                  "x": {
+                    "kind": "index",
+                    "x": {
+                      "kind": "member",
+                      "x": {
+                        "kind": "ident",
+                        "name": "body",
+                        "span": {
+                          "file": "../print/testdata/comments.art",
+                          "line": 22,
+                          "col": 12,
+                          "endLine": 22,
+                          "endCol": 16,
+                          "offset": 737
+                        }
+                      },
+                      "name": "items",
+                      "span": {
+                        "file": "../print/testdata/comments.art",
+                        "line": 22,
+                        "col": 12,
+                        "endLine": 22,
+                        "endCol": 22,
+                        "offset": 737
+                      }
+                    },
+                    "index": {
+                      "kind": "literal",
+                      "literal": "number",
+                      "text": "0",
+                      "value": "0",
+                      "span": {
+                        "file": "../print/testdata/comments.art",
+                        "line": 22,
+                        "col": 23,
+                        "endLine": 22,
+                        "endCol": 24,
+                        "offset": 748
+                      }
+                    },
+                    "span": {
+                      "file": "../print/testdata/comments.art",
+                      "line": 22,
+                      "col": 12,
+                      "endLine": 22,
+                      "endCol": 25,
+                      "offset": 737
+                    }
+                  },
+                  "name": "id",
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 22,
+                    "col": 12,
+                    "endLine": 22,
+                    "endCol": 28,
+                    "offset": 737
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "1",
+                  "value": "1",
+                  "span": {
+                    "file": "../print/testdata/comments.art",
+                    "line": 22,
+                    "col": 32,
+                    "endLine": 22,
+                    "endCol": 33,
+                    "offset": 757
+                  }
+                },
+                "span": {
+                  "file": "../print/testdata/comments.art",
+                  "line": 22,
+                  "col": 12,
+                  "endLine": 22,
+                  "endCol": 33,
+                  "offset": 737
+                }
+              },
+              "span": {
+                "file": "../print/testdata/comments.art",
+                "line": 22,
+                "col": 5,
+                "endLine": 22,
+                "endCol": 33,
+                "offset": 730
+              },
+              "class": "simple",
+              "comments": {
+                "after": [
+                  "# a comment after an index"
+                ]
+              }
+            }
+          ],
+          "span": {
+            "file": "../print/testdata/comments.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 24,
+            "endCol": 4,
+            "offset": 353
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "url"
+          ],
+          "comments": {
+            "above": [
+              {
+                "text": "# above the step",
+                "blank": true
+              }
+            ],
+            "open": [
+              "# trailing the step's brace"
+            ],
+            "beforeClose": [
+              {
+                "text": "# above the closing brace of the step"
+              }
+            ],
+            "afterClose": [
+              "# trailing the step's closing brace"
+            ]
+          }
+        }
+      ],
+      "span": {
+        "file": "../print/testdata/comments.art",
+        "line": 4,
+        "col": 1,
+        "endLine": 26,
+        "endCol": 2,
+        "offset": 144
+      },
+      "comments": {
+        "above": [
+          {
+            "text": "# A comment at the very top of the file, before anything else."
+          },
+          {
+            "text": "# A second paragraph of comment, separated by a blank line, above the scenario.",
+            "blank": true
+          }
+        ],
+        "open": [
+          "# trailing the opening brace"
+        ],
+        "beforeClose": [
+          {
+            "text": "# above the closing brace of the scenario"
+          }
+        ],
+        "afterClose": [
+          "# trailing the scenario's closing brace"
+        ]
+      }
+    }
+  ],
+  "comments": {
+    "above": [
+      {
+        "text": "# And a comment at the very end of the file, which lives on the EOF token.",
+        "blank": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+scenario: captures that cannot be read (testdata/art/bad_capture.art)
+  ERROR login                       <dur>
+         authToken body.session.token: body.session did not resolve
+         requestId match(raw, /req-([0-9a-f]+)/): regex "req-([0-9a-f]+)" matched nothing in raw
+
+2 failures:
+
+1) testdata/art/bad_capture.art:19
+     scenario  captures that cannot be read
+     step      login
+     assert    capture authToken body.session.token
+     error     body.session did not resolve
+
+2) testdata/art/bad_capture.art:20
+     scenario  captures that cannot be read
+     step      login
+     assert    capture requestId match(raw, /req-([0-9a-f]+)/)
+     error     regex "req-([0-9a-f]+)" matched nothing in raw
+
+Scenarios     1  (1 errored)
+Steps         1  (1 errored)
+Assertions    4  (2 passed, 2 errored)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed (1 errored), 2 of 4 assertions failed

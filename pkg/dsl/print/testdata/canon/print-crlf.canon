@@ -1,0 +1,9 @@
+# A file with CRLF line endings, which canonical mode normalises to LF.
+scenario "crlf" {
+  var a = 1
+
+  step "one" {
+    get "/a"
+    expect status == 200
+  }
+}

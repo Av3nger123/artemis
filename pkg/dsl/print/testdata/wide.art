@@ -1,0 +1,15 @@
+# The fits-inline boundary. A field block renders inline when the whole
+# statement fits in 100 columns at its indentation and breaks one field per
+# line when it does not, so these two steps differ by one byte of padding and
+# must come out shaped differently.
+scenario "wide" {
+  step "exactly at the margin" {
+    get "/a" { header "X-Padding" = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+    expect status == 200
+  }
+
+  step "one byte over the margin" {
+    get "/a" { header "X-Padding" = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+    expect status == 200
+  }
+}

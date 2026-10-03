@@ -1,0 +1,68 @@
+# The terminal half of the conformance corpus: the whole `run` block, the three
+# roots, and a capture read by a later step.
+#
+# Every command here is one POSIX puts in /usr/bin -- printf, cat, printenv,
+# false -- because the corpus runs on a developer's machine and on CI, and a
+# command neither has would make this a test of the machine.
+
+# conformance: pass
+scenario "the shell agrees" {
+  var greeting = "hello"
+
+  step "print two arguments" {
+    run "printf" {
+      args = ["%s-%s", "a", greeting]
+    }
+    timeout = "10s"
+
+    expect exit_code == 0
+    expect stdout == "a-hello"
+    expect stderr == ""
+    capture word = match(stdout, /a-(\w+)/)
+  }
+
+  step "read standard input" {
+    run "cat" {
+      stdin = "${word} from stdin"
+      cwd = "."
+    }
+    timeout = "10s"
+
+    expect exit_code == 0
+    expect stdout contains "hello from stdin"
+    expect stdout matches /from stdin$/
+  }
+
+  step "a step's env reaches the command" {
+    run "printenv" {
+      args = ["ARTEMIS_PARITY"]
+      env {
+        ARTEMIS_PARITY = "ART-49"
+      }
+    }
+    timeout = "10s"
+    retry { times = 2, delay = "10ms" }
+
+    expect exit_code == 0
+    expect stdout contains "ART-49"
+  }
+
+  step "a command that failed is an observation" {
+    run "false"
+    timeout = "10s"
+
+    expect exit_code != 0
+    expect exit_code > 0
+  }
+}
+
+# The other declared failure: a non-zero exit is not a zero one, on either side.
+# conformance: fail
+scenario "a failing command does not exit zero" {
+  step "run a command that exits non-zero" {
+    run "false"
+    timeout = "10s"
+
+    expect exit_code == 0
+  }
+}

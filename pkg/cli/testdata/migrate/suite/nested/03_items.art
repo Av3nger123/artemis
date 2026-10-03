@@ -1,0 +1,10 @@
+# Found by the recursive walk, and run after the files above it.
+scenario "items" {
+  var base = "%SERVER%"
+
+  step "list items" {
+    get "${base}/items"
+    expect status == 200
+    expect body.items exists
+  }
+}

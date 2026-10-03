@@ -1,0 +1,28 @@
+# A fixture for spans that cross lines: the body block below is one span from
+# its "{" to its "}", and the step after it is a long one, for the elision a
+# span covering more lines than the renderer echoes has to fall back on.
+scenario "blocks" {
+  step "post a body" {
+    post "https://api.example.com/orders" {
+      body = {
+        "sku": "A-1",
+        "qty": 2
+      }
+    }
+    expect status == 201
+  }
+
+  step "many lines" {
+    run "make" {
+      args = [
+        "build",
+        "test",
+        "lint",
+        "fmt",
+        "vet",
+        "cover"
+      ]
+    }
+    expect exit_code == 0
+  }
+}

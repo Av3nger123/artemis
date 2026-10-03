@@ -1,0 +1,8 @@
+=== terminal
+action_not_first.art:8:5: a step's action block must come before its statements
+   8 |     get "/orders"
+     |     ^^^
+   hint: move this above the expect, capture, retry and timeout lines
+
+=== codes
+action-not-first	error	8:5-8:8

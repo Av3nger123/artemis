@@ -1,0 +1,35 @@
+# Bad lines between good ones. Every scenario, step and statement that is
+# well-formed here must survive the ones that are not: recovery at statement
+# boundaries is what keeps one mistake from costing a file.
+
+scenario "good one" {
+  var url = env("API_URL")
+  nonsense here
+
+  var kept = 1
+
+  step "survives a bad statement" {
+    get "${url}/orders"
+    expect status == 200
+    expect ===
+    capture token = body.data.token
+  }
+
+  step "survives a bad field" {
+    post "/x" {
+      header "A" = "b"
+      query
+      body = {"ok": true}
+    }
+    expect status == 201
+  }
+}
+
+not a scenario at all
+
+scenario "also good" {
+  step "still parsed" {
+    run "echo hi"
+    expect exit_code == 0
+  }
+}

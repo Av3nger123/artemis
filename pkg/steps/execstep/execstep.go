@@ -1,7 +1,13 @@
-// Package execstep is the exec step: it runs a command, checks its exit code
-// and its two streams, and hands stdout to pkg/shared/capture so the step's
-// `capture:` values come out of it. It is registered in the default registry
-// under the step type "exec".
+// Package execstep is the terminal step: it runs a command and reports its
+// exit code and its two streams. It is registered in the default registry
+// under the step type "terminal", which is what pkg/dsl/lower stamps on a step
+// whose action block is `run`.
+//
+// The key was "exec" until ART-40, because that is what a YAML `type:` spelled
+// and the YAML loader validated against the registry. With YAML off the run
+// path the registry answers to the front end alone, and the front end -- the
+// checker, the diagnostics, `artemis grammar` -- has always called this a
+// terminal step.
 //
 // It is the escape hatch. Anything artemis has no step type for -- a CLI, a
 // migration script, a health check that is a shell one-liner -- is an exec step,
@@ -10,19 +16,18 @@
 //
 // There is no shell. Command is executed directly with Args: no word splitting,
 // no globbing, no `sh -c` unless the scenario names a shell itself. A scenario
-// that wants a pipeline writes `command: "sh"`, `args: ["-c", "..."]`, which is
+// that wants a pipeline writes `run "sh" { args = ["-c", "..."] }`, which is
 // longer to write and impossible to misread.
 //
-// Per ART-15's contract: one attempt per Execute, no retrying, no timing, and a
-// returned result that carries assertions and nothing else. A command that ran
-// and exited non-zero is a failed assertion, not an error -- the error return is
-// for a command that could not be run at all.
+// Per ART-15's contract: one attempt per Observe, no retrying, no timing, and
+// no assertions. A command that ran and exited non-zero is an observation, not
+// an error -- the error return is for a command that could not be run at all,
+// and `expect exit_code == 0` is what decides whether the scenario minds.
 package execstep
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -31,16 +36,12 @@ import (
 	"time"
 
 	"artemis/pkg/executor"
-	"artemis/pkg/result"
-	"artemis/pkg/shared"
-	"artemis/pkg/shared/assert"
-	"artemis/pkg/shared/capture"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 )
 
 // StepType is the type a scenario writes to get this executor.
-const StepType = "exec"
+const StepType = "terminal"
 
 // DefaultTimeout is how long one attempt may take when the step does not say.
 // There is no "no timeout": a command with no deadline is how a CI job hangs
@@ -56,13 +57,6 @@ const DefaultTimeout = 30 * time.Second
 // stopped matching.
 const MaxOutput = 1 << 20
 
-// Kinds the assertions this step makes are recorded under.
-const (
-	KindExitCode = "exit_code"
-	KindStdout   = "stdout"
-	KindStderr   = "stderr"
-)
-
 // Executor is the exec step.
 type Executor struct {
 	// Timeout is the deadline for a step that does not set one. Zero means
@@ -77,97 +71,6 @@ var _ executor.Executor = Executor{}
 
 func init() {
 	executor.Register(StepType, Executor{})
-}
-
-// Execute runs the command once and reports what it did.
-//
-// The order the assertions come out in is the order they are printed in: the
-// exit code first, then the stdout checks, then the stderr checks, then the
-// captures. Unlike the HTTP step, a wrong exit code does not suppress the rest:
-// the reason it does there -- a 500's body is not the body the scenario
-// described -- runs the other way for a command, where stderr is exactly what a
-// failure is diagnosed from and a check on it is most worth making when the
-// command did not succeed.
-func (e Executor) Execute(step models.Step, scope executor.Scope) (*result.StepResult, error) {
-	timeout, err := step.AttemptTimeout(e.timeout())
-	if err != nil {
-		return nil, err
-	}
-
-	spec, err := e.render(step, scope)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	run, err := e.run(ctx, step, spec, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	res := &result.StepResult{}
-	res.Assert(exitCodeAssertion(step, run.exitCode))
-	for _, check := range step.Expect.Stdout {
-		res.Assert(assert.Text(step.Name, KindStdout, check, run.stdout))
-	}
-	for _, check := range step.Expect.Stderr {
-		res.Assert(assert.Text(step.Name, KindStderr, check, run.stderr))
-	}
-	out := []byte(run.stdout)
-	for _, a := range capture.Apply(step, capture.Source{Text: out, JSON: parseJSON(step, out)}, scope.Vars()) {
-		res.Assert(a)
-	}
-	return res, nil
-}
-
-// render resolves every placeholder in the step before anything is started. A
-// failure names the part of the command it was in, because `{{host}}` missing
-// from the cwd and from an argument are different mistakes to go and fix.
-//
-// Env values are rendered in sorted key order so a scenario with two bad ones
-// reports the same one first on every run.
-func (e Executor) render(step models.Step, scope executor.Scope) (models.Exec, error) {
-	vars := scope.Vars()
-	src := step.Exec
-	out := models.Exec{}
-
-	if strings.TrimSpace(src.Command) == "" {
-		// Caught here rather than in models.Validate: Validate is handed the
-		// list of step types precisely so it holds none of its own, and
-		// teaching it that `exec` implies `command` would put a type's name
-		// back inside it. The same rule applies to an api step with no url.
-		return out, errors.New("exec step has no command to run")
-	}
-
-	var err error
-	if out.Command, err = shared.TransformText(src.Command, vars); err != nil {
-		return out, fmt.Errorf("rendering command: %w", err)
-	}
-	if out.Cwd, err = shared.TransformText(src.Cwd, vars); err != nil {
-		return out, fmt.Errorf("rendering cwd: %w", err)
-	}
-	if out.Stdin, err = shared.TransformText(src.Stdin, vars); err != nil {
-		return out, fmt.Errorf("rendering stdin: %w", err)
-	}
-	if len(src.Args) > 0 {
-		out.Args = make([]string, len(src.Args))
-		for i := range src.Args {
-			if out.Args[i], err = shared.TransformText(src.Args[i], vars); err != nil {
-				return out, fmt.Errorf("rendering args[%d]: %w", i, err)
-			}
-		}
-	}
-	if len(src.Env) > 0 {
-		out.Env = make(map[string]string, len(src.Env))
-		for _, key := range src.EnvKeys() {
-			if out.Env[key], err = shared.TransformText(src.Env[key], vars); err != nil {
-				return out, fmt.Errorf("rendering env %s: %w", key, err)
-			}
-		}
-	}
-	return out, nil
 }
 
 // outcome is what one run of a command produced.
@@ -207,7 +110,7 @@ func (e Executor) run(ctx context.Context, step models.Step, spec models.Exec, t
 	for _, s := range []struct {
 		kind string
 		b    *cappedBuffer
-	}{{KindStdout, &stdout}, {KindStderr, &stderr}} {
+	}{{RootStdout, &stdout}, {RootStderr, &stderr}} {
 		if s.b.dropped > 0 {
 			logger.Logger.Warn("Command output was truncated", "name", step.Name, "stream", s.kind, "kept", s.b.buf.Len(), "dropped", s.b.dropped)
 		}
@@ -252,35 +155,6 @@ func (e Executor) environ(spec models.Exec) []string {
 		env = append(env, key+"="+spec.Env[key])
 	}
 	return env
-}
-
-// exitCodeAssertion is the one check every exec step makes, whether or not it
-// asked for any others.
-func exitCodeAssertion(step models.Step, got int) result.AssertionResult {
-	a := result.Assertion{
-		Step:     step.Name,
-		Kind:     KindExitCode,
-		Operator: assert.OpEquals,
-		Expected: step.Expect.ExitCode,
-		Actual:   got,
-		Line:     step.Expect.ExitCodeLine,
-	}
-	if got == step.Expect.ExitCode {
-		return a.Pass()
-	}
-	return a.Fail()
-}
-
-// parseJSON decodes stdout as a JSON object, or returns nil. Output that is not
-// JSON is not an error here: whether the step needed JSON is decided by the
-// captures it declared, and each of those says so itself.
-func parseJSON(step models.Step, out []byte) map[string]any {
-	var parsed map[string]any
-	if err := json.Unmarshal(out, &parsed); err != nil {
-		logger.Logger.Debug("Command output is not a JSON object", "name", step.Name, "error", err.Error())
-		return nil
-	}
-	return parsed
 }
 
 func (e Executor) timeout() time.Duration {

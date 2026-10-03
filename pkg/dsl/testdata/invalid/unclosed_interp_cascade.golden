@@ -1,0 +1,73 @@
+=== terminal
+unclosed_interp_cascade.art:9:35: unclosed scenario
+   9 | scenario "unclosed interpolation" {
+     |                                   ^
+   hint: this "{" is never closed
+
+unclosed_interp_cascade.art:12:17: unclosed step
+   12 |   step "orders" {
+      |                 ^
+   hint: this "{" is never closed
+
+unclosed_interp_cascade.art:13:16: unterminated regex: a "/" literal cannot span lines
+   13 |     get "${base/orders"
+      |                ^^^^^^^^
+
+unclosed_interp_cascade.art:13:16: expected "}" to close the interpolation, found invalid input "/orders\""
+   13 |     get "${base/orders"
+      |                ^^^^^^^^
+   hint: an interpolated string is "...${ expr }..."
+
+unclosed_interp_cascade.art:13:16: expected an expression, found invalid input "/orders\""
+   13 |     get "${base/orders"
+      |                ^^^^^^^^
+
+unclosed_interp_cascade.art:14:5: expected "}" to close the interpolation, found "expect"
+   14 |     expect status == 200
+      |     ^^^^^^
+   hint: an interpolated string is "...${ expr }..."
+
+unclosed_interp_cascade.art:14:12: expected "}" to close the interpolation, found "status"
+   14 |     expect status == 200
+      |            ^^^^^^
+   hint: an interpolated string is "...${ expr }..."
+
+unclosed_interp_cascade.art:15:3: unterminated string: missing the closing '"'
+   15 |   }
+      |   ^
+   16 | }
+      | ^
+   17 |
+
+unclosed_interp_cascade.art:15:3: expected "}" to close the interpolation, found invalid input "}\n}\n"
+   15 |   }
+      |   ^
+   16 | }
+      | ^
+   17 |
+   hint: an interpolated string is "...${ expr }..."
+
+unclosed_interp_cascade.art:15:3: expected an expression, found invalid input "}\n}\n"
+   15 |   }
+      |   ^
+   16 | }
+      | ^
+   17 |
+
+unclosed_interp_cascade.art:17:1: expected "}" to close the interpolation, found end of file
+   17 |
+      | ^
+   hint: an interpolated string is "...${ expr }..."
+
+=== codes
+unclosed-block	error	9:35-9:36
+unclosed-block	error	12:17-12:18
+unterminated-regex	error	13:16-13:24
+unclosed-interpolation-expr	error	13:16-13:24
+unexpected-token	error	13:16-13:24
+unclosed-interpolation-expr	error	14:5-14:11
+unclosed-interpolation-expr	error	14:12-14:18
+unterminated-string	error	15:3-17:1
+unclosed-interpolation-expr	error	15:3-17:1
+unexpected-token	error	15:3-17:1
+unclosed-interpolation-expr	error	17:1-17:1

@@ -7,12 +7,17 @@ and then states the rules that example obeys.
 
 If this document and anything else disagree, this document is right.
 
-> **Status.** The language is designed and approved
-> (`docs/artemis-dsl-design.md`); the front end that reads it is subsystem A and
-> is not built yet. Until it lands, `artemis run` reads the YAML format the
-> [README](README.md) documents, and this document is what the front end is
-> implemented against. Three places where this spec decides something the design
-> left open are marked **spec decision**.
+> **Status.** `artemis run` reads this language. The front end -- lexer, parser,
+> checker, printer -- is built, and every example in this document is compiled by
+> `pkg/shared/spec_test.go` on every CI run: an example here either works or the
+> build is red.
+>
+> The language was designed and approved in `docs/artemis-dsl-design.md`; four
+> places where this spec decides something that design left open are marked
+> **spec decision**. All three step types are specified here; `browser` steps
+> compile and format but do not run yet -- see [`browser` steps](#browser-steps).
+> YAML is not a runtime format: it is an input to `artemis migrate`, and the
+> [README](README.md) documents the commands.
 
 ---
 
@@ -146,7 +151,7 @@ evaluated. Both are compile errors.
 **Spec decision.** `config` takes the name of a step type and settings for it.
 No setting is defined for `api` or `terminal` scenarios; the only block with keys
 today is `config browser`, which belongs to the browser step type and is
-specified with it. A `config` block naming a step type that does not exist, or
+specified with it -- see [`config browser`](#config-browser). A `config` block naming a step type that does not exist, or
 setting a key that type does not define, is a compile error.
 
 ---
@@ -172,7 +177,7 @@ step "build it" {
 | --- | --- |
 | `get`, `post`, `put`, `patch`, `delete`, `head`, `options` | `api` |
 | `run "<command>" { ... }` | `terminal` |
-| `browser { ... }` | `browser` -- not in this spec, see [Not in this spec](#not-in-this-spec) |
+| `browser { ... }` | `browser` -- see [`browser` steps](#browser-steps) |
 
 A step with no action block, and a step with two, are both compile errors. The
 type is known before any name in the step is resolved, which is what makes
@@ -333,6 +338,160 @@ scenario "release checks" {
 
 ---
 
+## `browser` steps
+
+The action is `browser` and a block of what to do in the page:
+
+```art
+scenario "upgrade to pro" {
+  config browser { headless = true, viewport = "1280x720" }
+
+  var url = env("APP_URL")
+
+  step "upgrade the plan" {
+    browser {
+      goto "${url}/settings/billing"
+      fill "#email" = "alice@example.com"
+      select "#plan" = "pro"
+      click "text=Upgrade"
+      wait "1s"
+    }
+    expect page.url contains "/settings/billing"
+    expect text("[role=status]") contains "Pro" within "10s"
+    expect count(".invoice") > 0
+    capture plan = match(text(".plan-badge"), /plan: (\w+)/)
+  }
+}
+```
+
+The block is **required** -- a browser step with no actions does nothing at all
+-- and it holds these eight statements, in any order and any number:
+
+| Action | Shape | What it does |
+| --- | --- | --- |
+| `goto` | `goto "/orders"` | Navigates to a URL. A relative one resolves against the page's current address |
+| `click` | `click "text=Sign in"` | Clicks the first element the selector matches |
+| `fill` | `fill "#email" = "alice@example.com"` | Replaces an input's value with the text |
+| `select` | `select "#plan" = "pro"` | Chooses an option of a `<select>`, by the option's value |
+| `press` | `press "Enter"` | Sends one key to whatever has focus |
+| `hover` | `hover ".plan-menu"` | Moves the pointer over the first match |
+| `upload` | `upload "#avatar" = "me.png"` | Attaches a file to a file input |
+| `wait` | `wait "1s"` | Waits for a fixed duration |
+
+Three of them -- `fill`, `select` and `upload` -- take a value after an `=`; the
+other five take a selector and nothing else. Writing the wrong shape is a
+compile error naming the action and showing the shape, rather than a syntax
+error about the `=`:
+
+```
+upgrade.art:9:7: "click" takes a selector and no value
+    9 |       click "text=Sign in" = "now"
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   hint: click "text=Sign in"
+```
+
+A statement that is not one of the eight is a compile error too, with a
+did-you-mean when it is nearly one of them and the eight listed when it is not.
+
+`wait`'s argument is a **duration**, the same `"30s"` / `"500ms"` / `"2m"` a
+`timeout` takes, and a string that is not one is a compile error. Waiting for a
+*condition* is not written here: it is [`within`](#within) on the assertion that
+names the condition, which is the only form that says what is being waited for.
+
+A selector is a string, and nothing in this language interprets it: it is passed
+through to the browser as written. So `"#email"`, `".invoice"`,
+`"[role=status]"` and `"text=Sign in"` are all just strings, and
+[interpolation](#interpolation) works in one as it does anywhere -- `click
+"text=${plan}"`.
+
+### What a browser step binds
+
+| Name | Type | What it is |
+| --- | --- | --- |
+| `page.url` | string | The page's current address, after any redirect or in-page navigation |
+| `page.title` | string | The document's title |
+
+`page` is the one root in the language whose members are a **closed set**, so
+`page.titl` is a compile error with the fix. A response's `body.datta` is not,
+because a response's shape is a run-time fact and checking it would reject
+correct files.
+
+The five **element functions** read the page. Each takes a selector, and `attr`
+takes an attribute name as well:
+
+| Function | Returns |
+| --- | --- |
+| `text("[role=status]")` | The first match's visible text, or `null` when nothing matches |
+| `value("#email")` | The first match's value as a form control |
+| `attr("#link", "href")` | The named attribute of the first match, or `null` when it has none |
+| `count(".invoice")` | How many elements the selector matches -- `0` and not an error when none do |
+| `visible(".modal")` | Whether the first match is visible |
+
+**Spec decision.** What an element function answers when the selector matches
+*nothing*: `count()` is `0`, `visible()` is `false`, and `text()`, `value()` and
+`attr()` are **`null`**. The design document specifies the five functions and
+their arities and leaves this open. They answer rather than erroring because
+`expect count(".invoice") == 0` and `expect text(".error") is null` are the
+assertions an author wants to be able to write, and a function that errored on
+no match would make the absence of a thing unassertable. An absent attribute on
+a present element is `null` for the same reason -- `exists` is the operator for
+asking, and [absent paths](#paths) already say what `null` means in an
+assertion.
+
+Browser actions themselves auto-wait: a `click` on an element that is about to
+appear waits for it, which is the browser's own behaviour and is inherited
+rather than reimplemented. So an action does not need a `wait` in front of it;
+`wait "1s"` is for a pause that has no element to wait on.
+
+They are functions and not roots, so `expect visible` is a compile error that
+names the call, and the wrong number of arguments is a compile error that shows
+the signature. They are in scope in a browser step and **nowhere else**: in an
+`api` step, in a `terminal` step or in a `var`'s value, each one is a compile
+error listing what *is* in scope there. The same holds the other way --
+`expect status == 200` in a browser step is an error naming `page.url`,
+`page.title` and the five functions.
+
+### `config browser`
+
+| Setting | Type | Default |
+| --- | --- | --- |
+| `headless` | boolean | `true` |
+| `viewport` | string, `"<width>x<height>"` | the browser's own default |
+
+```art
+config browser { headless = true, viewport = "1280x720" }
+```
+
+It is scenario-wide: one browser, one context, shared by every browser step of
+that scenario in the order they are written, so a step can sign in and the next
+step is still signed in. A scenario with no browser step opens no browser.
+
+An assertion in a browser step has a default [`within`](#within) of **5s**,
+because a page settles asynchronously and an assertion that reads it once is a
+race. The other two step types have no default; see [`within`](#within).
+
+### When a browser step fails
+
+A browser step that does not pass leaves a **screenshot** of the page, and the
+[JSON report](#the-json-report) names its path on the step and on the matching
+`failures` entry. It is written after the last attempt, because that is the
+attempt the report describes.
+
+```
+artemis run upgrade.art                            # artemis-screenshots/
+artemis run upgrade.art --screenshots shots        # shots/
+artemis run upgrade.art --screenshots ""           # none
+```
+
+The name is `<scenario>-<step>.png`, lower-cased with everything that is not a
+letter or a digit collapsed to a hyphen, and it has no timestamp: a rerun
+overwrites the file from the run before it, so the path in the report is
+predictable enough for a CI job to name the artifact it is about to upload. Two
+steps that share a name in one run get `-2` and `-3`. The folder is created only
+when a browser step actually fails, so a suite of `api` steps never grows one.
+
+---
+
 ## What is in scope
 
 An expression can name three things: the step's own observation, the scenario's
@@ -344,7 +503,7 @@ What the observation binds depends on the step's type:
 | --- | --- |
 | `api` | `status`, `body`, `raw`, `headers` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
-| `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [not in this spec](#not-in-this-spec) |
+| `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
 
 | Root | Type | What it is |
 | --- | --- | --- |
@@ -354,6 +513,8 @@ What the observation binds depends on the step's type:
 | `headers` | object | The response headers, keyed by name. Lookup is case-insensitive |
 | `exit_code` | number | The command's exit code |
 | `stdout`, `stderr` | string | The two streams, as text |
+| `page.url` | string | The page's current address |
+| `page.title` | string | The document's title |
 
 Naming a root that the step's type does not bind is a **compile error**, and the
 message lists the roots that are in scope:
@@ -467,6 +628,11 @@ Parentheses group: `expect (a == 1 or a == 2) and b exists`.
 | --- | --- |
 | `env("NAME")` | The environment variable `NAME`, or `""` when it is not set |
 | `match(<text>, /re/)` | The text the regex matched: capturing group 1 when the pattern has one, the whole match when it does not |
+| `text()`, `value()`, `attr()`, `count()`, `visible()` | What an element on the page says -- [in a `browser` step only](#what-a-browser-step-binds) |
+
+`env()` and `match()` are callable in every scope, including a `var`'s value.
+The five element functions are callable in a `browser` step and nowhere else:
+calling one anywhere else is a compile error naming what is in scope there.
 
 `env()` is an ordinary expression and is legal wherever an expression is -- in a
 `var`, in a URL, in a header, in a `body`, in an `expect`. An unset name is the
@@ -493,9 +659,45 @@ capture itemId   = match(raw, /\/items\/([0-9]+)/)    # group 1
 capture whole    = match(stdout, /v[0-9.]+/)          # the whole match
 ```
 
+Five things about it, each settled here because the design document left the
+surface syntax unwritten:
+
+| | |
+| --- | --- |
+| Which group | **Group 1** when the pattern has one capturing group, the **whole match** when it has none |
+| More than one group | A **compile error**. Make the ones you do not want non-capturing: `(?:...)` |
+| No match | An **errored assertion** naming the pattern. Not an empty string, and not a panic |
+| Type | Always a **string** |
+| Where it is legal | Anywhere an expression is, exactly like `env()` |
+
+A pattern with two or more capturing groups has an author who meant one of
+them, and guessing which is how a capture goes quietly wrong -- so the checker
+rejects it rather than taking the first, and names the rewrite:
+
+```art
+capture id = match(raw, /\/(items|orders)\/([0-9]+)/)      # error: two groups
+capture id = match(raw, /\/(?:items|orders)\/([0-9]+)/)    # one group, group 1
+```
+
+The pattern is counted at compile time when it is a regex literal, which it
+almost always is. A pattern that arrives as a string in a variable is counted
+at run time and gives the same reason as an errored assertion.
+
 `match()` returns a string -- the text that matched, not a guess at what it
-meant, because reading `"007"` as seven loses data. A pattern that matches
-nothing is an errored assertion naming the pattern, not an empty string.
+meant, because reading `"007"` as seven loses data. So `capture itemId =
+match(raw, /\/items\/([0-9]+)/)` against `moved to /items/42` makes `itemId`
+the string `"42"`: `itemId is string` is true and `itemId is number` is false,
+and `"${itemId}"` renders `42` either way.
+
+A pattern that matches nothing is an evaluation that could not be performed, not
+a value: in a `capture` it is one errored assertion naming the capture, and in
+an `expect` it is an errored assertion naming the expression. It is not an
+*absent path*, so `expect match(raw, /x/) exists` reports the reason rather than
+answering false -- the text was there and the question was asked.
+
+The first argument is the text to search and the second is the pattern. The
+pattern may be a regex literal or a string, which is the same rule `matches`
+follows, so a pattern can live in a `var`.
 
 ### How a value renders
 
@@ -518,8 +720,13 @@ A double-quoted string may hold `${ <expr> }`, with any expression inside:
 
 ```art
 var root = "${base}/${version}"
-get "${root}/orders/${body.data.id}?since=${since}"
-header "Authorization" = "Bearer ${token}"
+
+step "orders" {
+  get "${root}/orders/${orderId}?since=${since}" {
+    header "Authorization" = "Bearer ${token}"
+  }
+  expect status == 200
+}
 ```
 
 | | |
@@ -578,6 +785,21 @@ condition has to settle.
 | `browser` | 5s |
 | `api`, `terminal` | none -- the assertion is evaluated once |
 
+**Spec decision.** An explicit `within` on an `api` or a `terminal` step is
+accepted and the assertion is still evaluated **once**. Those two observations
+are complete when the step returns -- a response has arrived, a command has
+exited -- so nothing a re-evaluation reads can have changed, and honouring the
+budget literally would make a failure exactly `within` slower and no more likely
+to pass. That is the same reason those types have no default. A budget that will
+not parse is still a fault either way: as a compile error for a literal, and as
+an errored assertion for one that came out of a `var`. What re-runs an `api` step
+that is not ready yet is [`retry`](#retry).
+
+In a browser step the waiting is real: the assertion is re-evaluated every 100ms
+until it holds or the budget expires, reading the page again each time. An
+assertion that is already true costs nothing -- the 5s default is a ceiling on a
+failure, not a delay on a pass.
+
 `within` and `retry` compose: a step may retry, and its assertions may wait.
 They are not the same thing -- see [the three timers](#retry-timeout-and-within).
 
@@ -624,7 +846,8 @@ capture count = body.data.items[0].quantity
 
 A captured value **keeps its type**: a number stays a number, an object stays an
 object, so it can be compared with `>` or templated into a `body` as a value.
-`match()` is the exception and is always a string.
+[`match()`](#builtins) is the exception and is always a string, even when the
+text it matched is all digits.
 
 A capture is plumbing, not a check. One that succeeds records nothing -- a run
 that printed a line per captured token would bury the assertions that matter, and
@@ -647,7 +870,7 @@ scenario, so:
 | --- | --- | --- |
 | `retry { times, delay }` | Re-runs the **whole step**, action included | one attempt, no delay |
 | `timeout = "<duration>"` | Bounds **one attempt** of the step | `30s` |
-| `expect ... within "<duration>"` | Re-evaluates **one assertion** | none for `api` and `terminal`; 5s for `browser` |
+| `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api` and `terminal`; 5s for `browser` |
 
 ```art
 step "wait for the import" {
@@ -680,8 +903,8 @@ A duration string: `"500ms"`, `"5s"`, `"1m30s"`. It is **per attempt**, so a ste
 with `timeout = "5s"` and `retry { times = 3 }` may take fifteen seconds.
 
 There is no spelling of "wait forever", by design: a request with no deadline is
-how a CI job hangs until someone notices. `timeout = "0s"` is the default, not
-the absence of one.
+how a CI job hangs until someone notices. `timeout = "0s"` is not that spelling
+either -- zero means the 30s default, the same as writing no `timeout` at all.
 
 A step that runs out of time is an **errored step** with the deadline named --
 `no response within 5s` -- and is retried if the step asked for retries. A
@@ -773,8 +996,9 @@ Array       = "[" [ Expr { "," Expr } ] "]" ;
 Comments are `#` to end of line. Trailing commas are permitted in objects and
 arrays. Statements separate by newline; no semicolons.
 
-`BrowserAct`'s semantics are specified with the browser step type, not here --
-see [Not in this spec](#not-in-this-spec).
+`BrowserAct`'s semantics -- which actions take a value, what `wait` waits for,
+what a selector means -- are specified with [`browser` steps](#browser-steps)
+and not here, because a grammar says the shape and not the meaning.
 
 ---
 
@@ -883,8 +1107,8 @@ so a reader can tell "nothing failed" from "nothing ran":
           "error": "",
           "assertions": [
             {
-              "kind": "api",
-              "path": "status == 200",
+              "kind": "expect",
+              "path": "status",
               "operator": "==",
               "expected": 200,
               "actual": 200,
@@ -893,8 +1117,8 @@ so a reader can tell "nothing failed" from "nothing ran":
               "line": 11
             },
             {
-              "kind": "api",
-              "path": "body.data.state == \"ready\"",
+              "kind": "expect",
+              "path": "body.data.state",
               "operator": "==",
               "expected": "ready",
               "actual": "pending",
@@ -914,8 +1138,8 @@ so a reader can tell "nothing failed" from "nothing ran":
       "scenario": "items",
       "step": "get item",
       "status": "fail",
-      "kind": "api",
-      "path": "body.data.state == \"ready\"",
+      "kind": "expect",
+      "path": "body.data.state",
       "operator": "==",
       "expected": "ready",
       "actual": "pending",
@@ -942,12 +1166,13 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `attempts` | step | How many times the step was tried; `1` unless `retry` asked for more |
 | `line` | step, assertion, failure | The 1-based line of the scenario file it was written on, and `0` when artemis does not know |
 | `assertions` | step | One entry per `expect` the step evaluated, plus one per capture that failed, in the order they were made |
-| `kind` | assertion, failure | The step type the assertion was made in: `api`, `terminal`, `browser`, or `capture` for a capture that could not be read |
-| `path` | assertion, failure | The source text of the expression that was evaluated. For a capture, the name it captures under |
-| `operator` | assertion, failure | The expression's top-level comparison token -- `==`, `contains`, `exists` -- and `""` for an expression with no single one |
+| `kind` | assertion, failure | What made the assertion: `expect` for every `expect`, whatever its expression does, and `capture` for a capture that could not be read. There is no per-operator kind and no per-step-type one |
+| `path` | assertion, failure | The source text of what was inspected: `body.data.count`. For an expression with no single subject -- an `or` chain, a bare call -- the whole expression; for a capture, the name it captures under |
+| `operator` | assertion, failure | The expression's top-level comparison token -- `==`, `contains`, `exists`, `is`, or `not` prefixed to one of them -- and `""` for an expression with no single one |
 | `expected`, `actual` | assertion, failure | The two sides as evaluated, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve |
 | `failures` | run | Everything the run says to go and fix, flat and in run order. One entry per failing assertion, per step that could not run, and per file that would not compile, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed |
 | `scenario`, `step` | failure | The names of the two things the failure sits under, repeated so the entry stands alone |
+| `screenshot` | step, failure | The path to a picture of the page, for a [browser step that did not pass](#when-a-browser-step-fails), and `""` for every other step. The path is as the run was given it -- relative to the working directory unless `--screenshots` named an absolute one -- so a CI job uploading it uses the string verbatim. Repeated on the failure entry so the entry stands alone |
 
 Every key is always present, with its zero value rather than omitted, so a `jq`
 expression never has to tell absent from empty. `expected` and `actual` are the
@@ -956,9 +1181,17 @@ Every list is a list, empty rather than `null`.
 
 **Spec decision.** `kind`, `path` and `operator` are what they are above because
 an `expect` is an expression and has no single path or operator the way the old
-`operator:`/`value:`/`path:` record did. The schema does not change: a consumer
-reading `path` still gets the one string that identifies what was checked, and
-`operator` is still the comparison when there is exactly one.
+`operator:`/`value:`/`path:` record did. `kind` names the statement rather than
+the step type: a type is a property of the step, and repeating it on every
+assertion under that step says nothing new. `path` and `operator` are read off
+the expression -- the subject's source text, and the comparison when there is
+exactly one. The schema does not change: a consumer reading `path` still gets
+the one string that identifies what was checked.
+
+`pkg/cli/testdata/art/report_json.golden` is a whole document from a real run,
+and `pkg/shared/spec_test.go` holds this section to it -- both the keys and the
+`kind` vocabulary -- so a report that gained a key without gaining a row here
+fails the build.
 
 What is **not** in the document is anything artemis does not record: no request
 bodies, no response bodies and no headers. The line a failure came from it does
@@ -971,19 +1204,41 @@ file. Its `time` attribute is in **seconds**, not the milliseconds of
 
 ---
 
+## The toolchain
+
+Four commands read the language without running any of it, and they read it
+through the same front end `artemis run` does -- the same lexer, the same
+parser, the same checker -- so none of them can disagree with this document
+about what a file means. The [README](README.md#commands) specifies their flags
+and their output.
+
+| Command | What it does |
+| --- | --- |
+| `artemis parse -f x.art` | Every diagnostic the file produces, and a non-zero exit if any is an error. `--json` writes them as one document instead, for an editor or a UI |
+| `artemis fmt [-w] x.art` | The file in canonical layout. Layout only: no string requoted, no expression reassociated, no comment dropped |
+| `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
+| `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
+| `artemis build --lang=python\|js [-o dir]` | The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`; js is vitest with `fetch`, `child_process` and `@playwright/test`. The lowering rules are the same for both: one scenario becomes one test, a `capture` a local variable, an `expect` the runner's own assertion, a `within` on a browser assertion playwright's own timeout. Playwright on both sides and under `artemis run` means a browser scenario behaves the same way three ways. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `go` target is reserved and will not be built |
+
+A scenario is converted into this language once, never translated on the fly:
+`artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
+collection.json` for a Postman collection. Both write through `artemis fmt`'s
+printer, so what they produce is already canonical.
+
+---
+
 ## Not in this spec
 
 Everything here is deliberate. A scenario that uses one of these does not run.
 
 | | |
 | --- | --- |
-| **`browser` steps** | The action block, the element functions, `config browser`, and the session that persists across a scenario's browser steps. Designed, specified with the browser step type |
 | **`db` steps** | Designed, specified with the database step type |
 | **Control flow** | `if`, `else`, loops, data-driven tables, `parallel`, `group`. Reserved words, not features |
 | **Functions, imports, fixtures** | `fn`, `return`, `import`, `use`, `let`, `setup`, `teardown`. Reserved words. Reuse is what the host language is for, and `artemis build --lang=...` is the answer to "I need real abstraction" |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
-| **A `wait_until` statement** | Waiting is per assertion and is spelled [`within`](#within). There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |
+| **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |
 | **Request and response detail in a report** | Neither report carries a body or a header |
 | **YAML** | Not a runtime format. See below |
 
@@ -992,8 +1247,8 @@ Everything here is deliberate. A scenario that uses one of these does not run.
 ## Coming from YAML
 
 YAML survives as an input to `artemis migrate -f old.yaml -o new.art`, which is
-the only remaining YAML reader, and as what the [README](README.md) documents
-until the front end lands. Four habits do not carry over:
+the only YAML reader left in the binary. Nothing runs it. Six habits do not
+carry over:
 
 | In YAML | Here |
 | --- | --- |

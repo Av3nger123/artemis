@@ -1,0 +1,23 @@
+# Two unknown names: one inside an interpolation, one in an expression. Both get
+# a did-you-mean by edit distance against the names actually in scope, which for
+# `bse` is the `base` declared two lines above it.
+#
+# They get different *codes*, which is the point of having two. `bse` is near a
+# var, so it is an unknown-identifier: a name bound nowhere. `bdy` is near
+# `body`, a root this step's own type binds, so it is an unknown-field: the
+# author was reaching for a field of the response and misspelled it. A UI
+# offering a quick fix wants to know which.
+#
+# An interpolation's contents are an expression like any other -- the lexer
+# hands the parser real tokens inside `${ }` rather than a string to re-scan --
+# so an unknown name in a URL is the same diagnostic as an unknown name in an
+# expect, at its own span inside the string.
+
+scenario "names" {
+  var base = env("API_URL")
+
+  step "orders" {
+    get "${bse}/orders"
+    expect bdy.data.count > 0
+  }
+}

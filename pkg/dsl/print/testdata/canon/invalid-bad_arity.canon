@@ -1,0 +1,22 @@
+# Three things given the wrong number of arguments.
+#
+# `attr` is the one element function that takes two -- a selector and an
+# attribute name -- and `attr("#link")` is the mistake that follows from the
+# other five taking one.
+#
+# The two browser actions are the arity rule the parser deliberately does not
+# enforce: it reads whichever shape is written, so `click "x" = 1` arrives as
+# an act with a value and gets a diagnostic naming `click`, rather than a
+# syntax error about an unexpected `=`. The hint shows the shape, because the
+# shape is what the author has to write.
+
+scenario "arity" {
+  step "upgrade" {
+    browser {
+      goto "/settings/billing"
+      click "text=Sign in" = "now"
+      fill "#email"
+    }
+    expect attr("#link") contains "/pro"
+  }
+}

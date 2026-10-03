@@ -1,0 +1,36 @@
+# Four unrelated faults in one file, each with well-formed code either side of
+# it. All four must be reported: a front end that stopped at the first would
+# cost one edit cycle per mistake, which is the decoder behaviour the whole
+# rewrite exists to replace.
+#
+#   line 13  a statement that is not a declaration
+#   line 19  a request field with no value
+#   line 29  a chained comparison
+#   line 33  a step with no action block
+
+scenario "first" {
+  var url = env("API_URL")
+  nonsense here
+  var kept = 1
+
+  step "survives the bad field" {
+    post "${url}/orders" {
+      header "Content-Type" = "application/json"
+      query
+      body = {"sku": "A-1"}
+    }
+    expect status == 201
+  }
+}
+
+scenario "second" {
+  step "survives the chain" {
+    get "/orders"
+    expect body.data.count == 1 == true
+    capture token = body.data.token
+  }
+
+  step "has nothing to run" {
+    expect status == 200
+  }
+}

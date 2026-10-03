@@ -1,0 +1,14 @@
+# A regex literal that does not compile. This moves from run time to compile
+# time by design: a scenario that fails forty minutes into a suite because of an
+# unbalanced parenthesis is the class of fault the rewrite exists to delete.
+#
+# The lexer scans the literal happily -- balancing parentheses is not a lexical
+# property -- so compiling it is the checker's job, and the diagnostic carries
+# Go's own compile error so the author does not have to guess which paren.
+
+scenario "patterns" {
+  step "orders" {
+    get "/orders"
+    expect raw matches /order-(\d+/
+  }
+}

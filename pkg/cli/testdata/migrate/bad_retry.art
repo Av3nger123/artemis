@@ -1,0 +1,8 @@
+# A retry delay that is not a duration.
+scenario "bad retry delay" {
+  step "ping" {
+    get "%SERVER%/ping"
+    retry { times = 3, delay = "soon" }
+    expect status == 200
+  }
+}

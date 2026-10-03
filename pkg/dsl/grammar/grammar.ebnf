@@ -1,0 +1,69 @@
+(* The Artemis scenario language, in full. Quoted words are literal source
+   text; Ident, String, Number, Regex and Bool are lexical tokens described
+   under LEXICAL TOKENS below. Nothing in a .art file is outside this. *)
+
+File          = { Scenario } ;
+Scenario      = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl } "}" ;
+
+ConfigDecl    = "config" ConfigSubject "{" [ ConfigSetting { Sep ConfigSetting } ] "}" ;
+ConfigSubject = "browser" ;
+ConfigSetting = "headless" "=" Bool | "viewport" "=" Expr ;
+
+VarDecl       = "var" Ident "=" Expr ;
+StepDecl      = "step" String "{" Action { StepStmt } "}" ;
+
+Action        = Request | Run | Browser ;
+Request       = Method String [ "{" [ ReqField { Sep ReqField } ] "}" ] ;
+Method        = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
+ReqField      = "header" String "=" Expr
+              | "query"  String "=" Expr
+              | "body"   "=" Expr ;
+Run           = "run" Expr [ "{" [ RunField { Sep RunField } ] "}" ] ;
+RunField      = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
+              | "env" "{" [ EnvSetting { Sep EnvSetting } ] "}" ;
+EnvSetting    = Ident "=" Expr ;
+Browser       = "browser" "{" { BrowserAct } "}" ;
+BrowserAct    = "goto"   Expr
+              | "click"  Expr
+              | "press"  Expr
+              | "hover"  Expr
+              | "wait"   Expr
+              | "fill"   Expr "=" Expr
+              | "select" Expr "=" Expr
+              | "upload" Expr "=" Expr ;
+
+StepStmt      = Expect | Capture | Retry | Timeout ;
+Expect        = "expect" Expr [ "within" String ] ;
+Capture       = "capture" Ident "=" Expr ;
+Retry         = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
+RetryField    = "times" "=" Number | "delay" "=" String ;
+Timeout       = "timeout" "=" String ;
+Sep           = "," | newline ;
+
+Expr          = Or ;
+Or            = And { "or" And } ;
+And           = Not { "and" Not } ;
+Not           = "not" Not | Cmp ;
+Cmp           = Unary [ BinOp Unary | "exists" | "is" TypeName ] ;
+BinOp         = "==" | "!=" | "<" | "<=" | ">" | ">="
+              | "contains" | "matches" ;
+TypeName      = "string" | "number" | "boolean" | "object" | "array" | "null" ;
+Unary         = "-" Unary | Postfix ;
+Postfix       = Primary { "." Ident | "[" Expr "]" } ;
+Primary       = Number | String | Regex | Bool | "null" | Ident
+              | Object | Array | Call | "(" Expr ")" ;
+Call          = Builtin "(" [ Expr { "," Expr } ] ")" ;
+Object        = "{" [ String ":" Expr { "," String ":" Expr } [ "," ] ] "}" ;
+Array         = "[" [ Expr { "," Expr } [ "," ] ] "]" ;
+
+(* Builtin is the closed set of callables. Which of them are in scope depends
+   on the step type: see SCOPES below. *)
+Builtin       = "env" | "match"
+              | "text" | "value" | "attr" | "count" | "visible" ;
+
+(* Reserved words are not reachable from File. They lex as ordinary
+   identifiers and are rejected wherever a name is expected, so that a later
+   tier of the language can take them without a breaking change. *)
+Reserved      = "if" | "else" | "for" | "in" | "while" | "parallel" | "group"
+              | "fn" | "return" | "import" | "use" | "let" | "setup" | "teardown"
+              | "ai" ;

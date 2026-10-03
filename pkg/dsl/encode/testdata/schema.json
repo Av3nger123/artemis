@@ -1,0 +1,880 @@
+{
+  "schemaVersion": 1,
+  "outputOnlyKinds": [
+    "bad"
+  ],
+  "groups": {
+    "declaration": [
+      "scenario"
+    ],
+    "scenarioBody": [
+      "config",
+      "var",
+      "step"
+    ],
+    "action": [
+      "request",
+      "run",
+      "browser"
+    ],
+    "stepStatement": [
+      "expect",
+      "capture",
+      "field"
+    ],
+    "blockField": [
+      "field"
+    ],
+    "browserAction": [
+      "browserAct"
+    ],
+    "block": [
+      "block"
+    ],
+    "expression": [
+      "ident",
+      "literal",
+      "interp",
+      "unary",
+      "binary",
+      "exists",
+      "isType",
+      "member",
+      "index",
+      "call",
+      "object",
+      "array",
+      "paren"
+    ]
+  },
+  "document": {
+    "name": "document",
+    "doc": "the whole tree: what `artemis ast -f x.art` writes and `artemis ast --from-json` reads",
+    "fields": [
+      {
+        "name": "schemaVersion",
+        "type": "integer",
+        "inputRequired": true,
+        "doc": "the version of this encoding; artemis refuses a document from the future"
+      },
+      {
+        "name": "file",
+        "type": "string",
+        "doc": "the file every span in the document refers to; empty for a tree with no positioned token in it"
+      },
+      {
+        "name": "scenarios",
+        "type": "node[]",
+        "accepts": "declaration",
+        "optional": true
+      },
+      {
+        "name": "comments",
+        "type": "comments",
+        "optional": true,
+        "doc": "the comments at the end of the file, which belong to no scenario"
+      }
+    ]
+  },
+  "objects": [
+    {
+      "name": "span",
+      "doc": "where a node is, in the file the document names; the same six fields and the same names `artemis parse --json` uses",
+      "fields": [
+        {
+          "name": "file",
+          "type": "string"
+        },
+        {
+          "name": "line",
+          "type": "integer",
+          "doc": "1-based"
+        },
+        {
+          "name": "col",
+          "type": "integer",
+          "doc": "1-based, counted in bytes"
+        },
+        {
+          "name": "endLine",
+          "type": "integer",
+          "doc": "exclusive: just past the last byte"
+        },
+        {
+          "name": "endCol",
+          "type": "integer",
+          "doc": "exclusive"
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "doc": "0-based byte offset of the start"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "doc": "a quoted name -- a scenario's or a step's -- as source text and as its decoded value",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "the source, quotes and escapes included"
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "doc": "the decoded name; output only, artemis re-reads it from text"
+        }
+      ]
+    },
+    {
+      "name": "comment",
+      "doc": "one own-line comment, and whether the author left a blank line above it",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "the comment including its `#`"
+        },
+        {
+          "name": "blank",
+          "type": "boolean",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "comments",
+      "doc": "the five places canonical layout can put a comment; absent when a node carries none",
+      "fields": [
+        {
+          "name": "above",
+          "type": "comment[]",
+          "optional": true,
+          "doc": "own-line comments before the node"
+        },
+        {
+          "name": "blankAbove",
+          "type": "boolean",
+          "optional": true,
+          "doc": "a blank line between those and the node"
+        },
+        {
+          "name": "after",
+          "type": "string[]",
+          "optional": true,
+          "doc": "comments at the end of the node's line"
+        },
+        {
+          "name": "open",
+          "type": "string[]",
+          "optional": true,
+          "doc": "a comment at the end of the line the `{` opens"
+        },
+        {
+          "name": "beforeClose",
+          "type": "comment[]",
+          "optional": true,
+          "doc": "own-line comments above the `}`"
+        },
+        {
+          "name": "afterClose",
+          "type": "string[]",
+          "optional": true,
+          "doc": "a comment at the end of the `}`'s line"
+        }
+      ]
+    },
+    {
+      "name": "segment",
+      "doc": "one piece of an interpolated string: the literal text up to a hole, and the expression in it",
+      "fields": [
+        {
+          "name": "delim",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "`\"a${` for the first segment, `}b${` for a later one"
+        },
+        {
+          "name": "expr",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "absent only in a file the parser recovered past: `\"${}\"` has a hole with nothing in it"
+        }
+      ]
+    },
+    {
+      "name": "entry",
+      "doc": "one `\"key\": value` pair of an object literal",
+      "fields": [
+        {
+          "name": "key",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "absent only in a file the parser recovered past"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "absent only in a file the parser recovered past: `{\"a\":}` is one"
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "scenario",
+      "doc": "`scenario \"name\" { ... }`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "name",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "absent only in a file the parser recovered past; Decode requires it"
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "scenarioBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "config",
+      "doc": "`config browser { headless = true }`",
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "doc": "what is being configured; only `browser` has settings today"
+        },
+        {
+          "name": "block",
+          "type": "node",
+          "accepts": "block",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "var",
+      "doc": "`var url = env(\"API_URL\")`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier being bound"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "doc": "`step \"login\" { <action> <statement>... }`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "name",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "absent only in a file the parser recovered past; Decode requires it"
+        },
+        {
+          "name": "action",
+          "type": "node",
+          "accepts": "action",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "stepStatement",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "stepType",
+          "type": "string",
+          "doc": "api, terminal, browser, or unknown: inferred from the action and nothing else. Output only"
+        },
+        {
+          "name": "scope",
+          "type": "string[]",
+          "optional": true,
+          "doc": "every name resolvable in this step, in did-you-mean order: the step type's roots, the scenario's vars, then earlier steps' captures. A path picker is this list. Output only"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "request",
+      "doc": "an api step's action: a verb, a URL, an optional block",
+      "fields": [
+        {
+          "name": "method",
+          "type": "string",
+          "doc": "the HTTP verb, lower case; its presence is what makes the step an api step"
+        },
+        {
+          "name": "url",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "block",
+          "type": "node",
+          "accepts": "block",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "run",
+      "doc": "a terminal step's action: `run \"psql\" { args = [...] }`",
+      "fields": [
+        {
+          "name": "command",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "block",
+          "type": "node",
+          "accepts": "block",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "browser",
+      "doc": "a browser step's action: `browser { goto ... click ... }`",
+      "fields": [
+        {
+          "name": "acts",
+          "type": "node[]",
+          "accepts": "browserAction",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "browserAct",
+      "doc": "one statement inside a browser block",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "goto, click, fill, select, press, hover, upload or wait"
+        },
+        {
+          "name": "target",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "block",
+      "doc": "a brace-delimited field list: a request's, a `run`'s, a `retry`'s, a `config`'s, an `env`'s",
+      "fields": [
+        {
+          "name": "fields",
+          "type": "node[]",
+          "accepts": "blockField",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "field",
+      "doc": "`name = value`, `name \"key\" = value`, or `name { ... }`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "header, query, body, args, cwd, stdin, env, times, delay, timeout, retry, headless, viewport"
+        },
+        {
+          "name": "key",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "doc": "exactly one of value and block"
+        },
+        {
+          "name": "block",
+          "type": "node",
+          "accepts": "block",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "expect",
+      "doc": "`expect <expr>` with an optional `within \"10s\"`; one expect is one assertion",
+      "fields": [
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "budget",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "class",
+          "type": "string",
+          "doc": "simple (`<path> <op> <literal>`, `<path> exists`, `<path> is <type>`, or the `not` form of any) renders as a path picker, an operator dropdown and a value field; complex renders as one raw expression field. Output only"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "capture",
+      "doc": "`capture token = body.data.access_token`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier bound for every later step in the scenario"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "bad",
+      "doc": "source that did not parse, kept verbatim. Output only: Decode refuses a tree holding one",
+      "fields": [
+        {
+          "name": "source",
+          "type": "string",
+          "doc": "the exact bytes, trivia included"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "ident",
+      "doc": "a name: a variable, a capture, or a bound root like `status`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "literal",
+      "doc": "a number, a string with no interpolation, a regex, a boolean, or null",
+      "fields": [
+        {
+          "name": "literal",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "number, string, regex, boolean or null"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "the source, delimiters included: `\"a\\nb\"` with its quotes, `/re/` with its slashes"
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "doc": "the decoded content: escapes resolved. Output only, artemis re-reads it from text"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "interp",
+      "doc": "a double-quoted string with at least one `${...}` in it",
+      "fields": [
+        {
+          "name": "segments",
+          "type": "segment[]",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "end",
+          "type": "string",
+          "doc": "the closing piece, `}c\"`"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "unary",
+      "doc": "`not x` or `-x`",
+      "fields": [
+        {
+          "name": "op",
+          "type": "string",
+          "doc": "not or -"
+        },
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "binary",
+      "doc": "an infix operator",
+      "fields": [
+        {
+          "name": "op",
+          "type": "string",
+          "doc": "and, or, ==, !=, <, <=, >, >=, contains or matches"
+        },
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "y",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "exists",
+      "doc": "the postfix predicate `body.x exists`",
+      "fields": [
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "isType",
+      "doc": "the postfix predicate `body.count is number`",
+      "fields": [
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "doc": "string, number, boolean, object, array or null"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "member",
+      "doc": "`body.data`",
+      "fields": [
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "index",
+      "doc": "`body.items[0]` or `headers[\"content-type\"]`",
+      "fields": [
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "index",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "doc": "`env(\"API_URL\")` or `text(\"[role=status]\")`; there are no first-class functions",
+      "fields": [
+        {
+          "name": "callee",
+          "type": "string",
+          "doc": "env, text, value, attr, count or visible"
+        },
+        {
+          "name": "args",
+          "type": "node[]",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "object",
+      "doc": "an object literal, serialised to JSON by the lowerer rather than spliced as text",
+      "fields": [
+        {
+          "name": "entries",
+          "type": "entry[]",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "array",
+      "doc": "an array literal, `[\"-f\", \"seed.sql\"]`",
+      "fields": [
+        {
+          "name": "elems",
+          "type": "node[]",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "paren",
+      "doc": "`( expr )`. Kept as a node: canonical layout adds no parentheses, so a client that means them must send this",
+      "fields": [
+        {
+          "name": "x",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    }
+  ]
+}

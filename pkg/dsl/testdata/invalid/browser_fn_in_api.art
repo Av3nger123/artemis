@@ -1,0 +1,15 @@
+# A browser step's vocabulary used in an api step.
+#
+# Both of these exist in the language, which is what makes them not-in-scope
+# rather than unknown: `page` is a root and `text()` is a builtin, and it is
+# this step's type that cannot use either. So the hint lists the roots an api
+# step does bind, which is what tells the author these two assertions belong in
+# a browser step -- probably the next one.
+
+scenario "wrong step" {
+  step "orders" {
+    get "/orders"
+    expect page.url contains "/orders"
+    expect text("[role=status]") contains "Pro"
+  }
+}

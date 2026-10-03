@@ -1,0 +1,15 @@
+# A typo in `page`'s member.
+#
+# `page` is the one root whose members are a closed set, so this is catchable
+# where `body.datta.count` is not: a response's shape is a run-time fact and
+# checking it would reject correct files, but a page has exactly a url and a
+# title.
+
+scenario "the page" {
+  step "upgrade" {
+    browser {
+      goto "/settings/billing"
+    }
+    expect page.titl == "Billing"
+  }
+}

@@ -89,12 +89,19 @@ type jsonScenario struct {
 }
 
 type jsonStep struct {
-	Name       string          `json:"name"`
-	Status     string          `json:"status"`
-	DurationMS float64         `json:"duration_ms"`
-	Attempts   int             `json:"attempts"`
-	Line       int             `json:"line"`
-	Error      string          `json:"error"`
+	Name       string  `json:"name"`
+	Status     string  `json:"status"`
+	DurationMS float64 `json:"duration_ms"`
+	Attempts   int     `json:"attempts"`
+	Line       int     `json:"line"`
+	Error      string  `json:"error"`
+	// Screenshot is the path to a picture of the page, for a browser step that
+	// did not pass. Always present and empty when there is none, like every
+	// other key here, so a jq expression never has to tell absent from empty.
+	// The path is as the run was given it -- relative to the working directory
+	// unless --screenshots named an absolute one -- so a CI job uploading it
+	// uses the string verbatim.
+	Screenshot string          `json:"screenshot"`
 	Assertions []jsonAssertion `json:"assertions"`
 }
 
@@ -133,6 +140,10 @@ type jsonFailure struct {
 	Expected any    `json:"expected"`
 	Actual   any    `json:"actual"`
 	Error    string `json:"error"`
+	// Screenshot repeats the step's, because the point of this array is that
+	// an entry stands alone: something deciding what to go and fix should not
+	// have to walk the tree to find the picture of what broke.
+	Screenshot string `json:"screenshot"`
 }
 
 // WriteJSON writes run to w as one JSON document, indented, with a trailing
@@ -189,12 +200,13 @@ func fromDiagnostics(diags []result.Diagnostic) []jsonFailure {
 	out := make([]jsonFailure, 0, len(diags))
 	for _, d := range diags {
 		f := jsonFailure{
-			File:     d.File,
-			Line:     d.Line,
-			Scenario: d.Scenario,
-			Step:     d.Step,
-			Status:   d.Status.String(),
-			Error:    d.Error,
+			File:       d.File,
+			Line:       d.Line,
+			Scenario:   d.Scenario,
+			Step:       d.Step,
+			Status:     d.Status.String(),
+			Error:      d.Error,
+			Screenshot: d.Screenshot,
 		}
 		if d.Assertion != nil {
 			f.Kind = d.Assertion.Kind
@@ -235,6 +247,7 @@ func fromStep(step *result.StepResult) jsonStep {
 		Attempts:   step.Attempts,
 		Line:       step.Line,
 		Error:      step.Error,
+		Screenshot: step.Screenshot,
 		Assertions: make([]jsonAssertion, 0, len(step.Assertions)),
 	}
 	for _, a := range step.Assertions {

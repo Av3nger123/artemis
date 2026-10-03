@@ -1,0 +1,13 @@
+# A run where the API answers with a status nobody asked for.
+#
+# One `expect`, because the DSL deletes the rule the YAML fixture pinned. In
+# YAML a wrong status suppresses the body checks -- "one failed assertion, not
+# three" -- and in a .art file `expect status == 200` is one expect among its
+# peers and every one of them is evaluated. So the suppression has nothing left
+# to pin here, and status_and_body.art pins what replaced it.
+scenario "status code" {
+  step "ping" {
+    get "%SERVER%/ping"
+    expect status == 200
+  }
+}

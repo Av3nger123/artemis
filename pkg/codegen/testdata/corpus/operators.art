@@ -1,0 +1,39 @@
+# Every operator, every predicate, every type name, and every literal shape, in
+# one api step -- so the golden beside this file is the table a reviewer reads.
+scenario "every operator" {
+  var pattern = /ORD-[0-9]+/
+
+  step "the response says everything" {
+    get "https://example.test/report"
+
+    expect status == 200
+    expect status != 500
+    expect body.count > 0
+    expect body.count >= 1
+    expect body.count < 100
+    expect body.count <= 99
+    expect body.delta > -1
+    expect body.title contains "ready"
+    expect body.tags contains "urgent"
+    expect body.meta contains "owner"
+    expect body.ref matches /ORD-[0-9]+/
+    expect raw matches pattern
+    expect body.owner exists
+    expect not body.error exists
+    expect body.title is string
+    expect body.count is number
+    expect body.ready is boolean
+    expect body.meta is object
+    expect body.tags is array
+    expect body.gap is null
+    expect status == 200 and body.ready == true
+    expect status == 404 or status == 200
+    expect (status == 200 or status == 201) and not body.stale == true
+    expect body.tags[0] == "urgent"
+    expect body.meta.owner.name == "alice"
+    expect headers["x-request-id"] exists
+
+    capture ref = match(raw, /ORD-([0-9]+)/)
+    capture owner = body.meta.owner
+  }
+}

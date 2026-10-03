@@ -1,0 +1,14 @@
+=== terminal
+browser_fn_in_api.art:12:12: "page" is not in scope in an api step
+   12 |     expect page.url contains "/orders"
+      |            ^^^^
+   hint: an api step binds status, body, raw, headers
+
+browser_fn_in_api.art:13:12: "text()" is not in scope in an api step
+   13 |     expect text("[role=status]") contains "Pro"
+      |            ^^^^
+   hint: an api step binds status, body, raw, headers
+
+=== codes
+not-in-scope	error	12:12-12:16
+not-in-scope	error	13:12-13:16

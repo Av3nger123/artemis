@@ -1,0 +1,8 @@
+=== terminal
+page_member.art:13:17: unknown field "titl"
+   13 |     expect page.titl == "Billing"
+      |                 ^^^^
+   hint: did you mean "title"?
+
+=== codes
+unknown-field	error	13:17-13:21	suggest: "title"
