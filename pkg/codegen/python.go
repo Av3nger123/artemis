@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/lower"
 	"artemis/pkg/dsl/token"
 )
@@ -233,13 +232,6 @@ func (f *pyFile) scenario(sc *lower.Scenario) error {
 	}
 	return nil
 }
-
-// browserKey is the registry key a browser step carries, taken from lower rather
-// than spelled, so the two cannot disagree about what a browser step is called.
-var browserKey = func() string {
-	k, _ := lower.TypeKey(check.Browser)
-	return k
-}()
 
 // openPage is the fixture call that gives the scenario its page.
 //

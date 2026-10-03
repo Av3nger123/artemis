@@ -72,24 +72,73 @@ func TestBuildPrintsToStdout(t *testing.T) {
 // With -o the directory is created, the file is written into it, and its path is
 // printed -- a command that writes files silently is one you have to go looking
 // for.
+//
+// Both targets, because the file name is what the runner discovers by:
+// test_<stem>.py matches pytest's default discovery and <stem>.test.js matches
+// vitest's default include, so a wrong name is a suite that silently runs
+// nothing.
 func TestBuildWritesIntoTheDirectory(t *testing.T) {
-	path := writeArt(t, "checkout.art", buildArt)
-	out := filepath.Join(t.TempDir(), "tests", "generated")
+	for _, c := range []struct{ lang, file, holds string }{
+		{"python", "test_checkout.py", "def test_checkout():"},
+		{"js", "checkout.test.js", `test("checkout", async () => {`},
+	} {
+		t.Run(c.lang, func(t *testing.T) {
+			path := writeArt(t, "checkout.art", buildArt)
+			out := filepath.Join(t.TempDir(), "tests", "generated")
 
-	stdout, stderr, err := executeArgs(t, "build", "--lang=python", "-o", out, path)
+			stdout, stderr, err := executeArgs(t, "build", "--lang="+c.lang, "-o", out, path)
+			if err != nil {
+				t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
+			}
+			want := filepath.Join(out, c.file)
+			if strings.TrimSpace(stdout) != want {
+				t.Errorf("stdout = %q, want %q", stdout, want)
+			}
+			written, err := os.ReadFile(want) //nolint:gosec // a path this test chose
+			if err != nil {
+				t.Fatalf("the file was not written: %v", err)
+			}
+			if !strings.Contains(string(written), c.holds) {
+				t.Errorf("%s does not hold the test:\n%s", want, written)
+			}
+		})
+	}
+}
+
+// The js target through the command, as the python one is above: the whole
+// module to stdout, with nothing written beside the .art file.
+func TestBuildPrintsJavaScriptToStdout(t *testing.T) {
+	path := writeArt(t, "checkout.art", buildArt)
+
+	stdout, stderr, err := executeArgs(t, "build", "--lang=js", path)
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
-	want := filepath.Join(out, "test_checkout.py")
-	if strings.TrimSpace(stdout) != want {
-		t.Errorf("stdout = %q, want %q", stdout, want)
+	if stderr != "" {
+		t.Errorf("stderr = %q, want nothing", stderr)
 	}
-	written, err := os.ReadFile(want) //nolint:gosec // a path this test chose
+	for _, want := range []string{
+		"ONE-WAY EXPORT",
+		`import { expect, test } from "vitest";`,
+		`import { spawnSync } from "node:child_process";`,
+		`test("checkout", async () => {`,
+		"resp = await fetch(",
+		`expect(status === 201, 'status == 201').toBe(true);`,
+		`id = art_at(body, "id");`,
+		"proc = spawnSync(",
+		`expect(exit_code === 0, 'exit_code == 0').toBe(true);`,
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
+		}
+	}
+
+	entries, err := os.ReadDir(filepath.Dir(path))
 	if err != nil {
-		t.Fatalf("the file was not written: %v", err)
+		t.Fatal(err)
 	}
-	if !strings.Contains(string(written), "def test_checkout():") {
-		t.Errorf("%s does not hold the test function:\n%s", want, written)
+	if len(entries) != 1 {
+		t.Errorf("build without -o wrote something: %v", entries)
 	}
 }
 
@@ -115,9 +164,9 @@ func TestBuildOverwritesWithoutAsking(t *testing.T) {
 	}
 }
 
-// The reserved targets. `go` is reserved by the design's non-goals and `js` is
-// not built yet, and both say so by name rather than being answered with a
-// did-you-mean against the languages that do exist.
+// The reserved targets. `go` is reserved by the design's non-goals, and it says
+// so by name rather than being answered with a did-you-mean against the
+// languages that do exist.
 func TestBuildRefusesAReservedLanguage(t *testing.T) {
 	path := writeArt(t, "checkout.art", buildArt)
 	for _, lang := range codegen.Reserved() {
@@ -146,8 +195,8 @@ func TestBuildRefusesAnUnknownLanguage(t *testing.T) {
 	}
 }
 
-// --lang is required rather than defaulted, so an invocation that means python
-// today cannot come to mean something else when a second target lands.
+// --lang is required rather than defaulted, which is why an invocation that
+// meant python before the js target landed still means python.
 func TestBuildRequiresTheLanguage(t *testing.T) {
 	path := writeArt(t, "checkout.art", buildArt)
 	_, _, err := executeArgs(t, "build", path)

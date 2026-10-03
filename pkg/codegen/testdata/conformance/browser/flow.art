@@ -15,7 +15,7 @@ scenario "the form leads to the done page" {
     viewport = "1280x720"
   }
 
-  var base = env("BASE_URL")
+  var base = env("ARTEMIS_BASE_URL")
 
   step "sign in" {
     browser {
@@ -54,7 +54,7 @@ scenario "the form leads to the done page" {
 scenario "nothing settles on the never page" {
   step "wait for something that never comes" {
     browser {
-      goto "${env("BASE_URL")}/never"
+      goto "${env("ARTEMIS_BASE_URL")}/never"
     }
     timeout = "30s"
 

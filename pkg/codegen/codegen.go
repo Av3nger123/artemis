@@ -1,5 +1,5 @@
 // Package codegen turns a checked .art tree into source for another test
-// runner: `artemis build --lang=python` and, from ART-50, `--lang=js`.
+// runner: `artemis build --lang=python` and `artemis build --lang=js`.
 //
 // # Why this is additive
 //
@@ -21,7 +21,7 @@
 //
 // # The surface
 //
-//	tgt, err := codegen.Lookup("python")
+//	tgt, err := codegen.Lookup("python")   // or "js"
 //	files, err := tgt.Generate(tree)
 //
 // Lookup has three answers rather than two. A name may be implemented, or
@@ -38,7 +38,23 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/check"
+	"artemis/pkg/dsl/lower"
 )
+
+// The registry keys a lowered step carries, taken from lower.TypeKey rather
+// than spelled, so this package and the lowering cannot disagree about what a
+// step type is called. Both targets switch on them.
+var (
+	apiKey      = typeKey(check.API)
+	terminalKey = typeKey(check.Terminal)
+	browserKey  = typeKey(check.Browser)
+)
+
+func typeKey(t check.StepType) string {
+	k, _ := lower.TypeKey(t)
+	return k
+}
 
 // GeneratedFile is one file a target produced.
 //
@@ -79,6 +95,7 @@ var ErrUnknownTarget = errors.New("unknown target")
 
 // targets are the implemented ones, by the name --lang takes.
 var targets = map[string]Target{
+	"js":     JS{},
 	"python": Python{},
 }
 
@@ -87,13 +104,10 @@ var targets = map[string]Target{
 //
 // `go` is reserved by the design's non-goals: artemis will not generate Go,
 // because the eject path exists for teams whose tests live in another language
-// and Go is the one artemis is already written in. `js` is specified and not
-// built yet.
+// and Go is the one artemis is already written in. It is the only name here.
 var reserved = map[string]string{
 	"go": "the go target is reserved and artemis does not generate it; " +
 		"the .art file is the Go-side source of truth, and `artemis run` is how Go runs it",
-	"js": "the javascript target is specified and not built yet; " +
-		"today `artemis build` generates python",
 }
 
 // Lookup resolves a --lang value.
@@ -103,6 +117,9 @@ var reserved = map[string]string{
 // a decision to read, or a typo to fix.
 func Lookup(name string) (Target, error) {
 	key := strings.ToLower(strings.TrimSpace(name))
+	if canonical, ok := aliases[key]; ok {
+		key = canonical
+	}
 	if t, ok := targets[key]; ok {
 		return t, nil
 	}
@@ -111,6 +128,12 @@ func Lookup(name string) (Target, error) {
 	}
 	return nil, fmt.Errorf("%w %q; artemis build generates %s", ErrUnknownTarget, name, list(Names()))
 }
+
+// aliases are the other spellings of an implemented name. They are not in
+// Names(), so --lang's help lists one name per target and does not grow a
+// synonym -- but `--lang=javascript` is what a person types and answering it
+// with a did-you-mean would be unkind for no reason.
+var aliases = map[string]string{"javascript": "js"}
 
 // Names are the implemented target names, sorted. This is what --lang's help
 // text lists, so the flag's documentation and the registry cannot disagree.

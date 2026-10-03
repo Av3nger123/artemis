@@ -23,10 +23,11 @@ all: vet lint test build
 build:
 	$(GOBUILD) -o $(BINARY_NAME) $(MAIN_PATH)
 
-# pkg/codegen's execution-parity test runs the generated pytest against the same
-# fixture server the interpreter's tests use. It skips with a note when python3,
-# pytest or requests is missing, the way lint skips a missing linter -- CI
-# installs all three, so that gate is real where it counts.
+# pkg/codegen's execution-parity tests run the generated pytest and the generated
+# vitest against the same fixture server the interpreter's tests use. Each skips
+# with a note when its toolchain is missing -- python3 with pytest and requests
+# for one, node with a global vitest for the other -- the way lint skips a missing
+# linter. CI installs both, so those gates are real where they count.
 test:
 	$(GOTEST) ./...
 
@@ -36,8 +37,13 @@ test-race:
 
 # The tests that need a real browser: pkg/steps/browserstep's driver over
 # Chromium, pkg/cli's whole run against the local fixture server, and
-# pkg/codegen's browser execution-parity test -- which needs Playwright's python
-# package and its browsers as well, and skips with a note naming both.
+# pkg/codegen's two browser execution-parity tests -- which need Playwright's
+# python package and its `@playwright/test` package as well, plus the browsers
+# each of those downloads, and skip with a note naming what is missing.
+#
+# Those two are where "Playwright on all three sides" stops being a claim: the
+# same browser flow is driven by playwright-go, by playwright.sync_api and by
+# @playwright/test, and the three verdicts have to agree.
 #
 # Not part of `test`, and not run in CI. CI has no browser, and the first run on
 # a cold machine downloads about 683 MB of Chromium -- see docs/browser-engine.md.

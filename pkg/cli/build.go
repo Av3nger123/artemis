@@ -11,26 +11,32 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// langFlag is --lang: which target to generate. Required, because there is one
-// implemented target today and three names the registry knows, and an invocation
-// that means python now must not quietly mean something else later.
+// langFlag is --lang: which target to generate. Required rather than defaulted,
+// because the registry knows more names than it implements and an invocation
+// whose language is implicit would change meaning as targets land.
 const langFlag = "lang"
 
 var buildCmd = &cobra.Command{
-	Use:   "build --lang=python [-o <dir>] <file.art>",
+	Use:   "build --lang=python|js [-o <dir>] <file.art>",
 	Short: "Export a .art file as tests in another language",
 	Long: `Export a scenario file as a test file for another runner.
 
 	artemis build --lang=python checkout.art            # to stdout
 	artemis build --lang=python -o tests/ checkout.art  # tests/test_checkout.py
+	artemis build --lang=js -o tests/ checkout.art      # tests/checkout.test.js
 
 The python target emits pytest: 'requests' for an api step, 'subprocess' for a
-terminal step, and 'playwright.sync_api' for a browser step. One scenario becomes
-one test function with its steps as ordered statements, a 'capture' becomes a
-local variable, an 'expect' becomes a bare assert so pytest reports the operands,
-a 'within' on a browser assertion becomes playwright's own timeout, and a 'retry'
-becomes a loop around the step. 'pytest' runs the result with no artemis in the
-picture.
+terminal step, and 'playwright.sync_api' for a browser step. The js target emits
+vitest: 'fetch', 'child_process' and '@playwright/test'. Both follow the same
+lowering rules. One scenario becomes one test with its steps as ordered
+statements, a 'capture' becomes a local variable, an 'expect' becomes the
+runner's own assertion, a 'within' on a browser assertion becomes playwright's
+own timeout, and a 'retry' becomes a helper around the step. 'pytest' or
+'npx vitest run' runs the result with no artemis in the picture.
+
+Playwright on both sides means a browser scenario behaves the same way under
+either export and under 'artemis run', because the three are one protocol rather
+than three reimplementations.
 
 The export is one way. Artemis never reads generated code back: the .art file
 stays the source of truth, running the command again overwrites the output, and

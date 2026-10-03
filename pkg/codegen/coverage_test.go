@@ -18,6 +18,10 @@ import (
 // are walked out of the corpus's own trees, and a word in the first and not the
 // second fails this test by name.
 //
+// One corpus serves both targets, so this gates both of them at once: a word in
+// the token tables and not in the corpus is a word neither export has ever been
+// asked to emit.
+//
 // Walked rather than grepped. A `contains` inside a string literal is not a use of
 // `contains`, and the point of the check is that the emitter was exercised.
 
@@ -75,12 +79,18 @@ func TestCorpusCoversTheLanguage(t *testing.T) {
 	}, got.shapes)
 }
 
-// Every fixture has a golden beside it, or a fixture could be added and never
-// asserted on.
+// Every fixture has a golden for every target beside it.
+//
+// This is the issue's done-when in one test. A fixture with a .py.golden and no
+// .js.golden is a rule the Python target implements and the JavaScript target
+// was never asked about, and it fails here by name rather than passing quietly
+// -- which is the difference between a missing golden and a silent gap.
 func TestEveryFixtureHasAGolden(t *testing.T) {
 	for _, name := range corpus(t) {
-		if _, err := os.Stat(filepath.Join(corpusDir, name+".py.golden")); err != nil {
-			t.Errorf("%s has no golden: %v", name, err)
+		for _, tc := range goldenTargets {
+			if _, err := os.Stat(filepath.Join(corpusDir, name+tc.suffix)); err != nil {
+				t.Errorf("%s has no %s golden: %v", name, tc.target.Name(), err)
+			}
 		}
 	}
 }
@@ -91,14 +101,16 @@ func TestEveryGoldenHasAFixture(t *testing.T) {
 	for _, name := range corpus(t) {
 		have[name] = true
 	}
-	paths, err := filepath.Glob(filepath.Join(corpusDir, "*.py.golden"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, p := range paths {
-		name := strings.TrimSuffix(filepath.Base(p), ".py.golden")
-		if !have[name] {
-			t.Errorf("%s has no %s%s beside it", p, name, artExt)
+	for _, tc := range goldenTargets {
+		paths, err := filepath.Glob(filepath.Join(corpusDir, "*"+tc.suffix))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range paths {
+			name := strings.TrimSuffix(filepath.Base(p), tc.suffix)
+			if !have[name] {
+				t.Errorf("%s has no %s%s beside it", p, name, artExt)
+			}
 		}
 	}
 }
@@ -122,7 +134,7 @@ func missing(t *testing.T, where, what string, want []string, have map[string]bo
 // walkCorpus parses every fixture in each directory and records what it uses.
 //
 // It takes the directories rather than reading corpusDir, because two corpora
-// are checked against the token tables for different things: the python one for
+// are checked against the token tables for different things: the golden one for
 // the whole language, and parity_test.go's conformance one for every operator
 // over both non-browser step types.
 func walkCorpus(t *testing.T, dirs ...string) seen {

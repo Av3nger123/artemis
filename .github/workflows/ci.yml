@@ -33,23 +33,33 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # pkg/codegen's execution-parity test runs the *generated* pytest against
-      # the same fixture server the interpreter's tests use, and asserts the same
-      # pass/fail per scenario. It skips with a note when python3, pytest or
-      # requests is missing -- which is for a developer's machine, not for here:
-      # this is the gate that catches a codegen backend drifting from the
-      # interpreter, so CI installs what it needs to actually run it.
+      # pkg/codegen's execution-parity tests run the *generated* pytest and the
+      # *generated* vitest against the same fixture server the interpreter's
+      # tests use, and assert the same pass/fail per scenario. Each skips with a
+      # note when its toolchain is missing -- which is for a developer's machine,
+      # not for here: these are the gates that catch a codegen backend drifting
+      # from the interpreter, so CI installs what they need to actually run.
       #
-      # Playwright is deliberately not installed. The browser half of the corpus
-      # is behind the `browser` build tag for the reason the rest of the browser
-      # suite is: CI has no browser and a cold run downloads about 683 MB
-      # (docs/browser-engine.md).
+      # Playwright is deliberately not installed on either side. The browser half
+      # of the corpus is behind the `browser` build tag for the reason the rest of
+      # the browser suite is: CI has no browser and a cold run downloads about
+      # 683 MB (docs/browser-engine.md).
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: install the python test runner
         run: python3 -m pip install --disable-pip-version-check pytest requests
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Globally, because artemis is a Go module and ships no package.json:
+      # `npm root -g` is the one place pkg/codegen/jsparity_test.go can find
+      # vitest without adding a JavaScript package to this repository.
+      - name: install the javascript test runner
+        run: npm install -g vitest
 
       - name: gofmt
         run: |

@@ -7,7 +7,7 @@ scenario "the receipt renders" {
     viewport = "1280x720"
   }
 
-  var base = env("BASE_URL")
+  var base = env("ARTEMIS_BASE_URL")
 
   step "sign in and open the order" {
     browser {

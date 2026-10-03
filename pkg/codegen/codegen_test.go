@@ -43,11 +43,28 @@ func TestLookupResolvesAnImplementedTarget(t *testing.T) {
 // A --lang value is a command-line argument, so the case and the stray space a
 // shell leaves behind are both the language the user meant.
 func TestLookupIgnoresCaseAndSpace(t *testing.T) {
-	for _, name := range []string{"Python", "PYTHON", " python ", "python\t"} {
+	for _, name := range []string{"Python", "PYTHON", " python ", "python\t", "JS", " js "} {
 		if _, err := Lookup(name); err != nil {
-			t.Errorf("Lookup(%q) = %v, want the python target", name, err)
+			t.Errorf("Lookup(%q) = %v, want a target", name, err)
 		}
 	}
+}
+
+// implemented is every target the registry resolves, for the tests below that are
+// about a target and not about a language. A target added to the registry is
+// covered by all of them without a second edit, which is the only way a claim
+// like "every generated file says it is one way" stays true.
+func implemented(t *testing.T) []Target {
+	t.Helper()
+	out := make([]Target, 0, len(Names()))
+	for _, name := range Names() {
+		target, err := Lookup(name)
+		if err != nil {
+			t.Fatalf("Lookup(%q) = %v", name, err)
+		}
+		out = append(out, target)
+	}
+	return out
 }
 
 // The whole point of Reserved: `go` is a decision, not a typo, so it must not be
@@ -127,25 +144,35 @@ func TestSourceNameComesOffTheTree(t *testing.T) {
 }
 
 func TestGenerateOnASpanlessTreeNamesTheFileItself(t *testing.T) {
-	files, err := Python{}.Generate(&ast.File{})
-	if err != nil {
-		t.Fatalf("Generate = %v", err)
-	}
-	if len(files) != 1 || files[0].Path != "test_artemis.py" {
-		t.Fatalf("Generate = %+v, want one test_artemis.py", files)
+	// The fallback name every target derives from the .art extension when the
+	// tree has no spans to name it, in each target's own file-naming convention.
+	want := map[string]string{"python": "test_artemis.py", "js": "artemis.test.js"}
+	for _, target := range implemented(t) {
+		files, err := target.Generate(&ast.File{})
+		if err != nil {
+			t.Fatalf("%s: Generate = %v", target.Name(), err)
+		}
+		if len(files) != 1 || files[0].Path != want[target.Name()] {
+			t.Fatalf("%s: Generate = %+v, want one %s", target.Name(), files, want[target.Name()])
+		}
 	}
 }
 
 func TestGenerateOnNilIsAnEmptyModule(t *testing.T) {
-	files, err := Python{}.Generate(nil)
-	if err != nil {
-		t.Fatalf("Generate(nil) = %v", err)
-	}
-	if len(files) != 1 {
-		t.Fatalf("Generate(nil) returned %d files, want 1", len(files))
-	}
-	if strings.Contains(files[0].Content, "def test_") {
-		t.Error("Generate(nil) produced a test function")
+	for _, target := range implemented(t) {
+		files, err := target.Generate(nil)
+		if err != nil {
+			t.Fatalf("%s: Generate(nil) = %v", target.Name(), err)
+		}
+		if len(files) != 1 {
+			t.Fatalf("%s: Generate(nil) returned %d files, want 1", target.Name(), len(files))
+		}
+		// No test function, under either runner's spelling of one.
+		for _, forbidden := range []string{"def test_", "test(\""} {
+			if strings.Contains(files[0].Content, forbidden) {
+				t.Errorf("%s: Generate(nil) produced a test", target.Name())
+			}
+		}
 	}
 }
 
@@ -159,17 +186,19 @@ func TestEveryGeneratedFileSaysItIsOneWay(t *testing.T) {
   }
 }
 `)
-	files, err := Python{}.Generate(tree)
-	if err != nil {
-		t.Fatalf("Generate = %v", err)
-	}
-	for _, f := range files {
-		if !strings.Contains(f.Content, "ONE-WAY EXPORT") {
-			t.Errorf("%s does not say it is a one-way export", f.Path)
+	for _, target := range implemented(t) {
+		files, err := target.Generate(tree)
+		if err != nil {
+			t.Fatalf("%s: Generate = %v", target.Name(), err)
 		}
-		if !strings.Contains(f.Content, "artemis does not read it back") &&
-			!strings.Contains(f.Content, "Artemis does not read it back") {
-			t.Errorf("%s does not say artemis never reads it back", f.Path)
+		for _, f := range files {
+			if !strings.Contains(f.Content, "ONE-WAY EXPORT") {
+				t.Errorf("%s does not say it is a one-way export", f.Path)
+			}
+			if !strings.Contains(f.Content, "artemis does not read it back") &&
+				!strings.Contains(f.Content, "Artemis does not read it back") {
+				t.Errorf("%s does not say artemis never reads it back", f.Path)
+			}
 		}
 	}
 }
@@ -189,24 +218,27 @@ func TestGenerateIsDeterministic(t *testing.T) {
   }
 }
 `
-	first, err := Python{}.Generate(parse(t, "x.art", src))
-	if err != nil {
-		t.Fatalf("Generate = %v", err)
-	}
-	for i := 0; i < 5; i++ {
-		again, err := Python{}.Generate(parse(t, "x.art", src))
+	for _, target := range implemented(t) {
+		first, err := target.Generate(parse(t, "x.art", src))
 		if err != nil {
-			t.Fatalf("Generate = %v", err)
+			t.Fatalf("%s: Generate = %v", target.Name(), err)
 		}
-		if again[0].Content != first[0].Content {
-			t.Fatal("two runs over the same file produced different bytes")
+		for i := 0; i < 5; i++ {
+			again, err := target.Generate(parse(t, "x.art", src))
+			if err != nil {
+				t.Fatalf("%s: Generate = %v", target.Name(), err)
+			}
+			if again[0].Content != first[0].Content {
+				t.Fatalf("%s: two runs over the same file produced different bytes", target.Name())
+			}
 		}
 	}
 }
 
 // A target is handed a checked tree, but it must not panic on one that was built
 // by hand -- `artemis ast --from-json` can decode a tree nothing checked. A step
-// with no action is an error naming the step.
+// with no action is an error naming the step. The same two refusals for the
+// JavaScript target are in js_test.go.
 func TestGenerateRefusesAStepWithNoAction(t *testing.T) {
 	tree := &ast.File{Scenarios: []ast.Decl{&ast.Scenario{
 		Name: token.Token{Kind: token.String, Value: "x"},

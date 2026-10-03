@@ -1,6 +1,6 @@
 # Every HTTP verb, every request field, and the four roots an api step binds.
 scenario "the orders api" {
-  var base = env("BASE_URL")
+  var base = env("ARTEMIS_BASE_URL")
 
   step "create one" {
     post "${base}/orders" {

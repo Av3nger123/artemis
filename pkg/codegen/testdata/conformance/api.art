@@ -8,7 +8,7 @@
 
 # conformance: pass
 scenario "the query reaches the page" {
-  var base = env("BASE_URL")
+  var base = env("ARTEMIS_BASE_URL")
 
   step "ask for the done page with a user" {
     get "${base}/done" {
@@ -44,7 +44,7 @@ scenario "the query reaches the page" {
 # conformance: pass
 scenario "the form echoes what it was posted" {
   step "post the form" {
-    post "${env("BASE_URL")}/done?settle=0" {
+    post "${env("ARTEMIS_BASE_URL")}/done?settle=0" {
       header "Content-Type" = "application/x-www-form-urlencoded"
       body = "user=bob&plan=free"
     }
@@ -63,7 +63,7 @@ scenario "the form echoes what it was posted" {
 # conformance: fail
 scenario "a page that is there is not a 404" {
   step "ask for the form" {
-    get "${env("BASE_URL")}/"
+    get "${env("ARTEMIS_BASE_URL")}/"
     timeout = "10s"
 
     expect status == 404

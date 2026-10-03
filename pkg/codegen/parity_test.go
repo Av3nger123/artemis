@@ -55,13 +55,15 @@ import (
 // against a string, no step without an explicit `timeout`, and no assertion on
 // output long enough to be truncated.
 
-// conformanceDir is the corpus both backends run. Beside the target it gates,
-// and read by ART-50's JavaScript target in the same way.
+// conformanceDir is the corpus every backend runs: the interpreter, the generated
+// pytest here, and the generated vitest in jsparity_test.go. One directory, so a
+// scenario the Python export handles and the JavaScript export does not is
+// reported rather than never asked.
 const conformanceDir = "testdata/conformance"
 
-// browserConformanceDir is the browser half, run by parity_browser_test.go
-// behind the `browser` build tag: it needs a real Chromium on the Go side and
-// Playwright's own browsers on the Python side.
+// browserConformanceDir is the browser half, run by parity_browser_test.go and
+// jsparity_browser_test.go behind the `browser` build tag: it needs a real
+// Chromium on the Go side and Playwright's own browsers on each export's.
 const browserConformanceDir = conformanceDir + "/browser"
 
 // directive is the comment that declares what a scenario does against the
@@ -82,16 +84,24 @@ const (
 
 // parityRow is one scenario's three answers.
 //
-// test is the Python function name the emitter gives the scenario, which is what
-// lines a scenario up with a JUnit testcase. It is computed with the emitter's
-// own testName and unique rather than restated, so two scenarios whose names
-// slug alike are mapped the way the generated module actually names them.
+// pyTest and jsTest are the names each export gives the scenario, which is what
+// lines it up with a JUnit testcase. The Python one is computed with the
+// emitter's own testName and unique rather than restated, so two scenarios whose
+// names slug alike are mapped the way the generated module actually names them;
+// the JavaScript one is the scenario's name, because a vitest test is named by a
+// string and there is nothing to slug.
+//
+// exported is whichever export this run drove. The two are never compared with
+// each other -- a divergence between two exports and a divergence between an
+// export and the interpreter are the same bug, and the interpreter is the
+// authority both are measured against.
 type parityRow struct {
 	scenario string
-	test     string
+	pyTest   string
+	jsTest   string
 	declared outcome
 	interp   outcome
-	python   outcome
+	exported outcome
 }
 
 // TestPythonExecutionParity is the issue: run both backends over the corpus and
@@ -124,10 +134,10 @@ func parity(t *testing.T, dir string, mutate func(string) string, modules ...str
 }
 
 // parityEnv is what both backends need: the binary, the python interpreter, and
-// an environment holding BASE_URL for a fixture server that lives as long as the
+// an environment holding ARTEMIS_BASE_URL for a fixture server that lives as long as the
 // test does.
 //
-// BASE_URL is how the corpus reaches the server -- `var base = env("BASE_URL")`
+// ARTEMIS_BASE_URL is how the corpus reaches the server -- `var base = env("ARTEMIS_BASE_URL")`
 // is read by eval.Env.getenv under the interpreter and by os.environ.get in the
 // generated module, so one variable parameterises both backends and the corpus
 // hard-codes no port.
@@ -137,7 +147,7 @@ func parityEnv(t *testing.T, modules ...string) (bin, python string, env []strin
 	bin = artemisBinary(t)
 	srv := fixture.NewServer()
 	t.Cleanup(srv.Close)
-	return bin, python, append(os.Environ(), "BASE_URL="+srv.URL)
+	return bin, python, append(os.Environ(), "ARTEMIS_BASE_URL="+srv.URL)
 }
 
 // parityOf runs one corpus file both ways and compares the two verdicts against
@@ -155,14 +165,14 @@ func parityOf(t *testing.T, bin, python, file string, env []string, mutate func(
 		if _, ok := interp[rows[i].scenario]; !ok {
 			t.Fatalf("%s: artemis run reported no scenario named %q", filepath.Base(file), rows[i].scenario)
 		}
-		if _, ok := py[rows[i].test]; !ok {
+		if _, ok := py[rows[i].pyTest]; !ok {
 			t.Fatalf("%s: pytest collected no test named %s for scenario %q",
-				filepath.Base(file), rows[i].test, rows[i].scenario)
+				filepath.Base(file), rows[i].pyTest, rows[i].scenario)
 		}
 		rows[i].interp = interp[rows[i].scenario]
-		rows[i].python = py[rows[i].test]
+		rows[i].exported = py[rows[i].pyTest]
 	}
-	return compare(filepath.Base(file), rows)
+	return compare(filepath.Base(file), "pytest", rows)
 }
 
 func abs(t *testing.T, path string) string {
@@ -180,20 +190,24 @@ func abs(t *testing.T, path string) string {
 // It is a function over rows rather than a block of t.Errorf calls so that
 // TestParityDetectsADivergentBackend can assert it reports a divergence when
 // there is one -- a harness that can only ever agree proves nothing.
-func compare(file string, rows []parityRow) []string {
+//
+// runner names the export being measured -- "pytest" or "vitest" -- so one
+// function serves both backends and the two can never drift into two different
+// ideas of what a mismatch is.
+func compare(file, runner string, rows []parityRow) []string {
 	var problems []string
 	for _, r := range rows {
 		switch {
-		case r.interp != r.python:
+		case r.interp != r.exported:
 			problems = append(problems, fmt.Sprintf(
-				"%s: scenario %q diverges: `artemis run` says %s and the generated pytest says %s "+
-					"(the python backend and the interpreter disagree about the same scenario)",
-				file, r.scenario, r.interp, r.python))
+				"%s: scenario %q diverges: `artemis run` says %s and the generated %s says %s "+
+					"(the export and the interpreter disagree about the same scenario)",
+				file, r.scenario, r.interp, runner, r.exported))
 		case r.interp != r.declared:
 			problems = append(problems, fmt.Sprintf(
 				"%s: scenario %q is declared to %s, and both the interpreter and the generated "+
-					"pytest %sed it (a rule moved underneath both backends, or the corpus is wrong)",
-				file, r.scenario, r.declared, r.interp))
+					"%s %sed it (a rule moved underneath both backends, or the corpus is wrong)",
+				file, r.scenario, r.declared, runner, r.interp))
 		}
 	}
 	return problems
@@ -238,7 +252,11 @@ func scenarios(t *testing.T, path string) (rows []parityRow, undeclared []string
 		}
 		seenName[sc.Name] = true
 
-		row := parityRow{scenario: sc.Name, test: unique(testName(sc.Name), taken)}
+		row := parityRow{
+			scenario: sc.Name,
+			pyTest:   unique(testName(sc.Name), taken),
+			jsTest:   sc.Name,
+		}
 		if o, ok := nearest(declared, sc.Line); ok {
 			row.declared = o
 		} else {
