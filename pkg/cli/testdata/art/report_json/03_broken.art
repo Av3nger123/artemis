@@ -1,0 +1,9 @@
+# A misspelled step field, which is 03_broken.yaml's `respones:` in the DSL:
+# the same mistake, caught by the checker rather than by the YAML decoder.
+scenario "broken" {
+  step "typo" {
+    get "%SERVER%/health"
+    timeot = "5s"
+    expect status == 200
+  }
+}

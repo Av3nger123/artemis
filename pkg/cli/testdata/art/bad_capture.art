@@ -1,0 +1,22 @@
+# Two captures that cannot be read: a path that is not in this body, and a
+# regex that matches nothing in it. The step's request succeeds, so what is
+# pinned is that each unreadable capture is its own errored assertion under the
+# step -- not a crash, not a silent pass, and not one error standing in for
+# both.
+#
+# This fixture does *not* change by design, though the design document says it
+# does. It describes it as pinning "run-time failure for an empty capture
+# path"; an empty path was already a load error in YAML, and what the fixture
+# actually pins is a path that resolves to nothing and a regex that matches
+# nothing. Both of those are run-time facts in the DSL too -- a response's
+# shape is not something the checker can know -- so this is a parity case, with
+# the same four assertions and the same errored step.
+scenario "captures that cannot be read" {
+  step "login" {
+    post "%SERVER%/login" { body = {"user": "ada"} }
+    expect status == 200
+    expect body.token exists
+    capture authToken = body.session.token
+    capture requestId = match(raw, /req-([0-9a-f]+)/)
+  }
+}

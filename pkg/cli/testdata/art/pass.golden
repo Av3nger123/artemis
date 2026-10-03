@@ -1,0 +1,8 @@
+scenario: item lifecycle (testdata/art/pass.art)
+  ok    create item                 <dur>
+  ok    read it back                <dur>
+
+Scenarios     1  (1 passed)
+Steps         2  (2 passed)
+Assertions    6  (6 passed)
+PASS in <dur>

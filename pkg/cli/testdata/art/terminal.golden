@@ -1,0 +1,23 @@
+scenario: api and terminal (testdata/art/terminal.art)
+  ok    work out the path           <dur>
+  ok    read the collection         <dur>
+scenario: a command that fails (testdata/art/terminal.art)
+  FAIL  exit non-zero               <dur>
+         exit_code == 0, got 2
+
+1 failure:
+
+1) testdata/art/terminal.art:34
+     scenario  a command that fails
+     step      exit non-zero
+     assert    expect exit_code ==
+     expected  0
+     actual    2
+
+Scenarios     2  (1 passed, 1 failed)
+Steps         3  (2 passed, 1 failed)
+Assertions    7  (6 passed, 1 failed)
+FAIL in <dur>
+
+--- exit error ---
+1 of 3 steps failed, 1 of 7 assertions failed

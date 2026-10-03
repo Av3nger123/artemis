@@ -1,0 +1,15 @@
+# The first file of the suite: a token captured here is not visible to any
+# other file.
+scenario "login" {
+  var base = "%SERVER%"
+
+  step "sign in" {
+    post "${base}/login" {
+      header "Content-Type" = "application/json"
+      body = {"user": "ada"}
+    }
+    expect status == 200
+    expect body.token == "t0ken"
+    capture token = body.token
+  }
+}

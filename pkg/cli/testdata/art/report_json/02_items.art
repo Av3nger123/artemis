@@ -1,0 +1,12 @@
+scenario "items" {
+  step "list items" {
+    get "%SERVER%/items"
+    expect status == 200
+    expect body.total > 0
+  }
+
+  step "missing route" {
+    get "%SERVER%/nope"
+    expect status == 200
+  }
+}

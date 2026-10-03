@@ -47,6 +47,11 @@ import (
 // nothing off it but the deadline, which they make their own per-attempt
 // timeout a child of, so a cancelled run stops making requests.
 //
+// There is a second method an executor may have, in observe.go: Observe, which
+// reports what the step saw and leaves the asserting to the caller. It is
+// optional, it is what a .art step needs, and it shares this contract word for
+// word -- one attempt, an error only when the step could not run. See Observer.
+//
 // The result an executor returns is deliberately partial. It has assertions and
 // nothing else: no name, no duration, and Finish has not been called on it.
 // Returning result.StepResult rather than a narrower attempt type keeps one

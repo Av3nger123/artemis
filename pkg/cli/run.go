@@ -23,8 +23,13 @@ var runCmd = &cobra.Command{
 	Short: "Run the scenarios in a file or a folder",
 	Long: `Run the scenarios artemis finds at <path>.
 
-A file is run on its own. A folder is walked recursively for *.yaml and *.yml
-files, which are run in path order as one run: one summary, one exit code.`,
+A file is run on its own -- a .art file, or a YAML one. A folder is walked
+recursively for *.art, *.yaml and *.yml files, which are run in path order as
+one run: one summary, one exit code, whichever formats it holds.
+
+A .art file is lexed, parsed, name-checked and lowered before anything is sent.
+Every problem artemis finds is reported with the source line echoed, and a file
+that does not compile is one errored scenario: the files after it still run.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		closer, err := initRunEnv(cmd)
@@ -89,7 +94,10 @@ func reportRun(cmd *cobra.Command, path string) error {
 	}
 
 	rep := report.NewConsole(consoleOut)
-	run := runFiles(executor.Default(), files, rep)
+	// Diagnostics go to stderr whatever the console does: a .art file that will
+	// not compile is reported with its caret gutter, and stdout stays exactly
+	// one document when --report asked for one.
+	run := runFiles(executor.Default(), files, rep, cmd.ErrOrStderr())
 	// Between the step lines and the tallies: the blocks are what a reader --
 	// or the agent that wrote the scenario -- acts on (ART-12), and the
 	// summary's verdict stays the last line a run writes.
@@ -110,7 +118,12 @@ func reportRun(cmd *cobra.Command, path string) error {
 
 // scenarioExts are the extensions a folder walk picks up. A file named outright
 // is run whatever it is called -- the user said which file they meant.
-var scenarioExts = []string{".yaml", ".yml"}
+//
+// `.art` is here alongside the two YAML spellings rather than instead of them,
+// so a suite can be migrated a file at a time: a folder holding both runs both,
+// in one path order, as one run with one summary and one exit code. The two
+// formats leave together, when ART-40 takes YAML off the run path.
+var scenarioExts = []string{".yaml", ".yml", ".art"}
 
 // discover turns the path a user named into the list of scenario files to run.
 //
@@ -174,10 +187,18 @@ func isScenarioFile(name string) bool {
 //
 // A file artemis cannot load is recorded as an errored scenario and the rest
 // still run. Stopping at the first bad file would hide every other result of
-// the suite behind one typo.
-func runFiles(reg *executor.Registry, files []string, rep *report.Console) *result.RunResult {
+// the suite behind one typo. That holds for either format: a .art file with a
+// diagnostic is a file artemis cannot load.
+//
+// The dispatch is on the extension, which is the one place the run path knows
+// there are two formats. It goes with the YAML reader (ART-40).
+func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagOut io.Writer) *result.RunResult {
 	run := result.NewRun()
 	for _, file := range files {
+		if isArtFile(file) {
+			runArtFile(context.Background(), reg, file, run, rep, diagOut)
+			continue
+		}
 		config, err := loadScenario(file)
 		if err != nil {
 			// No name to give it: the file would not parse, so all anyone

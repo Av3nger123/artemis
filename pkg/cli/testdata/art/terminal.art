@@ -1,0 +1,37 @@
+# Both step types in one scenario, which is the whole of A2 in one file: a
+# terminal step captures a value out of its stdout and an api step uses it.
+#
+# It also holds two scenarios, which a .art file can do and a YAML file cannot
+# -- both run, in source order, as two scenarios of one run with one summary.
+#
+# The second scenario pins ART-17's semantics behind the `run` action block: a
+# command that ran and exited non-zero is a *failed assertion*, not a step
+# error, and the stderr expect is still made -- which is the rule that runs the
+# other way from the api step, because stderr is exactly what a failure is
+# diagnosed from and a check on it matters most when the command did not
+# succeed.
+scenario "api and terminal" {
+  var base = "%SERVER%"
+
+  step "work out the path" {
+    run "sh" { args = ["-c", "printf items; printf 'nothing is wrong' >&2"] }
+    expect exit_code == 0
+    expect stdout == "items"
+    expect stderr contains "nothing"
+    capture path = stdout
+  }
+
+  step "read the collection" {
+    get "${base}/${path}"
+    expect status == 200
+    expect body.items exists
+  }
+}
+
+scenario "a command that fails" {
+  step "exit non-zero" {
+    run "sh" { args = ["-c", "printf 'disk full' >&2; exit 2"] }
+    expect exit_code == 0
+    expect stderr contains "disk full"
+  }
+}

@@ -1,0 +1,19 @@
+testdata/art/template_error.art:11:27: unknown name "tokn"
+   11 |       body = {"token": "${tokn}"}
+      |                           ^^^^
+   hint: an api step binds status, body, raw, headers
+scenario: testdata/art/template_error.art
+  ERROR testdata/art/template_error.art:11:27: unknown name "tokn"
+
+1 failure:
+
+1) testdata/art/template_error.art
+     error     testdata/art/template_error.art:11:27: unknown name "tokn"
+
+Scenarios     1  (1 errored)
+Steps         0
+Assertions    0
+FAIL in <dur>
+
+--- exit error ---
+1 scenario could not run: testdata/art/template_error.art:11:27: unknown name "tokn"

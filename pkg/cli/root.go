@@ -43,7 +43,7 @@ func Init() {
 
 	// Deprecated: superseded by run, kept so the old invocation keeps working.
 	RootCmd.AddCommand(testCmd)
-	testCmd.Flags().StringP("file", "f", "", "Path to YAML file")
+	testCmd.Flags().StringP("file", "f", "", "Path to the scenario file: a .art file, or a YAML one")
 	if err := testCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}

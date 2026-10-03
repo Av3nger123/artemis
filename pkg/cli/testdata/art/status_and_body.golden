@@ -1,0 +1,27 @@
+scenario: status and body (testdata/art/status_and_body.art)
+  ERROR ping                        <dur>
+         status == 200, got 500
+         body.status ==: body.status did not resolve
+
+2 failures:
+
+1) testdata/art/status_and_body.art:17
+     scenario  status and body
+     step      ping
+     assert    expect status ==
+     expected  200
+     actual    500
+
+2) testdata/art/status_and_body.art:18
+     scenario  status and body
+     step      ping
+     assert    expect body.status ==
+     error     body.status did not resolve
+
+Scenarios     1  (1 errored)
+Steps         1  (1 errored)
+Assertions    2  (1 failed, 1 errored)
+FAIL in <dur>
+
+--- exit error ---
+1 of 1 steps failed (1 errored), 2 of 2 assertions failed

@@ -84,35 +84,19 @@ func (e Executor) Execute(ctx context.Context, step models.Step, scope executor.
 		return nil, err
 	}
 
-	start := time.Now()
-	resp, err := e.client().Do(req)
+	resp, err := e.exchange(ctx, step, req, timeout)
 	if err != nil {
-		// The deadline is the scenario's own number, so say which one was hit
-		// rather than leaving the reader to recognise "context deadline
-		// exceeded".
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("no response within %s: %w", timeout, err)
-		}
-		return nil, fmt.Errorf("performing request: %w", err)
+		return nil, err
 	}
-	// Read to EOF before closing: a body left part-read is a connection that is
-	// not reused, which with retries is a leak per attempt rather than per step.
-	body, readErr := io.ReadAll(resp.Body)
-	if closeErr := resp.Body.Close(); closeErr != nil {
-		logger.Logger.Warn("Error closing response body", "name", step.Name, "error", closeErr.Error())
-	}
-	logger.Logger.Info("API response", "name", step.Name, "status", resp.StatusCode, "time", time.Since(start))
-	if readErr != nil {
-		return nil, fmt.Errorf("reading response body: %w", readErr)
-	}
+	body := resp.body
 
 	res := &result.StepResult{}
-	statusOK := resp.StatusCode == step.Response.StatusCode
-	res.Assert(statusAssertion(step, resp.StatusCode, statusOK))
+	statusOK := resp.status == step.Response.StatusCode
+	res.Assert(statusAssertion(step, resp.status, statusOK))
 	if !statusOK {
 		// The body of an unexpected status is log material, not terminal
 		// output: it would land unterminated in the middle of the step list.
-		logger.Logger.Warn("Unexpected response status", "name", step.Name, "status", resp.StatusCode, "body", string(body))
+		logger.Logger.Warn("Unexpected response status", "name", step.Name, "status", resp.status, "body", string(body))
 		return res, nil
 	}
 
@@ -124,6 +108,46 @@ func (e Executor) Execute(ctx context.Context, step models.Step, scope executor.
 		res.Assert(a)
 	}
 	return res, nil
+}
+
+// response is what one exchange produced: everything the two front ends read
+// off an HTTP answer, and no live body. Nothing this package returns holds an
+// open response, which is why a caller cannot leak one.
+type response struct {
+	status  int
+	headers http.Header
+	body    []byte
+}
+
+// exchange sends req, reads the whole answer and closes it.
+//
+// Both ways of asking this executor come through here -- Execute, which goes on
+// to assert against the step's own checks, and Observe, which hands the answer
+// back as the roots a .art expression reads -- so the deadline wording, the
+// draining and the logging cannot differ between them.
+func (e Executor) exchange(ctx context.Context, step models.Step, req *http.Request, timeout time.Duration) (response, error) {
+	start := time.Now()
+	resp, err := e.client().Do(req)
+	if err != nil {
+		// The deadline is the scenario's own number, so say which one was hit
+		// rather than leaving the reader to recognise "context deadline
+		// exceeded".
+		if ctx.Err() == context.DeadlineExceeded {
+			return response{}, fmt.Errorf("no response within %s: %w", timeout, err)
+		}
+		return response{}, fmt.Errorf("performing request: %w", err)
+	}
+	// Read to EOF before closing: a body left part-read is a connection that is
+	// not reused, which with retries is a leak per attempt rather than per step.
+	body, readErr := io.ReadAll(resp.Body)
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		logger.Logger.Warn("Error closing response body", "name", step.Name, "error", closeErr.Error())
+	}
+	logger.Logger.Info("API response", "name", step.Name, "status", resp.StatusCode, "time", time.Since(start))
+	if readErr != nil {
+		return response{}, fmt.Errorf("reading response body: %w", readErr)
+	}
+	return response{status: resp.StatusCode, headers: resp.Header, body: body}, nil
 }
 
 // build renders the request out of scope. Every placeholder is resolved before

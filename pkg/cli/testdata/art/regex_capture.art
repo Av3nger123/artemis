@@ -1,0 +1,23 @@
+# A capture off a body that is not JSON at all. The first step's response is
+# plain text, so there is no path to read -- `raw` is every byte of it and
+# match() reads the group out -- and the value is interpolated into the second
+# step's URL, which is what proves a capture landed in the scenario's scope.
+#
+# `match(raw, /.../)` is ART-52's spelling of ART-18's `{regex: ...}`, with the
+# same rule: capturing group 1 when the pattern has one, and the value is
+# always the text that matched.
+scenario "regex capture" {
+  var base = "%SERVER%"
+
+  step "read the redirect" {
+    get "${base}/redirect"
+    expect status == 200
+    capture itemId = match(raw, /\/items\/([0-9]+)/)
+  }
+
+  step "read the item back" {
+    get "${base}/items/${itemId}"
+    expect status == 200
+    expect body.id == 42
+  }
+}

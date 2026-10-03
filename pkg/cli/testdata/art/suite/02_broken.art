@@ -1,0 +1,14 @@
+# A file artemis cannot load. It is one errored scenario naming its path, and
+# the files after it still run.
+#
+# 02_broken.yaml misspells `response` as `respones`, which the YAML decoder
+# rejects. Here it is a misspelled step field, which the checker rejects with a
+# did-you-mean -- the same class of mistake, caught by the stage that owns the
+# field names rather than by a decoder.
+scenario "broken" {
+  step "ping" {
+    get "%SERVER%"
+    timeot = "5s"
+    expect status == 200
+  }
+}

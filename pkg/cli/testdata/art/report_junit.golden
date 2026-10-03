@@ -1,0 +1,59 @@
+scenario: health (testdata/art/report_json/01_health.art)
+  ok    ping                        <dur>
+scenario: items (testdata/art/report_json/02_items.art)
+  FAIL  list items                  <dur>
+         body.total > 0, got 0
+  FAIL  missing route               <dur>
+         status == 200, got 404
+testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+   6 |     timeot = "5s"
+     |     ^^^^^^
+   hint: did you mean "timeout"?
+scenario: testdata/art/report_json/03_broken.art
+  ERROR testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+
+3 failures:
+
+1) testdata/art/report_json/02_items.art:5
+     scenario  items
+     step      list items
+     assert    expect body.total >
+     expected  0
+     actual    0
+
+2) testdata/art/report_json/02_items.art:10
+     scenario  items
+     step      missing route
+     assert    expect status ==
+     expected  200
+     actual    404
+
+3) testdata/art/report_json/03_broken.art
+     error     testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+
+Scenarios     3  (1 passed, 1 failed, 1 errored)
+Steps         3  (1 passed, 2 failed)
+Assertions    5  (3 passed, 2 failed)
+FAIL in <dur>
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="artemis" tests="4" failures="2" errors="1" skipped="0" time="0.000" timestamp="1970-01-01T00:00:00Z">
+  <testsuite name="health" file="testdata/art/report_json/01_health.art" tests="1" failures="0" errors="0" skipped="0" time="0.000">
+    <testcase name="ping" classname="testdata/art/report_json/01_health.art" time="0.000"></testcase>
+  </testsuite>
+  <testsuite name="items" file="testdata/art/report_json/02_items.art" tests="2" failures="2" errors="0" skipped="0" time="0.000">
+    <testcase name="list items" classname="testdata/art/report_json/02_items.art" time="0.000">
+      <failure message="body.total &gt; 0, got 0">body.total &gt; 0, got 0</failure>
+    </testcase>
+    <testcase name="missing route" classname="testdata/art/report_json/02_items.art" time="0.000">
+      <failure message="status == 200, got 404">status == 200, got 404</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="testdata/art/report_json/03_broken.art" file="testdata/art/report_json/03_broken.art" tests="1" failures="0" errors="1" skipped="0" time="0.000">
+    <testcase name="could not load" classname="testdata/art/report_json/03_broken.art" time="0.000">
+      <error message="testdata/art/report_json/03_broken.art:6:5: unknown field &#34;timeot&#34;">testdata/art/report_json/03_broken.art:6:5: unknown field &#34;timeot&#34;</error>
+    </testcase>
+  </testsuite>
+</testsuites>
+
+--- exit error ---
+2 of 3 steps failed, 2 of 5 assertions failed; 1 scenario could not run: testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"

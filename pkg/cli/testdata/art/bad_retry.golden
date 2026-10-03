@@ -1,0 +1,19 @@
+testdata/art/bad_retry.art:14:15: "soon" is not a duration
+   14 |       delay = "soon"
+      |               ^^^^^^
+   hint: a duration is a number and a unit: "30s", "500ms", "2m"
+scenario: testdata/art/bad_retry.art
+  ERROR testdata/art/bad_retry.art:14:15: "soon" is not a duration
+
+1 failure:
+
+1) testdata/art/bad_retry.art
+     error     testdata/art/bad_retry.art:14:15: "soon" is not a duration
+
+Scenarios     1  (1 errored)
+Steps         0
+Assertions    0
+FAIL in <dur>
+
+--- exit error ---
+1 scenario could not run: testdata/art/bad_retry.art:14:15: "soon" is not a duration

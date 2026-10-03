@@ -1,0 +1,20 @@
+# What the DSL changed, which has no YAML counterpart: a wrong status does not
+# suppress the expects after it.
+#
+# The server answers 500 with `{"error": "boom"}`. `expect status == 200` fails
+# and `expect body.status == "ok"` is still asked -- there is no `status` in
+# that body, so it is an errored assertion with a reason. Two assertions, both
+# reported, and the step errors.
+#
+# This is deliberate. The YAML rule existed because a 500's body is not the
+# body the scenario described, and the three body checks it suppressed were
+# noise. Here the author wrote one line per question, so answering all of them
+# costs one line each and tells the reader whether the service is broken or
+# only slow.
+scenario "status and body" {
+  step "ping" {
+    get "%SERVER%/ping"
+    expect status == 200
+    expect body.status == "ok"
+  }
+}

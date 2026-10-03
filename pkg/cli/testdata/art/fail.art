@@ -1,0 +1,13 @@
+# A run where the API answers, but with the wrong values.
+#
+# The status matches and two body expects do not, so the step fails with two
+# assertions under it rather than erroring. Each `expect` is one assertion,
+# which is what keeps the reported line a line of this file.
+scenario "status check" {
+  step "ping" {
+    get "%SERVER%/ping"
+    expect status == 200
+    expect body.status == "ok"
+    expect body.count <= 2
+  }
+}

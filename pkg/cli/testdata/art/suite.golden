@@ -1,0 +1,23 @@
+scenario: login (testdata/art/suite/01_login.art)
+  ok    sign in                     <dur>
+testdata/art/suite/02_broken.art:11:5: unknown field "timeot"
+   11 |     timeot = "5s"
+      |     ^^^^^^
+   hint: did you mean "timeout"?
+scenario: testdata/art/suite/02_broken.art
+  ERROR testdata/art/suite/02_broken.art:11:5: unknown field "timeot"
+scenario: items (testdata/art/suite/nested/03_items.art)
+  ok    list items                  <dur>
+
+1 failure:
+
+1) testdata/art/suite/02_broken.art
+     error     testdata/art/suite/02_broken.art:11:5: unknown field "timeot"
+
+Scenarios     3  (2 passed, 1 errored)
+Steps         2  (2 passed)
+Assertions    4  (4 passed)
+FAIL in <dur>
+
+--- exit error ---
+1 scenario could not run: testdata/art/suite/02_broken.art:11:5: unknown field "timeot"

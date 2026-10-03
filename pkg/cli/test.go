@@ -26,9 +26,12 @@ import (
 // CI job written against the only runner artemis has ever had keeps working, and
 // cobra tells its users where to go. Delete it a release after `run` has shipped.
 var testCmd = &cobra.Command{
-	Use:        "test",
-	Short:      "Test APIs defined in YAML file (deprecated: use `artemis run`)",
-	Long:       "Test APIs defined in YAML file and display the responses.\n\nDeprecated: use `artemis run <path>`, which also takes a folder.",
+	Use:   "test",
+	Short: "Run the scenarios in one file (deprecated: use `artemis run`)",
+	Long: "Run the scenarios in the file named by --file: a .art file, or a YAML one.\n\n" +
+		"A .art file is parsed, checked, lowered and run, with the same reporting\n" +
+		"and the same exit codes as a YAML one.\n\n" +
+		"Deprecated: use `artemis run <path>`, which also takes a folder.",
 	Deprecated: "use `artemis run <path>` instead; it takes a folder as well as a file.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		closer, err := initRunEnv(cmd)
@@ -42,6 +45,11 @@ var testCmd = &cobra.Command{
 
 // runTest runs the one file named by --file. It is `artemis run <file>` with the
 // path read off a flag, and goes when the deprecated `test` command goes.
+//
+// Both formats, because it is reportRun: `artemis test -f x.art` is the
+// invocation the design names, and it works here for the same reason
+// `artemis run x.art` does -- the dispatch is in runFiles and neither command
+// knows there are two formats.
 func runTest(cmd *cobra.Command) error {
 	filePath, err := cmd.Flags().GetString("file")
 	if err != nil {

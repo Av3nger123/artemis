@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -129,7 +130,7 @@ func TestRunFilesAggregatesEveryFileIntoOneRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	if !run.Passed() {
 		t.Fatalf("run.Passed() = false, want true: %s", runFailedError(run))
@@ -160,7 +161,7 @@ func TestRunFilesKeepsGoingPastAFileThatWillNotLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	if run.Passed() {
 		t.Fatal("run.Passed() = true, want false for a file that would not load")
@@ -194,7 +195,7 @@ func TestRunFailedErrorNamesAFileThatWouldNotLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	got := runFailedError(run).Error()
 	if !strings.Contains(got, "1 scenario could not run") {
@@ -251,7 +252,7 @@ steps:
 	if err != nil {
 		t.Fatalf("discover() = %v, want nil", err)
 	}
-	run := runFiles(executor.Default(), files, report.Discard())
+	run := runFiles(executor.Default(), files, report.Discard(), io.Discard)
 
 	if run.Scenarios[0].Status != result.StatusPass {
 		t.Fatalf("the capturing scenario = %q, want it to pass: %s", run.Scenarios[0].Status, runFailedError(run))
@@ -641,5 +642,42 @@ func TestFailureBlocksFollowTheConsoleToStderr(t *testing.T) {
 	}
 	if first := failures[0].(map[string]any); first["step"] == "" || first["line"] == 0.0 {
 		t.Errorf("failures[0] = %v, want a step and a line", first)
+	}
+}
+
+// Discovery takes .art alongside the two YAML spellings, so a suite can be
+// migrated a file at a time and a folder holding both runs both as one run.
+func TestDiscoverTakesArtFiles(t *testing.T) {
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01_first.art":       "",
+		"02_second.yaml":     "",
+		"03_third.yml":       "",
+		"nested/04_deep.art": "",
+		"notes.md":           "",
+		"collection.postman": "",
+		"05_upper.ART":       "",
+	})
+
+	files, err := discover(root)
+	if err != nil {
+		t.Fatalf("discover() error = %v", err)
+	}
+	want := []string{"01_first.art", "02_second.yaml", "03_third.yml", "05_upper.ART", "nested/04_deep.art"}
+	if got := rel(t, root, files); !reflect.DeepEqual(got, want) {
+		t.Errorf("discover() = %v, want %v", got, want)
+	}
+}
+
+// A folder with nothing artemis can run names every extension it looked for,
+// so the message says what to rename rather than only that it found nothing.
+func TestDiscoverEmptyFolderNamesTheArtExtension(t *testing.T) {
+	root := writeTree(t, t.TempDir(), map[string]string{"notes.md": ""})
+
+	_, err := discover(root)
+	if err == nil {
+		t.Fatal("discover() error = nil, want one for a folder with no scenarios")
+	}
+	if !strings.Contains(err.Error(), ".art") {
+		t.Errorf("error = %q, want it to name .art", err)
 	}
 }
