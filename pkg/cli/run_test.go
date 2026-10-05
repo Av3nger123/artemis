@@ -6,6 +6,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -719,5 +721,56 @@ func TestDiscoverEmptyFolderNamesTheArtExtension(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), ".art") {
 		t.Errorf("error = %q, want it to name .art", err)
+	}
+}
+
+// This is the test the design calls the important one: the check before the
+// run covers the whole folder, not one file at a time. If it did not, the
+// first file's step would already have reached the server by the time the
+// third file's absent variable was discovered -- a suite that creates real
+// orders before anyone learns its environment is incomplete. The hit count
+// on a real httptest handler is the only thing that can actually prove that
+// never happened; a stub would prove nothing.
+func TestRunStopsBeforeTheFirstStepWhenAVariableIsAbsent(t *testing.T) {
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		hits++
+	}))
+	defer srv.Close()
+
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01-first.art": `scenario "first" {
+  step "touch it" {
+    get "` + srv.URL + `/orders"
+    expect status == 200
+  }
+}`,
+		"03-reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_REPORT_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs([]string{"run", root})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	err := RootCmd.Execute()
+	if err == nil {
+		t.Fatal("the run passed with an absent variable")
+	}
+	if hits != 0 {
+		t.Fatalf("%d request(s) reached the server; the gate must run before any step", hits)
+	}
+	if !strings.Contains(errOut.String(), "ARTEMIS_TEST_REPORT_URL") {
+		t.Fatalf("the block does not name the variable:\n%s", errOut.String())
 	}
 }
