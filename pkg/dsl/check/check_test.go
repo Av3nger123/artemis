@@ -155,12 +155,12 @@ func TestEveryReservedWordHasAPurpose(t *testing.T) {
 }
 
 // TestEveryBuiltinHasAnArityAndASignature holds the three tables that describe
-// a call -- token.Builtins, arity and signatures -- to each other, so a
+// a call -- token.Builtins, params and signatures -- to each other, so a
 // builtin added to the language cannot reach a user as `() takes 0 arguments`
 // with an empty hint.
 func TestEveryBuiltinHasAnArityAndASignature(t *testing.T) {
 	for _, b := range token.Builtins {
-		if _, ok := arity[b]; !ok {
+		if _, ok := params[b]; !ok {
 			t.Errorf("builtin %q has no arity", b)
 		}
 		if signatures[b] == "" {
@@ -326,12 +326,71 @@ func TestAnUncompilablePatternIsNotAlsoCounted(t *testing.T) {
 	}
 }
 
-// Every builtin's parameter list is its arity, so the two tables cannot
-// disagree, and every builtin the language names is one the checker knows.
+// TestEnvTakesOneOrTwoArguments is ART-25's whole point for this task: env()
+// with a default value is as legal as env() without one. Task 2 is where an
+// absent name without a default becomes an error; this only widens the call
+// shape the checker accepts.
+func TestEnvTakesOneOrTwoArguments(t *testing.T) {
+	for _, src := range []string{
+		"scenario \"s\" {\n  var u = env(\"API_URL\")\n}\n",
+		"scenario \"s\" {\n  var u = env(\"API_URL\", \"http://localhost\")\n}\n",
+	} {
+		tree, parsed := parser.Parse("t.art", src)
+		if parsed.HasErrors() {
+			t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+				render("t.art", src, parsed))
+		}
+		_, bag := Check(tree)
+		if bag.HasErrors() {
+			t.Fatalf("env() rejected a legal call: %v", bag.All())
+		}
+	}
+}
+
+// TestEnvRejectsThreeArguments pins the message a range produces, as against
+// the fixed count every other builtin still reports.
+func TestEnvRejectsThreeArguments(t *testing.T) {
+	src := "scenario \"s\" {\n  var u = env(\"A\", \"b\", \"c\")\n}\n"
+	tree, parsed := parser.Parse("t.art", src)
+	if parsed.HasErrors() {
+		t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+			render("t.art", src, parsed))
+	}
+	_, bag := Check(tree)
+	if !bag.HasErrors() {
+		t.Fatal("env() with three arguments was accepted")
+	}
+	got := bag.All()[0].Message
+	want := `env() takes one argument or two; this call has three`
+	if got != want {
+		t.Fatalf("message\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// TestEnvSecondArgumentMustBeAString is the default value held to the same
+// rule as every other string parameter: a literal of the wrong kind is caught
+// here rather than surprising a run.
+func TestEnvSecondArgumentMustBeAString(t *testing.T) {
+	src := "scenario \"s\" {\n  var u = env(\"A\", 8080)\n}\n"
+	tree, parsed := parser.Parse("t.art", src)
+	if parsed.HasErrors() {
+		t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+			render("t.art", src, parsed))
+	}
+	_, bag := Check(tree)
+	if !bag.HasErrors() {
+		t.Fatal("a number as the default value was accepted")
+	}
+}
+
+// Every builtin's parameter list is its maximum arity, so the two tables
+// cannot disagree about how many arguments a call may have -- only env()'s
+// minimum, in minArgs, says it may have fewer. Every builtin the language
+// names is one the checker knows.
 func TestParamsAndBuiltinsAgree(t *testing.T) {
 	for name, ps := range params {
-		if got := arity[name]; got != len(ps) {
-			t.Errorf("%s(): arity %d, %d parameters", name, got, len(ps))
+		if _, high := wants(name); high != len(ps) {
+			t.Errorf("%s(): max arity %d, %d parameters", name, high, len(ps))
 		}
 		if !token.IsBuiltin(name) {
 			t.Errorf("%s() is in params and not in token.Builtins, so token.IsBuiltin "+

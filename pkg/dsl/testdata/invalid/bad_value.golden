@@ -4,10 +4,10 @@ bad_value.art:10:31: "headless" must be true or false, not a string
       |                               ^^^^^
    hint: headless = true
 
-bad_value.art:12:20: env()'s argument must be a string, not a number
+bad_value.art:12:20: env()'s first argument must be a string, not a number
    12 |   var region = env(42)
       |                    ^^
-   hint: env("API_URL")
+   hint: env("API_URL") or env("PORT", "8080")
 
 bad_value.art:16:7: "header" needs a name before its value
    16 |       header = "application/json"

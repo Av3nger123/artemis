@@ -49,18 +49,39 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// arity is how many arguments each builtin takes, which pkg/dsl/check enforces
-// at compile time. It is repeated here because Eval must be total: a tree built
-// in Go, or decoded from JSON by a UI, reaches this package without having been
-// checked.
+// arity is the most arguments each builtin takes, and minArity the fewest.
+// pkg/dsl/check enforces both at compile time. They are repeated here because
+// Eval must be total: a tree built in Go, or decoded from JSON by a UI,
+// reaches this package without having been checked.
 var arity = map[string]int{
-	"env":     1,
+	"env":     2,
 	"match":   2,
 	"text":    1,
 	"value":   1,
 	"attr":    2,
 	"count":   1,
 	"visible": 1,
+}
+
+// minArity holds env()'s minimum of one argument. A name that is not here
+// takes exactly as many as arity says, which is every builtin but env(): its
+// second argument is the default value for a variable with no value, and
+// that argument is optional.
+var minArity = map[string]int{
+	"env": 1,
+}
+
+// wants is how many arguments name accepts: the fewest and the most.
+func wants(name string) (minimum, maximum int, known bool) {
+	high, ok := arity[name]
+	if !ok {
+		return 0, 0, false
+	}
+	low := high
+	if m, ok := minArity[name]; ok {
+		low = m
+	}
+	return low, high, true
 }
 
 // maxGroups is how many capturing groups a match() pattern may have, which is
@@ -522,19 +543,29 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		return nil, errorf(c.Span(), "this call has no function name")
 	}
 	name := c.Callee.Name()
-	want, known := arity[name]
+	low, high, known := wants(name)
 	if !known {
 		return nil, errorf(c.Span(), "unknown function %s", name)
 	}
-	if len(c.Args) != want {
-		return nil, errorf(c.Span(), "%s() takes %d argument(s); this call has %d", name, want, len(c.Args))
+	if len(c.Args) < low || len(c.Args) > high {
+		// Every builtin but env() has one arity, not a range, and
+		// TestMatchExtraction pins match()'s existing wording -- "takes 2
+		// argument(s)" -- against the day this package grows a second
+		// builtin with a default. So the range only appears when there is
+		// one to report.
+		if low == high {
+			return nil, errorf(c.Span(), "%s() takes %d argument(s); this call has %d",
+				name, high, len(c.Args))
+		}
+		return nil, errorf(c.Span(), "%s() takes %d to %d argument(s); this call has %d",
+			name, low, high, len(c.Args))
 	}
 
 	if name == "match" {
 		return evalMatch(c, env)
 	}
 
-	args := make([]string, 0, want)
+	args := make([]string, 0, high)
 	for _, a := range c.Args {
 		v, err := Eval(a.Value, env)
 		if err != nil {

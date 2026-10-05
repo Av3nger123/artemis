@@ -92,6 +92,28 @@ func TestEnvFunctionReadsTheProcessEnvironment(t *testing.T) {
 	}
 }
 
+// TestEnvAcceptsTwoArguments is the evaluator's half of ART-25's arity
+// change. What the default value *produces* is Task 2's subject -- getenv
+// keeps its one-parameter signature until then, so a two-argument call still
+// evaluates to the variable's value. What this asserts is only that two
+// arguments are no longer an arity error.
+func TestEnvAcceptsTwoArguments(t *testing.T) {
+	env := &Env{Getenv: func(string) string { return "" }}
+	if _, err := evalSrc(t, `env("PORT", "8080")`, env); err != nil {
+		t.Fatalf("env() with two arguments: %v", err)
+	}
+}
+
+// TestEnvRejectsThreeArgumentsAtRunTime is evalCall's arity check standing in
+// for the checker: this package must be total over a tree the checker never
+// saw, so a mistake the checker would have caught still has to fail here.
+func TestEnvRejectsThreeArgumentsAtRunTime(t *testing.T) {
+	env := &Env{Getenv: func(string) string { return "" }}
+	if _, err := evalSrc(t, `env("A", "b", "c")`, env); err == nil {
+		t.Fatal("three arguments were accepted")
+	}
+}
+
 // An unset name is the empty string, which is today's documented behaviour: an
 // absent variable is how a scenario says "no token".
 func TestEnvFunctionIsEmptyForAnUnsetName(t *testing.T) {
