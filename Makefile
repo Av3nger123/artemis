@@ -83,6 +83,7 @@ golden:
 	$(GOTEST) ./pkg/dsl/print -update
 	$(GOTEST) ./pkg/dsl/encode -update
 	$(GOTEST) ./pkg/codegen -update
+	$(GOTEST) ./pkg/mcp -update
 
 vet:
 	$(GOVET) $(PKGS)
@@ -105,7 +106,7 @@ lint:
 		golangci-lint run $(PKGS); \
 	else \
 		echo "golangci-lint not found; skipping lint."; \
-		echo "install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8"; \
+		echo "install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0"; \
 	fi
 
 # Fails when golangci-lint is missing, for anyone who wants the gate locally.
