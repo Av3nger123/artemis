@@ -3,6 +3,7 @@ package check
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -416,6 +417,68 @@ func TestMatchIsCallableEverywhere(t *testing.T) {
 			t.Errorf("Functions(%s) = %v, and does not offer env()", ty, fns)
 		}
 	}
+}
+
+// TestInfoCollectsEnvNames states the three exclusions together: a default
+// value answers the call so it is not a need, a name that is not a plain
+// string literal is a value this stage cannot read, and the two live names
+// come back in the order they were written.
+func TestInfoCollectsEnvNames(t *testing.T) {
+	src := `scenario "s" {
+  var url = env("API_URL")
+  var pw  = env("API_PASSWORD")
+  var prt = env("PORT", "8080")
+  var dyn = env(url)
+  step "x" {
+    get "${url}" {
+      header "A" = pw
+    }
+    expect status == 200
+  }
+}`
+	info, bag := checkSource(t, src)
+	if bag.HasErrors() {
+		t.Fatalf("the file did not compile: %v", bag.All())
+	}
+	var got []string
+	for _, need := range info.EnvNeeds() {
+		got = append(got, need.Name)
+	}
+	want := []string{"API_URL", "API_PASSWORD"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// TestInfoCollectsOneNameOnce is the same name read twice, which is one need:
+// a run only needs to be told once that API_URL is absent.
+func TestInfoCollectsOneNameOnce(t *testing.T) {
+	src := `scenario "s" {
+  var a = env("API_URL")
+  var b = env("API_URL")
+  step "x" {
+    get "${a}${b}"
+    expect status == 200
+  }
+}`
+	info, _ := checkSource(t, src)
+	if len(info.EnvNeeds()) != 1 {
+		t.Fatalf("got %d needs, want 1", len(info.EnvNeeds()))
+	}
+}
+
+// checkSource parses and checks src, the shared setup for a test that wants
+// an Info rather than a diagnostic about a specific call. A parse failure
+// fails loudly here rather than letting Check run on a nil tree and the real
+// assertion below report a confusing zero.
+func checkSource(t *testing.T, src string) (*Info, *diag.Bag) {
+	t.Helper()
+	tree, parsed := parser.Parse("t.art", src)
+	if parsed.HasErrors() {
+		t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+			render("t.art", src, parsed))
+	}
+	return Check(tree)
 }
 
 func readFixture(t *testing.T, name string) string {

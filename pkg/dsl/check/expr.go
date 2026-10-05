@@ -267,9 +267,35 @@ func (c *checker) call(x *ast.Call, v *view) {
 			"%s()'s %sargument must be %s, not %s", name, which, ps[i].want, describeLiteral(lit)).
 			Hintf("%s", signatures[name])
 	}
+	if name == "env" {
+		c.envNeed(x)
+	}
 	if name == "match" && len(x.Args) == 2 {
 		c.groups(x.Args[1].Value)
 	}
+}
+
+// envNeed records the variable an env() call names, when the name is one the
+// checker can read.
+//
+// A call with a default value is not recorded: the default answers it, so a
+// run with nothing set still works. A name that is not a plain string literal
+// is not recorded either -- an interpolation holds a value this stage does not
+// have -- and pkg/eval reports that one when the step reaches it.
+func (c *checker) envNeed(x *ast.Call) {
+	if len(x.Args) != 1 {
+		return
+	}
+	lit, ok := x.Args[0].Value.(*ast.Literal)
+	if !ok || lit == nil || lit.Kind() != token.String {
+		return
+	}
+	name := lit.Tok.Value
+	if name == "" || c.info.envSeen[name] {
+		return
+	}
+	c.info.envSeen[name] = true
+	c.info.envs = append(c.info.envs, EnvNeed{Name: name, Span: lit.Span()})
 }
 
 // accepts reports whether a literal of kind k satisfies this parameter.

@@ -148,6 +148,20 @@ type Info struct {
 	steps   map[*ast.StepDecl]StepType
 	expects map[*ast.Expect]Class
 	scopes  map[*ast.StepDecl][]string
+	envs    []EnvNeed
+	envSeen map[string]bool
+}
+
+// EnvNeed is one env() call whose variable name the checker could read: a
+// single string literal, with no interpolation and no default value.
+//
+// The check before a run reads this list. A call the checker cannot read --
+// env(name), env("${prefix}_URL") -- is not here and is reported by pkg/eval
+// at the time of use instead, which is the same split this package applies to
+// a match() pattern that arrives in a var.
+type EnvNeed struct {
+	Name string
+	Span token.Span
 }
 
 // StepType is the type inferred for s.
@@ -190,6 +204,17 @@ func (i *Info) Steps() int {
 	return len(i.steps)
 }
 
+// EnvNeeds is every environment variable this file names in an env() call the
+// checker could read, in source order, each one once.
+func (i *Info) EnvNeeds() []EnvNeed {
+	if i == nil {
+		return nil
+	}
+	out := make([]EnvNeed, len(i.envs))
+	copy(out, i.envs)
+	return out
+}
+
 // Check resolves every name in tree.
 //
 // It returns a non-nil Info and a non-nil Bag for every input, including a
@@ -204,6 +229,7 @@ func Check(tree *ast.File) (*Info, *diag.Bag) {
 			steps:   map[*ast.StepDecl]StepType{},
 			expects: map[*ast.Expect]Class{},
 			scopes:  map[*ast.StepDecl][]string{},
+			envSeen: map[string]bool{},
 		},
 	}
 	if tree != nil {
