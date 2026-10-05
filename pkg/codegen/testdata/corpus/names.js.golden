@@ -13,6 +13,9 @@
 //   - a step that wrote no `timeout` has none here; artemis applies a default of
 //     its own per step type;
 //   - stdout and stderr are not truncated; artemis caps them for its report;
+//   - a variable with no value raises at the point of use. `artemis run`
+//     reports all of them before the first step; an exported module has no
+//     such moment;
 //   - vite owns two environment variables, so `env("BASE_URL")` reads vite's
 //     own base path here and `env("NODE_ENV")` reads the mode vitest ran in.
 //     Name yours something else.

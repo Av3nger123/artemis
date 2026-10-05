@@ -172,7 +172,10 @@ func header(source string) string {
 		"#     against a JSON 200 the way it does under the interpreter;\n" +
 		"#   - a step that wrote no `timeout` has none here; artemis applies a default of\n" +
 		"#     its own per step type;\n" +
-		"#   - stdout and stderr are not truncated; artemis caps them for its report.\n"
+		"#   - stdout and stderr are not truncated; artemis caps them for its report;\n" +
+		"#   - a variable with no value raises at the point of use. `artemis run`\n" +
+		"#     reports all of them before the first step; an exported module has no\n" +
+		"#     such moment.\n"
 }
 
 // scenario emits one test function.

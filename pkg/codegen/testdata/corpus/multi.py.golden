@@ -9,7 +9,10 @@
 #     against a JSON 200 the way it does under the interpreter;
 #   - a step that wrote no `timeout` has none here; artemis applies a default of
 #     its own per step type;
-#   - stdout and stderr are not truncated; artemis caps them for its report.
+#   - stdout and stderr are not truncated; artemis caps them for its report;
+#   - a variable with no value raises at the point of use. `artemis run`
+#     reports all of them before the first step; an exported module has no
+#     such moment.
 
 import json
 

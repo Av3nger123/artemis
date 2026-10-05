@@ -76,7 +76,7 @@ func TestJSExpressions(t *testing.T) {
 		{`body.tags != body.want`, `!art_eq(art_at(body, "tags"), art_at(body, "want"))`},
 		{`body.tags == ["a"]`, `art_eq(art_at(body, "tags"), ["a"])`},
 		{`raw == "${status} ok"`, "raw === `${art_render(status)} ok`"},
-		{`env("HOME") == "/root"`, `(process.env["HOME"] ?? "") === "/root"`},
+		{`env("HOME") == "/root"`, `art_env("HOME") === "/root"`},
 		{`match(raw, /(\d+)/) == "7"`, `art_match(raw, /(\d+)/) === "7"`},
 	} {
 		if got := assertion(t, c.art); got != c.want {

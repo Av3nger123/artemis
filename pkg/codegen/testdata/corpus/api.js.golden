@@ -13,6 +13,9 @@
 //   - a step that wrote no `timeout` has none here; artemis applies a default of
 //     its own per step type;
 //   - stdout and stderr are not truncated; artemis caps them for its report;
+//   - a variable with no value raises at the point of use. `artemis run`
+//     reports all of them before the first step; an exported module has no
+//     such moment;
 //   - vite owns two environment variables, so `env("BASE_URL")` reads vite's
 //     own base path here and `env("NODE_ENV")` reads the mode vitest ran in.
 //     Name yours something else.
@@ -29,6 +32,17 @@ function art_render(value) {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
   return JSON.stringify(value);
+}
+
+function art_env(name, fallback) {
+  // Read an environment variable the way artemis does. A variable that is not
+  // set, that is empty, or that holds only space characters has no value: with
+  // no fallback this throws, rather than giving the empty string that used to
+  // go straight into a URL. This is eval.Env.getenv, and the two must agree.
+  const value = process.env[name];
+  if (value !== undefined && String(value).trim() !== "") return value;
+  if (fallback !== undefined) return fallback;
+  throw new Error(`the environment variable ${name} has no value`);
 }
 
 function art_json(text) {
@@ -156,13 +170,13 @@ async function art_retry(options, attempt) {
 // scenario "the orders api", line 2
 test("the orders api", async () => {
   let base, id, status, body, raw, headers, resp;
-  base = (process.env["ARTEMIS_BASE_URL"] ?? "");
+  base = art_env("ARTEMIS_BASE_URL");
 
   // step "create one", line 5
   await art_retry({ times: 3, delay: 1.0 }, async () => {
     resp = await fetch(`${art_render(base)}/orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${art_render((process.env["TOKEN"] ?? ""))}` },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${art_render(art_env("TOKEN"))}` },
       body: art_render({ "sku": "ART-1", "qty": 2, "gift": true, "note": null }),
       signal: AbortSignal.timeout(10000),
     });

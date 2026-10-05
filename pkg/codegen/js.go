@@ -231,6 +231,9 @@ func jsHeader(source string) string {
 		"//   - a step that wrote no `timeout` has none here; artemis applies a default of\n" +
 		"//     its own per step type;\n" +
 		"//   - stdout and stderr are not truncated; artemis caps them for its report;\n" +
+		"//   - a variable with no value raises at the point of use. `artemis run`\n" +
+		"//     reports all of them before the first step; an exported module has no\n" +
+		"//     such moment;\n" +
 		"//   - vite owns two environment variables, so `env(\"BASE_URL\")` reads vite's\n" +
 		"//     own base path here and `env(\"NODE_ENV\")` reads the mode vitest ran in.\n" +
 		"//     Name yours something else.\n"

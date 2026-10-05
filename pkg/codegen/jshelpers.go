@@ -19,6 +19,7 @@ package codegen
 // export then knows the other.
 const (
 	jsHelperRender   = "art_render"
+	jsHelperEnv      = "art_env"
 	jsHelperJSON     = "art_json"
 	jsHelperURL      = "art_url"
 	jsHelperAt       = "art_at"
@@ -69,6 +70,19 @@ var jsHelpers = []jsHelper{{
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
   return JSON.stringify(value);
+}
+`,
+}, {
+	name: jsHelperEnv,
+	src: `function art_env(name, fallback) {
+  // Read an environment variable the way artemis does. A variable that is not
+  // set, that is empty, or that holds only space characters has no value: with
+  // no fallback this throws, rather than giving the empty string that used to
+  // go straight into a URL. This is eval.Env.getenv, and the two must agree.
+  const value = process.env[name];
+  if (value !== undefined && String(value).trim() !== "") return value;
+  if (fallback !== undefined) return fallback;
+  throw new Error(` + "`the environment variable ${name} has no value`" + `);
 }
 `,
 }, {

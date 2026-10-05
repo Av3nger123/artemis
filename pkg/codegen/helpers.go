@@ -16,6 +16,7 @@ package codegen
 // The helper keys, which are also the Python names.
 const (
 	helperRender   = "art_render"
+	helperEnv      = "art_env"
 	helperSeconds  = "art_seconds"
 	helperJSON     = "art_json"
 	helperExists   = "art_exists"
@@ -64,6 +65,22 @@ var helpers = []helper{{
     if isinstance(value, (int, float)):
         return repr(value)
     return json.dumps(value, separators=(",", ":"))
+`,
+}, {
+	name:    helperEnv,
+	imports: []string{"os"},
+	src: `def art_env(name, default=None):
+    """Read an environment variable the way artemis does. A variable that is
+    not set, that is empty, or that holds only space characters has no value:
+    with no default this raises, rather than giving the empty string that used
+    to go straight into a URL. This is eval.Env.getenv, and the two must agree
+    -- a scenario that fails under ` + "`artemis run`" + ` has to fail here too."""
+    value = os.environ.get(name)
+    if value is not None and value.strip() != "":
+        return value
+    if default is not None:
+        return default
+    raise AssertionError("the environment variable %s has no value" % name)
 `,
 }, {
 	name:    helperSeconds,

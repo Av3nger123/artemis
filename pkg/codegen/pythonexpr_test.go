@@ -94,7 +94,7 @@ func TestExpressionsBecomePython(t *testing.T) {
 		{"api", `headers["content-type"] == "text/html"`, `headers["content-type"] == "text/html"`},
 
 		// builtins
-		{"api", `env("HOME") == "/root"`, `os.environ.get("HOME", "") == "/root"`},
+		{"api", `env("HOME") == "/root"`, `art_env("HOME") == "/root"`},
 		{"api", `match(raw, /id=([0-9]+)/) == "7"`, `art_match(raw, r"id=([0-9]+)") == "7"`},
 
 		// interpolation: an f-string when the pieces fit in one, concatenation
