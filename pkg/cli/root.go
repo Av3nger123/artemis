@@ -25,6 +25,11 @@ func Init() {
 		slog.Error("Error marking flag as required", "error", err)
 	}
 
+	// MCP command: the same front end over stdin and stdout, for an agent.
+	// Its tools read; none of them writes a file.
+	RootCmd.AddCommand(mcpCmd)
+	mcpCmd.Flags().String(workspaceFlag, "", "The directory tool paths resolve against (default: the working directory)")
+
 	// Grammar command: the language, for whatever is about to write some. No
 	// file and no arguments -- everything it prints is in the binary.
 	RootCmd.AddCommand(grammarCmd)
