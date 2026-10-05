@@ -32,14 +32,19 @@ func apiEnv() *Env {
 			"token": "t-1",
 			"limit": float64(10),
 		},
-		Getenv: func(name string) string {
+		Lookup: func(name string) (string, bool) {
 			if name == "API_URL" {
-				return "https://env.example.com"
+				return "https://env.example.com", true
 			}
-			return ""
+			return "", false
 		},
 	}
 }
+
+// strPtr is env()'s second argument, as the pointer getenv now takes: a
+// fallback has to be a pointer so that env("FLAG", "") can be told apart from
+// env("FLAG"), which a plain string could not do.
+func strPtr(s string) *string { return &s }
 
 // evalSrc parses src as an expression and evaluates it. A parse error is a
 // broken test, not a result: this package is given trees the front end
@@ -98,7 +103,7 @@ func TestEnvFunctionReadsTheProcessEnvironment(t *testing.T) {
 // evaluates to the variable's value. What this asserts is only that two
 // arguments are no longer an arity error.
 func TestEnvAcceptsTwoArguments(t *testing.T) {
-	env := &Env{Getenv: func(string) string { return "" }}
+	env := &Env{Lookup: func(string) (string, bool) { return "", false }}
 	if _, err := evalSrc(t, `env("PORT", "8080")`, env); err != nil {
 		t.Fatalf("env() with two arguments: %v", err)
 	}
@@ -108,21 +113,19 @@ func TestEnvAcceptsTwoArguments(t *testing.T) {
 // for the checker: this package must be total over a tree the checker never
 // saw, so a mistake the checker would have caught still has to fail here.
 func TestEnvRejectsThreeArgumentsAtRunTime(t *testing.T) {
-	env := &Env{Getenv: func(string) string { return "" }}
+	env := &Env{Lookup: func(string) (string, bool) { return "", false }}
 	if _, err := evalSrc(t, `env("A", "b", "c")`, env); err == nil {
 		t.Fatal("three arguments were accepted")
 	}
 }
 
-// An unset name is the empty string, which is today's documented behaviour: an
-// absent variable is how a scenario says "no token".
-func TestEnvFunctionIsEmptyForAnUnsetName(t *testing.T) {
-	got, err := evalSrc(t, `env("NOPE")`, apiEnv())
-	if err != nil {
-		t.Fatalf(`env("NOPE") errored: %v`, err)
-	}
-	if got != "" {
-		t.Errorf(`env("NOPE") = %q, want ""`, got)
+// An absent name with no fallback is an error, not the empty string: ART-25
+// found that the old "" let `get "${url}/orders"` silently request "/orders"
+// instead of failing on the absent variable that produced it.
+func TestEnvFunctionIsAnErrorForAnUnsetName(t *testing.T) {
+	_, err := evalSrc(t, `env("NOPE")`, apiEnv())
+	if err == nil {
+		t.Fatal(`env("NOPE") gave no error`)
 	}
 }
 
@@ -133,7 +136,61 @@ func TestEnvFunctionDefaultsToTheRealEnvironment(t *testing.T) {
 		t.Fatalf("errored: %v", err)
 	}
 	if got != "set" {
-		t.Errorf("env() = %q, want the process value when Getenv is nil", got)
+		t.Errorf("env() = %q, want the process value when Lookup is nil", got)
+	}
+}
+
+func TestEnvAbsentIsAnError(t *testing.T) {
+	for name, value := range map[string]string{
+		"absent": "\x00", // the sentinel this test uses for "not set"
+		"empty":  "",
+		"spaces": "   ",
+		"tab":    "\t",
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := &Env{Lookup: func(string) (string, bool) {
+				if value == "\x00" {
+					return "", false
+				}
+				return value, true
+			}}
+			if _, err := env.getenv("API_URL", nil); err == nil {
+				t.Fatalf("a %s variable gave no error", name)
+			}
+		})
+	}
+}
+
+func TestEnvKeepsTheValueItAccepts(t *testing.T) {
+	env := &Env{Lookup: func(string) (string, bool) { return "  http://x  ", true }}
+	got, err := env.getenv("API_URL", nil)
+	if err != nil {
+		t.Fatalf("a value with space at each end was rejected: %v", err)
+	}
+	if got != "  http://x  " {
+		t.Fatalf("got %q; the value must not change", got)
+	}
+}
+
+func TestEnvFallbackWhenAbsent(t *testing.T) {
+	env := &Env{Lookup: func(string) (string, bool) { return "", false }}
+	got, err := env.getenv("PORT", strPtr("8080"))
+	if err != nil {
+		t.Fatalf("a default value did not apply: %v", err)
+	}
+	if got != "8080" {
+		t.Fatalf("got %q, want 8080", got)
+	}
+}
+
+func TestEnvEmptyFallbackIsLegal(t *testing.T) {
+	env := &Env{Lookup: func(string) (string, bool) { return "", false }}
+	got, err := env.getenv("FLAG", strPtr(""))
+	if err != nil {
+		t.Fatalf(`env("FLAG", "") must give an empty value: %v`, err)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want an empty value", got)
 	}
 }
 

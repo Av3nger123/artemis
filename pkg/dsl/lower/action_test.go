@@ -568,6 +568,12 @@ func TestAnUnevaluatableRequestNamesItsPart(t *testing.T) {
 // that the design document's scenario lowers into something an executor would
 // accept.
 func TestTheWorkedExampleProducesModels(t *testing.T) {
+	// ART-25: the fixture's three env() calls have no fallback, so Bind()
+	// now needs the names present -- an absent one is the fault this test
+	// would otherwise be covering up, not a value the lowerer invents.
+	t.Setenv("API_URL", "https://api.test")
+	t.Setenv("APP_URL", "https://app.test")
+	t.Setenv("API_PASSWORD", "pw")
 	sc, scope := bound(t, readFixture(t, "checkout.art"))
 	// The `orders` step reads the token the `login` step captures.
 	scope.Set("token", "abc")

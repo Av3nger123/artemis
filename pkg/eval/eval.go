@@ -579,7 +579,19 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 	}
 
 	if name == "env" {
-		return env.getenv(args[0]), nil
+		var fallback *string
+		if len(args) == 2 {
+			fallback = &args[1]
+		}
+		v, err := env.getenv(args[0], fallback)
+		if err != nil {
+			// getenv's error is package-level text, not span-shaped -- Absent
+			// is also Task 3's check-time error, which has no expression to
+			// point at. Here there is one, so the reason travels inside the
+			// *Error every other failure in this function already returns.
+			return nil, errorf(c.Span(), "%s", err)
+		}
+		return v, nil
 	}
 
 	page := env.elements()

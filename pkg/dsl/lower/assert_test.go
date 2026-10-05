@@ -21,7 +21,7 @@ func observed(roots map[string]any, scope executor.Scope) *eval.Env {
 	return &eval.Env{
 		Roots:  roots,
 		Vars:   scope.Vars(),
-		Getenv: func(string) string { return "" },
+		Lookup: func(string) (string, bool) { return "", false },
 	}
 }
 

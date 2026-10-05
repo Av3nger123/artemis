@@ -323,7 +323,7 @@ func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step,
 	// `text(".x")` resolve and what the settle loop re-reads the roots through;
 	// a nil one means there is nothing an assertion could wait for.
 	page := livePage(ctx, st.Type)
-	observed := &eval.Env{Roots: roots, Vars: base.Vars, Getenv: base.Getenv}
+	observed := &eval.Env{Roots: roots, Vars: base.Vars, Lookup: base.Lookup}
 	if page != nil {
 		observed.Elements = page.Elements()
 	}
