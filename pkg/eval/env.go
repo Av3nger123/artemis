@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -87,11 +88,26 @@ func HasValue(value string) bool {
 }
 
 // Absent is the error for a variable that a scenario needs and the
-// environment does not supply.
+// environment does not supply, reported at the point of use. Its one caller is
+// getenv, so the names that reach it are the ones the check before the run
+// could not read -- env(which), env("${prefix}_URL") -- plus any name in a
+// tree that never went through the checker at all.
 //
-// One text, used by the check before the run and by a name the check could
-// not read, because two texts for one fault is a defect of its own.
+// It is not shared with that check, and the two texts are not equal. The block
+// in pkg/cli/envcheck.go is the many-variable form: every absent name of a run
+// that has not started, with a file and a line each. This is the one-variable
+// form, named at the step that asked for it. Both name the variable, which is
+// the part a reader acts on; one sentence stretched over both shapes would
+// serve neither. What they do share is HasValue, so the two cannot disagree
+// about which variables are absent.
 func Absent(name string) error {
+	if name == "" {
+		// Only a name out of a var or an interpolation can be empty --
+		// pkg/dsl/check rejects env("") where it can see it -- and "the
+		// environment variable  has no value" is a sentence with a hole in it
+		// where the name should be, which names no fault at all.
+		return errors.New("env()'s argument must name an environment variable, not the empty string")
+	}
 	return fmt.Errorf("the environment variable %s has no value", name)
 }
 

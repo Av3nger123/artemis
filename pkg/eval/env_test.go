@@ -97,15 +97,22 @@ func TestEnvFunctionReadsTheProcessEnvironment(t *testing.T) {
 	}
 }
 
-// TestEnvAcceptsTwoArguments is the evaluator's half of ART-25's arity
-// change. What the default value *produces* is Task 2's subject -- getenv
-// keeps its one-parameter signature until then, so a two-argument call still
-// evaluates to the variable's value. What this asserts is only that two
-// arguments are no longer an arity error.
+// TestEnvAcceptsTwoArguments is the evaluator's half of ART-25's arity change,
+// end to end through Eval: two arguments are not an arity error, and the
+// second one is the value an absent name answers with.
+//
+// getenv's own tests cover the default value directly. What this one adds is
+// the path between them -- evalCall has to pass the second argument down, and
+// a call that evaluated to the variable's value while ignoring its default
+// would pass every one of those tests.
 func TestEnvAcceptsTwoArguments(t *testing.T) {
 	env := &Env{Lookup: func(string) (string, bool) { return "", false }}
-	if _, err := evalSrc(t, `env("PORT", "8080")`, env); err != nil {
+	got, err := evalSrc(t, `env("PORT", "8080")`, env)
+	if err != nil {
 		t.Fatalf("env() with two arguments: %v", err)
+	}
+	if got != "8080" {
+		t.Fatalf(`env("PORT", "8080") = %v, want the default value`, got)
 	}
 }
 

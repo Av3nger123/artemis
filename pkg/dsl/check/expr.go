@@ -268,11 +268,35 @@ func (c *checker) call(x *ast.Call, v *view) {
 			Hintf("%s", signatures[name])
 	}
 	if name == "env" {
+		c.envName(x)
 		c.envNeed(x)
 	}
 	if name == "match" && len(x.Args) == 2 {
 		c.groups(x.Args[1].Value)
 	}
+}
+
+// envName rejects env("") -- a name no environment can ever supply.
+//
+// Here rather than at run time, which is the split this file already follows:
+// a literal is settled at compile time and a name that came out of a var is
+// pkg/eval's. The run-time message would be "the environment variable  has no
+// value", a sentence with a hole in it where the name should be, and the
+// author would have to find the empty call themselves.
+//
+// A default value does not excuse it: env("", "8080") always answers "8080",
+// so the call says one thing and does another.
+func (c *checker) envName(x *ast.Call) {
+	if len(x.Args) == 0 {
+		return
+	}
+	lit, ok := x.Args[0].Value.(*ast.Literal)
+	if !ok || lit == nil || lit.Kind() != token.String || lit.Tok.Value != "" {
+		return
+	}
+	c.bag.Error(lit.Span(), diag.BadValue,
+		"env()'s argument must name an environment variable, not the empty string").
+		Hintf("%s", signatures["env"])
 }
 
 // envNeed records the variable an env() call names, when the name is one the
@@ -282,6 +306,10 @@ func (c *checker) call(x *ast.Call, v *view) {
 // run with nothing set still works. A name that is not a plain string literal
 // is not recorded either -- an interpolation holds a value this stage does not
 // have -- and pkg/eval reports that one when the step reaches it.
+//
+// An empty name is not recorded either, because envName has already reported
+// it: the file does not compile, so the gate never sees these needs at all,
+// and recording one would put a nameless row in a block about names.
 func (c *checker) envNeed(x *ast.Call) {
 	if len(x.Args) != 1 {
 		return

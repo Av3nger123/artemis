@@ -384,6 +384,40 @@ func TestEnvSecondArgumentMustBeAString(t *testing.T) {
 	}
 }
 
+// An empty name is rejected here rather than at the step that uses it: no
+// environment can supply "", and the run-time sentence would be "the
+// environment variable  has no value" -- a message with a hole in it where the
+// name should be.
+func TestEnvRejectsAnEmptyName(t *testing.T) {
+	for _, src := range []string{
+		"scenario \"s\" {\n  var u = env(\"\")\n}\n",
+		// A default does not excuse it: env("", "8080") always answers
+		// "8080", so the call says one thing and does another.
+		"scenario \"s\" {\n  var u = env(\"\", \"8080\")\n}\n",
+	} {
+		tree, parsed := parser.Parse("t.art", src)
+		if parsed.HasErrors() {
+			t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+				render("t.art", src, parsed))
+		}
+		info, bag := Check(tree)
+		all := bag.All()
+		if len(all) != 1 {
+			t.Fatalf("got %d diagnostics, want exactly 1:\n%s", len(all), render("t.art", src, bag))
+		}
+		if all[0].Code != diag.BadValue {
+			t.Errorf("code = %s, want %s", all[0].Code, diag.BadValue)
+		}
+		want := "env()'s argument must name an environment variable, not the empty string"
+		if all[0].Message != want {
+			t.Errorf("message\n got: %s\nwant: %s", all[0].Message, want)
+		}
+		if needs := info.EnvNeeds(); len(needs) != 0 {
+			t.Errorf("EnvNeeds() = %v, want none: a nameless row in the gate's block names nothing", needs)
+		}
+	}
+}
+
 // Every builtin's parameter list is its maximum arity, so the two tables
 // cannot disagree about how many arguments a call may have -- only env()'s
 // minimum, in minArgs, says it may have fewer. Every builtin the language
