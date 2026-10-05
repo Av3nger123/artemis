@@ -60,3 +60,21 @@ func TestEnvGateReportNamesTheEnvFile(t *testing.T) {
 		}
 	}
 }
+
+// The env-file clause is conditional, because the usual cause of an absent
+// variable is the file and "read .env" in a directory that has no .env sends
+// the reader to inspect a file that is not there. An empty path is how
+// reportRun says nothing loaded.
+func TestEnvGateReportOmitsTheEnvFileClauseWhenNothingWasRead(t *testing.T) {
+	var b strings.Builder
+	envGateReport(&b, []envFault{{Name: "API_URL", File: "a.art", Line: 4}}, "")
+	out := b.String()
+	if strings.Contains(out, "read ") {
+		t.Fatalf("the report claims to have read a file:\n%s", out)
+	}
+	for _, want := range []string{"API_URL", "a.art:4", "no value for 1 name", "nothing ran"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the report does not hold %q:\n%s", want, out)
+		}
+	}
+}

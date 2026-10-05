@@ -29,23 +29,23 @@ var testCmd = &cobra.Command{
 		"Deprecated: use `artemis run <path>`, which also takes a folder.",
 	Deprecated: "use `artemis run <path>` instead; it takes a folder as well as a file.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		closer, err := initRunEnv(cmd)
+		re, err := initRunEnv(cmd)
 		if err != nil {
 			return err
 		}
-		defer closer.Close()
-		return runTest(cmd)
+		defer re.closer.Close()
+		return runTest(cmd, re.envFile)
 	},
 }
 
 // runTest runs the one file named by --file. It is `artemis run <file>` with the
 // path read off a flag, and goes when the deprecated `test` command goes.
-func runTest(cmd *cobra.Command) error {
+func runTest(cmd *cobra.Command, envFile string) error {
 	filePath, err := cmd.Flags().GetString("file")
 	if err != nil {
 		return fmt.Errorf("reading --file flag: %w", err)
 	}
-	return reportRun(cmd, filePath)
+	return reportRun(cmd, filePath, envFile)
 }
 
 // sleep is how the retry loop waits between attempts and how a waiting

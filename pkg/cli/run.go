@@ -34,26 +34,43 @@ Every problem artemis finds is reported with the source line echoed, and a file
 that does not compile is one errored scenario: the files after it still run.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		closer, err := initRunEnv(cmd)
+		re, err := initRunEnv(cmd)
 		if err != nil {
 			return err
 		}
-		defer closer.Close()
-		return reportRun(cmd, args[0])
+		defer re.closer.Close()
+		return reportRun(cmd, args[0], re.envFile)
 	},
+}
+
+// runEnv is what a run has set up before it starts: what to close when it ends,
+// and the env file that actually loaded.
+//
+// envFile is the path only when godotenv read it, and empty otherwise -- an
+// absent default .env is the normal case, and a `-e prod.env` that could not be
+// read has already been warned about. The environment gate's block names the
+// file it read, so a run in a directory with no .env must not say "read .env":
+// that sends the reader to inspect a file that is not there instead of at the
+// variable they have to set.
+type runEnv struct {
+	closer  io.Closer
+	envFile string
 }
 
 // initRunEnv opens the log file and loads the env file for a run, and returns
 // what has to be closed when it ends. Both `run` and the deprecated `test` come
 // through here, so they cannot drift apart.
-func initRunEnv(cmd *cobra.Command) (io.Closer, error) {
+func initRunEnv(cmd *cobra.Command) (runEnv, error) {
 	logFilePath, _ := cmd.Flags().GetString("log")
 	envFilePath, _ := cmd.Flags().GetString("env")
 	closer, err := logger.InitLog(logFilePath)
 	if err != nil {
-		return nil, err
+		return runEnv{}, err
 	}
+	loaded := envFilePath
 	if err := env.InitEnv(envFilePath); err != nil {
+		// Nothing was read, so nothing is reported as read.
+		loaded = ""
 		logger.Logger.Warn("Could not load env file", "path", envFilePath, "error", err.Error())
 		// A missing .env is the normal case and not worth a line; a path the
 		// user named and that did not load is.
@@ -62,13 +79,16 @@ func initRunEnv(cmd *cobra.Command) (io.Closer, error) {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 		}
 	}
-	return closer, nil
+	return runEnv{closer: closer, envFile: loaded}, nil
 }
 
 // reportRun discovers the scenarios at path, runs them as one run, prints the
 // summary, writes whatever --report asked for, and returns an error if anything
 // failed -- that error is what makes the process exit non-zero.
-func reportRun(cmd *cobra.Command, path string) error {
+//
+// envFile is the env file the run read, or empty when it read none; it is only
+// here because the environment gate's block names it.
+func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// Before discovery: a mistyped format must not cost a suite run.
 	reportValues, _ := cmd.Flags().GetStringArray(reportFlag)
 	targets, err := parseReports(reportValues)
@@ -104,17 +124,24 @@ func reportRun(cmd *cobra.Command, path string) error {
 		shots: browserstep.NewShots(shotDir(cmd)),
 	}
 	run := runFilesWith(rt, files, rep, cmd.ErrOrStderr())
+
+	// Before the failure blocks and the summary, which is where a compile
+	// diagnostic goes too (SPEC.md): the environment error copies the compile
+	// error's habits, and a gated run's summary is an all-zeros `FAIL in <1ms`
+	// that explains nothing on its own. Printed after it, the block arrives
+	// once the reader has already gone looking for a cause.
+	//
+	// It goes to stderr beside the diagnostics, not to the console writer:
+	// stdout stays exactly one document when --report asked for one.
+	if len(rt.envFaults) > 0 {
+		envGateReport(cmd.ErrOrStderr(), rt.envFaults, envFile)
+	}
+
 	// Between the step lines and the tallies: the blocks are what a reader --
 	// or the agent that wrote the scenario -- acts on (ART-12), and the
-	// summary's verdict stays the last line a run writes.
+	// summary's verdict stays the last line the *run* writes.
 	rep.Failures(run)
 	rep.Summary(run)
-
-	// The block goes to stderr beside the diagnostics, not to the console
-	// writer: stdout stays exactly one document when --report asked for one.
-	if len(rt.envFaults) > 0 {
-		envGateReport(cmd.ErrOrStderr(), rt.envFaults, envFileOf(cmd))
-	}
 
 	// A report that could not be written wins over the run's own failure: the
 	// console has already said the run failed, and the missing report is the
@@ -122,11 +149,13 @@ func reportRun(cmd *cobra.Command, path string) error {
 	if err := writeReports(out, targets, run); err != nil {
 		return err
 	}
-	// run.Passed() is derived from the scenarios, and a gated run has none --
-	// so without this check a run that stopped before its first step would
-	// report a pass. run.Error already holds this text -- runFilesWith set it
-	// from the same faults -- so this reuses it rather than building the
-	// message a second time from rt.envFaults.
+	// Not for the exit code -- runFilesWith already forced Status to
+	// StatusError, so !run.Passed() is true and the process exits non-zero
+	// either way. This is for the message: a gated run holds no failed
+	// scenario and no failed step, so runFailedError finds no clause to write
+	// and falls back to "the run failed", which names nothing. run.Error
+	// already holds the text runFilesWith built from the same faults, so this
+	// reuses it rather than building it a second time from rt.envFaults.
 	if len(rt.envFaults) > 0 {
 		return errors.New(run.Error)
 	}
@@ -134,16 +163,6 @@ func reportRun(cmd *cobra.Command, path string) error {
 		return runFailedError(run)
 	}
 	return nil
-}
-
-// envFileOf is the env file the run read, for the check's report. The default
-// is .env, and a reader who sees the wrong path there has found their fault.
-func envFileOf(cmd *cobra.Command) string {
-	path, err := cmd.Flags().GetString("env")
-	if err != nil {
-		return ""
-	}
-	return path
 }
 
 // scenarioExts are the extensions a folder walk picks up. A file named outright
@@ -240,10 +259,11 @@ func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagO
 type runtimeEnv struct {
 	reg   *executor.Registry
 	shots *browserstep.Shots
-	// lookup resolves an environment variable for the check before the run.
-	// Nil means os.LookupEnv, which is what every caller but a test wants.
-	lookup func(string) (string, bool)
 	// envFaults is what the check found, for reportRun to print.
+	//
+	// There is no lookup seam beside it: envGate takes the lookup as a
+	// parameter and that is what its own unit tests drive, so a field here
+	// would have had no caller but itself.
 	envFaults []envFault
 }
 
@@ -281,18 +301,24 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// any, the environment gate stops; recording outcomes as they are found
 	// here would put every file that would not compile ahead of every file
 	// that ran, which is an ordering no one asked for. Each file's
-	// diagnostics are held in its own buffer rather than compiled a second
-	// time to get them in the right place -- compileArt renders them as it
-	// goes, and a second pass would print every one of them twice.
+	// diagnostics are held in its own buffer, which is what lets them be
+	// printed in that order out of the single compile above.
 	attempts := make([]fileAttempt, len(files))
 	for i, file := range files {
 		if !isArtFile(file) {
-			attempts[i] = fileAttempt{file: file, err: notAScenarioError(file)}
+			attempts[i] = fileAttempt{
+				compiled: compiled{file: file},
+				diag:     &bytes.Buffer{},
+				err:      notAScenarioError(file),
+			}
 			continue
 		}
-		var diag bytes.Buffer
-		c, err := loadArtFile(file, &diag)
-		attempts[i] = fileAttempt{file: file, ok: err == nil, compiled: c, err: err, diag: diag}
+		diag := &bytes.Buffer{}
+		c, err := loadArtFile(file, diag)
+		// loadArtFile answers a zero compiled when the file would not
+		// compile, and every report below needs the path either way.
+		c.file = file
+		attempts[i] = fileAttempt{ok: err == nil, compiled: c, err: err, diag: diag}
 	}
 
 	var loaded []compiled
@@ -301,7 +327,10 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			loaded = append(loaded, a.compiled)
 		}
 	}
-	faults := envGate(loaded, rt.lookup)
+	// nil is os.LookupEnv: the real process environment, which is where the
+	// .env file was loaded to. A seam here would have had no caller -- the
+	// gate's own tests pass their lookup to envGate directly.
+	faults := envGate(loaded, nil)
 	if len(faults) > 0 {
 		rt.envFaults = faults
 	}
@@ -341,12 +370,18 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 // fileAttempt is the outcome of compiling one file, kept in file order until
 // the environment gate has had its say and the run is ready to record every
 // outcome -- and print every diagnostic -- at once.
+//
+// The path is the embedded compiled's, set for a file that would not compile
+// too: a second `file` field beside it would shadow that one, and the two could
+// then disagree about which file this is.
 type fileAttempt struct {
-	file string
-	ok   bool
+	ok bool
 	compiled
-	err  error
-	diag bytes.Buffer
+	err error
+	// diag is a pointer because compileArt writes to it through an io.Writer
+	// while the attempt is being built; a value here would be copied into the
+	// slice and the diagnostics written to the copy that was thrown away.
+	diag *bytes.Buffer
 }
 
 // notAScenarioError is what a path artemis will not run says. It names the one

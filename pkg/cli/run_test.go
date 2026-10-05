@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
@@ -881,5 +883,118 @@ func TestRunReportsABrokenFileEvenWhenTheEnvGateAlsoTrips(t *testing.T) {
 	stdout := out.String()
 	if !strings.Contains(stdout, "ERROR") || !strings.Contains(stdout, "01-broken.art") {
 		t.Errorf("stdout does not record the broken file as an errored scenario:\n%s", stdout)
+	}
+}
+
+// The gate's block says "read .env" only when a .env was in fact read.
+// envFileOf used to answer the flag's value whatever happened, so a run in a
+// directory with no .env -- the silent, normal case -- told the reader to go
+// and inspect a file that does not exist, and a `-e prod.env` that failed to
+// load claimed to have been read as well.
+//
+// The directory is changed because `.env` is resolved against the working
+// directory: a temporary one with nothing in it is the no-.env case, and the
+// same directory with a .env in it is the other.
+func TestInitRunEnvNamesTheEnvFileOnlyWhenOneLoaded(t *testing.T) {
+	cases := []struct {
+		name  string
+		write bool
+		want  string
+	}{
+		{name: "no .env to read", write: false, want: ""},
+		{name: "a .env that loaded", write: true, want: ".env"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if c.write {
+				body := []byte("ARTEMIS_TEST_INIT_RUN_ENV=1\n")
+				if err := os.WriteFile(filepath.Join(dir, ".env"), body, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			inDir(t, dir)
+
+			// A command of its own rather than runCmd: cobra has no getter for
+			// a writer, so restoring runCmd's after the test would mean
+			// nailing it to os.Stderr -- which an explicitly set writer beats,
+			// and the next test to capture stderr through RootCmd would get
+			// nothing.
+			cmd := &cobra.Command{Use: "run"}
+			cmd.Flags().StringP("log", "l", "", "")
+			cmd.Flags().StringP("env", "e", ".env", "")
+			var errOut bytes.Buffer
+			cmd.SetErr(&errOut)
+
+			re, err := initRunEnv(cmd)
+			if err != nil {
+				t.Fatalf("initRunEnv() error = %v", err)
+			}
+			defer re.closer.Close()
+			if re.envFile != c.want {
+				t.Errorf("envFile = %q, want %q", re.envFile, c.want)
+			}
+			// A missing default .env stays silent: that is the documented
+			// behaviour, and this is the path that decides it.
+			if errOut.Len() != 0 {
+				t.Errorf("initRunEnv wrote to stderr: %s", errOut.String())
+			}
+		})
+	}
+}
+
+// inDir runs the rest of the test with dir as the working directory. os.Chdir
+// rather than t.Chdir: this module is on go 1.22 and t.Chdir arrived in 1.24.
+func inDir(t *testing.T, dir string) {
+	t.Helper()
+	was, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(was); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// The whole command, not just initRunEnv: a gated run in a directory with no
+// .env must not print the "read <file>" clause. The test above pins the path
+// initRunEnv reports; this pins that reportRun passes that path -- and not the
+// flag's default -- to envGateReport.
+func TestRunDoesNotClaimToHaveReadAnEnvFileWhenThereIsNone(t *testing.T) {
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_NO_ENV_FILE_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+	inDir(t, dir)
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs([]string{"run", "reports.art"})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	if err := RootCmd.Execute(); err == nil {
+		t.Fatal("the run passed with an absent variable")
+	}
+	stderr := errOut.String()
+	if !strings.Contains(stderr, "ARTEMIS_TEST_NO_ENV_FILE_URL") {
+		t.Fatalf("the block does not name the variable:\n%s", stderr)
+	}
+	if strings.Contains(stderr, "read .env") {
+		t.Errorf("the block claims to have read a .env that is not there:\n%s", stderr)
 	}
 }
