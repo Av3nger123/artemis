@@ -240,7 +240,7 @@ func (c *checker) call(x *ast.Call, v *view) {
 	}
 
 	ps := params[name]
-	low, high := wants(name)
+	low, high, _ := Arity(name)
 	if len(x.Args) < low || len(x.Args) > high {
 		c.bag.Error(x.Span(), diag.BadArity,
 			"%s() takes %s; this call has %s", name, takes(low, high), number(len(x.Args))).

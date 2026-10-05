@@ -258,8 +258,11 @@ func TestJSPatternRefusesAnInlineFlagGroup(t *testing.T) {
 }
 
 // Every builtin the language has needs a JavaScript spelling, or a .art file
-// that compiles produces a module that calls something undefined. The arity
-// table is shared with the Python target, so this is about the switch.
+// that compiles produces a module that calls something undefined.
+//
+// Names only, and the arity table is shared with the Python target: the
+// numbers are TestArityAgreesWithTheChecker's subject, so this is about the
+// switch.
 func TestEveryBuiltinHasAJavaScriptSpelling(t *testing.T) {
 	for _, name := range token.Builtins {
 		if _, ok := builtinArity[name]; !ok {

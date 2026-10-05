@@ -4,7 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/token"
 )
 
 // apiEnv is an api step's observation: the shapes a decoded HTTP response
@@ -317,5 +319,42 @@ func TestEnvNonStringDefaultNamesTheType(t *testing.T) {
 	want := "env()'s argument must be a string, got number at p"
 	if err.Error() != want {
 		t.Fatalf("message\n got: %s\nwant: %s", err, want)
+	}
+}
+
+// This package's arity and minArity are a second copy of pkg/dsl/check's
+// numbers -- Eval must be total over a tree a UI built, which never went
+// through the checker -- and a copy nothing compares is a copy that drifts.
+//
+// ART-25's own history is the argument: a *third* copy, in pkg/codegen, still
+// required exactly one argument for env() after both of these had learned
+// about the default value, and it was found by hand in the middle of the
+// implementation rather than by a test.
+//
+// Comparing rather than unifying: each package's reason for its own table is
+// documented where the table is, and one shared table is a change for its own
+// issue.
+func TestArityAgreesWithTheChecker(t *testing.T) {
+	for name := range arity {
+		low, high, ok := check.Arity(name)
+		if !ok {
+			t.Errorf("%s() is in this package's arity table and the checker does not know it", name)
+			continue
+		}
+		gotLow, gotHigh, known := wants(name)
+		if !known {
+			t.Errorf("%s() is in the arity table and wants() does not know it", name)
+			continue
+		}
+		if gotLow != low || gotHigh != high {
+			t.Errorf("%s() takes %d to %d arguments here and %d to %d in pkg/dsl/check",
+				name, gotLow, gotHigh, low, high)
+		}
+	}
+	for _, name := range token.Builtins {
+		if _, ok := arity[name]; !ok {
+			t.Errorf("%s() is a builtin of the language and this package has no arity for it, "+
+				"so Eval would report it as unknown", name)
+		}
 	}
 }

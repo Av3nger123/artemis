@@ -133,9 +133,11 @@ func TestParenthesesSurvive(t *testing.T) {
 }
 
 // Every builtin the language has needs a Python spelling, or `artemis build`
-// would emit a call to something that does not exist. The arity table is
-// pkg/eval's, duplicated here because it is what decides the emission, and this
-// is what keeps the two equal.
+// would emit a call to something that does not exist.
+//
+// Names only. The numbers are TestArityAgreesWithTheChecker's subject below --
+// this test passed for the whole of ART-25 while builtinArity still said env()
+// took exactly one argument.
 func TestEveryBuiltinHasASpelling(t *testing.T) {
 	for _, typ := range check.StepTypes() {
 		for _, fn := range check.Functions(typ) {
@@ -155,6 +157,52 @@ func TestEveryBuiltinHasASpelling(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("builtinArity has %q, which the checker does not make callable anywhere", fn)
+		}
+	}
+}
+
+// builtinArity and minBuiltinArity are a third copy of pkg/dsl/check's numbers
+// -- the first two being the checker's own and pkg/eval's -- and this is what
+// holds them together.
+//
+// It is here because this copy is the one that drifted: it still required
+// exactly one argument for env() after the checker and eval had both learned
+// about the default value, so `artemis build` refused a file `artemis run`
+// accepted, and the fault was found by hand in the middle of ART-25 rather
+// than by a test. Both targets read this table, so one test covers both.
+//
+// Comparing rather than unifying the three: each package's reason for its own
+// copy is documented where the copy is, and one shared table is a change for
+// its own issue.
+func TestArityAgreesWithTheChecker(t *testing.T) {
+	for name := range builtinArity {
+		low, high, known := check.Arity(name)
+		if !known {
+			t.Errorf("%s() is in builtinArity and the checker does not know it", name)
+			continue
+		}
+		// arity() answers the bounds beside its verdict, which is what the
+		// emitter's own error message reads, so the bounds are asked for the
+		// way the emitter asks for them.
+		_, gotLow, gotHigh := arity(name, low)
+		if gotLow != low || gotHigh != high {
+			t.Errorf("%s() takes %d to %d arguments here and %d to %d in pkg/dsl/check",
+				name, gotLow, gotHigh, low, high)
+		}
+		// Every count in the range emits, and nothing outside it does: the
+		// numbers agreeing is worth little if arity() reads them wrongly.
+		for n := low; n <= high; n++ {
+			if ok, _, _ := arity(name, n); !ok {
+				t.Errorf("%s() with %d argument(s) is rejected here and accepted by the checker", name, n)
+			}
+		}
+		if ok, _, _ := arity(name, high+1); ok {
+			t.Errorf("%s() with %d argument(s) is accepted here and rejected by the checker", name, high+1)
+		}
+	}
+	for name := range minBuiltinArity {
+		if _, ok := builtinArity[name]; !ok {
+			t.Errorf("minBuiltinArity has %q, which has no maximum -- so arity() never reads it", name)
 		}
 	}
 }

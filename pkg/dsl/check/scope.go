@@ -94,16 +94,28 @@ var minArgs = map[string]int{
 	"env": 1,
 }
 
-// wants is how many arguments name accepts: the fewest and the most.
-func wants(name string) (minimum, maximum int) {
+// Arity is how many arguments name accepts: the fewest, the most, and whether
+// this is a builtin at all.
+//
+// Exported because pkg/eval and pkg/codegen each keep their own copy of these
+// numbers -- eval because Eval must be total over a tree that was never
+// checked, codegen because its own switch decides the emission -- and a test in
+// each package asserts its copy against this one. The third copy, in
+// pkg/codegen, still required exactly one argument for env() well after the
+// checker and eval had both learned about the default value, and it was found
+// by hand rather than by a test.
+//
+// This package depends on token, ast and diag alone, so neither of those
+// packages' tests can import it into a cycle.
+func Arity(name string) (minimum, maximum int, ok bool) {
 	ps, ok := params[name]
 	if !ok {
-		return 0, 0
+		return 0, 0, false
 	}
 	if m, ok := minArgs[name]; ok {
-		return m, len(ps)
+		return m, len(ps), true
 	}
-	return len(ps), len(ps)
+	return len(ps), len(ps), true
 }
 
 // freeFns are the builtins callable in every scope, as against the browser
