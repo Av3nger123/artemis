@@ -28,6 +28,73 @@ func parse(t *testing.T, name, src string) *ast.File {
 	return tree
 }
 
+// buildPython and buildJS compile src through the named target and return the
+// one file's content, failing the test on any error -- the shared setup the
+// env() tests below and any future single-file assertion need.
+func buildPython(t *testing.T, src string) string {
+	t.Helper()
+	tree := parse(t, "x.art", src)
+	files, err := (Python{}).Generate(tree)
+	if err != nil {
+		t.Fatalf("Generate = %v", err)
+	}
+	return files[0].Content
+}
+
+func buildJS(t *testing.T, src string) string {
+	t.Helper()
+	tree := parse(t, "x.art", src)
+	files, err := (JS{}).Generate(tree)
+	if err != nil {
+		t.Fatalf("Generate = %v", err)
+	}
+	return files[0].Content
+}
+
+// The three targets have to agree about what env() means: ART-25 made an
+// absent, empty or blank variable an error in the interpreter, and the
+// generated modules must raise through art_env rather than fall back to the
+// empty string os.environ.get(name, "") used to give.
+func TestPythonEnvUsesTheHelper(t *testing.T) {
+	src := `scenario "s" {
+  var url = env("API_URL")
+  var prt = env("PORT", "8080")
+  step "x" {
+    get "${url}:${prt}"
+    expect status == 200
+  }
+}`
+	out := buildPython(t, src)
+	// art_env's own body still has to read the variable somehow, so
+	// os.environ.get appears once inside the helper; the thing that must be
+	// gone is the call site that used to default it to "" right there.
+	if strings.Contains(out, `os.environ.get("API_URL", "")`) {
+		t.Fatal("the generated module still reads the environment with a \"\" default")
+	}
+	for _, want := range []string{"def art_env(", `art_env("API_URL")`, `art_env("PORT", "8080")`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the generated module does not hold %q", want)
+		}
+	}
+}
+
+func TestJSEnvUsesTheHelper(t *testing.T) {
+	src := `scenario "s" {
+  var url = env("API_URL")
+  step "x" {
+    get "${url}"
+    expect status == 200
+  }
+}`
+	out := buildJS(t, src)
+	if strings.Contains(out, `?? ""`) {
+		t.Fatal("the generated module still falls back to an empty string")
+	}
+	if !strings.Contains(out, "function art_env(") {
+		t.Fatal("the generated module has no art_env")
+	}
+}
+
 func TestLookupResolvesAnImplementedTarget(t *testing.T) {
 	for _, name := range Names() {
 		target, err := Lookup(name)

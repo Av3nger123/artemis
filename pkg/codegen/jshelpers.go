@@ -19,6 +19,7 @@ package codegen
 // export then knows the other.
 const (
 	jsHelperRender   = "art_render"
+	jsHelperEnv      = "art_env"
 	jsHelperJSON     = "art_json"
 	jsHelperURL      = "art_url"
 	jsHelperAt       = "art_at"
@@ -69,6 +70,35 @@ var jsHelpers = []jsHelper{{
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
   return JSON.stringify(value);
+}
+`,
+}, {
+	name: jsHelperEnv,
+	src: `function art_env(name, fallback) {
+  // Read an environment variable the way artemis does. A variable that is not
+  // set, that is empty, or that holds only space characters has no value: with
+  // no fallback this throws, rather than giving the empty string that used to
+  // go straight into a URL. This is eval.Env.getenv, and the two must agree.
+  const value = process.env[name];
+  if (value !== undefined && String(value).trim() !== "") return value;
+  if (fallback !== undefined) {
+    if (typeof fallback !== "string") {
+      // The checker only judges a *literal* default, so env("URL", captured)
+      // reaches here with whatever the capture holds. ` + "`fallback !== undefined`" + `
+      // alone used to answer null with null, which art_render turns into the
+      // string "null" and puts in a URL -- the exact fault this helper exists
+      // to stop. eval's words, and eval's reading of null as a type of its
+      // own rather than an absent argument.
+      const kind =
+        fallback === null ? "null"
+        : Array.isArray(fallback) ? "array"
+        : typeof fallback === "object" ? "object"
+        : typeof fallback;
+      throw new TypeError(` + "`env()'s argument must be a string, got ${kind}`" + `);
+    }
+    return fallback;
+  }
+  throw new Error(` + "`the environment variable ${name} has no value`" + `);
 }
 `,
 }, {

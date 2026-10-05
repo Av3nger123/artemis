@@ -453,13 +453,17 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 	if err != nil {
 		return jsExpr{}, err
 	}
-	if want, ok := builtinArity[name]; !ok || len(args) != want {
-		if !ok {
+	if ok, min, max := arity(name, len(args)); !ok {
+		if _, known := builtinArity[name]; !known {
 			return jsExpr{}, fmt.Errorf("line %d: %s() is not a function artemis exports",
 				c.Span().Line, name)
 		}
-		return jsExpr{}, fmt.Errorf("line %d: %s() takes %d argument(s); this call has %d",
-			c.Span().Line, name, want, len(args))
+		if min == max {
+			return jsExpr{}, fmt.Errorf("line %d: %s() takes %d argument(s); this call has %d",
+				c.Span().Line, name, max, len(args))
+		}
+		return jsExpr{}, fmt.Errorf("line %d: %s() takes %d to %d argument(s); this call has %d",
+			c.Span().Line, name, min, max, len(args))
 	}
 
 	await := false
@@ -471,11 +475,13 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 
 	switch name {
 	case "env":
-		// Parenthesised, because `??` cannot sit beside `||` or `&&` without
-		// parentheses and an env() read is read in both positions. The empty
-		// default is eval's getenv: a variable that is not set is "" and not an
-		// error.
-		return src("(process.env[" + args[0].src + "] ?? \"\")"), nil
+		// art_env rather than (process.env[name] ?? ""): ART-25 made an absent,
+		// empty or blank variable an error in the interpreter, and the three
+		// targets have to agree about what env() means.
+		if len(args) == 2 {
+			return src(f.use(jsHelperEnv) + "(" + args[0].src + ", " + args[1].src + ")"), nil
+		}
+		return src(f.use(jsHelperEnv) + "(" + args[0].src + ")"), nil
 	case "match":
 		return src(f.use(jsHelperMatch) + "(" + args[0].src + ", " + args[1].src + ")"), nil
 	case "text":

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/lower"
 	"artemis/pkg/eval"
@@ -37,27 +38,29 @@ import (
 // that "a file artemis cannot load is recorded as an errored scenario and the
 // rest still run", and a file with diagnostics is such a file.
 
-// runArtFile compiles path and runs every scenario in it, appending to run.
+// loadArtFile compiles file into what the rest of the run needs: its
+// scenarios and the environment variables it names.
 //
-// The full diagnostics -- the caret gutter, the hints -- go to diagOut, which
-// is always stderr: stdout carries documents only, so `artemis run suite
-// --report json | jq` keeps working. What goes into the result tree is the
-// one-line reason, because report.Console.field trims each line of a value it
-// prints and would destroy a caret's alignment.
-func runArtFile(ctx context.Context, rt *runtimeEnv, file string, run *result.RunResult, rep *report.Console, diagOut io.Writer) {
-	scenarios, err := compileArt(file, diagOut)
+// A file that will not compile is reported to diagOut already (compileArt did
+// that), but is not recorded as an errored scenario here. It is the caller's
+// job to call failScenario with the error this returns -- and the caller
+// gets to choose when, which matters: runFilesWith compiles every file before
+// running any of them, and a file's place in run.Scenarios has to match the
+// order it was discovered in, not the order its outcome became known. Folding
+// the failScenario call in here would put every file that would not compile
+// ahead of every file that ran, regardless of which file actually came first.
+func loadArtFile(file string, diagOut io.Writer) (compiled, error) {
+	scenarios, needs, err := compileArt(file, diagOut)
 	if err != nil {
-		// No name to give it: the file did not compile, so all anyone knows
-		// about these scenarios is where they live.
-		scenario := run.NewScenario("", file)
-		rep.Scenario(scenario)
-		scenario.Fail(0, err)
-		rep.ScenarioFailed(scenario)
-		logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
-		return
+		return compiled{}, err
 	}
-	for _, sc := range scenarios {
-		executeArtScenario(ctx, rt, sc, file, run, rep)
+	return compiled{file: file, scenarios: scenarios, needs: needs}, nil
+}
+
+// runCompiled runs every scenario of one compiled file.
+func runCompiled(ctx context.Context, rt *runtimeEnv, c compiled, run *result.RunResult, rep *report.Console) {
+	for _, sc := range c.scenarios {
+		executeArtScenario(ctx, rt, sc, c.file, run, rep)
 	}
 }
 
@@ -67,10 +70,14 @@ func runArtFile(ctx context.Context, rt *runtimeEnv, file string, run *result.Ru
 // use, so a file this accepts is exactly a file `artemis parse` calls ok. The
 // error is the one-line reason a non-zero exit carries; the diagnostics
 // themselves have already been rendered to diagOut.
-func compileArt(path string, diagOut io.Writer) ([]*lower.Scenario, error) {
+//
+// The env() names a file reads come back beside the scenarios, each error
+// path answering nil: the check before the run (envGate) only ever sees needs
+// from a file that compiled.
+func compileArt(path string, diagOut io.Writer) ([]*lower.Scenario, []check.EnvNeed, error) {
 	src, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	tree, info, bag := frontEnd(path, string(src))
@@ -79,11 +86,11 @@ func compileArt(path string, diagOut io.Writer) ([]*lower.Scenario, error) {
 		files := diag.NewFiles()
 		files.Add(path, string(src))
 		if err := diag.Terminal(diagOut, files, diags); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	if bag.HasErrors() {
-		return nil, firstError(diags)
+		return nil, nil, firstError(diags)
 	}
 
 	scenarios, err := lower.File(tree, info)
@@ -91,9 +98,9 @@ func compileArt(path string, diagOut io.Writer) ([]*lower.Scenario, error) {
 		// Reachable only for a tree the checker accepted and the lowerer could
 		// not read, which is a bug in artemis rather than in the file -- so it
 		// names the file and says what it was doing.
-		return nil, fmt.Errorf("lowering %s: %w", path, err)
+		return nil, nil, fmt.Errorf("lowering %s: %w", path, err)
 	}
-	return scenarios, nil
+	return scenarios, info.EnvNeeds(), nil
 }
 
 // firstError is the one-line reason attached to a scenario that would not
@@ -323,7 +330,7 @@ func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step,
 	// `text(".x")` resolve and what the settle loop re-reads the roots through;
 	// a nil one means there is nothing an assertion could wait for.
 	page := livePage(ctx, st.Type)
-	observed := &eval.Env{Roots: roots, Vars: base.Vars, Getenv: base.Getenv}
+	observed := &eval.Env{Roots: roots, Vars: base.Vars, Lookup: base.Lookup}
 	if page != nil {
 		observed.Elements = page.Elements()
 	}

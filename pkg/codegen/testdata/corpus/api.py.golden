@@ -9,7 +9,10 @@
 #     against a JSON 200 the way it does under the interpreter;
 #   - a step that wrote no `timeout` has none here; artemis applies a default of
 #     its own per step type;
-#   - stdout and stderr are not truncated; artemis caps them for its report.
+#   - stdout and stderr are not truncated; artemis caps them for its report;
+#   - a variable with no value raises at the point of use. `artemis run`
+#     reports all of them before the first step; an exported module has no
+#     such moment.
 
 import json
 import os
@@ -34,6 +37,30 @@ def art_render(value):
     if isinstance(value, (int, float)):
         return repr(value)
     return json.dumps(value, separators=(",", ":"))
+
+
+def art_env(name, default=None):
+    """Read an environment variable the way artemis does. A variable that is
+    not set, that is empty, or that holds only space characters has no value:
+    with no default this raises, rather than giving the empty string that used
+    to go straight into a URL. This is eval.Env.getenv, and the two must agree
+    -- a scenario that fails under `artemis run` has to fail here too."""
+    value = os.environ.get(name)
+    if value is not None and value.strip() != "":
+        return value
+    if default is not None:
+        if not isinstance(default, str):
+            # The checker only judges a *literal* default, so env("PORT", port)
+            # reaches here with whatever port holds. The interpreter errors on
+            # it; returning it would put a number -- or a null that renders as
+            # "null" -- into a URL, which is the fault this helper exists to
+            # stop. eval's words, not Python's, so the two targets read alike.
+            kinds = {bool: "boolean", int: "number", float: "number",
+                     list: "array", dict: "object"}
+            raise TypeError("env()'s argument must be a string, got %s"
+                            % kinds.get(type(default), type(default).__name__))
+        return default
+    raise AssertionError("the environment variable %s has no value" % name)
 
 
 def art_json(response):
@@ -95,14 +122,14 @@ def art_retry(times=1, delay=0.0):
 
 # scenario "the orders api", line 2
 def test_the_orders_api():
-    base = os.environ.get("ARTEMIS_BASE_URL", "")
+    base = art_env("ARTEMIS_BASE_URL")
 
     # step "create one", line 5
     for attempt in art_retry(times=3, delay=1.0):
         with attempt:
             resp = requests.post(
                 f"{art_render(base)}/orders",
-                headers={"Content-Type": "application/json", "Authorization": "Bearer " + art_render(os.environ.get("TOKEN", ""))},
+                headers={"Content-Type": "application/json", "Authorization": "Bearer " + art_render(art_env("TOKEN"))},
                 data=art_render({"sku": "ART-1", "qty": 2, "gift": True, "note": None}),
                 timeout=10.0,
             )

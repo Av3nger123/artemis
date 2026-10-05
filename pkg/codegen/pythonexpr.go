@@ -369,21 +369,27 @@ func (f *pyFile) call(c *ast.Call) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if want, ok := builtinArity[name]; !ok || len(args) != want {
-		if !ok {
+	if ok, min, max := arity(name, len(args)); !ok {
+		if _, known := builtinArity[name]; !known {
 			return "", fmt.Errorf("line %d: %s() is not a function artemis exports", c.Span().Line, name)
 		}
-		return "", fmt.Errorf("line %d: %s() takes %d argument(s); this call has %d",
-			c.Span().Line, name, want, len(args))
+		if min == max {
+			return "", fmt.Errorf("line %d: %s() takes %d argument(s); this call has %d",
+				c.Span().Line, name, max, len(args))
+		}
+		return "", fmt.Errorf("line %d: %s() takes %d to %d argument(s); this call has %d",
+			c.Span().Line, name, min, max, len(args))
 	}
 
 	switch name {
 	case "env":
-		f.need("os")
-		// os.environ.get with a "" default, because that is what eval's getenv
-		// answers for a variable that is not set -- os.environ[name] would
-		// raise where the interpreter returns empty.
-		return "os.environ.get(" + args[0] + ", \"\")", nil
+		// art_env rather than os.environ.get(name, ""): ART-25 made an absent,
+		// empty or blank variable an error in the interpreter, and the three
+		// targets have to agree about what env() means.
+		if len(args) == 2 {
+			return f.use(helperEnv) + "(" + args[0] + ", " + args[1] + ")", nil
+		}
+		return f.use(helperEnv) + "(" + args[0] + ")", nil
 	case "match":
 		p, err := f.patternArg(c.Args[1].Value)
 		if err != nil {
@@ -408,8 +414,35 @@ func (f *pyFile) call(c *ast.Call) (string, error) {
 // here and checked against pkg/eval's own table in the tests, so a builtin added
 // to the language without a Python spelling fails this package's tests rather
 // than emitting a call to something that does not exist.
+//
+// This is the maximum a builtin takes; minBuiltinArity below is the minimum,
+// for env() alone. Both targets share one table because both switches are
+// guarded by arity() before they are reached.
 var builtinArity = map[string]int{
-	"env": 1, "match": 2, "text": 1, "value": 1, "attr": 2, "count": 1, "visible": 1,
+	"env": 2, "match": 2, "text": 1, "value": 1, "attr": 2, "count": 1, "visible": 1,
+}
+
+// minBuiltinArity is how few arguments a builtin accepts, for the builtins that
+// take a range -- today only env(). A name absent here takes exactly
+// builtinArity[name]; this mirrors pkg/dsl/check/scope.go's minArgs, which the
+// checker already enforces before a target ever sees the call, so this is a
+// second line of the same rule rather than a new one.
+var minBuiltinArity = map[string]int{
+	"env": 1,
+}
+
+// arity reports whether got is a count name's builtin accepts, and the bounds
+// that decide the error message when it is not.
+func arity(name string, got int) (ok bool, min, max int) {
+	max, known := builtinArity[name]
+	if !known {
+		return false, 0, 0
+	}
+	min = max
+	if m, ok := minBuiltinArity[name]; ok {
+		min = m
+	}
+	return got >= min && got <= max, min, max
 }
 
 // args emits a call's arguments in order.

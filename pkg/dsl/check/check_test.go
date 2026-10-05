@@ -3,6 +3,7 @@ package check
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -155,12 +156,12 @@ func TestEveryReservedWordHasAPurpose(t *testing.T) {
 }
 
 // TestEveryBuiltinHasAnArityAndASignature holds the three tables that describe
-// a call -- token.Builtins, arity and signatures -- to each other, so a
+// a call -- token.Builtins, params and signatures -- to each other, so a
 // builtin added to the language cannot reach a user as `() takes 0 arguments`
 // with an empty hint.
 func TestEveryBuiltinHasAnArityAndASignature(t *testing.T) {
 	for _, b := range token.Builtins {
-		if _, ok := arity[b]; !ok {
+		if _, ok := params[b]; !ok {
 			t.Errorf("builtin %q has no arity", b)
 		}
 		if signatures[b] == "" {
@@ -326,12 +327,118 @@ func TestAnUncompilablePatternIsNotAlsoCounted(t *testing.T) {
 	}
 }
 
-// Every builtin's parameter list is its arity, so the two tables cannot
-// disagree, and every builtin the language names is one the checker knows.
+// TestEnvTakesOneOrTwoArguments is ART-25's whole point for this task: env()
+// with a default value is as legal as env() without one. Task 2 is where an
+// absent name without a default becomes an error; this only widens the call
+// shape the checker accepts.
+func TestEnvTakesOneOrTwoArguments(t *testing.T) {
+	for _, src := range []string{
+		"scenario \"s\" {\n  var u = env(\"API_URL\")\n}\n",
+		"scenario \"s\" {\n  var u = env(\"API_URL\", \"http://localhost\")\n}\n",
+	} {
+		tree, parsed := parser.Parse("t.art", src)
+		if parsed.HasErrors() {
+			t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+				render("t.art", src, parsed))
+		}
+		_, bag := Check(tree)
+		if bag.HasErrors() {
+			t.Fatalf("env() rejected a legal call: %v", bag.All())
+		}
+	}
+}
+
+// TestEnvRejectsThreeArguments pins the message a range produces, as against
+// the fixed count every other builtin still reports.
+func TestEnvRejectsThreeArguments(t *testing.T) {
+	src := "scenario \"s\" {\n  var u = env(\"A\", \"b\", \"c\")\n}\n"
+	tree, parsed := parser.Parse("t.art", src)
+	if parsed.HasErrors() {
+		t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+			render("t.art", src, parsed))
+	}
+	_, bag := Check(tree)
+	if !bag.HasErrors() {
+		t.Fatal("env() with three arguments was accepted")
+	}
+	got := bag.All()[0].Message
+	want := `env() takes one argument or two; this call has three`
+	if got != want {
+		t.Fatalf("message\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// TestEnvSecondArgumentMustBeAString is the default value held to the same
+// rule as every other string parameter: a literal of the wrong kind is caught
+// here rather than surprising a run.
+func TestEnvSecondArgumentMustBeAString(t *testing.T) {
+	src := "scenario \"s\" {\n  var u = env(\"A\", 8080)\n}\n"
+	tree, parsed := parser.Parse("t.art", src)
+	if parsed.HasErrors() {
+		t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+			render("t.art", src, parsed))
+	}
+	_, bag := Check(tree)
+	if !bag.HasErrors() {
+		t.Fatal("a number as the default value was accepted")
+	}
+}
+
+// An empty name is rejected here rather than at the step that uses it: no
+// environment can supply "", and the run-time sentence would be "the
+// environment variable  has no value" -- a message with a hole in it where the
+// name should be.
+func TestEnvRejectsAnEmptyName(t *testing.T) {
+	for _, src := range []string{
+		"scenario \"s\" {\n  var u = env(\"\")\n}\n",
+		// A default does not excuse it: env("", "8080") always answers
+		// "8080", so the call says one thing and does another.
+		"scenario \"s\" {\n  var u = env(\"\", \"8080\")\n}\n",
+	} {
+		tree, parsed := parser.Parse("t.art", src)
+		if parsed.HasErrors() {
+			t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+				render("t.art", src, parsed))
+		}
+		info, bag := Check(tree)
+		all := bag.All()
+		if len(all) != 1 {
+			t.Fatalf("got %d diagnostics, want exactly 1:\n%s", len(all), render("t.art", src, bag))
+		}
+		if all[0].Code != diag.BadValue {
+			t.Errorf("code = %s, want %s", all[0].Code, diag.BadValue)
+		}
+		want := "env()'s argument must name an environment variable, not the empty string"
+		if all[0].Message != want {
+			t.Errorf("message\n got: %s\nwant: %s", all[0].Message, want)
+		}
+		if needs := info.EnvNeeds(); len(needs) != 0 {
+			t.Errorf("EnvNeeds() = %v, want none: a nameless row in the gate's block names nothing", needs)
+		}
+	}
+}
+
+// Every builtin the language names is one the checker knows, each of its
+// parameters says what it takes, and its two bounds are coherent.
+//
+// The bounds are the part that had no test. The assertion used to be `high !=
+// len(ps)` against a high that Arity derives from len(ps) -- len(ps) !=
+// len(ps), which cannot fail -- and nothing read minArgs at all: minArgs["env"]
+// = 3 would have made every env() call an arity error with every test still
+// green. A minimum above the maximum, or below one, is now the failure.
 func TestParamsAndBuiltinsAgree(t *testing.T) {
 	for name, ps := range params {
-		if got := arity[name]; got != len(ps) {
-			t.Errorf("%s(): arity %d, %d parameters", name, got, len(ps))
+		low, high, ok := Arity(name)
+		if !ok {
+			t.Errorf("%s() is in params and Arity does not know it", name)
+			continue
+		}
+		if high != len(ps) {
+			t.Errorf("%s(): max arity %d, %d parameters", name, high, len(ps))
+		}
+		if low < 1 || low > high {
+			t.Errorf("%s(): accepts %d to %d arguments, which is not a range a call can satisfy",
+				name, low, high)
 		}
 		if !token.IsBuiltin(name) {
 			t.Errorf("%s() is in params and not in token.Builtins, so token.IsBuiltin "+
@@ -341,6 +448,19 @@ func TestParamsAndBuiltinsAgree(t *testing.T) {
 			if p.want == "" || len(p.kinds) == 0 {
 				t.Errorf("%s()'s parameter %d says nothing about what it takes", name, i)
 			}
+		}
+	}
+	for name, low := range minArgs {
+		ps, ok := params[name]
+		if !ok {
+			t.Errorf("minArgs has %q, which has no parameter list -- so Arity never reads it", name)
+			continue
+		}
+		// A minimum equal to the maximum is the default and says nothing; a
+		// builtin that no longer takes a range should leave minArgs instead.
+		if low >= len(ps) {
+			t.Errorf("minArgs[%q] = %d against %d parameters: a minimum that is not below the "+
+				"maximum is either a contradiction or a line with no effect", name, low, len(ps))
 		}
 	}
 }
@@ -357,6 +477,68 @@ func TestMatchIsCallableEverywhere(t *testing.T) {
 			t.Errorf("Functions(%s) = %v, and does not offer env()", ty, fns)
 		}
 	}
+}
+
+// TestInfoCollectsEnvNames states the three exclusions together: a default
+// value answers the call so it is not a need, a name that is not a plain
+// string literal is a value this stage cannot read, and the two live names
+// come back in the order they were written.
+func TestInfoCollectsEnvNames(t *testing.T) {
+	src := `scenario "s" {
+  var url = env("API_URL")
+  var pw  = env("API_PASSWORD")
+  var prt = env("PORT", "8080")
+  var dyn = env(url)
+  step "x" {
+    get "${url}" {
+      header "A" = pw
+    }
+    expect status == 200
+  }
+}`
+	info, bag := checkSource(t, src)
+	if bag.HasErrors() {
+		t.Fatalf("the file did not compile: %v", bag.All())
+	}
+	var got []string
+	for _, need := range info.EnvNeeds() {
+		got = append(got, need.Name)
+	}
+	want := []string{"API_URL", "API_PASSWORD"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// TestInfoCollectsOneNameOnce is the same name read twice, which is one need:
+// a run only needs to be told once that API_URL is absent.
+func TestInfoCollectsOneNameOnce(t *testing.T) {
+	src := `scenario "s" {
+  var a = env("API_URL")
+  var b = env("API_URL")
+  step "x" {
+    get "${a}${b}"
+    expect status == 200
+  }
+}`
+	info, _ := checkSource(t, src)
+	if len(info.EnvNeeds()) != 1 {
+		t.Fatalf("got %d needs, want 1", len(info.EnvNeeds()))
+	}
+}
+
+// checkSource parses and checks src, the shared setup for a test that wants
+// an Info rather than a diagnostic about a specific call. A parse failure
+// fails loudly here rather than letting Check run on a nil tree and the real
+// assertion below report a confusing zero.
+func checkSource(t *testing.T, src string) (*Info, *diag.Bag) {
+	t.Helper()
+	tree, parsed := parser.Parse("t.art", src)
+	if parsed.HasErrors() {
+		t.Fatalf("source does not parse, so this test proves nothing:\n%s",
+			render("t.art", src, parsed))
+	}
+	return Check(tree)
 }
 
 func readFixture(t *testing.T, name string) string {

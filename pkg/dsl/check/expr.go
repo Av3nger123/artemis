@@ -13,7 +13,7 @@ import (
 // signatures are what a builtin's call looks like, for an arity hint. A hint
 // that shows the shape is worth more than one that restates the count.
 var signatures = map[string]string{
-	"env":     `env("API_URL")`,
+	"env":     `env("API_URL") or env("PORT", "8080")`,
 	"match":   `match(raw, /id=([0-9]+)/)`,
 	"text":    `text("[role=status]")`,
 	"value":   `value("#email")`,
@@ -26,9 +26,14 @@ var signatures = map[string]string{
 // argument; this call has 2" reads like a template and "takes one argument;
 // this call has two" reads like a sentence. A count with no word falls back to
 // digits, which only an absurd call reaches.
+//
+// numbers holds 3 as well as 0-2 now: env() takes one argument or two, so a
+// call with a third is the first arity mistake this package reports against a
+// range rather than a fixed count, and "this call has 3" would read like the
+// one case that forgot the sentence.
 var (
 	counts  = map[int]string{1: "one argument", 2: "two arguments"}
-	numbers = map[int]string{0: "none", 1: "one", 2: "two"}
+	numbers = map[int]string{0: "none", 1: "one", 2: "two", 3: "three"}
 )
 
 func count(n int) string {
@@ -43,6 +48,15 @@ func number(n int) string {
 		return w
 	}
 	return strconv.Itoa(n)
+}
+
+// takes spells the accepted count for an arity message: one number when a
+// builtin takes exactly that many, and a range when it takes either.
+func takes(low, high int) string {
+	if low == high {
+		return count(low)
+	}
+	return count(low) + " or " + number(high)
 }
 
 // ordinals name an argument's position for a message about a call with more
@@ -226,9 +240,10 @@ func (c *checker) call(x *ast.Call, v *view) {
 	}
 
 	ps := params[name]
-	if len(x.Args) != len(ps) {
+	low, high, _ := Arity(name)
+	if len(x.Args) < low || len(x.Args) > high {
 		c.bag.Error(x.Span(), diag.BadArity,
-			"%s() takes %s; this call has %s", name, count(len(ps)), number(len(x.Args))).
+			"%s() takes %s; this call has %s", name, takes(low, high), number(len(x.Args))).
 			Hintf("%s", signatures[name])
 		return
 	}
@@ -252,9 +267,63 @@ func (c *checker) call(x *ast.Call, v *view) {
 			"%s()'s %sargument must be %s, not %s", name, which, ps[i].want, describeLiteral(lit)).
 			Hintf("%s", signatures[name])
 	}
+	if name == "env" {
+		c.envName(x)
+		c.envNeed(x)
+	}
 	if name == "match" && len(x.Args) == 2 {
 		c.groups(x.Args[1].Value)
 	}
+}
+
+// envName rejects env("") -- a name no environment can ever supply.
+//
+// Here rather than at run time, which is the split this file already follows:
+// a literal is settled at compile time and a name that came out of a var is
+// pkg/eval's. The run-time message would be "the environment variable  has no
+// value", a sentence with a hole in it where the name should be, and the
+// author would have to find the empty call themselves.
+//
+// A default value does not excuse it: env("", "8080") always answers "8080",
+// so the call says one thing and does another.
+func (c *checker) envName(x *ast.Call) {
+	if len(x.Args) == 0 {
+		return
+	}
+	lit, ok := x.Args[0].Value.(*ast.Literal)
+	if !ok || lit == nil || lit.Kind() != token.String || lit.Tok.Value != "" {
+		return
+	}
+	c.bag.Error(lit.Span(), diag.BadValue,
+		"env()'s argument must name an environment variable, not the empty string").
+		Hintf("%s", signatures["env"])
+}
+
+// envNeed records the variable an env() call names, when the name is one the
+// checker can read.
+//
+// A call with a default value is not recorded: the default answers it, so a
+// run with nothing set still works. A name that is not a plain string literal
+// is not recorded either -- an interpolation holds a value this stage does not
+// have -- and pkg/eval reports that one when the step reaches it.
+//
+// An empty name is not recorded either, because envName has already reported
+// it: the file does not compile, so the gate never sees these needs at all,
+// and recording one would put a nameless row in a block about names.
+func (c *checker) envNeed(x *ast.Call) {
+	if len(x.Args) != 1 {
+		return
+	}
+	lit, ok := x.Args[0].Value.(*ast.Literal)
+	if !ok || lit == nil || lit.Kind() != token.String {
+		return
+	}
+	name := lit.Tok.Value
+	if name == "" || c.info.envSeen[name] {
+		return
+	}
+	c.info.envSeen[name] = true
+	c.info.envs = append(c.info.envs, EnvNeed{Name: name, Span: lit.Span()})
 }
 
 // accepts reports whether a literal of kind k satisfies this parameter.

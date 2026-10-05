@@ -61,7 +61,7 @@ func stepN(t *testing.T, src string, n int) *Step {
 // scenario's scope and nothing else. A step's own roots are not on it, because a
 // URL cannot read the status of the request it is part of.
 func envOf(scope executor.Scope) *eval.Env {
-	return &eval.Env{Vars: scope.Vars(), Getenv: func(string) string { return "" }}
+	return &eval.Env{Vars: scope.Vars(), Lookup: func(string) (string, bool) { return "", false }}
 }
 
 // The design document's worked example is the file this package has to lower, so

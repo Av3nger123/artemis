@@ -13,6 +13,9 @@
 //   - a step that wrote no `timeout` has none here; artemis applies a default of
 //     its own per step type;
 //   - stdout and stderr are not truncated; artemis caps them for its report;
+//   - a variable with no value raises at the point of use. `artemis run`
+//     reports all of them before the first step; an exported module has no
+//     such moment;
 //   - vite owns two environment variables, so `env("BASE_URL")` reads vite's
 //     own base path here and `env("NODE_ENV")` reads the mode vitest ran in.
 //     Name yours something else.
@@ -31,6 +34,33 @@ function art_render(value) {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
   return JSON.stringify(value);
+}
+
+function art_env(name, fallback) {
+  // Read an environment variable the way artemis does. A variable that is not
+  // set, that is empty, or that holds only space characters has no value: with
+  // no fallback this throws, rather than giving the empty string that used to
+  // go straight into a URL. This is eval.Env.getenv, and the two must agree.
+  const value = process.env[name];
+  if (value !== undefined && String(value).trim() !== "") return value;
+  if (fallback !== undefined) {
+    if (typeof fallback !== "string") {
+      // The checker only judges a *literal* default, so env("URL", captured)
+      // reaches here with whatever the capture holds. `fallback !== undefined`
+      // alone used to answer null with null, which art_render turns into the
+      // string "null" and puts in a URL -- the exact fault this helper exists
+      // to stop. eval's words, and eval's reading of null as a type of its
+      // own rather than an absent argument.
+      const kind =
+        fallback === null ? "null"
+        : Array.isArray(fallback) ? "array"
+        : typeof fallback === "object" ? "object"
+        : typeof fallback;
+      throw new TypeError(`env()'s argument must be a string, got ${kind}`);
+    }
+    return fallback;
+  }
+  throw new Error(`the environment variable ${name} has no value`);
 }
 
 function art_eq(a, b) {
@@ -151,13 +181,13 @@ async function art_retry(options, attempt) {
 // scenario "the database agrees", line 2
 test("the database agrees", async () => {
   let db, rows, exit_code, stdout, stderr, proc;
-  db = (process.env["PGDATABASE"] ?? "");
+  db = art_env("PGDATABASE");
 
   // step "seed it", line 5
   proc = spawnSync("psql", ["-v", "ON_ERROR_STOP=1", "-f", "seed.sql"], {
     cwd: "./fixtures",
     input: "",
-    env: { ...process.env, "PGDATABASE": art_render(db), "PGPASSWORD": art_render((process.env["PGPASSWORD"] ?? "")) },
+    env: { ...process.env, "PGDATABASE": art_render(db), "PGPASSWORD": art_render(art_env("PGPASSWORD")) },
     encoding: "utf8",
     timeout: 30000,
   });

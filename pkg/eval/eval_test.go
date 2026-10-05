@@ -563,3 +563,17 @@ func TestUnknownOperatorIsReachableOnlyByABug(t *testing.T) {
 		t.Errorf("compare with an invented operator = %v, want an unknown-operator error", err)
 	}
 }
+
+func TestEnvWithADynamicNameErrorsAtUse(t *testing.T) {
+	env := &Env{
+		Vars:   map[string]any{"which": "API_URL"},
+		Lookup: func(string) (string, bool) { return "", false },
+	}
+	_, err := evalSrc(t, `env(which)`, env)
+	if err == nil {
+		t.Fatal("a dynamic name with no value gave no error")
+	}
+	if !strings.Contains(err.Error(), Absent("API_URL").Error()) {
+		t.Fatalf("the reason must be the one text:\n got: %v\nwant: %v", err, Absent("API_URL"))
+	}
+}

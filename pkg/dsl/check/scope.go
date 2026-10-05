@@ -68,10 +68,12 @@ var aPattern = param{
 
 // params is what each builtin takes, in order. env() and match() are
 // everywhere; the rest are browser-only and rejected elsewhere by scope, not
-// by this table. Its length is the builtin's arity, so the two cannot
-// disagree.
+// by this table. Its length used to be the builtin's whole arity, back when
+// every builtin took exactly as many arguments as it had parameters; env()'s
+// default value ended that, so the length is now only the maximum and
+// minArgs below holds what the length cannot say.
 var params = map[string][]param{
-	"env":     {aString},
+	"env":     {aString, aString},
 	"match":   {aString, aPattern},
 	"text":    {aString},
 	"value":   {aString},
@@ -80,15 +82,41 @@ var params = map[string][]param{
 	"visible": {aString},
 }
 
-// arity is how many arguments each builtin takes, derived from params so that
-// adding a builtin is one line rather than two that can drift.
-var arity = func() map[string]int {
-	m := make(map[string]int, len(params))
-	for name, ps := range params {
-		m[name] = len(ps)
+// minArgs is how few arguments a builtin accepts, for the builtins that take a
+// range. A name that is not here takes exactly as many as it has parameters,
+// which is every builtin but env().
+//
+// env()'s second argument is the default value for a variable with no value.
+// The arity of a builtin was the length of its parameter list until that
+// argument existed, and a length cannot say "one or two" -- so the length is
+// now the maximum and this is the minimum.
+var minArgs = map[string]int{
+	"env": 1,
+}
+
+// Arity is how many arguments name accepts: the fewest, the most, and whether
+// this is a builtin at all.
+//
+// Exported because pkg/eval and pkg/codegen each keep their own copy of these
+// numbers -- eval because Eval must be total over a tree that was never
+// checked, codegen because its own switch decides the emission -- and a test in
+// each package asserts its copy against this one. The third copy, in
+// pkg/codegen, still required exactly one argument for env() well after the
+// checker and eval had both learned about the default value, and it was found
+// by hand rather than by a test.
+//
+// This package depends on token, ast and diag alone, so neither of those
+// packages' tests can import it into a cycle.
+func Arity(name string) (minimum, maximum int, ok bool) {
+	ps, ok := params[name]
+	if !ok {
+		return 0, 0, false
 	}
-	return m
-}()
+	if m, ok := minArgs[name]; ok {
+		return m, len(ps), true
+	}
+	return len(ps), len(ps), true
+}
 
 // freeFns are the builtins callable in every scope, as against the browser
 // element functions. env() reads the process environment and match() reads a

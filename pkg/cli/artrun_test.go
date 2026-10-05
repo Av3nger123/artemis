@@ -419,7 +419,7 @@ scenario "second" {
 // compileArt reports a file that is not there as a plain error: a file with no
 // contents has nothing to be diagnosed about.
 func TestCompileArtMissingFile(t *testing.T) {
-	_, err := compileArt(filepath.Join(t.TempDir(), "nope.art"), io.Discard)
+	_, _, err := compileArt(filepath.Join(t.TempDir(), "nope.art"), io.Discard)
 	if err == nil {
 		t.Fatal("compileArt() error = nil, want one for a file that is not there")
 	}
@@ -480,7 +480,12 @@ func TestArtRunHonoursTheContext(t *testing.T) {
 	cancel()
 
 	run := result.NewRun()
-	runArtFile(ctx, &runtimeEnv{reg: executor.Default()}, path, run, report.Discard(), io.Discard)
+	rt := &runtimeEnv{reg: executor.Default()}
+	c, err := loadArtFile(path, io.Discard)
+	if err != nil {
+		t.Fatalf("loadArtFile() failed to load a file that should compile: %v", err)
+	}
+	runCompiled(ctx, rt, c, run, report.Discard())
 	run.Finish()
 
 	if run.Passed() {

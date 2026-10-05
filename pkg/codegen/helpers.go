@@ -16,6 +16,7 @@ package codegen
 // The helper keys, which are also the Python names.
 const (
 	helperRender   = "art_render"
+	helperEnv      = "art_env"
 	helperSeconds  = "art_seconds"
 	helperJSON     = "art_json"
 	helperExists   = "art_exists"
@@ -64,6 +65,32 @@ var helpers = []helper{{
     if isinstance(value, (int, float)):
         return repr(value)
     return json.dumps(value, separators=(",", ":"))
+`,
+}, {
+	name:    helperEnv,
+	imports: []string{"os"},
+	src: `def art_env(name, default=None):
+    """Read an environment variable the way artemis does. A variable that is
+    not set, that is empty, or that holds only space characters has no value:
+    with no default this raises, rather than giving the empty string that used
+    to go straight into a URL. This is eval.Env.getenv, and the two must agree
+    -- a scenario that fails under ` + "`artemis run`" + ` has to fail here too."""
+    value = os.environ.get(name)
+    if value is not None and value.strip() != "":
+        return value
+    if default is not None:
+        if not isinstance(default, str):
+            # The checker only judges a *literal* default, so env("PORT", port)
+            # reaches here with whatever port holds. The interpreter errors on
+            # it; returning it would put a number -- or a null that renders as
+            # "null" -- into a URL, which is the fault this helper exists to
+            # stop. eval's words, not Python's, so the two targets read alike.
+            kinds = {bool: "boolean", int: "number", float: "number",
+                     list: "array", dict: "object"}
+            raise TypeError("env()'s argument must be a string, got %s"
+                            % kinds.get(type(default), type(default).__name__))
+        return default
+    raise AssertionError("the environment variable %s has no value" % name)
 `,
 }, {
 	name:    helperSeconds,

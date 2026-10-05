@@ -256,6 +256,14 @@ type RunResult struct {
 	Duration time.Duration
 	// Status is derived from the scenarios by Finish.
 	Status Status
+	// Error is why the run as a whole could not proceed, and empty for every
+	// run that got as far as its scenarios.
+	//
+	// It exists because a run that the check before the run stopped has no
+	// scenarios at all, and "no scenarios and a failing status" is also what a
+	// suite that matched no file looks like. A consumer has to be able to tell
+	// those apart.
+	Error string
 	// Scenarios are the scenarios it ran, in order.
 	Scenarios []*ScenarioResult
 

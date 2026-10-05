@@ -6,11 +6,15 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
@@ -719,5 +723,278 @@ func TestDiscoverEmptyFolderNamesTheArtExtension(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), ".art") {
 		t.Errorf("error = %q, want it to name .art", err)
+	}
+}
+
+// This is the test the design calls the important one: the check before the
+// run covers the whole folder, not one file at a time. If it did not, the
+// first file's step would already have reached the server by the time the
+// third file's absent variable was discovered -- a suite that creates real
+// orders before anyone learns its environment is incomplete. The hit count
+// on a real httptest handler is the only thing that can actually prove that
+// never happened; a stub would prove nothing.
+func TestRunStopsBeforeTheFirstStepWhenAVariableIsAbsent(t *testing.T) {
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		hits++
+	}))
+	defer srv.Close()
+
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01-first.art": `scenario "first" {
+  step "touch it" {
+    get "` + srv.URL + `/orders"
+    expect status == 200
+  }
+}`,
+		"03-reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_REPORT_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs([]string{"run", root})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	err := RootCmd.Execute()
+	if err == nil {
+		t.Fatal("the run passed with an absent variable")
+	}
+	if hits != 0 {
+		t.Fatalf("%d request(s) reached the server; the gate must run before any step", hits)
+	}
+	if !strings.Contains(errOut.String(), "ARTEMIS_TEST_REPORT_URL") {
+		t.Fatalf("the block does not name the variable:\n%s", errOut.String())
+	}
+}
+
+// A gated run and a run of an empty suite both end with no scenarios and a
+// failing status, and run.Error is the only thing a consumer of the JSON
+// report can use to tell them apart (ART-25 task 6). This test drives a real
+// gate trip through runFilesWith -- not a RunResult built by hand -- so it
+// fails if either the Status override or the Error assignment next to it in
+// runFilesWith's gate branch is ever dropped or no-opped: every other test in
+// this package and in pkg/report either asserts on stderr text that comes
+// from envGateReport, not run.Error or the report, or constructs run.Error by
+// hand and never calls runFilesWith at all.
+func TestRunFilesWithSetsErrorAndStatusWhenTheEnvGateTrips(t *testing.T) {
+	initOnce.Do(Init)
+
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01-reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_GATE_WIRING_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+	files, err := discover(root)
+	if err != nil {
+		t.Fatalf("discover() error = %v", err)
+	}
+
+	run := runFilesWith(&runtimeEnv{reg: executor.Default()}, files, report.Discard(), &bytes.Buffer{})
+
+	if run.Status != result.StatusError {
+		t.Fatalf("run.Status = %v, want %v", run.Status, result.StatusError)
+	}
+	if run.Error == "" {
+		t.Fatal("run.Error is empty; the gate tripped but left no reason behind")
+	}
+	if !strings.Contains(run.Error, "ARTEMIS_TEST_GATE_WIRING_URL") {
+		t.Fatalf("run.Error = %q, want it to name the absent variable", run.Error)
+	}
+
+	var doc bytes.Buffer
+	if err := report.WriteJSON(&doc, run); err != nil {
+		t.Fatalf("WriteJSON() error = %v", err)
+	}
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(doc.Bytes(), &parsed); err != nil {
+		t.Fatalf("the document is not valid JSON: %v\n%s", err, doc.String())
+	}
+	if parsed.Error != run.Error {
+		t.Fatalf(`document "error" = %q, want it to equal run.Error %q`, parsed.Error, run.Error)
+	}
+}
+
+// Pass 2 of runFilesWith is unconditional on purpose: a file that will not
+// compile is still recorded, and its diagnostic still printed, even when the
+// environment gate has already tripped on a different file. Nothing else in
+// this package pins that down -- envcheck_test.go only tests the gate in
+// isolation, and the test above has no broken file -- so a later change that
+// returns early as soon as the gate trips would pass every other test while
+// silently dropping both the caret gutter and the errored scenario for the
+// file that was broken before the gate ever ran. The broken file is placed
+// first, not last, so an implementation that only handles "broken file after
+// the point where everything else already ran" cannot pass by accident.
+func TestRunReportsABrokenFileEvenWhenTheEnvGateAlsoTrips(t *testing.T) {
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01-broken.art": brokenArt("http://unused.invalid"),
+		"02-reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_REPORT_URL_2")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs([]string{"run", root})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	err := RootCmd.Execute()
+	if err == nil {
+		t.Fatal("the run passed with a broken file and an absent variable")
+	}
+
+	stderr := errOut.String()
+	if !strings.Contains(stderr, "^^^") {
+		t.Errorf("stderr does not carry the compile diagnostic's caret gutter:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "timeot") {
+		t.Errorf("stderr does not name the broken file's misspelled field:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "ARTEMIS_TEST_REPORT_URL_2") {
+		t.Errorf("stderr does not name the absent variable:\n%s", stderr)
+	}
+
+	// The compile failure still reaches the console as an errored scenario,
+	// not just a diagnostic: the console summary goes to stdout here (no
+	// --report moved it), and "ERROR" beside the file is how it renders one.
+	stdout := out.String()
+	if !strings.Contains(stdout, "ERROR") || !strings.Contains(stdout, "01-broken.art") {
+		t.Errorf("stdout does not record the broken file as an errored scenario:\n%s", stdout)
+	}
+}
+
+// The gate's block says "read .env" only when a .env was in fact read.
+// envFileOf used to answer the flag's value whatever happened, so a run in a
+// directory with no .env -- the silent, normal case -- told the reader to go
+// and inspect a file that does not exist, and a `-e prod.env` that failed to
+// load claimed to have been read as well.
+//
+// The directory is changed because `.env` is resolved against the working
+// directory: a temporary one with nothing in it is the no-.env case, and the
+// same directory with a .env in it is the other.
+func TestInitRunEnvNamesTheEnvFileOnlyWhenOneLoaded(t *testing.T) {
+	cases := []struct {
+		name  string
+		write bool
+		want  string
+	}{
+		{name: "no .env to read", write: false, want: ""},
+		{name: "a .env that loaded", write: true, want: ".env"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if c.write {
+				body := []byte("ARTEMIS_TEST_INIT_RUN_ENV=1\n")
+				if err := os.WriteFile(filepath.Join(dir, ".env"), body, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			inDir(t, dir)
+
+			// A command of its own rather than runCmd: cobra has no getter for
+			// a writer, so restoring runCmd's after the test would mean
+			// nailing it to os.Stderr -- which an explicitly set writer beats,
+			// and the next test to capture stderr through RootCmd would get
+			// nothing.
+			cmd := &cobra.Command{Use: "run"}
+			cmd.Flags().StringP("log", "l", "", "")
+			cmd.Flags().StringP("env", "e", ".env", "")
+			var errOut bytes.Buffer
+			cmd.SetErr(&errOut)
+
+			re, err := initRunEnv(cmd)
+			if err != nil {
+				t.Fatalf("initRunEnv() error = %v", err)
+			}
+			defer re.closer.Close()
+			if re.envFile != c.want {
+				t.Errorf("envFile = %q, want %q", re.envFile, c.want)
+			}
+			// A missing default .env stays silent: that is the documented
+			// behaviour, and this is the path that decides it.
+			if errOut.Len() != 0 {
+				t.Errorf("initRunEnv wrote to stderr: %s", errOut.String())
+			}
+		})
+	}
+}
+
+// inDir runs the rest of the test with dir as the working directory. os.Chdir
+// rather than t.Chdir: this module is on go 1.22 and t.Chdir arrived in 1.24.
+func inDir(t *testing.T, dir string) {
+	t.Helper()
+	was, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(was); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// The whole command, not just initRunEnv: a gated run in a directory with no
+// .env must not print the "read <file>" clause. The test above pins the path
+// initRunEnv reports; this pins that reportRun passes that path -- and not the
+// flag's default -- to envGateReport.
+func TestRunDoesNotClaimToHaveReadAnEnvFileWhenThereIsNone(t *testing.T) {
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_NO_ENV_FILE_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+	inDir(t, dir)
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs([]string{"run", "reports.art"})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	if err := RootCmd.Execute(); err == nil {
+		t.Fatal("the run passed with an absent variable")
+	}
+	stderr := errOut.String()
+	if !strings.Contains(stderr, "ARTEMIS_TEST_NO_ENV_FILE_URL") {
+		t.Fatalf("the block does not name the variable:\n%s", stderr)
+	}
+	if strings.Contains(stderr, "read .env") {
+		t.Errorf("the block claims to have read a .env that is not there:\n%s", stderr)
 	}
 }
