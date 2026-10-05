@@ -97,9 +97,9 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v7
         with:
           # Pinned to the version .golangci.yml is written for. An unpinned
           # linter turns someone else's release into a red build here.
-          version: v1.64.8
+          version: v2.14.0
           args: --timeout=5m

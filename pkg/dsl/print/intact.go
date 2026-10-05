@@ -51,7 +51,7 @@ func isNil(n ast.Node) bool {
 		return true
 	}
 	switch v := reflect.ValueOf(n); v.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map:
+	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map:
 		return v.IsNil()
 	}
 	return false
