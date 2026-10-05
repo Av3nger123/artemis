@@ -774,3 +774,59 @@ func TestRunStopsBeforeTheFirstStepWhenAVariableIsAbsent(t *testing.T) {
 		t.Fatalf("the block does not name the variable:\n%s", errOut.String())
 	}
 }
+
+// Pass 2 of runFilesWith is unconditional on purpose: a file that will not
+// compile is still recorded, and its diagnostic still printed, even when the
+// environment gate has already tripped on a different file. Nothing else in
+// this package pins that down -- envcheck_test.go only tests the gate in
+// isolation, and the test above has no broken file -- so a later change that
+// returns early as soon as the gate trips would pass every other test while
+// silently dropping both the caret gutter and the errored scenario for the
+// file that was broken before the gate ever ran. The broken file is placed
+// first, not last, so an implementation that only handles "broken file after
+// the point where everything else already ran" cannot pass by accident.
+func TestRunReportsABrokenFileEvenWhenTheEnvGateAlsoTrips(t *testing.T) {
+	initOnce.Do(Init)
+	resetRunFlags(t)
+
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01-broken.art": brokenArt("http://unused.invalid"),
+		"02-reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_REPORT_URL_2")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+
+	var out, errOut bytes.Buffer
+	RootCmd.SetArgs([]string{"run", root})
+	RootCmd.SetOut(&out)
+	RootCmd.SetErr(&errOut)
+	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
+
+	err := RootCmd.Execute()
+	if err == nil {
+		t.Fatal("the run passed with a broken file and an absent variable")
+	}
+
+	stderr := errOut.String()
+	if !strings.Contains(stderr, "^^^") {
+		t.Errorf("stderr does not carry the compile diagnostic's caret gutter:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "timeot") {
+		t.Errorf("stderr does not name the broken file's misspelled field:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "ARTEMIS_TEST_REPORT_URL_2") {
+		t.Errorf("stderr does not name the absent variable:\n%s", stderr)
+	}
+
+	// The compile failure still reaches the console as an errored scenario,
+	// not just a diagnostic: the console summary goes to stdout here (no
+	// --report moved it), and "ERROR" beside the file is how it renders one.
+	stdout := out.String()
+	if !strings.Contains(stdout, "ERROR") || !strings.Contains(stdout, "01-broken.art") {
+		t.Errorf("stdout does not record the broken file as an errored scenario:\n%s", stdout)
+	}
+}

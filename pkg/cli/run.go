@@ -323,6 +323,15 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		runCompiled(context.Background(), rt, a.compiled, run, rep)
 	}
 	run.Finish()
+	// Finish derives Status from the scenarios, and a gated run can hold
+	// scenarios that all passed -- the files that happened to need nothing
+	// absent -- or none at all. Either way the run did not do what it was
+	// asked: force the status a reader of the console summary or the JSON
+	// report sees to match the non-zero exit envGateError already gives the
+	// process, so neither one calls this a pass.
+	if len(faults) > 0 {
+		run.Status = result.StatusError
+	}
 	return run
 }
 
