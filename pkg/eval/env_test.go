@@ -297,3 +297,25 @@ func TestAnElementFunctionWithNoPageIsAReason(t *testing.T) {
 		t.Errorf("error = %q, want %q", err.Error(), want)
 	}
 }
+
+// TestEnvNonStringDefaultNamesTheType is the interpreter's half of a sentence
+// the two generated helpers also have to write.
+//
+// The checker judges only a literal, so env("PORT", port) compiles and this is
+// what the step then says. pkg/codegen's art_env tests assert the part of it a
+// helper can reproduce -- everything before " at ", which is the source text
+// of the argument and is not something a helper has.
+func TestEnvNonStringDefaultNamesTheType(t *testing.T) {
+	env := &Env{
+		Lookup: func(string) (string, bool) { return "", false },
+		Vars:   map[string]any{"p": 8080.0},
+	}
+	_, err := evalSrc(t, `env("PORT", p)`, env)
+	if err == nil {
+		t.Fatal("a number as the default value was accepted")
+	}
+	want := "env()'s argument must be a string, got number at p"
+	if err.Error() != want {
+		t.Fatalf("message\n got: %s\nwant: %s", err, want)
+	}
+}

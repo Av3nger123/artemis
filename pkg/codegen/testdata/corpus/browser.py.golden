@@ -51,6 +51,16 @@ def art_env(name, default=None):
     if value is not None and value.strip() != "":
         return value
     if default is not None:
+        if not isinstance(default, str):
+            # The checker only judges a *literal* default, so env("PORT", port)
+            # reaches here with whatever port holds. The interpreter errors on
+            # it; returning it would put a number -- or a null that renders as
+            # "null" -- into a URL, which is the fault this helper exists to
+            # stop. eval's words, not Python's, so the two targets read alike.
+            kinds = {bool: "boolean", int: "number", float: "number",
+                     list: "array", dict: "object"}
+            raise TypeError("env()'s argument must be a string, got %s"
+                            % kinds.get(type(default), type(default).__name__))
         return default
     raise AssertionError("the environment variable %s has no value" % name)
 
