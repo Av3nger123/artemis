@@ -775,6 +775,59 @@ func TestRunStopsBeforeTheFirstStepWhenAVariableIsAbsent(t *testing.T) {
 	}
 }
 
+// A gated run and a run of an empty suite both end with no scenarios and a
+// failing status, and run.Error is the only thing a consumer of the JSON
+// report can use to tell them apart (ART-25 task 6). This test drives a real
+// gate trip through runFilesWith -- not a RunResult built by hand -- so it
+// fails if either the Status override or the Error assignment next to it in
+// runFilesWith's gate branch is ever dropped or no-opped: every other test in
+// this package and in pkg/report either asserts on stderr text that comes
+// from envGateReport, not run.Error or the report, or constructs run.Error by
+// hand and never calls runFilesWith at all.
+func TestRunFilesWithSetsErrorAndStatusWhenTheEnvGateTrips(t *testing.T) {
+	initOnce.Do(Init)
+
+	root := writeTree(t, t.TempDir(), map[string]string{
+		"01-reports.art": `scenario "reports" {
+  var url = env("ARTEMIS_TEST_GATE_WIRING_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}`,
+	})
+	files, err := discover(root)
+	if err != nil {
+		t.Fatalf("discover() error = %v", err)
+	}
+
+	run := runFilesWith(&runtimeEnv{reg: executor.Default()}, files, report.Discard(), &bytes.Buffer{})
+
+	if run.Status != result.StatusError {
+		t.Fatalf("run.Status = %v, want %v", run.Status, result.StatusError)
+	}
+	if run.Error == "" {
+		t.Fatal("run.Error is empty; the gate tripped but left no reason behind")
+	}
+	if !strings.Contains(run.Error, "ARTEMIS_TEST_GATE_WIRING_URL") {
+		t.Fatalf("run.Error = %q, want it to name the absent variable", run.Error)
+	}
+
+	var doc bytes.Buffer
+	if err := report.WriteJSON(&doc, run); err != nil {
+		t.Fatalf("WriteJSON() error = %v", err)
+	}
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(doc.Bytes(), &parsed); err != nil {
+		t.Fatalf("the document is not valid JSON: %v\n%s", err, doc.String())
+	}
+	if parsed.Error != run.Error {
+		t.Fatalf(`document "error" = %q, want it to equal run.Error %q`, parsed.Error, run.Error)
+	}
+}
+
 // Pass 2 of runFilesWith is unconditional on purpose: a file that will not
 // compile is still recorded, and its diagnostic still printed, even when the
 // environment gate has already tripped on a different file. Nothing else in
