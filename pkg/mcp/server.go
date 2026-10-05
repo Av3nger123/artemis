@@ -49,6 +49,7 @@ func New(opts Options) *mcp.Server {
 	srv := &server{ws: ws}
 
 	addGrammar(s, srv)
+	addValidate(s, srv)
 	return s
 }
 
