@@ -650,7 +650,14 @@ an absent variable is a fault in the environment every file of the run shares.
 
 A name artemis cannot read before the run -- `env(which)`,
 `env("${prefix}_URL")` -- is reported when the step reaches it, as a step
-error, with the same reason.
+error, with the same reason. `env("")` is a compile error: no environment can
+supply a variable with no name.
+
+The check reads the files that compiled. A file that will not compile
+contributes none of its `env()` names, so a run of a broken file beside a good
+one runs the good one and reports the absent variable only once the broken file
+compiles -- two runs for two faults. A file that will not compile is already
+reported, with its line, and correcting it is the next move either way.
 
 ```dotenv
 API_URL=https://localhost:8000
@@ -1028,6 +1035,10 @@ file is reported rather than only the first: a file with three mistakes takes on
 run to fix. Nothing panics -- a malformed file produces diagnostics and a
 non-zero exit, never a stack trace.
 
+An environment error keeps both habits. Every absent variable of the whole run
+is reported, in one block, before the first step -- so an incomplete
+environment takes one run to correct rather than one run per variable.
+
 The diagnostic bar is a compiler's:
 
 ```
@@ -1041,6 +1052,13 @@ The distinction between a step error and an assertion failure is worth caring
 about: a flaky environment should not read as a broken API. `status` in every
 report is `error` for the first and `fail` for the second.
 
+An environment error is a fault of the run and not of a scenario, so it is the
+*run* level that carries it: `status` is `error` and `error` holds the reason,
+naming the variables. No scenario that compiled is started, so `scenarios` is
+empty -- bar a file that would not compile, which is recorded as an errored
+scenario whatever the environment says, because that fault was known first and
+belongs to the file.
+
 ---
 
 ## The exit code
@@ -1051,8 +1069,9 @@ report is `error` for the first and `fail` for the second.
 | `1` | Anything else |
 
 Anything else is: a failed assertion, an errored step, a scenario whose file
-would not compile, a bad flag, a path that matched no scenario file, and a report
-that could not be written. There is no third code -- a caller that needs to tell
+would not compile, a variable an `env()` call needs and the environment does not
+supply, a bad flag, a path that matched no scenario file, and a report that could
+not be written. There is no third code -- a caller that needs to tell
 those apart reads the [report](#the-json-report), where the shape of the failure
 is spelled out.
 

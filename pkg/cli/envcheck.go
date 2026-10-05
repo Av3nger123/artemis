@@ -42,6 +42,19 @@ type envFault struct {
 //
 // Every fault, not the first: a run with four absent variables takes one run
 // to fix rather than four.
+//
+// One exception, and SPEC.md's "nothing executes" is qualified by it: the
+// needs come from the files that compiled, so a file that will not compile
+// contributes none of its env() names. A suite of a broken file that needs
+// API_URL plus a good file that needs nothing runs the good file for real and
+// never mentions API_URL. Correcting the typo is what makes the gate trip --
+// two runs for two faults, with the good file's side effects in between.
+//
+// That is accepted rather than designed around. The alternative is reading
+// needs out of a tree the checker rejected, whose env() calls may be
+// half-parsed, and naming variables for a file nobody can run yet. A file that
+// will not compile is already reported with its line and its caret, and
+// correcting it is the reader's next move either way.
 func envGate(files []compiled, lookup func(string) (string, bool)) []envFault {
 	if lookup == nil {
 		lookup = os.LookupEnv

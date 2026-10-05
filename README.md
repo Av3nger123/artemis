@@ -827,6 +827,13 @@ holds only space characters has no value; with no default, that is an error
 that artemis reports before the run's first step, naming every such variable
 at once.
 
+**This changed.** `env()` on a variable with no value used to give the empty
+string, so `get "${url}/orders"` quietly requested `/orders` and the run
+reported a refused connection or somebody else's 404 instead of the absent
+variable behind it. It now fails. A scenario that wants the old behaviour for
+one variable writes `env("NAME", "")`, which asks for an empty value in a way
+the file shows.
+
 ```art
 scenario "staging" {
   var url    = env("API_URL")
