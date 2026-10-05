@@ -83,6 +83,7 @@ golden:
 	$(GOTEST) ./pkg/dsl/print -update
 	$(GOTEST) ./pkg/dsl/encode -update
 	$(GOTEST) ./pkg/codegen -update
+	$(GOTEST) ./pkg/mcp -update
 
 vet:
 	$(GOVET) $(PKGS)

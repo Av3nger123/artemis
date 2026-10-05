@@ -867,6 +867,42 @@ A file named with `-e` that cannot be read is a warning; a missing default
 **Remember not to commit your environment files to version control systems like
 Git, as they may contain sensitive information.**
 
+## The MCP server
+
+`artemis mcp` serves the Model Context Protocol on stdin and stdout, so an agent
+can author scenarios against the real grammar and the real checker instead of
+from memory.
+
+```sh
+artemis mcp --workspace /path/to/repo
+```
+
+Four tools, all of them read-only:
+
+| Tool | What it answers |
+| --- | --- |
+| `artemis_grammar` | Every finite option set in the language |
+| `artemis_validate` | Every diagnostic in a piece of source text, with codes and suggestions. Nothing is read from disk |
+| `artemis_format` | The same source in canonical layout: the bytes `artemis fmt` writes |
+| `artemis_list` | The `.art` files in the workspace, in path order |
+
+No tool writes a file. An agent composes source, calls `artemis_validate` until
+`ok` is true, and writes the file with whatever write tool its own host
+provides -- the tool the user has already approved.
+
+Each tool returns its document on two channels. The text block is the document
+exactly as artemis wrote it; structured content is the same thing decoded, with
+`ok` added where a caller needs one boolean to loop on. The split exists because
+the protocol decodes structured content on the way, so key order does not
+survive it -- and the point of these tools is that the bytes are the CLI's
+bytes. `artemis_validate` returns what `artemis parse --json` prints, byte for
+byte, and a test asserts it over every fixture in `pkg/dsl/testdata/invalid`. A
+diagnostic an agent reads is the diagnostic a person reads.
+
+Every path a tool is given is relative to `--workspace`, which defaults to the
+directory the server was started in. A path that leaves the workspace is
+refused, including one that leaves it through a symlink.
+
 ## Checking a command, not an API
 
 A `terminal` step runs a command and asserts on what it did. It is the escape

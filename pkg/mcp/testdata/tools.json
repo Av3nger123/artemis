@@ -1,0 +1,94 @@
+[
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Return .art source text in canonical layout: the exact bytes `artemis fmt` writes. Nothing is read from or written to disk. Call this on source that already validates, before writing the file, so the file on disk is fmt-clean and a later edit is a one-line diff. Source that does not compile has no canonical form and comes back with its diagnostics instead.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "description": "a label for the diagnostics' spans; this file is never opened",
+          "type": "string"
+        },
+        "source": {
+          "description": "the .art source text to format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "name": "artemis_format",
+    "outputSchema": {
+      "type": "object"
+    }
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Every finite option set in the Artemis DSL: the step types, the fields each action block takes, the assertion operators, and the values each field accepts. Call this before writing a .art file to learn what the language permits instead of guessing.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "artemis_grammar",
+    "outputSchema": {
+      "type": "object"
+    }
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List the .art scenario files in the workspace, in path order, as workspace-relative paths. Call this first to find out what scenarios exist before reading or changing one.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "description": "a workspace-relative directory to walk; the whole workspace when absent",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "artemis_list",
+    "outputSchema": {
+      "type": "object"
+    }
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Check .art source text and return every diagnostic: the stable code, the severity, the span, the message, a hint, and mechanical suggestions whose `replace` is a ready fix. Nothing is read from or written to disk -- pass the source you are about to write. Call this after each change until `ok` is true. Key your behaviour off `code`, which is stable; `message` is not.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "description": "a label for the diagnostics' spans; this file is never opened",
+          "type": "string"
+        },
+        "source": {
+          "description": "the .art source text to check",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "name": "artemis_validate",
+    "outputSchema": {
+      "type": "object"
+    }
+  }
+]
