@@ -124,9 +124,11 @@ func reportRun(cmd *cobra.Command, path string) error {
 	}
 	// run.Passed() is derived from the scenarios, and a gated run has none --
 	// so without this check a run that stopped before its first step would
-	// report a pass.
+	// report a pass. run.Error already holds this text -- runFilesWith set it
+	// from the same faults -- so this reuses it rather than building the
+	// message a second time from rt.envFaults.
 	if len(rt.envFaults) > 0 {
-		return envGateError(rt.envFaults)
+		return errors.New(run.Error)
 	}
 	if !run.Passed() {
 		return runFailedError(run)
@@ -331,6 +333,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// process, so neither one calls this a pass.
 	if len(faults) > 0 {
 		run.Status = result.StatusError
+		run.Error = envGateError(faults).Error()
 	}
 	return run
 }

@@ -58,6 +58,7 @@ type jsonRun struct {
 	DurationMS    float64        `json:"duration_ms"`
 	Status        string         `json:"status"`
 	Passed        bool           `json:"passed"`
+	Error         string         `json:"error"`
 	Counts        jsonCounts     `json:"counts"`
 	Scenarios     []jsonScenario `json:"scenarios"`
 	Failures      []jsonFailure  `json:"failures"`
@@ -180,6 +181,7 @@ func fromRun(run *result.RunResult) jsonRun {
 		DurationMS:    millis(run.Duration),
 		Status:        run.Status.String(),
 		Passed:        run.Passed(),
+		Error:         run.Error,
 		Counts:        fromCounts(run.Counts()),
 		Scenarios:     make([]jsonScenario, 0, len(run.Scenarios)),
 		Failures:      fromDiagnostics(run.Diagnostics()),

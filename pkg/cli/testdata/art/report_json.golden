@@ -41,6 +41,7 @@ FAIL in <dur>
   "duration_ms": 0,
   "status": "error",
   "passed": false,
+  "error": "",
   "counts": {
     "scenarios": {
       "total": 3,

@@ -66,6 +66,7 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
   "duration_ms": 14,
   "status": "fail",
   "passed": false,
+  "error": "",
   "counts": {
     "scenarios": {
       "total": 1,
@@ -296,6 +297,24 @@ func TestWriteJSONOfNilIsAnEmptyRun(t *testing.T) {
 	}
 	if doc["started_at"] != "" {
 		t.Errorf("started_at = %v, want empty for a run that never began", doc["started_at"])
+	}
+}
+
+// A gated run and a run of an empty suite both hold no scenarios, and until
+// now both produced the same document. error is what tells them apart, so it
+// has to carry the gate's text and not move schema_version doing it -- adding
+// a key is not the kind of change that bumps the version.
+func TestWriteJSONCarriesARunLevelError(t *testing.T) {
+	run := result.NewRun()
+	run.Error = "the environment is not complete: no value for API_URL"
+	run.Finish()
+
+	doc := decode(t, writeJSON(t, run))
+	if doc["error"] != run.Error {
+		t.Errorf("error = %q, want %q", doc["error"], run.Error)
+	}
+	if doc["schema_version"] != float64(SchemaVersion) {
+		t.Errorf("schema_version = %v, want %d; a new key does not move it", doc["schema_version"], SchemaVersion)
 	}
 }
 
