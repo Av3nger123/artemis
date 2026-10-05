@@ -79,28 +79,56 @@ func documentBytes(t *testing.T, res *mcp.CallToolResult) []byte {
 	return []byte(text.Text)
 }
 
-// Every tool this version serves is read-only. A tool that claims otherwise, or
-// claims nothing, gets gated differently by a host -- or not at all.
-func TestEveryToolIsAnnotatedReadOnly(t *testing.T) {
-	cs := connect(t, t.TempDir())
+// Which tools can change or reach anything, stated as a table and asserted
+// against what the server actually registered.
+//
+// A host cannot gate what it was not told about, so an annotation that drifts
+// from what the tool does is the bug that matters most here -- a read-only
+// claim on artemis_run would have it auto-approved somewhere, and it runs a
+// shell command. The table is exhaustive on purpose: a tool added without a
+// decision about its annotations fails this test rather than shipping quietly.
+func TestToolAnnotationsSayWhatEachToolCanDo(t *testing.T) {
+	type want struct{ readOnly, openWorld bool }
+	expected := map[string]want{
+		"artemis_grammar":  {readOnly: true, openWorld: false},
+		"artemis_validate": {readOnly: true, openWorld: false},
+		"artemis_format":   {readOnly: true, openWorld: false},
+		"artemis_list":     {readOnly: true, openWorld: false},
+		// Writes one .art file in the workspace. Runs nothing, reaches nothing.
+		"artemis_write": {readOnly: false, openWorld: false},
+		// Executes the scenario: a terminal step is a shell command, an api
+		// step sends real requests.
+		"artemis_run": {readOnly: false, openWorld: true},
+	}
 
+	cs := connect(t, t.TempDir())
 	res, err := cs.ListTools(context.Background(), &mcp.ListToolsParams{})
 	if err != nil {
 		t.Fatalf("listing tools: %v", err)
 	}
-	if len(res.Tools) == 0 {
-		t.Fatal("the server registered no tools")
+	if len(res.Tools) != len(expected) {
+		t.Fatalf("the server registered %d tools, the table names %d", len(res.Tools), len(expected))
 	}
+
 	for _, tool := range res.Tools {
+		w, named := expected[tool.Name]
+		if !named {
+			t.Errorf("%s is registered but not in the table; decide its annotations", tool.Name)
+			continue
+		}
 		if tool.Annotations == nil {
 			t.Errorf("%s has no annotations", tool.Name)
 			continue
 		}
-		if !tool.Annotations.ReadOnlyHint {
-			t.Errorf("%s is not annotated read-only", tool.Name)
+		if tool.Annotations.ReadOnlyHint != w.readOnly {
+			t.Errorf("%s readOnlyHint = %v, want %v", tool.Name, tool.Annotations.ReadOnlyHint, w.readOnly)
 		}
-		if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
-			t.Errorf("%s is not annotated closed-world", tool.Name)
+		if tool.Annotations.OpenWorldHint == nil {
+			t.Errorf("%s leaves openWorldHint unset, which the protocol reads as true", tool.Name)
+			continue
+		}
+		if *tool.Annotations.OpenWorldHint != w.openWorld {
+			t.Errorf("%s openWorldHint = %v, want %v", tool.Name, *tool.Annotations.OpenWorldHint, w.openWorld)
 		}
 	}
 }

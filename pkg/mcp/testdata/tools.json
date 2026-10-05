@@ -65,6 +65,34 @@
   },
   {
     "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": true
+    },
+    "description": "Run the scenarios in a workspace-relative .art file, or in a folder of them, and return the full JSON report: counts, every scenario and step, every assertion, and a failure block naming what was expected and what happened. Read `passed` -- a run whose assertions failed is a successful call reporting a failed test, not an error. WARNING: this executes the scenario. A terminal step runs a shell command, a browser step drives a browser, and an api step sends real requests to whatever URL it names.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "envFile": {
+          "description": "a workspace-relative env file to load before the run",
+          "type": "string"
+        },
+        "path": {
+          "description": "a workspace-relative .art file, or a folder of them",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "artemis_run",
+    "outputSchema": {
+      "type": "object"
+    }
+  },
+  {
+    "annotations": {
       "openWorldHint": false,
       "readOnlyHint": true
     },
@@ -87,6 +115,35 @@
       "type": "object"
     },
     "name": "artemis_validate",
+    "outputSchema": {
+      "type": "object"
+    }
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false
+    },
+    "description": "Write .art source to a workspace-relative path, after checking it and putting it in canonical layout. Source that does not compile is refused with its diagnostics and nothing is written, so this tool cannot leave a broken scenario on disk. The file written is always fmt-clean. An existing file is overwritten; `created` says which happened.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "a workspace-relative .art path to write",
+          "type": "string"
+        },
+        "source": {
+          "description": "the .art source text to write",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "source"
+      ],
+      "type": "object"
+    },
+    "name": "artemis_write",
     "outputSchema": {
       "type": "object"
     }

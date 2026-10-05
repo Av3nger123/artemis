@@ -11,6 +11,8 @@
 package mcpserver
 
 import (
+	"os"
+
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,12 +27,23 @@ const Version = "v1"
 // read outside of.
 type Options struct {
 	Workspace string
+
+	// Binary is the artemis to run scenarios with. Empty means this one, which
+	// is what `artemis mcp` wants: the server and the runner are then the same
+	// build and cannot disagree about the language.
+	//
+	// It exists because a test cannot use "this one" -- inside `go test` the
+	// running executable is the test binary, and asking it to `run` a scenario
+	// would re-enter the test harness. A test points this at a real build.
+	Binary string
 }
 
 // server is what the tool handlers close over: the workspace, and nothing else.
 // There is no session and no cache, so a restart loses nothing.
 type server struct {
 	ws workspace
+	// bin is the artemis that artemis_run executes. See Options.Binary.
+	bin string
 }
 
 // New builds the server with every tool registered. It does not connect: the
@@ -46,12 +59,22 @@ func New(opts Options) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "artemis", Version: Version}, nil)
 
 	ws, _ := newWorkspace(opts.Workspace)
-	srv := &server{ws: ws}
+	bin := opts.Binary
+	if bin == "" {
+		// An executable path that cannot be found leaves bin empty, and
+		// artemis_run then fails per call with exec's own error. Every other
+		// tool still works, which is the same choice New makes about a
+		// workspace that will not resolve.
+		bin, _ = os.Executable()
+	}
+	srv := &server{ws: ws, bin: bin}
 
 	addGrammar(s, srv)
 	addValidate(s, srv)
 	addFormat(s, srv)
 	addList(s, srv)
+	addWrite(s, srv)
+	addRun(s, srv)
 	return s
 }
 

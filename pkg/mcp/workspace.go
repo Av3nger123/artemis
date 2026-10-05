@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -83,4 +84,44 @@ func (w workspace) resolveArt(rel string) (string, error) {
 		return "", fmt.Errorf("%s: not a scenario file (artemis reads %s files)", rel, front.Ext)
 	}
 	return w.resolve(rel)
+}
+
+// resolveNew is resolve for a path that does not exist yet, which is what a
+// write is given.
+//
+// resolve cannot serve it: it resolves symlinks, and a path with no file at the
+// end of it has nothing to resolve. So the parent is checked instead -- the
+// parent must exist and must be inside the workspace -- and the name is joined
+// onto the resolved parent. A caller cannot escape through a directory that is
+// not there, and cannot create the directory either.
+func (w workspace) resolveNew(rel string) (string, error) {
+	if !front.IsArtFile(rel) {
+		return "", fmt.Errorf("%s: not a scenario file (artemis writes %s files)", rel, front.Ext)
+	}
+	dir, name := filepath.Split(rel)
+	parent, err := w.resolve(filepath.Clean(dir))
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(parent, name), nil
+}
+
+// resolveRunTarget is resolve for the path a run is given, which is a scenario
+// file or a folder of them.
+//
+// `artemis run` takes either, so this does too. The extension rule applies only
+// to a regular file: a folder is walked for *.art and is not itself one.
+func (w workspace) resolveRunTarget(rel string) (string, error) {
+	abs, err := w.resolve(rel)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", rel, err)
+	}
+	if !info.IsDir() && !front.IsArtFile(rel) {
+		return "", fmt.Errorf("%s: not a scenario file (artemis runs %s files)", rel, front.Ext)
+	}
+	return abs, nil
 }
