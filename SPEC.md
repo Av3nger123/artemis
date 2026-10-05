@@ -626,7 +626,8 @@ Parentheses group: `expect (a == 1 or a == 2) and b exists`.
 
 | Builtin | Returns |
 | --- | --- |
-| `env("NAME")` | The environment variable `NAME`, or `""` when it is not set |
+| `env("NAME")` | The environment variable `NAME`. A variable that is not set, that is empty, or that holds only space characters has no value, and a call with no default is an error |
+| `env("NAME", "default")` | The same, with `default` when `NAME` has no value. `env("FLAG", "")` is how a scenario asks for an empty value |
 | `match(<text>, /re/)` | The text the regex matched: capturing group 1 when the pattern has one, the whole match when it does not |
 | `text()`, `value()`, `attr()`, `count()`, `visible()` | What an element on the page says -- [in a `browser` step only](#what-a-browser-step-binds) |
 
@@ -635,13 +636,21 @@ The five element functions are callable in a `browser` step and nowhere else:
 calling one anywhere else is a compile error naming what is in scope there.
 
 `env()` is an ordinary expression and is legal wherever an expression is -- in a
-`var`, in a URL, in a header, in a `body`, in an `expect`. An unset name is the
-empty string rather than an error: an absent variable is how a scenario says "no
-token".
+`var`, in a URL, in a header, in a `body`, in an `expect`.
 
 Environment variables come from the process environment and from the `.env` file
 in the working directory, or from the file given with `-e`. A file named with
 `-e` that cannot be read is a warning; a missing default `.env` is silent.
+
+Before the first step of a run, artemis reads every `env()` call whose name is
+a plain string literal and reports every one of those variables that has no
+value, in one message, and runs nothing. The check covers the whole run and not
+one file at a time: a file that will not compile is a fault in that file, and
+an absent variable is a fault in the environment every file of the run shares.
+
+A name artemis cannot read before the run -- `env(which)`,
+`env("${prefix}_URL")` -- is reported when the step reaches it, as a step
+error, with the same reason.
 
 ```dotenv
 API_URL=https://localhost:8000
@@ -1002,14 +1011,15 @@ and not here, because a grammar says the shape and not the meaning.
 
 ---
 
-## The three kinds of failure
+## The four kinds of failure
 
-Artemis keeps three things apart everywhere -- on the terminal, in the reports,
+Artemis keeps four things apart everywhere -- on the terminal, in the reports,
 and in what it decides to retry:
 
 | | What it is | Examples |
 | --- | --- | --- |
 | **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse |
+| **Environment error** | The run cannot start: a variable an `env()` call needs has no value. Nothing executes | an absent `API_URL`, an `API_URL=` with no value |
 | **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
 | **Assertion failure** | The step ran and gave the wrong answer | `status == 200` against a 404 |
 
@@ -1085,6 +1095,7 @@ so a reader can tell "nothing failed" from "nothing ran":
   "duration_ms": 14,
   "status": "fail",
   "passed": false,
+  "error": "",
   "counts": {
     "scenarios":  { "total": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0 },
     "steps":      { "total": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0 },
@@ -1156,6 +1167,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. Not nanoseconds, and not the seconds the JUnit report uses |
 | `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. Nothing produces `skip` today; it is in the vocabulary |
 | `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary |
+| `error` | run | Why the run could not proceed at all, and `""` for every run that reached its scenarios. An environment error is the one thing that sets it |
 | `counts` | run | Totals per level, each a `{total, passed, failed, errored, skipped}` tally, so nobody walks the tree to say "2 of 5 assertions failed" |
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |

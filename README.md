@@ -820,10 +820,12 @@ path that cannot be opened fails the command.
 
 ### Environment variables
 
-`env("NAME")` is an ordinary expression and is legal wherever an expression is:
-in a `var`, in a URL, in a header, in a `body`, in an `expect`. An unset name is
-the empty string rather than an error -- an absent variable is how a scenario
-says "no token".
+`env("NAME")` and `env("NAME", "default")` are ordinary expressions and are
+legal wherever an expression is: in a `var`, in a URL, in a header, in a
+`body`, in an `expect`. A variable that is not set, that is empty, or that
+holds only space characters has no value; with no default, that is an error
+that artemis reports before the run's first step, naming every such variable
+at once.
 
 ```art
 scenario "staging" {
