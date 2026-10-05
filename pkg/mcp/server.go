@@ -50,6 +50,8 @@ func New(opts Options) *mcp.Server {
 
 	addGrammar(s, srv)
 	addValidate(s, srv)
+	addFormat(s, srv)
+	addList(s, srv)
 	return s
 }
 
