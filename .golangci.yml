@@ -15,6 +15,18 @@ linters:
     - revive
     - unconvert
   settings:
+    # v2's staticcheck is v1's staticcheck, gosimple and stylecheck merged under
+    # one name, so the default set is wider than what this repo ever enforced:
+    # v1 ran SA (staticcheck) and S1 (gosimple) and did not enable stylecheck.
+    # ST and QF are switched back off, so the migration to v2 changed the
+    # schema and not the rules. Turning either family on is a decision with a
+    # diff attached -- ST1005 wants error strings reworded, and this repo
+    # asserts error strings in goldens -- so it belongs in its own change.
+    staticcheck:
+      checks:
+        - all
+        - -ST*
+        - -QF*
     misspell:
       locale: UK
     revive:
