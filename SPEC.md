@@ -125,6 +125,7 @@ scenario "orders" {
 | --- | --- | --- |
 | `config` | `config <ident> { <key> = <expr>, ... }` | Settings for one step type, named by the ident |
 | `var` | `var <ident> = <expr>` | A value every step of the scenario can name |
+| `secret` | `secret var ...`, `secret capture ...` | A binding whose value no report prints |
 | `step` | `step "<name>" { ... }` | One action and what to expect of it |
 
 Steps run in the order they are written, one after another. There is no way to
@@ -145,6 +146,64 @@ var headers = {"Accept": "application/json"}
 A `var` may name an earlier `var`, as `root` does. It may not name a later one,
 and it may not name a `capture`: captures do not exist yet when variables are
 evaluated. Both are compile errors.
+
+### `secret`
+
+`secret` is a modifier before `var` and before `capture`:
+
+```art
+scenario "checkout" {
+  secret var pw = env("API_PASSWORD")
+  var url = env("API_URL")
+
+  step "get a token" {
+    post "${url}/token" {
+      body = {"username": "alice", "password": pw}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}
+```
+
+Three things are true of it.
+
+**It changes no request.** A `secret` binding sends the same bytes as a plain
+one. The modifier says what a *report* may print, and nothing else. It is not
+protection in transit.
+
+**A value built from a secret binding is secret too.** The `Authorization`
+header above is withheld because it interpolates `token`. This holds through
+interpolation, a call, a comparison, an object field and an array element. A
+`capture` whose own expression reads a secret binding is secret with no modifier
+on it, so `capture part = match(pw, /^(.{3})/)` needs none.
+
+**It is positional, not a keyword.** `secret` means the modifier only
+immediately before `var` or `capture`. `var secret = "x"` and `capture secret =
+body.kind` are both legal, as `capture body = ...` already is.
+
+A report prints `***` in place of a withheld value. The length is fixed, so it
+does not report the length of the value. The two operands of a comparison are
+withheld separately, so `expect pw == "hunter2"` still shows which side was
+which. A failure between two types keeps naming both types: the type of a
+credential is not the credential.
+
+What a report withholds is decided per field. A request body written as an
+object literal is withheld field by field, so one secret password does not hide
+the rest of a body. A body that is not a literal -- `body = payload` -- has no
+field to address, so all of it is withheld. The same is true of a secret under
+an interpolated key, `{"${k}": pw}`: no path can name it, so the whole body
+goes.
+
+A `secret` binding that no step reads is not an error. A file under edit must
+still compile.
 
 ### `config`
 
@@ -962,7 +1021,7 @@ File        = { Scenario } ;
 Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl } "}" ;
 ConfigDecl  = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
 Setting     = Ident "=" Expr ;
-VarDecl     = "var" Ident "=" Expr ;
+VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl    = "step" String "{" Action { StepStmt } "}" ;
 
 Action      = Request | Run | Browser ;
@@ -986,7 +1045,7 @@ BrowserAct  = "goto"   Expr
 
 StepStmt    = Expect | Capture | Retry | Timeout ;
 Expect      = "expect" Expr [ "within" String ] ;
-Capture     = "capture" Ident "=" Expr ;
+Capture     = [ "secret" ] "capture" Ident "=" Expr ;
 Retry       = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
 RetryField  = "times" "=" Int | "delay" "=" String ;
 Timeout     = "timeout" "=" String ;
