@@ -79,6 +79,18 @@ type AssertionResult struct {
 	// line of its own. A reader of a failure resolves zero against the step's
 	// own line rather than printing it; see Diagnostics.
 	Line int
+
+	// ExpectedSecret and ActualSecret report that the operand came from a
+	// binding the scenario declared `secret`, so every report writer prints a
+	// placeholder in its place. ART-54.
+	//
+	// They are per-operand and not one flag, because `expect pw == "hunter2"`
+	// has one secret side and withholding both would hide the comparison
+	// entirely. The tree keeps the true value either way: redaction is the
+	// writer's job, which is what leaves room for a flag that shows a value on
+	// a local run without re-architecting anything.
+	ExpectedSecret bool
+	ActualSecret   bool
 }
 
 // Passed reports whether the assertion did not fail the run.
@@ -94,6 +106,11 @@ type Assertion struct {
 	Expected any
 	Actual   any
 	Line     int
+
+	// ExpectedSecret and ActualSecret are carried through to the recorded
+	// assertion. See AssertionResult.
+	ExpectedSecret bool
+	ActualSecret   bool
 }
 
 // Pass records a as having passed.
@@ -113,15 +130,17 @@ func (a Assertion) Errored(err error) AssertionResult {
 
 func (a Assertion) with(status Status, errMsg string) AssertionResult {
 	return AssertionResult{
-		Step:     a.Step,
-		Kind:     a.Kind,
-		Path:     a.Path,
-		Operator: a.Operator,
-		Expected: a.Expected,
-		Actual:   a.Actual,
-		Status:   status,
-		Error:    errMsg,
-		Line:     a.Line,
+		Step:           a.Step,
+		Kind:           a.Kind,
+		Path:           a.Path,
+		Operator:       a.Operator,
+		Expected:       a.Expected,
+		Actual:         a.Actual,
+		Status:         status,
+		Error:          errMsg,
+		Line:           a.Line,
+		ExpectedSecret: a.ExpectedSecret,
+		ActualSecret:   a.ActualSecret,
 	}
 }
 

@@ -257,7 +257,7 @@ func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, er
 		case *ast.Browser:
 			out.Acts = acts(it)
 		case *ast.Expect:
-			out.Expects = append(out.Expects, expect(it, t, info))
+			out.Expects = append(out.Expects, expect(it, t, info, secrets))
 		case *ast.Capture:
 			if it.Name.Kind != token.Ident {
 				continue // the parser reported a capture with no name.

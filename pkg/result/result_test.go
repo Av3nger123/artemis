@@ -339,3 +339,43 @@ func TestAllPassed(t *testing.T) {
 		})
 	}
 }
+
+// ART-54: the two secret marks have to survive the Assertion -> AssertionResult
+// constructors, which is the one thing result does with them.
+func TestAssertionCarriesSecretMarks(t *testing.T) {
+	base := Assertion{
+		Step: "one", Kind: "expect", Path: "pw", Operator: "equals",
+		Expected: "wanted", Actual: "hunter2",
+		ActualSecret: true,
+	}
+	for _, tc := range []struct {
+		name string
+		got  AssertionResult
+	}{
+		{"Fail", base.Fail()},
+		{"Pass", base.Pass()},
+		{"Errored", base.Errored(errors.New("boom"))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !tc.got.ActualSecret {
+				t.Error("ActualSecret did not survive")
+			}
+			if tc.got.ExpectedSecret {
+				t.Error("ExpectedSecret must stay false")
+			}
+			// The tree keeps the true value; redaction belongs to the writers.
+			if tc.got.Actual != "hunter2" {
+				t.Errorf("Actual = %v, want the true value", tc.got.Actual)
+			}
+		})
+	}
+}
+
+// An assertion with no marks must be exactly what it was before ART-54, which is
+// what keeps every existing golden byte-identical.
+func TestAssertionWithoutMarksIsUnchanged(t *testing.T) {
+	got := Assertion{Step: "one", Kind: "expect", Expected: 200, Actual: 404}.Fail()
+	if got.ExpectedSecret || got.ActualSecret {
+		t.Errorf("marks default to true: %+v", got)
+	}
+}

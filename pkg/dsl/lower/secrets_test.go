@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"artemis/pkg/eval"
 	"artemis/pkg/shared/models"
 )
 
@@ -223,5 +224,64 @@ func TestSecretsTerminalEnvAndStdin(t *testing.T) {
 	}
 	if m.Secrets.Args {
 		t.Error("args must not be secret")
+	}
+}
+
+// operandMarks has to agree with how eval.Assert fills an Outcome: for a
+// comparison Actual is the left operand and Expected the right. A disagreement
+// here would redact the wrong half of a failure message.
+func TestSecretsAssertionOperands(t *testing.T) {
+	t.Setenv("P", "hunter2")
+	sc := one(t, `scenario "s" {
+  secret var pw = env("P")
+  step "one" {
+    get "/x"
+    expect body.given == pw
+    expect pw == body.given
+    expect status == 200
+    expect pw exists
+    expect not pw == "x"
+    expect body.token == "plain"
+  }
+}`)
+	tests := []struct {
+		n                        int
+		wantExpected, wantActual bool
+		why                      string
+	}{
+		{0, true, false, `body.given == pw: the right operand is secret`},
+		{1, false, true, `pw == body.given: the left operand is secret`},
+		{2, false, false, `status == 200: neither side is secret`},
+		{3, false, true, `pw exists: one operand, and it is the subject`},
+		{4, false, true, `not pw == "x": parses as not (pw == "x"), so pw is the left operand`},
+		{5, false, false, `body.token == "plain": a member name is not a binding`},
+	}
+	for _, tc := range tests {
+		e := sc.Steps[0].Expects[tc.n]
+		if e.ExpectedSecret != tc.wantExpected || e.ActualSecret != tc.wantActual {
+			t.Errorf("%s: expected=%v actual=%v, want expected=%v actual=%v",
+				tc.why, e.ExpectedSecret, e.ActualSecret, tc.wantExpected, tc.wantActual)
+		}
+	}
+}
+
+// The marks have to reach the recorded assertion, which is the only reason they
+// exist. Assert is the seam.
+func TestSecretsReachTheRecordedAssertion(t *testing.T) {
+	t.Setenv("P", "hunter2")
+	sc, scope := bound(t, `scenario "s" {
+  secret var pw = env("P")
+  step "one" {
+    get "/x"
+    expect pw == "something else"
+  }
+}`)
+	env := &eval.Env{Vars: scope.Vars(), Lookup: func(string) (string, bool) { return "", false }}
+	got := sc.Steps[0].Expects[0].Assert("one", env)
+	if !got.ActualSecret {
+		t.Error("ActualSecret did not reach the recorded assertion")
+	}
+	if got.Actual != "hunter2" {
+		t.Errorf("Actual = %v: the tree must keep the true value", got.Actual)
 	}
 }

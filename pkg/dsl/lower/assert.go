@@ -7,6 +7,7 @@ import (
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
+	"artemis/pkg/dsl/taint"
 	"artemis/pkg/eval"
 	"artemis/pkg/executor"
 	"artemis/pkg/result"
@@ -61,6 +62,13 @@ type Expect struct {
 
 	// Line is the line the `expect` keyword sits on.
 	Line int
+
+	// ExpectedSecret and ActualSecret say which operand of this assertion read
+	// a secret binding. They are decided here, at lowering time, because that
+	// is where the expression and the scenario's secret set are both in hand --
+	// pkg/eval stays pure and knows nothing about a secret. ART-54.
+	ExpectedSecret bool
+	ActualSecret   bool
 }
 
 // Capture is one `capture name = expr`.
@@ -116,7 +124,12 @@ func (e *Expect) Within(env *eval.Env) (time.Duration, error) {
 // observed plus the scenario's scope. One call to eval.Assert and one
 // AssertionResult out of it: the one-to-one rule is the shape of this function.
 func (e *Expect) Assert(step string, env *eval.Env) result.AssertionResult {
-	return eval.Assert(e.Value, env).Record(step, KindExpect, e.Line)
+	out := eval.Assert(e.Value, env).Record(step, KindExpect, e.Line)
+	// Stamped after Record rather than inside pkg/eval: the runner owns the
+	// result tree and every judgement in it, and eval.Outcome gains no field.
+	out.ExpectedSecret = e.ExpectedSecret
+	out.ActualSecret = e.ActualSecret
+	return out
 }
 
 // Assert evaluates every expect in the step, in source order, and returns one
@@ -202,15 +215,44 @@ func source(x ast.Expr) string {
 	return strings.Join(strings.Fields(ast.Source(x)), " ")
 }
 
+// operandMarks says which side of an assertion read a secret binding.
+//
+// It mirrors how eval.Assert fills an Outcome, which is the only thing that
+// makes the two marks mean anything: for a comparison, Actual is the left
+// operand and Expected the right, so the sides are marked separately. For every
+// other shape -- `pw exists`, `pw is string`, a bare call -- there is one
+// operand, it becomes Actual, and Expected is a constant the file already shows.
+//
+// Paren and `not` are unwrapped because eval.Assert unwraps them too: `not pw ==
+// "x"` compares pw, and a mark that stopped at the `not` would miss it.
+func operandMarks(x ast.Expr, secrets map[string]bool) (expected, actual bool) {
+	for {
+		switch v := x.(type) {
+		case *ast.Paren:
+			x = v.X
+		case *ast.Unary:
+			// Only `not`: a numeric minus keeps its operand as the subject, and
+			// unwrapping it changes nothing about which side is which.
+			x = v.X
+		default:
+			if b, ok := x.(*ast.Binary); ok {
+				return taint.Secret(b.Y, secrets), taint.Secret(b.X, secrets)
+			}
+			return false, taint.Secret(x, secrets)
+		}
+	}
+}
+
 // expect lowers one `expect`, taking its class from the checker and its default
 // budget from the step's type.
-func expect(e *ast.Expect, t check.StepType, info *check.Info) *Expect {
+func expect(e *ast.Expect, t check.StepType, info *check.Info, secrets map[string]bool) *Expect {
 	out := &Expect{
 		Value:  e.Value,
 		Budget: e.Budget,
 		Class:  info.Class(e),
 		Line:   e.Keyword.Span.Line,
 	}
+	out.ExpectedSecret, out.ActualSecret = operandMarks(e.Value, secrets)
 	if t == check.Browser {
 		out.Default = BrowserWithin
 	}
