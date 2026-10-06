@@ -42,6 +42,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode"
 
 	"artemis/pkg/shared/models"
@@ -111,6 +112,12 @@ type Writer struct {
 	// Dir is where the files go. Empty means tracing is off.
 	Dir string
 
+	// mu guards used and the write, because `--jobs` runs scenario files at the
+	// same time. Held across the whole of On, for the reason browserstep.Shots
+	// holds its own: the work is a file write, so overlapping two buys nothing
+	// and serialising them keeps the -2 suffix honest.
+	mu sync.Mutex
+
 	// used counts the names already taken, so two steps with one name in a run
 	// do not overwrite each other.
 	used map[string]int
@@ -129,6 +136,8 @@ func (w *Writer) On(rec Record) (string, error) {
 	if w == nil || w.Dir == "" {
 		return "", nil
 	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	path := filepath.Join(w.Dir, w.name(rec.Scenario, rec.Step))
 	if err := os.MkdirAll(w.Dir, 0o750); err != nil {
 		return "", fmt.Errorf("making the trace directory %s: %w", w.Dir, err)

@@ -128,8 +128,14 @@ scenario "orders" {
 | `secret` | `secret var ...`, `secret capture ...` | A binding whose value no report prints |
 | `step` | `step "<name>" { ... }` | One action and what to expect of it |
 
-Steps run in the order they are written, one after another. There is no way to
-ask for parallelism.
+Steps run in the order they are written, one after another, and a scenario's
+steps are never run in parallel: a step reads what the steps above it captured,
+so the order is the meaning. The language has no way to ask for anything else --
+`parallel` is a reserved word and not a feature.
+
+Whole scenario *files* are a different question, and one the language does not
+answer. `artemis run --jobs N` runs N of them at once; see
+[Running files at once](#running-files-at-once).
 
 ### `var`
 
@@ -541,6 +547,34 @@ artemis run upgrade.art                            # artemis-screenshots/
 artemis run upgrade.art --screenshots shots        # shots/
 artemis run upgrade.art --screenshots ""           # none
 ```
+
+### Running files at once
+
+Steps within a scenario are ordered, and so are the scenarios within one file.
+Separate files share nothing: `SPEC.md` already says a scenario's captures are
+invisible to the next, and that nothing is shared between files. So separate
+files can run at the same time, and `--jobs` says how many:
+
+```sh
+artemis run suite/ --jobs 6      # six files at once
+artemis run suite/               # one at a time, the default
+```
+
+This is a property of the runner and not of the language. There is no `parallel`
+block, and `parallel` stays a reserved word.
+
+The order of a report does not change. A scenario keeps the place its file had in
+discovery order, however early or late that file finished, so a golden file and a
+`jq` expression are unaffected.
+
+What does change is the console. With more than one job, each file's output is
+held and printed when its turn comes, instead of a step at a time as it happens.
+Two files printing to one terminal at once produce something no reader can
+follow. A run with one job still streams, which is why one is the default.
+
+One is the default for a second reason: the limit on a run like this is the
+service under test. A suite pointed at a staging API meets a rate limit long
+before it saturates the machine.
 
 ### Tracing a step
 

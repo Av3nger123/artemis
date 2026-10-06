@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -37,6 +38,13 @@ type Shots struct {
 	// Dir is where the files go. Empty means screenshots are off.
 	Dir string
 
+	// mu guards used and the write itself, because `--jobs` runs scenario files
+	// at the same time and two of them can reach here at once. Taking it around
+	// the whole of On rather than around the map alone: a screenshot is slow and
+	// rare, so there is nothing to gain by letting two overlap, and serialising
+	// them keeps the -2 suffix meaning what it says.
+	mu sync.Mutex
+
 	// used is the names already taken, so two steps with the same name in one
 	// run do not overwrite each other. The value is how many have been seen,
 	// which is what the -2, -3 suffix counts.
@@ -64,6 +72,8 @@ func (s *Shots) On(b *Bindings, scenario, step string) (string, error) {
 	if s == nil || s.Dir == "" || b == nil {
 		return "", nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.Dir, s.name(scenario, step))
 	// Lazily, and only now: a run with no failing browser step leaves no
 	// directory behind.

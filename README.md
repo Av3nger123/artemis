@@ -968,6 +968,36 @@ named, and no amount of static analysis can know that.
 Withholding covers what the scenario declared. A trace still holds whatever the
 service answered, so treat the folder as sensitive.
 
+### Running a suite faster
+
+A suite that waits on a service spends nearly all of its time waiting. Separate
+scenario files share nothing -- no variables, no captures, no scope -- so they can
+wait at the same time:
+
+```sh
+artemis run suite/ --jobs 6      # six files at once
+artemis run suite/               # one at a time, the default
+```
+
+Six files against a two-second endpoint: 14.6s at one job, 3.3s at six.
+
+This is the runner's doing, not the language's. A scenario's steps are still
+ordered -- a step reads what the steps above it captured -- and `parallel` is
+still a reserved word rather than a block you can write.
+
+**The report is unaffected.** A scenario keeps the place its file had in
+discovery order, whenever that file happened to finish, so goldens and `jq`
+expressions do not move.
+
+**The console changes.** With more than one job each file's output is held and
+printed when its turn arrives, rather than a step at a time as it happens:
+two files writing to one terminal at once is unreadable. One job still streams
+live, which is why it is the default.
+
+One is also the default because the limit here is the service, not the machine.
+A suite pointed at a staging API will meet a rate limit long before it saturates
+a laptop, so the number is yours to choose.
+
 ## The MCP server
 
 `artemis mcp` serves the Model Context Protocol on stdin and stdout, so an agent
@@ -1145,8 +1175,11 @@ command makes -- so it stays an input the command can read.
 - **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
   valuable property is determinism, and an assertion that flakes for
   unreproducible reasons is worse than a missing one.
-- **Concurrent execution.** Scenarios and steps run one after another, in the
-  order they are written. There is no way to ask for parallelism.
+- **Concurrent execution inside a scenario.** A scenario's steps run one after
+  another, in the order they are written, and nothing asks for otherwise: a step
+  reads what the steps above it captured, so the order is the meaning. Whole
+  files do run at once, with `--jobs` -- see
+  [Running a suite faster](#running-a-suite-faster).
 - **Request and response detail in a report.** Still not in the report itself,
   which stays a verdict. `--trace` writes it to a file per step instead -- see
   [Tracing a run](#tracing-a-run).
