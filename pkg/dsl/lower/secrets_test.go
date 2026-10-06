@@ -156,8 +156,15 @@ func TestSecretsCaptureReachesTheNextStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Model() = %v", err)
 	}
-	if first.Secrets.Any() {
-		t.Errorf("the capturing step marks nothing of its own: %+v", first.Secrets)
+	// Nothing it *sent* is secret: the scenario declares no secret var, so the
+	// request marks are all empty. Its observation is another matter -- the
+	// token is in its own response body, which ART-55's marks withhold.
+	if first.Secrets.URL || first.Secrets.Body || len(first.Secrets.Headers) > 0 ||
+		len(first.Secrets.BodyPaths) > 0 {
+		t.Errorf("the capturing step's request marks nothing: %+v", first.Secrets)
+	}
+	if got := first.Secrets.ObservedPaths["body"]; len(got) != 1 || got[0] != "/data/access_token" {
+		t.Errorf("ObservedPaths[body] = %v, want [/data/access_token]", got)
 	}
 
 	second, err := sc.Steps[1].Model(env)
@@ -283,5 +290,101 @@ func TestSecretsReachTheRecordedAssertion(t *testing.T) {
 	}
 	if got.Actual != "hunter2" {
 		t.Errorf("Actual = %v: the tree must keep the true value", got.Actual)
+	}
+}
+
+// A `secret capture` marks every later use of the binding, but the credential's
+// origin is this step's response. These are the marks that let a trace withhold
+// it there.
+func TestSecretsObservedPaths(t *testing.T) {
+	tests := []struct {
+		name      string
+		capture   string
+		wantRoots []string
+		wantPaths map[string][]string
+	}{
+		{
+			name:      "a path is addressable, so the rest of the body survives",
+			capture:   `secret capture token = body.data.access_token`,
+			wantPaths: map[string][]string{"body": {"/data/access_token"}},
+		},
+		{
+			name:      "an array index becomes a decimal pointer segment",
+			capture:   `secret capture first = body.items[0].secret`,
+			wantPaths: map[string][]string{"body": {"/items/0/secret"}},
+		},
+		{
+			name:      "a quoted index is a pointer segment too",
+			capture:   `secret capture ct = headers["set-cookie"]`,
+			wantPaths: map[string][]string{"headers": {"/set-cookie"}},
+		},
+		{
+			name:      "a call names no location, so the root goes whole",
+			capture:   `secret capture tok = match(raw, /tok=(\w+)/)`,
+			wantRoots: []string{"raw"},
+		},
+		{
+			name:      "capturing a whole root withholds it whole",
+			capture:   `secret capture all = body`,
+			wantRoots: []string{"body"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := secretsOf(t, `scenario "s" {
+  step "one" {
+    get "/x"
+    expect status == 200
+    `+tc.capture+`
+  }
+}`, 0)
+			for _, want := range tc.wantRoots {
+				if !got.ObservedRoots[want] {
+					t.Errorf("ObservedRoots missing %q: %+v", want, got.ObservedRoots)
+				}
+			}
+			for root, wantPointers := range tc.wantPaths {
+				if !slices.Equal(got.ObservedPaths[root], wantPointers) {
+					t.Errorf("ObservedPaths[%q] = %v, want %v", root, got.ObservedPaths[root], wantPointers)
+				}
+			}
+			if len(tc.wantPaths) == 0 && len(got.ObservedPaths) != 0 {
+				t.Errorf("ObservedPaths = %v, want none", got.ObservedPaths)
+			}
+		})
+	}
+}
+
+// A plain capture marks nothing of the observation, which is what keeps a trace
+// of an ordinary scenario complete.
+func TestSecretsObservedNothingForAPlainCapture(t *testing.T) {
+	got := secretsOf(t, `scenario "s" {
+  step "one" {
+    get "/x"
+    expect status == 200
+    capture token = body.data.access_token
+  }
+}`, 0)
+	if len(got.ObservedRoots) != 0 || len(got.ObservedPaths) != 0 {
+		t.Errorf("a plain capture marked the observation: %+v", got)
+	}
+}
+
+// A root withheld whole must not also list paths: keeping both would suggest
+// the rest of that root survived.
+func TestSecretsObservedWholeRootDropsItsPaths(t *testing.T) {
+	got := secretsOf(t, `scenario "s" {
+  step "one" {
+    get "/x"
+    expect status == 200
+    secret capture a = body.data.token
+    secret capture b = match(body, /x/)
+  }
+}`, 0)
+	if !got.ObservedRoots["body"] {
+		t.Fatalf("body must be withheld whole: %+v", got)
+	}
+	if _, found := got.ObservedPaths["body"]; found {
+		t.Errorf("ObservedPaths still lists body: %v", got.ObservedPaths)
 	}
 }

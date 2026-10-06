@@ -542,6 +542,41 @@ artemis run upgrade.art --screenshots shots        # shots/
 artemis run upgrade.art --screenshots ""           # none
 ```
 
+### Tracing a step
+
+A report says what failed. A **trace** says what went over the wire, and
+`--trace` asks for one file per step:
+
+```sh
+artemis run checkout.art --trace traces      # traces/checkout-get-a-token.json
+artemis run checkout.art                     # no traces: off unless asked
+```
+
+Every step gets one, whether it passed or not, because comparing a passing step
+with a failing one is half of how a reader works out what changed. A step that
+could not run at all gets one too, holding what it sent and the reason: that is
+the case with no response to read, and so the case a trace helps with most.
+
+A trace records the step's observation under the names its type binds --
+`status`, `body`, `raw`, `headers` for an api step, `exit_code`, `stdout`,
+`stderr` for a terminal one -- beside what the step sent. Only the last attempt
+of a retried step is recorded, because a later attempt replaces an earlier one
+whole.
+
+A value a [`secret`](#secret) binding named is withheld, written as `***` rather
+than left out, so a withheld header and an absent one do not read the same. Both
+directions are withheld: a secret value the step *sent*, and the place in the
+response a `secret capture` read its value *from* -- a
+`secret capture token = body.data.access_token` withholds `/data/access_token`
+of that step's body, and leaves the rest of the response readable.
+
+A string longer than 64 KiB is cut, the value says so, and the trace's
+`truncated` list names what was cut.
+
+Tracing is off unless asked for, and a trace file holds whatever the service
+answered. Withholding covers what the scenario declared, so treat the folder as
+sensitive regardless.
+
 The name is `<scenario>-<step>.png`, lower-cased with everything that is not a
 letter or a digit collapsed to a hyphen, and it has no timestamp: a rerun
 overwrites the file from the run before it, so the path in the report is
@@ -1262,6 +1297,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `expected`, `actual` | assertion, failure | The two sides as evaluated, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve |
 | `failures` | run | Everything the run says to go and fix, flat and in run order. One entry per failing assertion, per step that could not run, and per file that would not compile, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed |
 | `scenario`, `step` | failure | The names of the two things the failure sits under, repeated so the entry stands alone |
+| `trace` | step | The path to the file holding what the step sent and what it saw, and `""` unless `--trace` asked for one. The path is as the run was given it, so a CI job uploading it uses the string verbatim. See [Tracing a step](#tracing-a-step) |
 | `screenshot` | step, failure | The path to a picture of the page, for a [browser step that did not pass](#when-a-browser-step-fails), and `""` for every other step. The path is as the run was given it -- relative to the working directory unless `--screenshots` named an absolute one -- so a CI job uploading it uses the string verbatim. Repeated on the failure entry so the entry stands alone |
 
 Every key is always present, with its zero value rather than omitted, so a `jq`

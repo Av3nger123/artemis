@@ -49,6 +49,25 @@ type Secrets struct {
 	// Acts marks one browser act's value each, by its position in Browser.Acts:
 	// `fill "#password" = pw`.
 	Acts map[int]bool
+
+	// ObservedRoots names roots a trace must withhold whole, by the name the
+	// step type binds them under: "body", "raw", "stdout".
+	//
+	// This is the half of the problem the request marks above do not reach. A
+	// `secret capture token = body.data.access_token` withholds every later
+	// `Bearer ${token}`, but the token's *origin* is this step's response body,
+	// and a trace that printed that body would make the marking theatre.
+	//
+	// A root is withheld whole when the capture that read it is not addressable
+	// -- `match(raw, /tok=(\w+)/)` names no location.
+	ObservedRoots map[string]bool
+
+	// ObservedPaths names what to withhold inside a root that is otherwise
+	// readable: root name to RFC 6901 pointers within it. A capture written as
+	// a path -- `body.data.access_token` -- is addressable, so the rest of the
+	// response survives, which matters because a token response is usually the
+	// one worth reading.
+	ObservedPaths map[string][]string
 }
 
 // Any reports whether anything at all is secret, so a caller can skip the work
@@ -56,5 +75,6 @@ type Secrets struct {
 func (s Secrets) Any() bool {
 	return s.URL || s.Body || s.Args || s.Stdin ||
 		len(s.Headers) > 0 || len(s.Env) > 0 ||
-		len(s.Acts) > 0 || len(s.BodyPaths) > 0
+		len(s.Acts) > 0 || len(s.BodyPaths) > 0 ||
+		len(s.ObservedRoots) > 0 || len(s.ObservedPaths) > 0
 }

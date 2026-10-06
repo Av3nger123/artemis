@@ -8,6 +8,7 @@ import (
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/trace"
 	"bytes"
 	"context"
 	"errors"
@@ -120,8 +121,9 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// not compile is reported with its caret gutter, and stdout stays exactly
 	// one document when --report asked for one.
 	rt := &runtimeEnv{
-		reg:   executor.Default(),
-		shots: browserstep.NewShots(shotDir(cmd)),
+		reg:    executor.Default(),
+		shots:  browserstep.NewShots(shotDir(cmd)),
+		traces: trace.New(traceDir(cmd)),
 	}
 	run := runFilesWith(rt, files, rep, cmd.ErrOrStderr())
 
@@ -259,6 +261,9 @@ func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagO
 type runtimeEnv struct {
 	reg   *executor.Registry
 	shots *browserstep.Shots
+	// traces writes what each step sent and saw. A nil writer, or one with no
+	// directory, is tracing off -- which is every test that is not about it.
+	traces *trace.Writer
 	// envFaults is what the check found, for reportRun to print.
 	//
 	// There is no lookup seam beside it: envGate takes the lookup as a
@@ -484,6 +489,25 @@ func shotDir(cmd *cobra.Command) string {
 	dir, err := cmd.Flags().GetString(screenshotsFlag)
 	if err != nil {
 		return browserstep.DefaultDir
+	}
+	return dir
+}
+
+// traceFlag is the flag naming where each step's trace goes. Empty means do not
+// write any, and that is the default: a trace holds whatever the service
+// answered, so it is something a run opts into rather than something it has to
+// remember to turn off.
+const traceFlag = "trace"
+
+// traceDir is where a step's trace goes: --trace, or nothing.
+//
+// Unlike shotDir there is no default directory to fall back to, because the
+// flag's own default is off. A command with no such flag gets tracing off, which
+// is the safe direction for a wiring mistake.
+func traceDir(cmd *cobra.Command) string {
+	dir, err := cmd.Flags().GetString(traceFlag)
+	if err != nil {
+		return ""
 	}
 	return dir
 }

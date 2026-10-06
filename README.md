@@ -915,6 +915,59 @@ Git.
 See [SPEC.md](SPEC.md) for exactly how much of a body is withheld when one
 field of it is secret.
 
+### Tracing a run
+
+A report says what failed. It does not say what came back, which is the thing you
+want when a CI job goes red with `body.total > 0, got 0` and the service is three
+deploys along from what you have locally.
+
+`--trace` writes that, one file per step:
+
+```sh
+artemis run checkout.art --trace traces
+```
+
+```json
+{
+  "scenario": "checkout",
+  "step": "get a token",
+  "type": "api",
+  "attempt": 1,
+  "sent": {
+    "method": "POST",
+    "url": "https://api.test/token",
+    "headers": { "Content-Type": "application/json" },
+    "body": { "username": "alice", "password": "***" }
+  },
+  "observed": {
+    "status": 401,
+    "headers": { "Content-Type": "application/json" },
+    "body": { "error": "password expired" },
+    "raw": "{\"error\":\"password expired\"}"
+  }
+}
+```
+
+Every step gets one, whether it passed or not: comparing the step that worked
+with the step that did not is half of how anyone finds the difference. A step
+that could not run at all gets one too, holding what it sent and the reason --
+that is the case with no response to read, so what went out is the whole of the
+evidence.
+
+What is under `observed` is whatever the step's type binds, so a `run` step
+traces `exit_code`, `stdout` and `stderr` instead, and nothing about the format
+is specific to HTTP.
+
+**It is off unless you ask**, and values from [`secret`](#keeping-a-credential-out-of-a-report)
+bindings are withheld in two ways. The marked field is replaced, so one secret
+password does not hide the body around it. And the secret's *value* is removed
+wherever else it appears -- which matters because a service that echoes a token
+back in a later response has put the credential somewhere no `capture` ever
+named, and no amount of static analysis can know that.
+
+Withholding covers what the scenario declared. A trace still holds whatever the
+service answered, so treat the folder as sensitive.
+
 ## The MCP server
 
 `artemis mcp` serves the Model Context Protocol on stdin and stdout, so an agent
@@ -1094,8 +1147,6 @@ command makes -- so it stays an input the command can read.
   unreproducible reasons is worse than a missing one.
 - **Concurrent execution.** Scenarios and steps run one after another, in the
   order they are written. There is no way to ask for parallelism.
-- **Request and response detail in a report.** Neither report carries a request
-  body, a response body or headers: the result model does not record them. The
-  line a failure came from it does -- see [Reading a failure](#reading-a-failure).
-  `secret` is what will make that detail safe to record: a trace of the scenario
-  at the top of this file would otherwise hold the password in its request body.
+- **Request and response detail in a report.** Still not in the report itself,
+  which stays a verdict. `--trace` writes it to a file per step instead -- see
+  [Tracing a run](#tracing-a-run).

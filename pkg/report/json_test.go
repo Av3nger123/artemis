@@ -106,6 +106,7 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
           "line": 5,
           "error": "",
           "screenshot": "",
+          "trace": "",
           "assertions": [
             {
               "kind": "status_code",

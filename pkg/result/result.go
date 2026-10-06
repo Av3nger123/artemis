@@ -172,6 +172,17 @@ type StepResult struct {
 	// or zero when it is not known. It is what a step that could not run at all
 	// points at, and the fallback for an assertion with no line of its own.
 	Line int
+
+	// Trace is the path to the file holding what this step sent and what it
+	// saw, and empty when tracing is off. ART-55.
+	//
+	// A path and not the trace itself, for the reason Screenshot above is a
+	// path: the report is a verdict and the trace is evidence, and a trace of
+	// every step of a long suite inlined here would make the report the one
+	// document nobody opens. It is a field on the step rather than on an
+	// api-shaped type for Screenshot's reason too -- the result tree is the one
+	// thing pkg/report reads.
+	Trace string
 }
 
 // AllPassed reports whether every assertion in as passed. It is what "is this

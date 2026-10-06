@@ -142,6 +142,11 @@ func (s *Step) Model(env *eval.Env) (models.Step, error) {
 			return out, fmt.Errorf("step %q: %w", s.Name, err)
 		}
 	}
+	// The observation half of the marks, which no action knows about: it is
+	// driven by where a secret capture read its value *from*. See observed.go.
+	obs := s.observed()
+	out.Secrets.ObservedRoots, out.Secrets.ObservedPaths = obs.ObservedRoots, obs.ObservedPaths
+
 	// Exactly one arm runs, and a step whose action did not parse runs none:
 	// TypeKey already refused it, so there is nothing here to guard.
 	return out, nil
