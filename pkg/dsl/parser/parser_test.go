@@ -524,3 +524,56 @@ func firstStep(t *testing.T, f *ast.File) *ast.StepDecl {
 	}
 	return found
 }
+
+// TestParseSecretVar is the `secret` modifier on a var: ART-54's language
+// surface. The modifier is positional, so the two files below differ by one
+// token and by nothing else.
+func TestParseSecretVar(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  secret var pw = env(\"P\")\n  var url = env(\"U\")\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	body := scenarioBody(t, file)
+	if got := body[0].(*ast.VarDecl).Secret.Value; got != "secret" {
+		t.Errorf("Secret = %q, want %q", got, "secret")
+	}
+	if got := body[1].(*ast.VarDecl).Secret.Value; got != "" {
+		t.Errorf("a plain var has Secret = %q, want empty", got)
+	}
+}
+
+// A variable named `secret` stays legal. The grammar has no lexical keywords --
+// see atWord -- and ART-54 must not take a name away from anyone.
+func TestParseVarNamedSecret(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  var secret = \"x\"\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	v := scenarioBody(t, file)[0].(*ast.VarDecl)
+	if v.Secret.Value != "" {
+		t.Errorf("Secret = %q, want empty", v.Secret.Value)
+	}
+	if v.Name.Value != "secret" {
+		t.Errorf("Name = %q, want %q", v.Name.Value, "secret")
+	}
+}
+
+// `secret` before a word it cannot modify names the two words that can follow
+// it, rather than falling through to the "config, var or step" message.
+func TestParseSecretWithoutBinding(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  secret step \"x\" {\n    get \"/\"\n  }\n}\n")
+	if got := codes(bag); len(got) == 0 {
+		t.Fatal("want a diagnostic for `secret step`")
+	}
+}
+
+// scenarioBody is the declarations of the first scenario, which Scenarios holds
+// as a Decl.
+func scenarioBody(t *testing.T, f *ast.File) []ast.Decl {
+	t.Helper()
+	sc, ok := f.Scenarios[0].(*ast.Scenario)
+	if !ok {
+		t.Fatalf("first declaration is %T, want *ast.Scenario", f.Scenarios[0])
+	}
+	return sc.Body
+}

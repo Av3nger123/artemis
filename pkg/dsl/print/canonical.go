@@ -118,7 +118,9 @@ func (c *canon) config(d *ast.ConfigDecl) {
 }
 
 func (c *canon) varDecl(d *ast.VarDecl) {
-	left := join(" ", d.Keyword.Text, d.Name.Text)
+	// join drops an empty string, so a plain var prints as it always has and a
+	// `secret var` needs no second branch here.
+	left := join(" ", d.Secret.Text, d.Keyword.Text, d.Name.Text)
 	c.line(d.Tokens(nil), assign(left, d.Assign, c.expr(d.Value)))
 }
 

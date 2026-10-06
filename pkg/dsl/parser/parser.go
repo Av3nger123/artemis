@@ -142,6 +142,31 @@ func (p *parser) atWord(word string) bool {
 	return t.Kind == token.Ident && t.Value == word
 }
 
+// peekWordAt reports whether the nth token after the cursor is an identifier
+// with this text, counting the cursor itself as zero.
+//
+// One token of lookahead is what a positional modifier costs. `secret` opens a
+// declaration only when `var` or `capture` follows it, and `var secret = "x"`
+// has to keep parsing, so no dispatch can decide on the cursor alone. Markers
+// are skipped the way next does, because a marker is not a word.
+func (p *parser) peekWordAt(n int, word string) bool {
+	seen, i := 0, p.i
+	for ; i < len(p.toks); i++ {
+		if p.toks[i].IsMarker() {
+			continue
+		}
+		if seen == n {
+			break
+		}
+		seen++
+	}
+	if i >= len(p.toks) {
+		return false
+	}
+	t := p.toks[i]
+	return t.Kind == token.Ident && t.Value == word
+}
+
 // atBoundary reports whether the cursor is at a statement boundary: a newline
 // separated it from the previous token, or the enclosing block ends here, or
 // the file does.

@@ -292,6 +292,12 @@
       "doc": "`var url = env(\"API_URL\")`",
       "fields": [
         {
+          "name": "secret",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"
+        },
+        {
           "name": "name",
           "type": "string",
           "doc": "the identifier being bound"
