@@ -392,7 +392,41 @@ func errText(err error) string {
 	return err.Error()
 }
 
+// Redacted is what stands in for a value that came from a binding the scenario
+// declared `secret`. ART-54.
+//
+// The length is fixed and deliberately unrelated to the value's. A placeholder
+// that kept the length would report the length of a credential, which is a
+// useful fact to an attacker.
+//
+// It lives here rather than in pkg/report because Describe needs it and this
+// package imports nothing else from artemis. pkg/report refers to this one, so
+// there is a single spelling.
+const Redacted = "***"
+
+// Shown returns the two operands as a reader may see them: the real value, or
+// Redacted for a side that came from a secret binding.
+//
+// Everything that prints an operand goes through this -- Describe below, and
+// every writer in pkg/report -- so what withholding means is decided once. The
+// fields themselves keep the true value, because the tree stays faithful and
+// redaction belongs to whatever renders it.
+func (a AssertionResult) Shown() (expected, actual any) {
+	expected, actual = a.Expected, a.Actual
+	if a.ExpectedSecret {
+		expected = Redacted
+	}
+	if a.ActualSecret {
+		actual = Redacted
+	}
+	return expected, actual
+}
+
 // Describe renders an assertion as one line, for an error message or a log.
+//
+// This is the line the console prints under a failed step as the run goes, which
+// makes it an operand site like any other: it went through Shown from ART-54
+// onward, having leaked a credential before that.
 func (a AssertionResult) Describe() string {
 	where := a.Path
 	if where == "" {
@@ -401,5 +435,6 @@ func (a AssertionResult) Describe() string {
 	if a.Error != "" {
 		return fmt.Sprintf("%s %s: %s", where, a.Operator, a.Error)
 	}
-	return fmt.Sprintf("%s %s %v, got %v", where, a.Operator, a.Expected, a.Actual)
+	expected, actual := a.Shown()
+	return fmt.Sprintf("%s %s %v, got %v", where, a.Operator, expected, actual)
 }

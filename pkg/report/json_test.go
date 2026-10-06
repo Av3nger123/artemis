@@ -416,3 +416,43 @@ func TestWriteJSONCarriesAnUnknownLineAsZero(t *testing.T) {
 		t.Errorf("assertion line = %v, want 0", a["line"])
 	}
 }
+
+// ART-54: report.json is the file a CI job uploads as an artifact, so a
+// credential reaching it is the leak this feature exists to stop. Both places
+// json.go writes an operand are covered: the assertion list and the failure
+// list.
+func TestJSONRedactsASecretOperand(t *testing.T) {
+	step := &result.StepResult{Name: "compare", Line: 4}
+	step.Assert(result.Assertion{
+		Kind: "expect", Path: "pw", Operator: "equals",
+		Expected: "wanted", Actual: "hunter2", Line: 6,
+		ActualSecret: true,
+	}.Fail())
+	step.Finish(time.Millisecond)
+
+	sc := &result.ScenarioResult{Name: "secrets", File: "s.art", Steps: []*result.StepResult{step}}
+	sc.Finish(time.Millisecond)
+	run := result.NewRun()
+	run.Scenarios = []*result.ScenarioResult{sc}
+	run.Finish()
+
+	var buf bytes.Buffer
+	if err := WriteJSON(&buf, run); err != nil {
+		t.Fatalf("WriteJSON() = %v, want nil", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "hunter2") {
+		t.Errorf("the credential reached report.json:\n%s", out)
+	}
+	if !strings.Contains(out, Redacted) {
+		t.Errorf("want %q in report.json:\n%s", Redacted, out)
+	}
+	if !strings.Contains(out, "wanted") {
+		t.Errorf("the other operand must survive:\n%s", out)
+	}
+	// Two writes, so two placeholders: the assertion entry and the failure
+	// entry. A redaction that covered only one would still leak.
+	if n := strings.Count(out, Redacted); n < 2 {
+		t.Errorf("found %d placeholders, want the assertion entry and the failure entry:\n%s", n, out)
+	}
+}

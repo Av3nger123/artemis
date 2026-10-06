@@ -2,6 +2,7 @@ package result
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -377,5 +378,45 @@ func TestAssertionWithoutMarksIsUnchanged(t *testing.T) {
 	got := Assertion{Step: "one", Kind: "expect", Expected: 200, Actual: 404}.Fail()
 	if got.ExpectedSecret || got.ActualSecret {
 		t.Errorf("marks default to true: %+v", got)
+	}
+}
+
+// Describe is the line the console prints under a failed step while the run is
+// still going, and it leaked a credential until ART-54. This is the regression.
+func TestDescribeRedactsASecretOperand(t *testing.T) {
+	a := Assertion{
+		Kind: "expect", Path: "body.given", Operator: "==",
+		Expected: "hunter2", Actual: "not-the-password",
+		ExpectedSecret: true,
+	}.Fail()
+	got := a.Describe()
+	if strings.Contains(got, "hunter2") {
+		t.Errorf("Describe() = %q, which leaks the credential", got)
+	}
+	if !strings.Contains(got, Redacted) {
+		t.Errorf("Describe() = %q, want %q in it", got, Redacted)
+	}
+	if !strings.Contains(got, "not-the-password") {
+		t.Errorf("Describe() = %q, want the other operand kept", got)
+	}
+}
+
+// An assertion with no marks describes exactly as it did before ART-54.
+func TestDescribeUnchangedWithoutMarks(t *testing.T) {
+	a := Assertion{Kind: "expect", Path: "status", Operator: "==", Expected: 200, Actual: 404}.Fail()
+	if got, want := a.Describe(), "status == 200, got 404"; got != want {
+		t.Errorf("Describe() = %q, want %q", got, want)
+	}
+}
+
+// Shown never alters the stored values: the tree stays faithful and redaction
+// belongs to whatever renders it.
+func TestShownLeavesTheTreeIntact(t *testing.T) {
+	a := Assertion{Expected: "e", Actual: "a", ExpectedSecret: true, ActualSecret: true}.Fail()
+	if e, ac := a.Shown(); e != Redacted || ac != Redacted {
+		t.Errorf("Shown() = %v, %v, want both redacted", e, ac)
+	}
+	if a.Expected != "e" || a.Actual != "a" {
+		t.Errorf("Shown() mutated the assertion: %+v", a)
 	}
 }
