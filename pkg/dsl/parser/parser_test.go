@@ -577,3 +577,59 @@ func scenarioBody(t *testing.T, f *ast.File) []ast.Decl {
 	}
 	return sc.Body
 }
+
+// TestParseSecretCapture is the `secret` modifier on a capture. A capture is
+// the other binding ART-54 has to cover: in the README's own scenario the
+// bearer token comes from one, not from env().
+func TestParseSecretCapture(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  step \"one\" {\n    get \"/\"\n    secret capture token = body.t\n    capture id = body.id\n  }\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	caps := captures(t, file)
+	if got := caps[0].Secret.Value; got != "secret" {
+		t.Errorf("Secret = %q, want %q", got, "secret")
+	}
+	if got := caps[1].Secret.Value; got != "" {
+		t.Errorf("a plain capture has Secret = %q, want empty", got)
+	}
+}
+
+// `capture secret = ...` stays legal, as `capture body = ...` already is.
+func TestParseCaptureNamedSecret(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  step \"one\" {\n    get \"/\"\n    capture secret = body.x\n  }\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	c := captures(t, file)[0]
+	if c.Secret.Value != "" {
+		t.Errorf("Secret = %q, want empty", c.Secret.Value)
+	}
+	if c.Name.Value != "secret" {
+		t.Errorf("Name = %q, want %q", c.Name.Value, "secret")
+	}
+}
+
+// In a step body `secret` before a word it cannot modify must name what may
+// follow it, rather than reaching parseField and being reported as a bad field.
+func TestParseSecretInStepWithoutCapture(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  step \"one\" {\n    get \"/\"\n    secret timeout = \"5s\"\n  }\n}\n")
+	if got := codes(bag); len(got) == 0 {
+		t.Fatal("want a diagnostic for `secret timeout`")
+	}
+}
+
+// captures is every capture of the first step, in source order.
+func captures(t *testing.T, f *ast.File) []*ast.Capture {
+	t.Helper()
+	var out []*ast.Capture
+	for _, s := range firstStep(t, f).Body {
+		if c, ok := s.(*ast.Capture); ok {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("no capture in the first step")
+	}
+	return out
+}

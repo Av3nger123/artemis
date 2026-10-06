@@ -579,6 +579,12 @@
       "doc": "`capture token = body.data.access_token`",
       "fields": [
         {
+          "name": "secret",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"
+        },
+        {
           "name": "name",
           "type": "string",
           "doc": "the identifier bound for every later step in the scenario"

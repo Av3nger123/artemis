@@ -291,6 +291,8 @@ var nodeSchemas = []nodeSchema{
 		commentsField,
 	}},
 	{Kind: kindCapture, Doc: "`capture token = body.data.access_token`", Fields: []fieldSchema{
+		{Name: "secret", Type: "boolean", Optional: true,
+			Doc: "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"},
 		word("name", "the identifier bound for every later step in the scenario"),
 		child("value", "expression"),
 		spanField, commentsField,

@@ -38,6 +38,10 @@ func (e *Expect) stmt()            {}
 // what makes it a declaration as much as a statement; the checker adds it to
 // the scope of the steps that follow.
 type Capture struct {
+	// Secret is the `secret` modifier, and the zero token when it is absent.
+	// It is a token for the reason VarDecl.Secret is one: the round trip is
+	// built from Tokens.
+	Secret  token.Token // `secret`, zero when the modifier is absent
 	Keyword token.Token // capture
 	Name    token.Token // the Ident being bound
 	Assign  token.Token // =
@@ -46,6 +50,7 @@ type Capture struct {
 }
 
 func (c *Capture) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, c.Secret)
 	dst = appendTok(dst, c.Keyword)
 	dst = appendTok(dst, c.Name)
 	dst = appendTok(dst, c.Assign)

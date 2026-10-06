@@ -188,7 +188,8 @@ func (c *canon) stmt(s ast.Stmt) {
 	case *ast.Expect:
 		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, c.expr(v.Value), v.Within.Text, c.expr(v.Budget)))
 	case *ast.Capture:
-		c.line(v.Tokens(nil), assign(join(" ", v.Keyword.Text, v.Name.Text), v.Assign, c.expr(v.Value)))
+		c.line(v.Tokens(nil), assign(
+			join(" ", v.Secret.Text, v.Keyword.Text, v.Name.Text), v.Assign, c.expr(v.Value)))
 	case *ast.BrowserAct:
 		c.line(v.Tokens(nil), assign(join(" ", v.Name.Text, c.expr(v.Target)), v.Assign, c.expr(v.Value)))
 	case *ast.Bad:

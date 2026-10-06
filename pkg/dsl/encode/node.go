@@ -240,6 +240,7 @@ func (e *enc) expect(x *ast.Expect) *obj {
 
 func (e *enc) capture(c *ast.Capture) *obj {
 	return start(kindCapture, c).
+		set("secret", c.Secret.Text != "").
 		set("name", c.Name.Text).
 		set("value", e.node(c.Value)).
 		span().
