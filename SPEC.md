@@ -211,6 +211,13 @@ goes.
 A `secret` binding that no step reads is not an error. A file under edit must
 still compile.
 
+`secret` reaches artemis's own reports and traces, and no further. `artemis
+build` exports a scenario as a test for another runner, and that runner has no
+idea what a secret is: a generated pytest or vitest test that fails prints both
+operands the way its own framework does. The value still arrives through
+`art_env` rather than as a literal in the file, so the generated code holds no
+credential of its own.
+
 ### `config`
 
 **Spec decision.** `config` takes the name of a step type and settings for it.
