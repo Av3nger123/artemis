@@ -75,6 +75,11 @@ type Capture struct {
 	// Line is the line the captured *name* sits on, not the expression's: the
 	// name is what a scenario goes and fixes.
 	Line int
+	// Declared is true when the author wrote `secret capture`. A capture can
+	// also be secret without it -- `capture part = match(pw, /x(.)/)` reads a
+	// secret binding -- which is why the scenario walk asks taint.Secret as
+	// well as reading this. ART-54.
+	Declared bool
 }
 
 // Within is how long this assertion may be re-evaluated for, zero meaning it is

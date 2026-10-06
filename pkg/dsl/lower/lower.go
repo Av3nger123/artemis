@@ -56,6 +56,7 @@ import (
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
+	"artemis/pkg/dsl/taint"
 	"artemis/pkg/dsl/token"
 	"artemis/pkg/eval"
 	"artemis/pkg/executor"
@@ -199,11 +200,18 @@ func File(tree *ast.File, info *check.Info) ([]*Scenario, error) {
 }
 
 // scenario lowers one scenario's body in source order.
+//
+// The source order is what makes the secret set correct. A `secret var` is in
+// scope for every step, so all of them are collected before the first step is
+// lowered. A secret `capture` is in scope for the steps *after* its own, as
+// SPEC.md's scoping rule says, so it joins the set only once its step is done --
+// which is why the set is built here and not in a pass of its own.
 func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 	out := &Scenario{
 		Name: sc.Name.Value,
 		Line: sc.Keyword.Span.Line,
 	}
+	secrets := secretVars(sc)
 	for _, d := range sc.Body {
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
@@ -227,15 +235,50 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				Line:  d.Name.Span.Line,
 			})
 		case *ast.StepDecl:
-			st, err := step(d, info)
+			st, err := step(d, info, secrets)
 			if err != nil {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)
 			}
 			out.Steps = append(out.Steps, st)
+			// After the step, never before it: a capture is not in scope for
+			// the step that writes it.
+			addSecretCaptures(secrets, st)
 		}
 		// *ast.Bad and anything else: already reported by the parser.
 	}
 	return out, nil
+}
+
+// secretVars is the names of the scenario's `secret var` declarations.
+//
+// Every one of them is in scope for every step, so this runs before the first
+// step is lowered. A var with no name was reported by the parser and is skipped,
+// as the var lowering below skips it.
+func secretVars(sc *ast.Scenario) map[string]bool {
+	out := map[string]bool{}
+	for _, d := range sc.Body {
+		v, ok := d.(*ast.VarDecl)
+		if !ok || v.Secret.Text == "" || v.Name.Kind != token.Ident {
+			continue
+		}
+		out[v.Name.Value] = true
+	}
+	return out
+}
+
+// addSecretCaptures adds the names st captured secretly, for the steps below it.
+//
+// A capture is secret two ways, and both are needed. The author wrote `secret
+// capture`, which is Declared. Or the captured expression itself read a secret
+// binding -- `capture part = match(pw, /x(.)/)` -- which taint.Secret reports,
+// and which has to count: a value derived from a credential is still the
+// credential's to leak.
+func addSecretCaptures(secrets map[string]bool, st *Step) {
+	for _, c := range st.Captures {
+		if c.Declared || taint.Secret(c.Value, secrets) {
+			secrets[c.Name] = true
+		}
+	}
 }
 
 // config lowers `config browser { ... }`. A subject that is not `browser` is

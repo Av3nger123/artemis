@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/taint"
 	"artemis/pkg/dsl/token"
 	"artemis/pkg/eval"
 	"artemis/pkg/shared/models"
@@ -23,6 +24,12 @@ type Request struct {
 	Query   []*Param
 	Body    ast.Expr
 	Line    int
+
+	// secretNames are the bindings declared `secret` and in scope for this
+	// step. Model consults them, rather than lowering deciding, because a
+	// header's name is itself an expression -- `header "${name}" = v` parses --
+	// so which name a mark belongs to is only known once env exists.
+	secretNames map[string]bool
 }
 
 // Param is a named value in a block: `header "X" = v`, `query "q" = v`, or an
@@ -60,6 +67,10 @@ type Run struct {
 	Stdin   ast.Expr
 	Env     []*Param
 	Line    int
+
+	// secretNames are the bindings declared `secret` and in scope for this
+	// step, read by Model for the same reason Request.secretNames is.
+	secretNames map[string]bool
 }
 
 // Act is one statement inside a `browser` block: `goto "/orders"`, `fill
@@ -112,20 +123,29 @@ func (a *Act) Model(env *eval.Env) (models.Act, error) {
 // rest: the acts are a sequence with side effects, so an act after a broken one
 // was never going to run, and reporting two failures would describe a step that
 // got further than it did.
-func browserModel(acts []*Act, env *eval.Env) (models.Browser, error) {
+func browserModel(acts []*Act, env *eval.Env, secrets map[string]bool) (models.Browser, models.Secrets, error) {
 	out := models.Browser{}
+	var marks models.Secrets
 	if len(acts) == 0 {
-		return out, nil
+		return out, marks, nil
 	}
 	out.Acts = make([]models.Act, 0, len(acts))
-	for _, a := range acts {
+	for i, a := range acts {
 		m, err := a.Model(env)
 		if err != nil {
-			return out, err
+			return out, marks, err
 		}
 		out.Acts = append(out.Acts, m)
+		// By position, because an act has no name a report could key on and
+		// two `fill` acts in one step are ordinary.
+		if taint.Secret(a.Value, secrets) || taint.Secret(a.Target, secrets) {
+			if marks.Acts == nil {
+				marks.Acts = map[int]bool{}
+			}
+			marks.Acts[i] = true
+		}
 	}
-	return out, nil
+	return out, marks, nil
 }
 
 // Model evaluates the request against env and returns what httpstep reads.
@@ -136,31 +156,47 @@ func browserModel(acts []*Act, env *eval.Env) (models.Browser, error) {
 // already has a query: source order rather than sorted, so a repeated `query
 // "tag"` keeps both values in the order the author wrote them, and so nothing
 // here reorders a file.
-func (r *Request) Model(env *eval.Env) (models.Request, error) {
+func (r *Request) Model(env *eval.Env) (models.Request, models.Secrets, error) {
 	out := models.Request{Method: strings.ToUpper(r.Method)}
+	var marks models.Secrets
 
 	raw, err := text(r.URL, env)
 	if err != nil {
-		return out, fmt.Errorf("url: %w", err)
+		return out, marks, fmt.Errorf("url: %w", err)
 	}
 	query, err := queryString(r.Query, env)
 	if err != nil {
-		return out, err
+		return out, marks, err
 	}
 	out.URL = withQuery(raw, query)
+
+	// A secret query value marks the URL, because withQuery folded it in there
+	// and the URL string is where the value actually ends up.
+	marks.URL = taint.Secret(r.URL, r.secretNames)
+	for _, q := range r.Query {
+		if taint.Secret(q.Value, r.secretNames) || taint.Secret(q.Key, r.secretNames) {
+			marks.URL = true
+		}
+	}
 
 	if len(r.Headers) > 0 {
 		out.Headers = make(map[string]string, len(r.Headers))
 		for _, h := range r.Headers {
 			name, err := h.name(env)
 			if err != nil {
-				return out, fmt.Errorf("header name: %w", err)
+				return out, marks, fmt.Errorf("header name: %w", err)
 			}
 			value, err := text(h.Value, env)
 			if err != nil {
-				return out, fmt.Errorf("header %q: %w", name, err)
+				return out, marks, fmt.Errorf("header %q: %w", name, err)
 			}
 			out.Headers[name] = value
+			if taint.Secret(h.Value, r.secretNames) {
+				if marks.Headers == nil {
+					marks.Headers = map[string]bool{}
+				}
+				marks.Headers[name] = true
+			}
 		}
 	}
 
@@ -170,10 +206,75 @@ func (r *Request) Model(env *eval.Env) (models.Request, error) {
 	// concatenation. A step with no body sends an empty one.
 	if r.Body != nil {
 		if out.Body, err = text(r.Body, env); err != nil {
-			return out, fmt.Errorf("body: %w", err)
+			return out, marks, fmt.Errorf("body: %w", err)
+		}
+		marks.Body, marks.BodyPaths = bodyMarks(r.Body, r.secretNames)
+	}
+	return out, marks, nil
+}
+
+// bodyMarks decides how much of a body a report must withhold.
+//
+// An object literal is the one body shape whose fields are separate
+// expressions, so it is the one shape that can be withheld field by field: the
+// paths come back as JSON pointers and the rest of the body stays readable.
+// That matters most for the request this feature exists for -- a token request
+// whose only secret is one password field.
+//
+// Every other shape -- `body = payload`, a concatenation -- has no field to
+// walk, so the whole body is withheld. The rule is deliberately conservative in
+// that direction, and SPEC.md says so, because a person who moves a body into a
+// var would otherwise be surprised by a less precise report.
+func bodyMarks(body ast.Expr, secrets map[string]bool) (whole bool, paths []string) {
+	obj, ok := body.(*ast.Object)
+	if !ok {
+		return taint.Secret(body, secrets), nil
+	}
+	paths, unnameable := secretPaths(obj, "", secrets)
+	if unnameable {
+		// A secret sat under a key no pointer can name, so there is no path to
+		// give a reader and the whole body has to go.
+		return true, nil
+	}
+	return false, paths
+}
+
+// secretPaths returns a JSON pointer for each field of an object literal whose
+// value read a secret binding, and recurses into a nested literal.
+//
+// unnameable reports that a secret sat under a key this cannot address: a key is
+// an expression, because `{"${k}": v}` parses, and an interpolated key has no
+// pointer a reader could match. Its caller withholds the whole body in that
+// case rather than emitting a pointer that matches nothing.
+func secretPaths(o *ast.Object, prefix string, secrets map[string]bool) (paths []string, unnameable bool) {
+	for _, en := range o.Entries {
+		lit, ok := en.Key.(*ast.Literal)
+		named := ok && lit.Tok.Kind == token.String
+		if !named {
+			if taint.Secret(en.Key, secrets) || taint.Secret(en.Value, secrets) {
+				unnameable = true
+			}
+			continue
+		}
+		path := prefix + "/" + escapePointer(lit.Tok.Value)
+		if nested, nok := en.Value.(*ast.Object); nok {
+			sub, bad := secretPaths(nested, path, secrets)
+			paths = append(paths, sub...)
+			unnameable = unnameable || bad
+			continue
+		}
+		if taint.Secret(en.Value, secrets) {
+			paths = append(paths, path)
 		}
 	}
-	return out, nil
+	return paths, unnameable
+}
+
+// escapePointer applies RFC 6901 to one path segment: `~` becomes `~0` and `/`
+// becomes `~1`, in that order.
+func escapePointer(s string) string {
+	s = strings.ReplaceAll(s, "~", "~0")
+	return strings.ReplaceAll(s, "/", "~1")
 }
 
 // queryString builds the `a=1&b=2` of a request's query parameters.
@@ -226,37 +327,51 @@ func withQuery(raw, query string) string {
 // them is reported in. models.Exec's own EnvKeys() sorts the map afterwards, so
 // the environment handed to the child process is built the same way on every
 // run whatever order it was written in.
-func (r *Run) Model(env *eval.Env) (models.Exec, error) {
+func (r *Run) Model(env *eval.Env) (models.Exec, models.Secrets, error) {
 	out := models.Exec{}
+	var marks models.Secrets
 
 	var err error
 	if out.Command, err = trimmed(r.Command, env); err != nil {
-		return out, fmt.Errorf("command: %w", err)
+		return out, marks, fmt.Errorf("command: %w", err)
 	}
 	if out.Cwd, err = text(r.Cwd, env); err != nil {
-		return out, fmt.Errorf("cwd: %w", err)
+		return out, marks, fmt.Errorf("cwd: %w", err)
 	}
 	if out.Stdin, err = text(r.Stdin, env); err != nil {
-		return out, fmt.Errorf("stdin: %w", err)
+		return out, marks, fmt.Errorf("stdin: %w", err)
 	}
 	if out.Args, err = args(r.Args, env); err != nil {
-		return out, err
+		return out, marks, err
 	}
+
+	// The command and the cwd both land in what a trace would show as the thing
+	// that ran, so they share one mark.
+	marks.URL = taint.Secret(r.Command, r.secretNames) || taint.Secret(r.Cwd, r.secretNames)
+	marks.Stdin = taint.Secret(r.Stdin, r.secretNames)
+	marks.Args = taint.Secret(r.Args, r.secretNames)
+
 	if len(r.Env) > 0 {
 		out.Env = make(map[string]string, len(r.Env))
 		for _, e := range r.Env {
 			name, err := e.name(env)
 			if err != nil {
-				return out, fmt.Errorf("env name: %w", err)
+				return out, marks, fmt.Errorf("env name: %w", err)
 			}
 			value, err := text(e.Value, env)
 			if err != nil {
-				return out, fmt.Errorf("env %s: %w", name, err)
+				return out, marks, fmt.Errorf("env %s: %w", name, err)
 			}
 			out.Env[name] = value
+			if taint.Secret(e.Value, r.secretNames) {
+				if marks.Env == nil {
+					marks.Env = map[string]bool{}
+				}
+				marks.Env[name] = true
+			}
 		}
 	}
-	return out, nil
+	return out, marks, nil
 }
 
 // args evaluates `args = ["-f", "seed.sql"]` to the argv execstep passes to the

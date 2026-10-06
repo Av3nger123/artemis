@@ -401,7 +401,7 @@ func TestAnActValueThatWillNotResolveNamesTheSelector(t *testing.T) {
 // a tree built by hand (artemis ast --from-json, a UI) can.
 func TestAnEmptyBrowserBlockModelsCleanly(t *testing.T) {
 	var acts []*Act
-	got, err := browserModel(acts, envOf(executor.NewScope()))
+	got, _, err := browserModel(acts, envOf(executor.NewScope()), nil)
 	if err != nil {
 		t.Fatalf("browserModel(nil) = %v, want nil", err)
 	}
