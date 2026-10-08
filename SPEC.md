@@ -125,10 +125,17 @@ scenario "orders" {
 | --- | --- | --- |
 | `config` | `config <ident> { <key> = <expr>, ... }` | Settings for one step type, named by the ident |
 | `var` | `var <ident> = <expr>` | A value every step of the scenario can name |
+| `secret` | `secret var ...`, `secret capture ...` | A binding whose value no report prints |
 | `step` | `step "<name>" { ... }` | One action and what to expect of it |
 
-Steps run in the order they are written, one after another. There is no way to
-ask for parallelism.
+Steps run in the order they are written, one after another, and a scenario's
+steps are never run in parallel: a step reads what the steps above it captured,
+so the order is the meaning. The language has no way to ask for anything else --
+`parallel` is a reserved word and not a feature.
+
+Whole scenario *files* are a different question, and one the language does not
+answer. `artemis run --jobs N` runs N of them at once; see
+[Running files at once](#running-files-at-once).
 
 ### `var`
 
@@ -145,6 +152,71 @@ var headers = {"Accept": "application/json"}
 A `var` may name an earlier `var`, as `root` does. It may not name a later one,
 and it may not name a `capture`: captures do not exist yet when variables are
 evaluated. Both are compile errors.
+
+### `secret`
+
+`secret` is a modifier before `var` and before `capture`:
+
+```art
+scenario "checkout" {
+  secret var pw = env("API_PASSWORD")
+  var url = env("API_URL")
+
+  step "get a token" {
+    post "${url}/token" {
+      body = {"username": "alice", "password": pw}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}
+```
+
+Three things are true of it.
+
+**It changes no request.** A `secret` binding sends the same bytes as a plain
+one. The modifier says what a *report* may print, and nothing else. It is not
+protection in transit.
+
+**A value built from a secret binding is secret too.** The `Authorization`
+header above is withheld because it interpolates `token`. This holds through
+interpolation, a call, a comparison, an object field and an array element. A
+`capture` whose own expression reads a secret binding is secret with no modifier
+on it, so `capture part = match(pw, /^(.{3})/)` needs none.
+
+**It is positional, not a keyword.** `secret` means the modifier only
+immediately before `var` or `capture`. `var secret = "x"` and `capture secret =
+body.kind` are both legal, as `capture body = ...` already is.
+
+A report prints `***` in place of a withheld value. The length is fixed, so it
+does not report the length of the value. The two operands of a comparison are
+withheld separately, so `expect pw == "hunter2"` still shows which side was
+which. A failure between two types keeps naming both types: the type of a
+credential is not the credential.
+
+What a report withholds is decided per field. A request body written as an
+object literal is withheld field by field, so one secret password does not hide
+the rest of a body. A body that is not a literal -- `body = payload` -- has no
+field to address, so all of it is withheld. The same is true of a secret under
+an interpolated key, `{"${k}": pw}`: no path can name it, so the whole body
+goes.
+
+A `secret` binding that no step reads is not an error. A file under edit must
+still compile.
+
+`secret` reaches artemis's own reports and traces, and no further. `artemis
+build` exports a scenario as a test for another runner, and that runner has no
+idea what a secret is: a generated pytest or vitest test that fails prints both
+operands the way its own framework does. The value still arrives through
+`art_env` rather than as a literal in the file, so the generated code holds no
+credential of its own.
 
 ### `config`
 
@@ -482,6 +554,69 @@ artemis run upgrade.art                            # artemis-screenshots/
 artemis run upgrade.art --screenshots shots        # shots/
 artemis run upgrade.art --screenshots ""           # none
 ```
+
+### Running files at once
+
+Steps within a scenario are ordered, and so are the scenarios within one file.
+Separate files share nothing: `SPEC.md` already says a scenario's captures are
+invisible to the next, and that nothing is shared between files. So separate
+files can run at the same time, and `--jobs` says how many:
+
+```sh
+artemis run suite/ --jobs 6      # six files at once
+artemis run suite/               # one at a time, the default
+```
+
+This is a property of the runner and not of the language. There is no `parallel`
+block, and `parallel` stays a reserved word.
+
+The order of a report does not change. A scenario keeps the place its file had in
+discovery order, however early or late that file finished, so a golden file and a
+`jq` expression are unaffected.
+
+What does change is the console. With more than one job, each file's output is
+held and printed when its turn comes, instead of a step at a time as it happens.
+Two files printing to one terminal at once produce something no reader can
+follow. A run with one job still streams, which is why one is the default.
+
+One is the default for a second reason: the limit on a run like this is the
+service under test. A suite pointed at a staging API meets a rate limit long
+before it saturates the machine.
+
+### Tracing a step
+
+A report says what failed. A **trace** says what went over the wire, and
+`--trace` asks for one file per step:
+
+```sh
+artemis run checkout.art --trace traces      # traces/checkout-get-a-token.json
+artemis run checkout.art                     # no traces: off unless asked
+```
+
+Every step gets one, whether it passed or not, because comparing a passing step
+with a failing one is half of how a reader works out what changed. A step that
+could not run at all gets one too, holding what it sent and the reason: that is
+the case with no response to read, and so the case a trace helps with most.
+
+A trace records the step's observation under the names its type binds --
+`status`, `body`, `raw`, `headers` for an api step, `exit_code`, `stdout`,
+`stderr` for a terminal one -- beside what the step sent. Only the last attempt
+of a retried step is recorded, because a later attempt replaces an earlier one
+whole.
+
+A value a [`secret`](#secret) binding named is withheld, written as `***` rather
+than left out, so a withheld header and an absent one do not read the same. Both
+directions are withheld: a secret value the step *sent*, and the place in the
+response a `secret capture` read its value *from* -- a
+`secret capture token = body.data.access_token` withholds `/data/access_token`
+of that step's body, and leaves the rest of the response readable.
+
+A string longer than 64 KiB is cut, the value says so, and the trace's
+`truncated` list names what was cut.
+
+Tracing is off unless asked for, and a trace file holds whatever the service
+answered. Withholding covers what the scenario declared, so treat the folder as
+sensitive regardless.
 
 The name is `<scenario>-<step>.png`, lower-cased with everything that is not a
 letter or a digit collapsed to a hyphen, and it has no timestamp: a rerun
@@ -962,7 +1097,7 @@ File        = { Scenario } ;
 Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl } "}" ;
 ConfigDecl  = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
 Setting     = Ident "=" Expr ;
-VarDecl     = "var" Ident "=" Expr ;
+VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl    = "step" String "{" Action { StepStmt } "}" ;
 
 Action      = Request | Run | Browser ;
@@ -986,7 +1121,7 @@ BrowserAct  = "goto"   Expr
 
 StepStmt    = Expect | Capture | Retry | Timeout ;
 Expect      = "expect" Expr [ "within" String ] ;
-Capture     = "capture" Ident "=" Expr ;
+Capture     = [ "secret" ] "capture" Ident "=" Expr ;
 Retry       = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
 RetryField  = "times" "=" Int | "delay" "=" String ;
 Timeout     = "timeout" "=" String ;
@@ -1203,6 +1338,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `expected`, `actual` | assertion, failure | The two sides as evaluated, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve |
 | `failures` | run | Everything the run says to go and fix, flat and in run order. One entry per failing assertion, per step that could not run, and per file that would not compile, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed |
 | `scenario`, `step` | failure | The names of the two things the failure sits under, repeated so the entry stands alone |
+| `trace` | step | The path to the file holding what the step sent and what it saw, and `""` unless `--trace` asked for one. The path is as the run was given it, so a CI job uploading it uses the string verbatim. See [Tracing a step](#tracing-a-step) |
 | `screenshot` | step, failure | The path to a picture of the page, for a [browser step that did not pass](#when-a-browser-step-fails), and `""` for every other step. The path is as the run was given it -- relative to the working directory unless `--screenshots` named an absolute one -- so a CI job uploading it uses the string verbatim. Repeated on the failure entry so the entry stands alone |
 
 Every key is always present, with its zero value rather than omitted, so a `jq`

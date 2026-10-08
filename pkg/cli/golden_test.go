@@ -347,6 +347,16 @@ func goldenCases(t *testing.T) []goldenCase {
 			},
 		},
 		{
+			// ART-54: a failed `expect` against a secret binding, with the
+			// JSON document as well as the console summary, because both are
+			// places an operand is written. The golden is the assertion that
+			// `hunter2` appears in neither.
+			name:    "secret_redacted",
+			args:    []string{"--report", "json"},
+			wantErr: true,
+			handler: jsonHandler(http.StatusOK, `{"given": "not-the-password"}`),
+		},
+		{
 			// The whole --report json document for a run with something of
 			// every kind in it: a scenario that passed, one with a failed
 			// assertion and an errored step, and a file that would not load

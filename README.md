@@ -867,6 +867,137 @@ A file named with `-e` that cannot be read is a warning; a missing default
 **Remember not to commit your environment files to version control systems like
 Git, as they may contain sensitive information.**
 
+### Keeping a credential out of a report
+
+A report prints both operands of a failed assertion, so `expect pw == "..."`
+against a password would print the password -- into the terminal and into
+`report.json`, which a CI job often keeps as an artifact. Mark the binding
+`secret` and it does not:
+
+```art
+scenario "checkout" {
+  secret var pw = env("API_PASSWORD")
+  var url = env("API_URL")
+
+  step "get a token" {
+    post "${url}/token" {
+      body = {"username": "alice", "password": pw}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}
+```
+
+`secret` goes before `var` and before `capture`. A captured token needs it as
+much as an environment variable does, which is why both take it.
+
+The marking spreads on its own. The `Authorization` header above is withheld
+because it interpolates `token`, and the same holds through a call, a
+comparison, an object field and an array element -- so a value derived from a
+credential does not escape by being rewritten. A `capture` whose expression
+reads a secret binding is secret without the word.
+
+Three things it does not do. It does not change the request: the same bytes go
+out either way, and `secret` is a statement about reports alone. It does not
+take the name away -- `var secret = ...` still parses, because the word means
+the modifier only in front of `var` and `capture`. And it is not a guarantee
+about anything but a report: an environment file is still yours to keep out of
+Git.
+
+See [SPEC.md](SPEC.md) for exactly how much of a body is withheld when one
+field of it is secret.
+
+### Tracing a run
+
+A report says what failed. It does not say what came back, which is the thing you
+want when a CI job goes red with `body.total > 0, got 0` and the service is three
+deploys along from what you have locally.
+
+`--trace` writes that, one file per step:
+
+```sh
+artemis run checkout.art --trace traces
+```
+
+```json
+{
+  "scenario": "checkout",
+  "step": "get a token",
+  "type": "api",
+  "attempt": 1,
+  "sent": {
+    "method": "POST",
+    "url": "https://api.test/token",
+    "headers": { "Content-Type": "application/json" },
+    "body": { "username": "alice", "password": "***" }
+  },
+  "observed": {
+    "status": 401,
+    "headers": { "Content-Type": "application/json" },
+    "body": { "error": "password expired" },
+    "raw": "{\"error\":\"password expired\"}"
+  }
+}
+```
+
+Every step gets one, whether it passed or not: comparing the step that worked
+with the step that did not is half of how anyone finds the difference. A step
+that could not run at all gets one too, holding what it sent and the reason --
+that is the case with no response to read, so what went out is the whole of the
+evidence.
+
+What is under `observed` is whatever the step's type binds, so a `run` step
+traces `exit_code`, `stdout` and `stderr` instead, and nothing about the format
+is specific to HTTP.
+
+**It is off unless you ask**, and values from [`secret`](#keeping-a-credential-out-of-a-report)
+bindings are withheld in two ways. The marked field is replaced, so one secret
+password does not hide the body around it. And the secret's *value* is removed
+wherever else it appears -- which matters because a service that echoes a token
+back in a later response has put the credential somewhere no `capture` ever
+named, and no amount of static analysis can know that.
+
+Withholding covers what the scenario declared. A trace still holds whatever the
+service answered, so treat the folder as sensitive.
+
+### Running a suite faster
+
+A suite that waits on a service spends nearly all of its time waiting. Separate
+scenario files share nothing -- no variables, no captures, no scope -- so they can
+wait at the same time:
+
+```sh
+artemis run suite/ --jobs 6      # six files at once
+artemis run suite/               # one at a time, the default
+```
+
+Six files against a two-second endpoint: 14.6s at one job, 3.3s at six.
+
+This is the runner's doing, not the language's. A scenario's steps are still
+ordered -- a step reads what the steps above it captured -- and `parallel` is
+still a reserved word rather than a block you can write.
+
+**The report is unaffected.** A scenario keeps the place its file had in
+discovery order, whenever that file happened to finish, so goldens and `jq`
+expressions do not move.
+
+**The console changes.** With more than one job each file's output is held and
+printed when its turn arrives, rather than a step at a time as it happens:
+two files writing to one terminal at once is unreadable. One job still streams
+live, which is why it is the default.
+
+One is also the default because the limit here is the service, not the machine.
+A suite pointed at a staging API will meet a rate limit long before it saturates
+a laptop, so the number is yours to choose.
+
 ## The MCP server
 
 `artemis mcp` serves the Model Context Protocol on stdin and stdout, so an agent
@@ -1044,8 +1175,11 @@ command makes -- so it stays an input the command can read.
 - **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
   valuable property is determinism, and an assertion that flakes for
   unreproducible reasons is worse than a missing one.
-- **Concurrent execution.** Scenarios and steps run one after another, in the
-  order they are written. There is no way to ask for parallelism.
-- **Request and response detail in a report.** Neither report carries a request
-  body, a response body or headers: the result model does not record them. The
-  line a failure came from it does -- see [Reading a failure](#reading-a-failure).
+- **Concurrent execution inside a scenario.** A scenario's steps run one after
+  another, in the order they are written, and nothing asks for otherwise: a step
+  reads what the steps above it captured, so the order is the meaning. Whole
+  files do run at once, with `--jobs` -- see
+  [Running a suite faster](#running-a-suite-faster).
+- **Request and response detail in a report.** Still not in the report itself,
+  which stays a verdict. `--trace` writes it to a file per step instead -- see
+  [Tracing a run](#tracing-a-run).

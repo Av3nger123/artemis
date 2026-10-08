@@ -85,10 +85,21 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 	switch {
 	case p.atWord("config"):
 		return p.parseConfig()
-	case p.atWord("var"):
+	case p.atWord("var"), p.atWord("secret") && p.peekWordAt(1, "var"):
 		return p.parseVar()
 	case p.atWord("step"):
 		return p.parseStep()
+	}
+
+	// `secret` before a word it cannot modify gets its own message. Falling
+	// through would suggest "config", "var" or "step" in place of `secret`
+	// itself, which is not what the author got wrong.
+	if p.atWord("secret") {
+		at := p.next()
+		p.errorf(p.peek(), diag.UnexpectedToken,
+			"expected \"var\" or \"capture\" after \"secret\", found %s", describe(p.peek())).
+			DidYouMean(p.peek().Value, []string{"var", "capture"})
+		return p.badFrom(at)
 	}
 
 	p.errorf(p.peek(), diag.UnexpectedToken,
@@ -121,19 +132,26 @@ func (p *parser) parseConfig() ast.Decl {
 	return c
 }
 
-// parseVar is `var <ident> = Expr`.
+// parseVar is `[ "secret" ] "var" <ident> = Expr`.
+//
+// badFrom already drops a zero token, so the optional modifier needs no branch
+// on the recovery paths.
 func (p *parser) parseVar() ast.Decl {
-	v := &ast.VarDecl{Keyword: p.next()}
+	v := &ast.VarDecl{}
+	if p.atWord("secret") {
+		v.Secret = p.next()
+	}
+	v.Keyword = p.next()
 
 	name, ok := p.expectIdent("a variable name")
 	if !ok {
-		return p.badFrom(v.Keyword)
+		return p.badFrom(v.Secret, v.Keyword)
 	}
 	v.Name = name
 
 	assign, ok := p.expect(token.Assign, "\"=\" and a value")
 	if !ok {
-		return p.badFrom(v.Keyword, v.Name)
+		return p.badFrom(v.Secret, v.Keyword, v.Name)
 	}
 	v.Assign = assign
 	v.Value = p.parseExpr()

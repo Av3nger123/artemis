@@ -82,6 +82,11 @@ type Step struct {
 
 	// Captures are the step's `capture` statements in source order.
 	Captures []*Capture
+
+	// secretNames are the bindings declared `secret` and in scope for this
+	// step: the scenario's secret vars, plus the secret captures of the steps
+	// above this one. ART-54.
+	secretNames map[string]bool
 }
 
 // Retry is `retry { times = 3, delay = "2s" }` with both values still
@@ -125,18 +130,23 @@ func (s *Step) Model(env *eval.Env) (models.Step, error) {
 
 	switch {
 	case s.Request != nil:
-		if out.Request, err = s.Request.Model(env); err != nil {
+		if out.Request, out.Secrets, err = s.Request.Model(env); err != nil {
 			return out, fmt.Errorf("step %q: %w", s.Name, err)
 		}
 	case s.Run != nil:
-		if out.Exec, err = s.Run.Model(env); err != nil {
+		if out.Exec, out.Secrets, err = s.Run.Model(env); err != nil {
 			return out, fmt.Errorf("step %q: %w", s.Name, err)
 		}
 	case s.Acts != nil:
-		if out.Browser, err = browserModel(s.Acts, env); err != nil {
+		if out.Browser, out.Secrets, err = browserModel(s.Acts, env, s.secretNames); err != nil {
 			return out, fmt.Errorf("step %q: %w", s.Name, err)
 		}
 	}
+	// The observation half of the marks, which no action knows about: it is
+	// driven by where a secret capture read its value *from*. See observed.go.
+	obs := s.observed()
+	out.Secrets.ObservedRoots, out.Secrets.ObservedPaths = obs.ObservedRoots, obs.ObservedPaths
+
 	// Exactly one arm runs, and a step whose action did not parse runs none:
 	// TypeKey already refused it, so there is nothing here to guard.
 	return out, nil
@@ -222,7 +232,7 @@ func duration(x ast.Expr, env *eval.Env) (string, error) {
 // The statements are walked with ast.Children, which is the action and the
 // statements in *source* order, so the expects come out in the order they were
 // written whether or not they were written after the action block.
-func step(d *ast.StepDecl, info *check.Info) (*Step, error) {
+func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, error) {
 	// check.TypeOf, not a fourth switch on the action's Go type: the checker
 	// exports it pure precisely so that the lowerer and the encoder cannot
 	// disagree with it about what a step is.
@@ -235,29 +245,33 @@ func step(d *ast.StepDecl, info *check.Info) (*Step, error) {
 	}
 
 	out := &Step{
-		Name: d.Name.Value,
-		Type: key,
-		Line: d.Keyword.Span.Line,
+		Name:        d.Name.Value,
+		Type:        key,
+		Line:        d.Keyword.Span.Line,
+		secretNames: secrets,
 	}
 
 	for _, it := range ast.Children(d) {
 		switch it := it.(type) {
 		case *ast.Request:
 			out.Request = request(it)
+			out.Request.secretNames = secrets
 		case *ast.Run:
 			out.Run = runAction(it)
+			out.Run.secretNames = secrets
 		case *ast.Browser:
 			out.Acts = acts(it)
 		case *ast.Expect:
-			out.Expects = append(out.Expects, expect(it, t, info))
+			out.Expects = append(out.Expects, expect(it, t, info, secrets))
 		case *ast.Capture:
 			if it.Name.Kind != token.Ident {
 				continue // the parser reported a capture with no name.
 			}
 			out.Captures = append(out.Captures, &Capture{
-				Name:  it.Name.Value,
-				Value: it.Value,
-				Line:  it.Name.Span.Line,
+				Name:     it.Name.Value,
+				Value:    it.Value,
+				Line:     it.Name.Span.Line,
+				Declared: it.Secret.Text != "",
 			})
 		case *ast.Field:
 			stepField(out, it)

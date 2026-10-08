@@ -56,6 +56,16 @@ func Init() {
 		"Write a machine-readable report: "+strings.Join(reportFormats(), "|")+"[=path] (default: stdout, which moves the console report to stderr). Repeatable")
 	runCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
 		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off; the folder is created only when one fails")
+	// Off by default, which is the opposite of --screenshots: a trace holds
+	// what the service answered, so it is opted into. Values a `secret`
+	// binding named are withheld -- see SPEC.md -- but a trace is still a
+	// file to treat as sensitive.
+	runCmd.Flags().String(traceFlag, "",
+		"Write what each step sent and saw into this folder, one file per step. Off unless given; values from `secret` bindings are withheld")
+	// One by default, and deliberately not the number of CPUs: the limit on a
+	// run like this is the service under test, not this process.
+	runCmd.Flags().Int(jobsFlag, 1,
+		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order, rather than streaming it live")
 
 	// Build command: a .art file out as tests in another language. --lang is
 	// required rather than defaulted, so an invocation that means python today
@@ -81,6 +91,10 @@ func Init() {
 	// exist here.
 	testCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
 		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off")
+	testCmd.Flags().String(traceFlag, "",
+		"Write what each step sent and saw into this folder, one file per step. Off unless given; values from `secret` bindings are withheld")
+	testCmd.Flags().Int(jobsFlag, 1,
+		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order")
 
 	// Migrate command: YAML in, .art out, once. The one remaining YAML reader
 	// in the binary, now that ART-40 has taken the format off the run path.

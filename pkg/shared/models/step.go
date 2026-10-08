@@ -60,6 +60,11 @@ type Step struct {
 	// Line is the line of the source file the step was written on, which is
 	// where a step that could not run at all points (ART-12).
 	Line int
+
+	// Secrets names the parts of this step a report must not print. See
+	// secrets.go. The zero value marks nothing, which is every step of every
+	// scenario that declares no secret binding.
+	Secrets Secrets
 }
 
 // Request is what an `api` step sends, with every value already resolved.
