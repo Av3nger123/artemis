@@ -364,7 +364,7 @@ func checkMigrateGolden(t *testing.T, name, got string) {
 // change the row records has been undone.
 func assertCodes(t *testing.T, name, src string, want []string) {
 	t.Helper()
-	_, _, bag := frontEnd(name+".art", src)
+	bag := frontEnd(name+".art", src).Bag
 
 	var got []string
 	for _, d := range bag.All() {

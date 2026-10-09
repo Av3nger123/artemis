@@ -49,6 +49,9 @@ type Unit struct {
 	// Bag is every diagnostic: the parser's, the expander's and the
 	// checker's, the last two with their use chains.
 	Bag *diag.Bag
+	// Uses is the expansion's use table, which a span's Via indexes (Via-1):
+	// what `artemis expand` reads to say where each step came from.
+	Uses []expand.Use
 }
 
 // CompileWith is the whole front end: parse, expand, check. l reads imported
@@ -75,7 +78,7 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 	for k, v := range res.Sources {
 		sources[k] = v
 	}
-	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: bag}
+	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: bag, Uses: res.Uses}
 }
 
 // Compile lexes, parses and name-checks src, and returns every diagnostic in

@@ -81,20 +81,23 @@ func compileArt(path string, diagOut io.Writer) ([]*lower.Scenario, []check.EnvN
 		return nil, nil, err
 	}
 
-	tree, info, bag := frontEnd(path, string(src))
-	diags := bag.All()
+	// Imports are read from disk, and what is lowered is the expanded tree:
+	// every use already replaced by the steps it stands for, so the lowerer
+	// and the runner never meet one. A diagnostic may point into an imported
+	// collection, so every file the front end read is there to render it.
+	u := frontEnd(path, string(src))
+	diags := u.Bag.All()
 	if len(diags) > 0 {
-		files := diag.NewFiles()
-		files.Add(path, string(src))
-		if err := diag.Terminal(diagOut, files, diags); err != nil {
+		if err := diag.Terminal(diagOut, sourceFiles(u), diags); err != nil {
 			return nil, nil, err
 		}
 	}
-	if bag.HasErrors() {
+	if u.Bag.HasErrors() {
 		return nil, nil, firstError(diags)
 	}
+	info := u.Info
 
-	scenarios, err := lower.File(tree, info)
+	scenarios, err := lower.File(u.Expanded, info)
 	if err != nil {
 		// Reachable only for a tree the checker accepted and the lowerer could
 		// not read, which is a bug in artemis rather than in the file -- so it

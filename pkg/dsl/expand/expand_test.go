@@ -242,3 +242,22 @@ func TestCopiesAreStampedAndChained(t *testing.T) {
 		t.Fatal("sources")
 	}
 }
+
+func TestUseRecordsTheItemItExpanded(t *testing.T) {
+	files := map[string]string{
+		"auth.art": auth,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"u\" }\n}\n",
+	}
+	tree, _ := parserParse(files["main.art"])
+	res, bag := Expand(tree, MapLoader(files))
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	if len(res.Uses) != 1 {
+		t.Fatalf("want one use, got %v", res.Uses)
+	}
+	it := res.Uses[0].Item
+	if it.File != "auth.art" || it.Line != 2 {
+		t.Fatalf("Item = %+v, want the request's name at auth.art:2", it)
+	}
+}

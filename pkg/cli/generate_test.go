@@ -275,7 +275,7 @@ func TestGeneratedGoldenChecksClean(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, bag := frontEnd("kitchen_sink.art", string(src))
+	bag := frontEnd("kitchen_sink.art", string(src)).Bag
 	if bag.HasErrors() {
 		for _, d := range bag.All() {
 			t.Errorf("%s: %s", d.Code, d.Message)

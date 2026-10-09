@@ -1,0 +1,9 @@
+collection "auth" {
+  request login(user, secret password, base) {
+    post "${base}/token" {
+      body = {"username": user, "password": password}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+}

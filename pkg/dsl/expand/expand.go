@@ -25,6 +25,7 @@ type Use struct {
 	Span   token.Span // the use line, in the file it was written in
 	Parent int        // 1 + index of the enclosing use, 0 at the top
 	Ref    string     // "orders.create"
+	Item   token.Span // the name of the request or flow it expanded; zero when it resolved to nothing
 }
 
 // Result is an expansion.
@@ -331,6 +332,17 @@ func itemName(d ast.Decl) string {
 	return ""
 }
 
+// itemSpan is the span of d's name, where a reader goes to find it.
+func itemSpan(d ast.Decl) token.Span {
+	switch v := d.(type) {
+	case *ast.RequestDecl:
+		return v.Name.Span
+	case *ast.FlowDecl:
+		return v.Name.Span
+	}
+	return token.Span{}
+}
+
 func keys(m map[string]*ast.Collection) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
@@ -356,6 +368,7 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 	if !ok {
 		return nil
 	}
+	e.res.Uses[via-1].Item = itemSpan(item)
 	key := c.Name.Value + "." + itemName(item)
 	if i := slices.Index(stack, key); i >= 0 {
 		chain := append(slices.Clone(stack[i:]), key)

@@ -68,6 +68,9 @@ func TestCompileWithExpandsAndChecksTheExpandedTree(t *testing.T) {
 	if _, ok := u.Sources["main.art"]; !ok {
 		t.Fatal("Sources must hold the root file too")
 	}
+	if len(u.Uses) != 1 || u.Uses[0].Ref != "c.r" || u.Uses[0].Item.File != "c.art" {
+		t.Fatalf("Uses must be the expansion's use table, got %+v", u.Uses)
+	}
 }
 
 func TestCompileWithAttachesTheUseChainToCheckerDiagnostics(t *testing.T) {

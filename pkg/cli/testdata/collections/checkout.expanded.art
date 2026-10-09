@@ -1,0 +1,25 @@
+scenario "checkout" {
+  var url = env("API_URL")
+  secret var login_password = "s3cret"
+
+  # from auth.login (testdata/collections/auth.art:2) via testdata/collections/checkout.art:6
+  step "auth.login" {
+    post "${url}/token" { body = {"username": "alice", "password": login_password} }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  secret var bad_password = "wrong"
+
+  # from auth.login (testdata/collections/auth.art:2) via testdata/collections/checkout.art:8
+  step "bad" {
+    post "${url}/token" { body = {"username": "alice", "password": bad_password} }
+    secret capture bad_token = body.data.access_token
+    expect status == 401
+  }
+
+  step "orders" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+  }
+}
