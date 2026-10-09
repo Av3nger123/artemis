@@ -53,6 +53,7 @@ type expander struct {
 	loaded  map[string]*unit // by canonical name
 	loading []string         // the import stack, for cycle messages
 	owner   map[*ast.Collection]*unit
+	literal map[*ast.StepDecl]bool // an expanded step whose body was written as an object literal
 }
 
 // unit is one parsed file and the collections it can see by name.
@@ -85,6 +86,7 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 		loaded:  map[string]*unit{},
 		loading: []string{name},
 		owner:   map[*ast.Collection]*unit{},
+		literal: map[*ast.StepDecl]bool{},
 	}
 	root := &unit{name: name, tree: tree, ok: true}
 	e.imports(root)
@@ -327,18 +329,26 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 		if !ok {
 			return nil
 		}
-		return []ast.Decl{requestStep(it, stepName(use, c, it.Name.Value), env, stamp)}
+		s := requestStep(it, stepName(use, c, it.Name.Value), env, stamp)
+		e.writtenLiteral(s, it.Action)
+		e.override(use, via, []*ast.StepDecl{s}, use.Lines, false, nil)
+		return []ast.Decl{s}
 	case *ast.FlowDecl:
 		env, ok := e.bind(use, it, it.Params, stamp)
 		if !ok {
 			return nil
 		}
 		var out []ast.Decl
+		own := map[string]*ast.StepDecl{}
 		for _, d := range it.Body {
 			switch v := d.(type) {
 			case *ast.StepDecl:
 				s := ast.Clone(v, stamp)
+				e.writtenLiteral(s, v.Action)
 				substStep(s, env)
+				if _, dup := own[v.Name.Value]; !dup {
+					own[v.Name.Value] = s
+				}
 				out = append(out, s)
 			case *ast.UseDecl:
 				inner := ast.Clone(v, stamp)
@@ -346,6 +356,7 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 				out = append(out, e.expandUse(owner, c, inner, via, stack)...)
 			}
 		}
+		e.override(use, via, nil, use.Lines, true, own)
 		return out
 	}
 	return nil

@@ -18,14 +18,19 @@ import (
 // position of the item before it in the slice. An appended statement prints
 // last, a synthetic action prints first because the action heads the list, and
 // for a tree with no edits in it the result is exactly ast.Children's.
+//
+// Offsets are compared only among the items written where the action was
+// (ast.SplitOrigin); an item pkg/dsl/expand placed from a use line elsewhere
+// prints after them, in slice order, as ast.Children has it.
 func stepItems(s *ast.StepDecl) []ast.Node {
-	list := make([]ast.Node, 0, len(s.Body)+1)
+	all := make([]ast.Node, 0, len(s.Body)+1)
 	if !isNil(s.Action) {
-		list = append(list, s.Action)
+		all = append(all, s.Action)
 	}
 	for _, st := range s.Body {
-		list = append(list, st)
+		all = append(all, st)
 	}
+	list, foreign := ast.SplitOrigin(all)
 
 	// key[i] is the item's own offset, or the running maximum for a synthetic
 	// one, which is what keeps it where the slice put it.
@@ -46,7 +51,7 @@ func stepItems(s *ast.StepDecl) []ast.Node {
 			keys[j], keys[j-1] = keys[j-1], keys[j]
 		}
 	}
-	return list
+	return append(list, foreign...)
 }
 
 // blockIndent is the indentation of the first intact item in a list, read off
