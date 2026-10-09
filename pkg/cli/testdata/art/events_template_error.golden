@@ -1,0 +1,7 @@
+{"event":"run-start","files":["testdata/art/template_error.art"]}
+{"event":"scenario-start","file":"testdata/art/template_error.art","scenario":"","steps":[]}
+{"event":"scenario-end","file":"testdata/art/template_error.art","scenario":"","result":{"name":"","file":"testdata/art/template_error.art","status":"error","duration_ms":0,"error":"testdata/art/template_error.art:11:27: unknown name \"tokn\""}}
+{"event":"run-end","result":{"schema_version":1,"started_at":"1970-01-01T00:00:00Z","duration_ms":0,"status":"error","passed":false,"error":"","counts":{"scenarios":{"total":1,"passed":0,"failed":0,"errored":1,"skipped":0},"steps":{"total":0,"passed":0,"failed":0,"errored":0,"skipped":0},"assertions":{"total":0,"passed":0,"failed":0,"errored":0,"skipped":0}}}}
+
+--- exit error ---
+1 scenario could not run: testdata/art/template_error.art:11:27: unknown name "tokn"
