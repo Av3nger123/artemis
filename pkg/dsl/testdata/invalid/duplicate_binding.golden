@@ -1,0 +1,14 @@
+=== terminal
+duplicate_binding.art:18:13: "token" is already bound
+   18 |     capture token = body.token
+      |             ^^^^^
+   hint: the var at line 9 binds it first
+
+duplicate_binding.art:19:13: "session" is already bound
+   19 |     capture session = body.session
+      |             ^^^^^^^
+   hint: the capture at line 13 binds it first
+
+=== codes
+duplicate-binding	error	18:13-18:18
+duplicate-binding	error	19:13-19:20

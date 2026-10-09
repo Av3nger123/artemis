@@ -232,9 +232,34 @@ var freeFnOf = func() map[string]bool {
 type scope struct {
 	vars     []string
 	captures []string
+
+	// first is where each name was bound first, var or capture, for the
+	// rule that a capture may not take a name already bound. file is the
+	// scenario's own file, which a binding copied in by a use is not.
+	first map[string]binding
+	file  string
 }
 
-func newScope() *scope { return &scope{} }
+// binding is one name's first binding: what bound it and its name token.
+type binding struct {
+	kind string // "var" or "capture"
+	tok  token.Token
+}
+
+func newScope() *scope { return &scope{first: map[string]binding{}} }
+
+// bind records tok as its name's first binding, unless the name has one.
+func (s *scope) bind(tok token.Token, kind string) {
+	if _, ok := s.first[tok.Value]; !ok {
+		s.first[tok.Value] = binding{kind: kind, tok: tok}
+	}
+}
+
+// fromUse reports whether a span was copied in by a use rather than written
+// in the scenario.
+func (s *scope) fromUse(sp token.Span) bool {
+	return sp.Via != 0 || (s.file != "" && sp.File != s.file)
+}
 
 func (s *scope) addVar(name string)     { s.vars = append(s.vars, name) }
 func (s *scope) addCapture(name string) { s.captures = append(s.captures, name) }

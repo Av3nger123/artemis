@@ -44,6 +44,8 @@
 package check
 
 import (
+	"fmt"
+
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
@@ -259,6 +261,17 @@ type checker struct {
 // meaningful if the walk is in reading order. ast.Scenario.Body already is.
 func (c *checker) scenario(s *ast.Scenario) {
 	sc := newScope()
+	sc.file = s.Keyword.Span.File
+
+	// Every var of the scenario is a name a capture may not take, whether it
+	// is declared above the capture or below: either way the scenario would
+	// hold two values under one name. So the vars are collected before the
+	// walk, while the walk itself still binds them in order for resolution.
+	for _, d := range s.Body {
+		if v, ok := d.(*ast.VarDecl); ok && v != nil && v.Name.Kind == token.Ident {
+			sc.bind(v.Name, "var")
+		}
+	}
 
 	for _, d := range s.Body {
 		switch d := d.(type) {
@@ -331,9 +344,39 @@ func (c *checker) step(s *ast.StepDecl, sc *scope) {
 	// follow, which is the design's "each capture from an *earlier* step".
 	for _, st := range s.Body {
 		if cap, ok := st.(*ast.Capture); ok && cap != nil && cap.Name.Kind == token.Ident {
+			c.rebinds(cap.Name, sc)
 			sc.addCapture(cap.Name.Value)
 		}
 	}
+}
+
+// rebinds reports a capture whose name a var or an earlier capture already
+// holds, and otherwise records it as the name's first binding. SPEC.md: "a
+// capture may not reuse the name of a var or of an earlier capture, because
+// silently shadowing a value is how a scenario comes to assert against the
+// wrong one."
+//
+// When either binding was copied in by a use -- its span is stamped with Via,
+// or it sits in another file than the scenario -- the fix is usually `as`,
+// which prefixes a use's captures, so the hint says so.
+func (c *checker) rebinds(name token.Token, sc *scope) {
+	if token.IsReserved(name.Value) {
+		return // reserved already said what is wrong with this name
+	}
+	first, ok := sc.first[name.Value]
+	if !ok {
+		sc.bind(name, "capture")
+		return
+	}
+	where := fmt.Sprintf("the %s at line %d", first.kind, first.tok.Span.Line)
+	if first.tok.Span.File != name.Span.File {
+		where += " of " + first.tok.Span.File
+	}
+	hint := where + " binds it first"
+	if sc.fromUse(first.tok.Span) || sc.fromUse(name.Span) {
+		hint += "\nuse ... as <name> to keep both"
+	}
+	c.bag.Error(name.Span, diag.DuplicateBinding, "%q is already bound", name.Value).Hintf("%s", hint)
 }
 
 // expect checks the assertion and records its simple/complex label.

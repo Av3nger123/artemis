@@ -1,0 +1,21 @@
+# A capture that takes a name the scenario already binds.
+#
+# SPEC.md: a capture may not reuse the name of a var or of an earlier capture,
+# because silently shadowing a value is how a scenario comes to assert against
+# the wrong one. The checker owns it because it is the stage that walks the
+# scenario's bindings in order; the hint names the first binding.
+
+scenario "rebind" {
+  var token = env("TOKEN")
+
+  step "login" {
+    post "/token"
+    capture session = body.session
+  }
+
+  step "refresh" {
+    post "/refresh"
+    capture token = body.token
+    capture session = body.session
+  }
+}

@@ -165,6 +165,11 @@ const (
 	// by the field's meaning: `env(42)`, `times = "3"`, `headless = "yes"`, or
 	// a `header` with no name before its `=`.
 	BadValue Code = "bad-value"
+
+	// DuplicateBinding is a capture that reuses the name of a var or of an
+	// earlier capture in the same scenario. The span is the capture's name;
+	// the hint says where the name was bound first.
+	DuplicateBinding Code = "duplicate-binding"
 )
 
 // The expander's codes: what is wrong with an import or a use.
@@ -224,6 +229,7 @@ var registry = []CodeInfo{
 	{UnknownType, Error, "the right-hand side of \"is\" is not a type name"},
 	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
 	{BadValue, Error, "a value is the wrong kind for the position it is in"},
+	{DuplicateBinding, Error, "a capture reuses the name of a var or of an earlier capture"},
 	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
 	{ImportNotFound, Error, "an imported file cannot be read"},
 	{ImportCycle, Error, "a file imports itself, directly or through other files"},

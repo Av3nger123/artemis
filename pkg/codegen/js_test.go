@@ -95,7 +95,9 @@ func importsOf(module string) string {
 
 // Every binding a test assigns is declared once at the top, which is what makes
 // a capture written inside a retry callback visible to the steps below it -- and
-// what keeps a name bound in two steps from being a redeclaration.
+// what keeps a root bound in two steps (stdout, status) from being a
+// redeclaration. A capture can no longer be bound in two steps: the checker
+// rejects that as duplicate-binding, so the second step captures another name.
 func TestJSDeclaresEveryBindingOnce(t *testing.T) {
 	files, err := JS{}.Generate(parse(t, "x.art", `scenario "x" {
   var base = "https://example.test"
@@ -112,7 +114,7 @@ func TestJSDeclaresEveryBindingOnce(t *testing.T) {
       args = [id]
     }
     expect exit_code == 0
-    capture id = stdout
+    capture out = stdout
   }
 }
 `))
@@ -121,16 +123,16 @@ func TestJSDeclaresEveryBindingOnce(t *testing.T) {
 	}
 	module := files[0].Content
 
-	// One `let`, naming the var, the capture once however many steps bind it,
+	// One `let`, naming the var, each capture once,
 	// and the roots and locals of both step types.
 	if n := strings.Count(module, "  let "); n != 1 {
 		t.Errorf("the test has %d let lines, want 1:\n%s", n, module)
 	}
 	for _, want := range []string{
-		"  let base, id, status, body, raw, headers, resp, exit_code, stdout, stderr,\n    proc;\n",
+		"  let base, id, out, status, body, raw, headers, resp, exit_code, stdout,\n    stderr, proc;\n",
 		// The capture is assigned, not declared, inside the retry callback.
 		"    id = raw;",
-		"  id = stdout;",
+		"  out = stdout;",
 	} {
 		if !strings.Contains(module, want) {
 			t.Errorf("the module does not hold %q:\n%s", want, module)

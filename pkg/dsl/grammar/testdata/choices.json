@@ -195,6 +195,11 @@
           "severity": "error"
         },
         {
+          "value": "duplicate-binding",
+          "doc": "a capture reuses the name of a var or of an earlier capture",
+          "severity": "error"
+        },
+        {
           "value": "duplicate-collection",
           "doc": "two collections in scope have the same name",
           "severity": "error"

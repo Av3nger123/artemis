@@ -215,13 +215,17 @@ func TestNestedSecretParamFromAFlowParamIsHoistedTwice(t *testing.T) {
 	}
 }
 
+// The request's argument reads the scenario's var token while the request
+// captures token too: as renames the capture and leaves the argument alone.
+// (The request once named its parameter token as well; a parameter is a var
+// to the standalone check, so that is now duplicate-binding.)
 func TestAsRewritesOnlyReadsInLaterSteps(t *testing.T) {
 	got, diags := run(t, map[string]string{
 		"c.art": "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"a\"\n      capture t = body.t\n    }\n" +
 			"    step \"two\" {\n      get \"${t}/b\"\n      expect status == 200\n      capture t2 = body.x\n    }\n" +
 			"    step \"three\" {\n      get \"${t2}/c\"\n    }\n  }\n" +
-			"  request r(token) {\n    get \"x\"\n    expect body.token == token\n    capture token = body.token\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var token = 2\n  use c.f as a {}\n  use c.r as a { token = token }\n}\n",
+			"  request r(want) {\n    get \"x\"\n    expect body.token == want\n    capture token = body.token\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var token = 2\n  use c.f as a {}\n  use c.r as a { want = token }\n}\n",
 	})
 	noDiags(t, diags)
 	for _, want := range []string{
