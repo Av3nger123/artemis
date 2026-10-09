@@ -1,0 +1,34 @@
+import "auth.art"
+
+collection "orders" {
+  request create(sku, qty = 1, base = env("API_URL")) {
+    post "${base}/orders" { body = {"sku": sku, "qty": qty} }
+    expect status == 201
+    capture order_id = body.data.id
+  }
+
+  flow checkout(user, secret password, base = env("API_URL")) {
+    use auth.login { user = user, password = password, base = base }
+    use create { sku = "A-1", qty = 2, base = base }
+
+    step "pay" {
+      post "${base}/orders/${order_id}/pay"
+      expect status == 200
+    }
+  }
+}
+
+scenario "rush" {
+  use orders.create as rush {
+    sku = "A-1"
+    header "X-Priority" = "high"
+    body.qty = 5
+    drop expects
+    expect status == 202
+  }
+  use orders.checkout {
+    user = "alice"
+    password = env("PW")
+    in "pay" { header "X-Trace" = "1" }
+  }
+}

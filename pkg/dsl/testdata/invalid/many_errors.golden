@@ -1,5 +1,5 @@
 === terminal
-many_errors.art:13:3: expected "config", "var" or "step", found "nonsense"
+many_errors.art:13:3: expected "config", "var", "step" or "use", found "nonsense"
    13 |   nonsense here
       |   ^^^^^^^^
 

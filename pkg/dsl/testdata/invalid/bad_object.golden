@@ -16,14 +16,14 @@ bad_object.art:7:21: expected a field name, found "\"A-1\""
    7 |       body = {"sku" "A-1", 3: true}
      |                     ^^^^^
 
-bad_object.art:9:5: expected "config", "var" or "step", found "expect"
+bad_object.art:9:5: expected "config", "var", "step" or "use", found "expect"
    9 |     expect status == 201
      |     ^^^^^^
 
-bad_object.art:11:1: expected "scenario", found "}"
+bad_object.art:11:1: expected "import", "collection" or "scenario", found "}"
    11 | }
       | ^
-   hint: a file holds scenarios: scenario "name" { ... }
+   hint: a file holds imports, then collections and scenarios
 
 === codes
 unexpected-token	error	7:21-7:26

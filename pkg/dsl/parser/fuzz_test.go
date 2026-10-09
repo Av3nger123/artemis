@@ -145,6 +145,16 @@ func fileSeeds() []string {
 		"scenario \"s\" {\r\n\tvar a = 1\r\n}\r\n",
 		"\ufeffscenario \"s\" {}", // a byte-order mark, which the lexer keeps as whitespace
 		"scenario \"s\" { var a = \x00 }",
+
+		// Imports, collections and uses, whole and cut off.
+		"import \"a.art\"\n",
+		"import",
+		"collection \"c\" {\n  request r(a, secret b, c = 1) {\n    get \"/x\"\n  }\n  flow f() {\n    use r { a = 1 }\n  }\n}\n",
+		"collection \"c\" { request r(",
+		"collection \"c\" { flow f(secret) { use",
+		"scenario \"s\" {\n  use c.r as x {\n    a = 1, body.b.c = 2, drop expects\n    in \"t\" { header \"H\" = \"v\" }\n  }\n}\n",
+		"scenario \"s\" { use c.r { body.",
+		"scenario \"s\" { use c.r { in \"t\" { in \"u\" {",
 	}
 }
 

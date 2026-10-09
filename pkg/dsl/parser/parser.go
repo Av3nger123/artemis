@@ -167,6 +167,25 @@ func (p *parser) peekWordAt(n int, word string) bool {
 	return t.Kind == token.Ident && t.Value == word
 }
 
+// peekKindAt reports whether the nth token after the cursor is of kind k,
+// counting the cursor itself as zero and skipping markers as peekWordAt does.
+func (p *parser) peekKindAt(n int, k token.Kind) bool {
+	seen, i := 0, p.i
+	for ; i < len(p.toks); i++ {
+		if p.toks[i].IsMarker() {
+			continue
+		}
+		if seen == n {
+			break
+		}
+		seen++
+	}
+	if i >= len(p.toks) {
+		return false
+	}
+	return p.toks[i].Kind == k
+}
+
 // atBoundary reports whether the cursor is at a statement boundary: a newline
 // separated it from the previous token, or the enclosing block ends here, or
 // the file does.

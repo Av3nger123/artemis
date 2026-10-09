@@ -180,6 +180,11 @@
           "severity": "error"
         },
         {
+          "value": "import-placement",
+          "doc": "an import appears below a collection or a scenario",
+          "severity": "error"
+        },
+        {
           "value": "invalid-duration",
           "doc": "a string in a duration position is not a duration",
           "severity": "error"
@@ -217,6 +222,11 @@
         {
           "value": "not-in-scope",
           "doc": "a name is not bound in this step's type",
+          "severity": "error"
+        },
+        {
+          "value": "reserved-param",
+          "doc": "a parameter is named like a use-block override word, so no use can pass it",
           "severity": "error"
         },
         {

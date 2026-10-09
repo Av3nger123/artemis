@@ -58,17 +58,25 @@ func FuzzCheck(f *testing.F) {
 			}
 		}
 
-		// Every step the tree holds was typed. The Info is a promise about the
-		// whole tree, and a step the descent never reached would be a step
+		// Every step a scenario holds was typed. The Info is a promise about
+		// every scenario, and a step the descent never reached would be a step
 		// ART-37's lowerer has no type for -- which is the one way this
-		// package can fail silently.
-		ast.Inspect(tree, func(n ast.Node) {
-			if s, ok := n.(*ast.StepDecl); ok {
-				if _, typed := info.steps[s]; !typed {
-					t.Fatalf("a step was not typed: %q", src)
-				}
+		// package can fail silently. A collection's steps are not Check's: a
+		// flow's steps are checked where pkg/dsl/expand puts them, so the walk
+		// is over the scenarios, as Check's own is.
+		for _, d := range tree.Scenarios {
+			sc, ok := d.(*ast.Scenario)
+			if !ok {
+				continue
 			}
-		})
+			ast.Inspect(sc, func(n ast.Node) {
+				if s, ok := n.(*ast.StepDecl); ok {
+					if _, typed := info.steps[s]; !typed {
+						t.Fatalf("a step was not typed: %q", src)
+					}
+				}
+			})
+		}
 
 		// Running twice must give the same answer. The checker holds no state
 		// between calls, and a scope that leaked across scenarios -- the one

@@ -8,23 +8,38 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// parseFile is `File = { Scenario }`.
+// parseFile is `File = { Import } { Collection | Scenario }`.
 //
 // An empty file is valid and yields a File with no scenarios. Anything at the
-// top level that is not a scenario is reported once and recovered past, so a
-// stray line above a scenario does not cost the scenario.
+// top level that is none of the three is reported once and recovered past, so
+// a stray line above a scenario does not cost the scenario. An import below a
+// collection or a scenario still parses, and is reported where it stands.
 func (p *parser) parseFile() *ast.File {
 	file := &ast.File{}
+	seenBody := false
 
 	for !p.at(token.EOF) {
 		before := p.i
 
-		if p.atWord("scenario") {
+		switch {
+		case p.atWord("import"):
+			imp := p.parseImport()
+			if seenBody {
+				p.errorf(tokenAt(imp), diag.ImportPlacement,
+					"an import must come before every collection and scenario").
+					Hintf("move it to the top of the file")
+			}
+			file.Scenarios = append(file.Scenarios, imp)
+		case p.atWord("collection"):
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseCollection())
+		case p.atWord("scenario"):
+			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseScenario())
-		} else {
+		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
-				"expected \"scenario\", found %s", describe(p.peek())).
-				Hintf("a file holds scenarios: scenario \"name\" { ... }")
+				"expected \"import\", \"collection\" or \"scenario\", found %s", describe(p.peek())).
+				Hintf("a file holds imports, then collections and scenarios")
 			file.Scenarios = append(file.Scenarios, p.recoverTo())
 		}
 
@@ -80,7 +95,7 @@ func (p *parser) parseScenarioBody(open token.Token) ([]ast.Decl, token.Token) {
 	return body, p.next()
 }
 
-// parseScenarioDecl is one of the three declarations a scenario body holds.
+// parseScenarioDecl is one of the four declarations a scenario body holds.
 func (p *parser) parseScenarioDecl() ast.Decl {
 	switch {
 	case p.atWord("config"):
@@ -89,10 +104,12 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 		return p.parseVar()
 	case p.atWord("step"):
 		return p.parseStep()
+	case p.atWord("use"):
+		return p.parseUse()
 	}
 
 	// `secret` before a word it cannot modify gets its own message. Falling
-	// through would suggest "config", "var" or "step" in place of `secret`
+	// through would suggest "config", "var", "step" or "use" in place of `secret`
 	// itself, which is not what the author got wrong.
 	if p.atWord("secret") {
 		at := p.next()
@@ -103,8 +120,8 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 	}
 
 	p.errorf(p.peek(), diag.UnexpectedToken,
-		"expected \"config\", \"var\" or \"step\", found %s", describe(p.peek())).
-		DidYouMean(p.peek().Value, []string{"config", "var", "step"})
+		"expected \"config\", \"var\", \"step\" or \"use\", found %s", describe(p.peek())).
+		DidYouMean(p.peek().Value, []string{"config", "var", "step", "use"})
 	return p.recoverTo()
 }
 
@@ -174,11 +191,26 @@ func (p *parser) parseStep() ast.Decl {
 	if !ok {
 		return p.badFrom(s.Keyword)
 	}
-	s.Name = name
 
-	open, ok := p.expect(token.LBrace, "\"{\" to open the step")
+	body := p.parseStepBody("step", name)
+	if body == nil {
+		return p.badFrom(s.Keyword, name)
+	}
+	body.Keyword, body.Name = s.Keyword, name
+	p.endDecl("a step")
+	return body
+}
+
+// parseStepBody is a step's `"{" Action { StepStmt } "}"`, shared with a
+// collection's request declaration so both hold the same shape rules with the
+// same diagnostics. what is "step" or "request", and name is what the
+// missing-action diagnostic points at. It returns nil, having consumed
+// nothing, when there is no "{".
+func (p *parser) parseStepBody(what string, name token.Token) *ast.StepDecl {
+	s := &ast.StepDecl{}
+	open, ok := p.expect(token.LBrace, "\"{\" to open the "+what)
 	if !ok {
-		return p.badFrom(s.Keyword, s.Name)
+		return nil
 	}
 	s.LBrace = open
 
@@ -221,7 +253,7 @@ func (p *parser) parseStep() ast.Decl {
 	}
 
 	if p.at(token.EOF) {
-		p.unclosed(open, "step")
+		p.unclosed(open, what)
 	} else {
 		s.RBrace = p.next()
 	}
@@ -230,11 +262,9 @@ func (p *parser) parseStep() ast.Decl {
 		// A step's type comes from its action, so a step without one has no
 		// type and nothing to run. The span is the step's name, because that
 		// is the line an author will go to.
-		p.errorf(s.Name, diag.MissingAction, "step %s has no action block", s.Name.Text).
+		p.errorf(name, diag.MissingAction, "%s %s has no action block", what, name.Text).
 			Hintf("a step does one of: an HTTP verb (get, post, ...), run \"<command>\", or browser { ... }")
 	}
-
-	p.endDecl("a step")
 	return s
 }
 

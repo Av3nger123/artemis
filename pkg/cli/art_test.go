@@ -159,7 +159,7 @@ func TestParseArtReportsEveryErrorAndFails(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		`expected "config", "var" or "step", found "nonsense"`,
+		`expected "config", "var", "step" or "use", found "nonsense"`,
 		`expected "=" and a value after "query"`,
 		`"==" cannot be chained with another comparison`,
 		`step "has nothing to run" has no action block`,

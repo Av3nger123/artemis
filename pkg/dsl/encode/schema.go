@@ -97,13 +97,17 @@ type groupSchema struct {
 }
 
 var groupSchemas = []groupSchema{
-	{"declaration", []string{kindScenario}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep}},
+	{"declaration", []string{kindScenario, kindImport, kindCollection}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse}},
 	{"action", []string{kindRequest, kindRun, kindBrowser}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
 	{"blockField", []string{kindField}},
 	{"browserAction", []string{kindBrowserAct}},
 	{"block", []string{kindBlock}},
+	{"collectionItem", []string{kindRequestDecl, kindFlow}},
+	{"param", []string{kindParam}},
+	{"flowBody", []string{kindStep, kindUse}},
+	{"useLine", []string{kindField, kindBodySet, kindDrop, kindExpect, kindIn}},
 	{"expression", []string{
 		kindIdent, kindLiteral, kindInterp, kindUnary, kindBinary, kindExists,
 		kindIsType, kindMember, kindIndex, kindCall, kindObject, kindArray, kindParen,
@@ -300,6 +304,57 @@ var nodeSchemas = []nodeSchema{
 	{Kind: kindBad, Doc: "source that did not parse, kept verbatim. Output only: Decode refuses a tree holding one", Fields: []fieldSchema{
 		word("source", "the exact bytes, trivia included"),
 		spanField,
+	}},
+	{Kind: kindImport, Doc: "`import \"auth.art\"`; imports come before every collection and scenario", Fields: []fieldSchema{
+		word("path", "the file imported, decoded: escapes resolved, no quotes"),
+		spanField, commentsField,
+	}},
+	{Kind: kindCollection, Doc: "`collection \"orders\" { request ... flow ... }`", Fields: []fieldSchema{
+		recoveredName,
+		list("items", "collectionItem"),
+		spanField, commentsField,
+	}},
+	{Kind: kindParam, Doc: "one parameter of a request or a flow: `sku`, `qty = 1`, `secret password`", Fields: []fieldSchema{
+		word("name", "the identifier a use passes as `name = value`"),
+		{Name: "secret", Type: "boolean", Optional: true,
+			Doc: "the `secret` modifier: the value passed is redacted wherever it appears. Absent means false"},
+		optChild("default", "expression"),
+		spanField,
+	}},
+	{Kind: kindRequestDecl, Doc: "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised", Fields: []fieldSchema{
+		word("name", "the identifier a use names it by"),
+		list("params", "param"),
+		child("action", "action"),
+		list("body", "stepStatement"),
+		spanField, commentsField,
+	}},
+	{Kind: kindFlow, Doc: "`flow checkout(user) { step ... use ... }`", Fields: []fieldSchema{
+		word("name", "the identifier a use names it by"),
+		list("params", "param"),
+		list("body", "flowBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`", Fields: []fieldSchema{
+		{Name: "collection", Type: "string", Optional: true,
+			Doc: "the collection before the dot; absent for a sibling in the same collection"},
+		word("item", "the request or flow used"),
+		{Name: "alias", Type: "string", Optional: true, Doc: "the name after `as`"},
+		list("lines", "useLine"),
+		spanField, commentsField,
+	}},
+	{Kind: kindBodySet, Doc: "`body.qty = 5` in a use block: one field of a literal body", Fields: []fieldSchema{
+		{Name: "path", Type: "string[]", InputRequired: true, Doc: "the names after `body`, outermost first"},
+		child("value", "expression"),
+		spanField, commentsField,
+	}},
+	{Kind: kindDrop, Doc: "`drop expects` in a use block: the used item's expects are not run", Fields: []fieldSchema{
+		spanField, commentsField,
+	}},
+	{Kind: kindIn, Doc: "`in \"pay\" { ... }` in a use block: overrides aimed at one step of a flow", Fields: []fieldSchema{
+		{Name: "step", Type: "name", Optional: true, InputRequired: true,
+			Doc: "the step's name, as the flow writes it"},
+		list("lines", "useLine"),
+		spanField, commentsField,
 	}},
 	{Kind: kindIdent, Doc: "a name: a variable, a capture, or a bound root like `status`", Fields: []fieldSchema{
 		word("name", ""),

@@ -2,6 +2,7 @@ action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-value	error	a value is the wrong kind for the position it is in
 duplicate-action	error	a step block contains more than one action block
+import-placement	error	an import appears below a collection or a scenario
 invalid-duration	error	a string in a duration position is not a duration
 invalid-escape	error	a string literal contains an escape the language does not define
 invalid-regex	error	a regex literal does not compile
@@ -10,6 +11,7 @@ missing-separator	error	two statements run together with no newline or comma bet
 nesting-too-deep	error	a file nests deeper than the parser will descend
 non-associative-operator	error	a comparison operator is chained with another
 not-in-scope	error	a name is not bound in this step's type
+reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-word	error	a word reserved for a later tier is used as a name
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"

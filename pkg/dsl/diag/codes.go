@@ -94,6 +94,14 @@ const (
 	// lexer's UnclosedInterpolation: the lexer catches a `${` that reaches end
 	// of string, this catches one whose contents stop making sense first.
 	UnclosedInterpolationExpr Code = "unclosed-interpolation-expr"
+
+	// ImportPlacement is an import below a collection or a scenario. Imports
+	// come first so a reader sees every dependency of a file at its top.
+	ImportPlacement Code = "import-placement"
+
+	// ReservedParam is a parameter named like a use-block override word, which
+	// no use could ever pass.
+	ReservedParam Code = "reserved-param"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -186,6 +194,8 @@ var registry = []CodeInfo{
 	{NonAssociativeOperator, Error, "a comparison operator is chained with another"},
 	{NestingTooDeep, Error, "a file nests deeper than the parser will descend"},
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
+	{ImportPlacement, Error, "an import appears below a collection or a scenario"},
+	{ReservedParam, Error, "a parameter is named like a use-block override word, so no use can pass it"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},

@@ -22,9 +22,10 @@ import (
 // TestGoldensCoverEveryKind fails if a kind is added without one of them growing
 // to hold it.
 var goldenFixtures = map[string]string{
-	"kinds.json":          "testdata/kinds.art",
-	"print-comments.json": "../print/testdata/comments.art",
-	"parser-recover.json": "../parser/testdata/recover.art",
+	"kinds.json":              "testdata/kinds.art",
+	"print-comments.json":     "../print/testdata/comments.art",
+	"parser-recover.json":     "../parser/testdata/recover.art",
+	"parser-collections.json": "../parser/testdata/collections.art",
 }
 
 // TestEncodingGoldens pins the encoding of the three fixtures.
