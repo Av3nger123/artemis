@@ -1,0 +1,9 @@
+{"event":"run-start","files":["testdata/art/fail.art"]}
+{"event":"scenario-start","file":"testdata/art/fail.art","scenario":"status check","steps":["ping"]}
+{"event":"step-start","file":"testdata/art/fail.art","scenario":"status check","step":"ping","index":0}
+{"event":"step-end","file":"testdata/art/fail.art","scenario":"status check","index":0,"result":{"name":"ping","status":"fail","duration_ms":0,"attempts":1,"line":7,"error":"","screenshot":"","assertions":[{"kind":"expect","path":"status","operator":"==","expected":200,"actual":200,"status":"pass","error":"","line":9},{"kind":"expect","path":"body.status","operator":"==","expected":"ok","actual":"pending","status":"fail","error":"","line":10},{"kind":"expect","path":"body.count","operator":"\u003c=","expected":2,"actual":3,"status":"fail","error":"","line":11}]}}
+{"event":"scenario-end","file":"testdata/art/fail.art","scenario":"status check","result":{"name":"status check","file":"testdata/art/fail.art","status":"fail","duration_ms":0,"error":""}}
+{"event":"run-end","result":{"schema_version":1,"started_at":"1970-01-01T00:00:00Z","duration_ms":0,"status":"fail","passed":false,"error":"","counts":{"scenarios":{"total":1,"passed":0,"failed":1,"errored":0,"skipped":0},"steps":{"total":1,"passed":0,"failed":1,"errored":0,"skipped":0},"assertions":{"total":3,"passed":1,"failed":2,"errored":0,"skipped":0}}}}
+
+--- exit error ---
+1 of 1 steps failed, 2 of 3 assertions failed

@@ -53,15 +53,24 @@ const SchemaVersion = 1
 // What is still not here is anything the result tree does not hold: no request or
 // response bodies, and no headers.
 type jsonRun struct {
-	SchemaVersion int            `json:"schema_version"`
-	StartedAt     string         `json:"started_at"`
-	DurationMS    float64        `json:"duration_ms"`
-	Status        string         `json:"status"`
-	Passed        bool           `json:"passed"`
-	Error         string         `json:"error"`
-	Counts        jsonCounts     `json:"counts"`
-	Scenarios     []jsonScenario `json:"scenarios"`
-	Failures      []jsonFailure  `json:"failures"`
+	jsonRunSummary
+	Scenarios []jsonScenario `json:"scenarios"`
+	Failures  []jsonFailure  `json:"failures"`
+}
+
+// jsonRunSummary is the part of the document about the run as a whole: every
+// key but scenarios and failures. It is its own type so the event stream's
+// run-end carries exactly these keys (events.go). Embedded, its fields are
+// encoded inline and in the same order, so splitting it out changed no byte of
+// the document -- TestWriteJSONPinsTheSchema holds that.
+type jsonRunSummary struct {
+	SchemaVersion int        `json:"schema_version"`
+	StartedAt     string     `json:"started_at"`
+	DurationMS    float64    `json:"duration_ms"`
+	Status        string     `json:"status"`
+	Passed        bool       `json:"passed"`
+	Error         string     `json:"error"`
+	Counts        jsonCounts `json:"counts"`
 }
 
 // jsonCounts is the run's tallies at each level, so a consumer does not have to
@@ -81,12 +90,19 @@ type jsonTally struct {
 }
 
 type jsonScenario struct {
-	Name       string     `json:"name"`
-	File       string     `json:"file"`
-	Status     string     `json:"status"`
-	DurationMS float64    `json:"duration_ms"`
-	Error      string     `json:"error"`
-	Steps      []jsonStep `json:"steps"`
+	jsonScenarioSummary
+	Steps []jsonStep `json:"steps"`
+}
+
+// jsonScenarioSummary is a scenario without its steps, which is what the event
+// stream's scenario-end carries: by then every step has already arrived on its
+// own step-end. Embedded in jsonScenario for the same reason as jsonRunSummary.
+type jsonScenarioSummary struct {
+	Name       string  `json:"name"`
+	File       string  `json:"file"`
+	Status     string  `json:"status"`
+	DurationMS float64 `json:"duration_ms"`
+	Error      string  `json:"error"`
 }
 
 type jsonStep struct {
@@ -176,15 +192,9 @@ func fromRun(run *result.RunResult) jsonRun {
 		run = &result.RunResult{}
 	}
 	out := jsonRun{
-		SchemaVersion: SchemaVersion,
-		StartedAt:     rfc3339(run.StartedAt),
-		DurationMS:    millis(run.Duration),
-		Status:        run.Status.String(),
-		Passed:        run.Passed(),
-		Error:         run.Error,
-		Counts:        fromCounts(run.Counts()),
-		Scenarios:     make([]jsonScenario, 0, len(run.Scenarios)),
-		Failures:      fromDiagnostics(run.Diagnostics()),
+		jsonRunSummary: fromRunSummary(run),
+		Scenarios:      make([]jsonScenario, 0, len(run.Scenarios)),
+		Failures:       fromDiagnostics(run.Diagnostics()),
 	}
 	for _, sc := range run.Scenarios {
 		if sc == nil {
@@ -193,6 +203,19 @@ func fromRun(run *result.RunResult) jsonRun {
 		out.Scenarios = append(out.Scenarios, fromScenario(sc))
 	}
 	return out
+}
+
+// fromRunSummary is the run's own keys, without the tree under it.
+func fromRunSummary(run *result.RunResult) jsonRunSummary {
+	return jsonRunSummary{
+		SchemaVersion: SchemaVersion,
+		StartedAt:     rfc3339(run.StartedAt),
+		DurationMS:    millis(run.Duration),
+		Status:        run.Status.String(),
+		Passed:        run.Passed(),
+		Error:         run.Error,
+		Counts:        fromCounts(run.Counts()),
+	}
 }
 
 // fromDiagnostics maps the run's diagnostics onto the wire type. A run that
@@ -225,12 +248,8 @@ func fromDiagnostics(diags []result.Diagnostic) []jsonFailure {
 
 func fromScenario(sc *result.ScenarioResult) jsonScenario {
 	out := jsonScenario{
-		Name:       sc.Name,
-		File:       sc.File,
-		Status:     sc.Status.String(),
-		DurationMS: millis(sc.Duration),
-		Error:      sc.Error,
-		Steps:      make([]jsonStep, 0, len(sc.Steps)),
+		jsonScenarioSummary: fromScenarioSummary(sc),
+		Steps:               make([]jsonStep, 0, len(sc.Steps)),
 	}
 	for _, step := range sc.Steps {
 		if step == nil {
@@ -239,6 +258,17 @@ func fromScenario(sc *result.ScenarioResult) jsonScenario {
 		out.Steps = append(out.Steps, fromStep(step))
 	}
 	return out
+}
+
+// fromScenarioSummary is the scenario's own keys, without its steps.
+func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
+	return jsonScenarioSummary{
+		Name:       sc.Name,
+		File:       sc.File,
+		Status:     sc.Status.String(),
+		DurationMS: millis(sc.Duration),
+		Error:      sc.Error,
+	}
 }
 
 func fromStep(step *result.StepResult) jsonStep {

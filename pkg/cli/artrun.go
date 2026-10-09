@@ -140,6 +140,12 @@ func firstError(diags []diag.Diagnostic) error {
 func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(sc.Name, file)
 	rep.Scenario(scenario)
+	rt.events.ScenarioStart(scenario, stepNames(sc))
+	// Deferred, so every way out of here -- vars that will not bind, a config
+	// that will not resolve, a browser that will not close, or every step run
+	// -- ends the scenario on the stream exactly once, with the status it
+	// actually ended on. Both arguments are pointers, read when it runs.
+	defer rt.events.ScenarioEnd(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", sc.Name))
 
 	// The scenario's declared variables, with whatever the steps capture
@@ -184,7 +190,8 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		Headless: cfg.Headless,
 		Viewport: cfg.Viewport,
 	}, func(ctx context.Context) error {
-		for _, st := range sc.Steps {
+		for i, st := range sc.Steps {
+			rt.events.StepStart(scenario, i, st.Name)
 			stepResult := scenario.NewStep(st.Name)
 			// The line the step was written on, so a step that could not run
 			// at all -- and an assertion with no line of its own -- still
@@ -195,6 +202,9 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 			// Every step that was reached gets a line, including one artemis
 			// could not execute.
 			rep.Step(stepResult)
+			// After the console's line and after any screenshot, so the
+			// result a watcher gets is the one the report will hold.
+			rt.events.StepEnd(scenario, i, stepResult)
 		}
 		return nil
 	})
@@ -210,6 +220,16 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		logger.Logger.Error("Could not close a scenario's browser", "file", file, "error", closeErr.Error())
 	}
 	logger.Logger.Info("Testing ended")
+}
+
+// stepNames is the names of a scenario's steps in order, for scenario-start: a
+// watcher can lay the whole scenario out before its first step runs.
+func stepNames(sc *lower.Scenario) []string {
+	names := make([]string, 0, len(sc.Steps))
+	for _, st := range sc.Steps {
+		names = append(names, st.Name)
+	}
+	return names
 }
 
 // runArtStep attempts st until it passes or its attempts run out, and records

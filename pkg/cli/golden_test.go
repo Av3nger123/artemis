@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +69,10 @@ type goldenCase struct {
 	// two cases that pin two reports of the same run share one fixture, so the
 	// documents are directly comparable.
 	fixture string
+	// stdoutOnly makes the transcript stdout alone, for a case whose stdout is
+	// a document of its own -- the event stream -- that the console on stderr
+	// would otherwise be interleaved with.
+	stdoutOnly bool
 }
 
 // fixtureName is the testdata entry a case runs: its own name unless it borrows
@@ -107,7 +112,11 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 	var out strings.Builder
 	RootCmd.SetArgs(append([]string{"run", path}, c.args...))
 	RootCmd.SetOut(&out)
-	RootCmd.SetErr(&out)
+	if c.stdoutOnly {
+		RootCmd.SetErr(io.Discard)
+	} else {
+		RootCmd.SetErr(&out)
+	}
 	t.Cleanup(func() { RootCmd.SetOut(os.Stderr); RootCmd.SetErr(os.Stderr) })
 	runErr := RootCmd.Execute()
 
@@ -200,6 +209,10 @@ var spacedDur = regexp.MustCompile(` +(?:` + durPattern + `)`)
 var (
 	jsonStartedAt  = regexp.MustCompile(`"started_at": "[^"]*"`)
 	jsonDurationMS = regexp.MustCompile(`"duration_ms": [0-9.]+`)
+	// The same two values in a compact document -- an --events line, which
+	// json.Marshal writes with no space after the colon.
+	jsonLineStartedAt  = regexp.MustCompile(`"started_at":"[^"]*"`)
+	jsonLineDurationMS = regexp.MustCompile(`"duration_ms":[0-9.]+`)
 )
 
 // xmlTimestamp and xmlTime match the two values in a --report junit document
@@ -225,6 +238,8 @@ func scrub(s, tempPath, fixture, url string) string {
 	s = strings.ReplaceAll(s, url, "http://127.0.0.1:PORT")
 	s = jsonStartedAt.ReplaceAllString(s, `"started_at": "1970-01-01T00:00:00Z"`)
 	s = jsonDurationMS.ReplaceAllString(s, `"duration_ms": 0`)
+	s = jsonLineStartedAt.ReplaceAllString(s, `"started_at":"1970-01-01T00:00:00Z"`)
+	s = jsonLineDurationMS.ReplaceAllString(s, `"duration_ms":0`)
 	s = xmlTimestamp.ReplaceAllString(s, `timestamp="1970-01-01T00:00:00Z"`)
 	s = xmlTime.ReplaceAllString(s, `time="0.000"`)
 	return spacedDur.ReplaceAllStringFunc(s, func(m string) string {
@@ -507,30 +522,36 @@ func TestGoldenArt(t *testing.T) {
 	for _, c := range artGoldenCases(t) {
 		t.Run(c.name, func(t *testing.T) {
 			out, runErr := runGolden(t, c)
-
-			if c.wantErr && runErr == nil {
-				t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
-			}
-			if !c.wantErr && runErr != nil {
-				t.Errorf("Execute() = %v, want nil:\n%s", runErr, out)
-			}
-
-			path := filepath.Join("testdata", artDir, c.name+".golden")
-			if *update {
-				if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
-					t.Fatalf("writing %s: %v", path, err)
-				}
-				t.Logf("updated %s", path)
-				return
-			}
-			want, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("reading %s: %v (run `make golden` to create it)", path, err)
-			}
-			if got := out; got != string(want) {
-				t.Errorf("output does not match %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
-			}
+			checkGolden(t, c, out, runErr)
 		})
+	}
+}
+
+// checkGolden holds one case's exit to wantErr and its transcript to
+// testdata/art/<name>.golden, or rewrites the golden under -update.
+func checkGolden(t *testing.T, c goldenCase, out string, runErr error) {
+	t.Helper()
+	if c.wantErr && runErr == nil {
+		t.Errorf("Execute() = nil, want an error so the process exits non-zero:\n%s", out)
+	}
+	if !c.wantErr && runErr != nil {
+		t.Errorf("Execute() = %v, want nil:\n%s", runErr, out)
+	}
+
+	path := filepath.Join("testdata", artDir, c.name+".golden")
+	if *update {
+		if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+			t.Fatalf("writing %s: %v", path, err)
+		}
+		t.Logf("updated %s", path)
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v (run `make golden` to create it)", path, err)
+	}
+	if got := out; got != string(want) {
+		t.Errorf("output does not match %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
 	}
 }
 
@@ -561,5 +582,45 @@ func TestGoldenArtFixturesAreCanonical(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walking %s: %v", root, err)
+	}
+}
+
+// eventGoldenCases are four of the corpus's runs again, with --events ndjson
+// and nothing else: a file that passes, a file that fails, a file that does not
+// compile, and report_json's folder, which has one of each in one run. Each
+// borrows its fixture and server from the case it repeats, so the stream reads
+// against that case's console golden and, for report_json, its document.
+func eventGoldenCases(t *testing.T) []goldenCase {
+	t.Helper()
+	byName := map[string]goldenCase{}
+	for _, c := range artGoldenCases(t) {
+		byName[c.name] = c
+	}
+	var cases []goldenCase
+	for _, name := range []string{"pass", "fail", "template_error", "report_json"} {
+		c, ok := byName[name]
+		if !ok {
+			t.Fatalf("no golden case named %s to repeat with --events", name)
+		}
+		c.name = "events_" + name
+		c.fixture = name
+		// Replaced, not appended: report_json's own --report json would be
+		// a second document on stdout, which --events refuses.
+		c.args = []string{"--events", "ndjson"}
+		c.stdoutOnly = true
+		cases = append(cases, c)
+	}
+	return cases
+}
+
+// TestGoldenEvents pins the whole event stream of a run, one JSON object per
+// line, plus the error the command exited with. stderr -- the console, the
+// diagnostics -- is left out: it is what TestGoldenArt pins already.
+func TestGoldenEvents(t *testing.T) {
+	for _, c := range eventGoldenCases(t) {
+		t.Run(c.name, func(t *testing.T) {
+			out, runErr := runGolden(t, c)
+			checkGolden(t, c, out, runErr)
+		})
 	}
 }

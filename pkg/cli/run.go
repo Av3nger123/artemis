@@ -95,6 +95,13 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	if err != nil {
 		return err
 	}
+	// The deprecated `test` has no --events, and GetString answers "" for a
+	// flag the command does not have, which is off.
+	eventsValue, _ := cmd.Flags().GetString(eventsFlag)
+	streaming, err := parseEvents(eventsValue, targets)
+	if err != nil {
+		return err
+	}
 
 	files, err := discover(path)
 	if err != nil {
@@ -104,14 +111,15 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// cmd.OutOrStdout, not os.Stdout: a test captures the run's output by
 	// setting the command's writer.
 	//
-	// When a report goes to stdout, the console goes to stderr instead, so
-	// stdout is exactly one document and `artemis run suite --report json | jq`
-	// works. It is moved rather than silenced: a person watching a long suite
-	// should still see steps tick past, and the console is the only thing that
-	// prints the failure breakdown.
+	// When a report or the event stream goes to stdout, the console goes to
+	// stderr instead, so stdout is exactly one document -- or exactly one
+	// event per line -- and `artemis run suite --report json | jq` works. It is
+	// moved rather than silenced: a person watching a long suite should still
+	// see steps tick past, and the console is the only thing that prints the
+	// failure breakdown.
 	out := cmd.OutOrStdout()
 	consoleOut := out
-	if anyToStdout(targets) {
+	if anyToStdout(targets) || streaming {
 		consoleOut = cmd.ErrOrStderr()
 	}
 
@@ -122,6 +130,9 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	rt := &runtimeEnv{
 		reg:   executor.Default(),
 		shots: browserstep.NewShots(shotDir(cmd)),
+	}
+	if streaming {
+		rt.events = report.NewEvents(out)
 	}
 	run := runFilesWith(rt, files, rep, cmd.ErrOrStderr())
 
@@ -259,6 +270,10 @@ func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagO
 type runtimeEnv struct {
 	reg   *executor.Registry
 	shots *browserstep.Shots
+	// events is the --events stream, nil when it was not asked for. Every
+	// method on a nil *report.Events writes nothing, so the runner calls them
+	// unconditionally rather than asking first.
+	events *report.Events
 	// envFaults is what the check found, for reportRun to print.
 	//
 	// There is no lookup seam beside it: envGate takes the lookup as a
@@ -286,6 +301,9 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	}()
 
 	run := result.NewRun()
+	// Before anything compiles: a watcher learns the shape of the run first,
+	// including the files that will turn out not to load.
+	rt.events.RunStart(files)
 
 	// Every file is compiled before any file runs, which is what the check
 	// before the run needs: an absent variable has to be reported before the
@@ -345,7 +363,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			diagOut.Write(a.diag.Bytes()) //nolint:errcheck // the console report below already surfaces a run that cannot report
 		}
 		if !a.ok {
-			failScenario(run, rep, a.file, a.err)
+			failScenario(run, rep, rt.events, a.file, a.err)
 			continue
 		}
 		if len(faults) > 0 {
@@ -364,6 +382,9 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		run.Status = result.StatusError
 		run.Error = envGateError(faults).Error()
 	}
+	// After the gate has had its say about the status, so run-end says what
+	// the report and the exit code say.
+	rt.events.RunEnd(run)
 	return run
 }
 
@@ -398,12 +419,15 @@ func notAScenarioError(file string) error {
 // failScenario records a file artemis could not load as one errored scenario.
 //
 // No name to give it: the file did not load, so all anyone knows about this
-// scenario is where it lives.
-func failScenario(run *result.RunResult, rep *report.Console, file string, err error) {
+// scenario is where it lives. On the event stream that is a scenario-start
+// with no name and no steps, and an errored scenario-end with the reason.
+func failScenario(run *result.RunResult, rep *report.Console, events *report.Events, file string, err error) {
 	scenario := run.NewScenario("", file)
 	rep.Scenario(scenario)
+	events.ScenarioStart(scenario, nil)
 	scenario.Fail(0, err)
 	rep.ScenarioFailed(scenario)
+	events.ScenarioEnd(scenario)
 	logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
 }
 

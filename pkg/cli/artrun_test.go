@@ -3,12 +3,14 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -490,5 +492,213 @@ func TestArtRunHonoursTheContext(t *testing.T) {
 
 	if run.Passed() {
 		t.Fatal("run passed, want a failure: the context was already cancelled")
+	}
+}
+
+// runArtEvents runs files through runFilesWith with the event stream on, and
+// returns each event decoded, in order.
+func runArtEvents(t *testing.T, files ...string) []map[string]any {
+	t.Helper()
+	var buf bytes.Buffer
+	rt := &runtimeEnv{reg: executor.Default(), events: report.NewEvents(&buf)}
+	runFilesWith(rt, files, report.Discard(), io.Discard)
+	var events []map[string]any
+	for i, line := range strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n") {
+		var e map[string]any
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatalf("event %d is not one JSON object: %v\n%s", i+1, err, buf.String())
+		}
+		events = append(events, e)
+	}
+	return events
+}
+
+// eventNames is the "event" of each event, for asserting the order.
+func eventNames(events []map[string]any) []string {
+	names := make([]string, 0, len(events))
+	for _, e := range events {
+		name, _ := e["event"].(string)
+		names = append(names, name)
+	}
+	return names
+}
+
+// A scenario is laid out before it runs, and each step starts and ends in turn
+// with its index, so a watcher ticks steps off as they finish.
+func TestEventsTickEveryStep(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	path := writeArt(t, "two.art", fmt.Sprintf(`scenario "two steps" {
+  step "first" {
+    get %q
+    expect status == 200
+  }
+
+  step "second" {
+    get %q
+    expect body.status == "ok"
+  }
+}
+`, srv.URL, srv.URL))
+
+	events := runArtEvents(t, path)
+
+	want := []string{"run-start", "scenario-start", "step-start", "step-end", "step-start", "step-end", "scenario-end", "run-end"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	if got := events[1]["steps"]; !reflect.DeepEqual(got, []any{"first", "second"}) {
+		t.Errorf("scenario-start steps = %v, want [first second]", got)
+	}
+	for i, at := range []int{2, 4} {
+		if got := events[at]["index"]; got != float64(i) {
+			t.Errorf("step-start %d index = %v, want %d", i, got, i)
+		}
+		if got := events[at+1]["index"]; got != float64(i) {
+			t.Errorf("step-end %d index = %v, want %d", i, got, i)
+		}
+		if got := events[at+1]["result"].(map[string]any)["status"]; got != "pass" {
+			t.Errorf("step-end %d status = %v, want pass", i, got)
+		}
+	}
+	for _, e := range events[1:7] {
+		if e["file"] != path || e["scenario"] != "two steps" {
+			t.Errorf("%v names file %v and scenario %v, want %s and two steps", e["event"], e["file"], e["scenario"], path)
+		}
+	}
+}
+
+// A scenario whose vars will not bind runs no step, and still ends on the
+// stream -- errored, with the reason -- or a watcher shows it running forever.
+func TestEventsEndAScenarioWhoseVarsWillNotBind(t *testing.T) {
+	path := writeArt(t, "bad_var.art", `scenario "bad var" {
+  var n = match("no digits here", /([0-9]+)/)
+
+  step "ping" {
+    get "/ping"
+    expect status == 200
+  }
+}
+`)
+
+	events := runArtEvents(t, path)
+
+	want := []string{"run-start", "scenario-start", "scenario-end", "run-end"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	end := events[2]["result"].(map[string]any)
+	if end["status"] != "error" {
+		t.Errorf("scenario-end status = %v, want error", end["status"])
+	}
+	if msg, _ := end["error"].(string); !strings.Contains(msg, "var n") {
+		t.Errorf("scenario-end error = %q, want it to name the var", msg)
+	}
+}
+
+// The same for a browser config that will not resolve: no step, one end.
+func TestEventsEndAScenarioWhoseBrowserConfigWillNotResolve(t *testing.T) {
+	path := writeArt(t, "bad_config.art", `scenario "the app" {
+  var size = 1280
+  config browser { viewport = size, headless = "yes" }
+
+  step "open it" {
+    browser {
+      goto "http://127.0.0.1:1/settings"
+    }
+    expect page.url contains "/settings"
+  }
+}
+`)
+
+	events := runArtEvents(t, path)
+
+	want := []string{"run-start", "scenario-start", "scenario-end", "run-end"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	if status := events[2]["result"].(map[string]any)["status"]; status != "error" {
+		t.Errorf("scenario-end status = %v, want error", status)
+	}
+}
+
+// A file that does not compile is a start with no name and no steps -- [] and
+// not null -- and an errored end carrying the first diagnostic.
+func TestEventsGiveAFileThatWillNotCompileAStartAndAnEnd(t *testing.T) {
+	path := writeArt(t, "broken.art", `scenario "broken" {
+  step "typo" {
+    get "http://127.0.0.1:1/health"
+    timeot = "5s"
+    expect status == 200
+  }
+}
+`)
+
+	events := runArtEvents(t, path)
+
+	want := []string{"run-start", "scenario-start", "scenario-end", "run-end"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	start := events[1]
+	if start["scenario"] != "" {
+		t.Errorf("scenario-start scenario = %v, want \"\"", start["scenario"])
+	}
+	if steps, ok := start["steps"].([]any); !ok || len(steps) != 0 {
+		t.Errorf("scenario-start steps = %#v, want []", start["steps"])
+	}
+	end := events[2]["result"].(map[string]any)
+	if end["status"] != "error" {
+		t.Errorf("scenario-end status = %v, want error", end["status"])
+	}
+	if msg, _ := end["error"].(string); !strings.Contains(msg, "timeot") {
+		t.Errorf("scenario-end error = %q, want the diagnostic", msg)
+	}
+}
+
+// A path that is not a scenario, named outright, goes the same way as a file
+// that does not compile: it is one errored scenario, on the stream as on the
+// report.
+func TestEventsGiveAFileThatIsNotAScenarioAStartAndAnEnd(t *testing.T) {
+	path := writeArt(t, "notes.md", "not a scenario\n")
+
+	events := runArtEvents(t, path)
+
+	want := []string{"run-start", "scenario-start", "scenario-end", "run-end"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	if msg, _ := events[2]["result"].(map[string]any)["error"].(string); !strings.Contains(msg, "not a scenario file") {
+		t.Errorf("scenario-end error = %q, want it to say this is not a scenario file", msg)
+	}
+}
+
+// A run the environment gate stops starts no scenario that compiled -- none of
+// them ran -- and run-end carries the gate's status and reason, as the report
+// does. run-start still lists the file: it is what the run was asked to try.
+func TestEventsOfAGatedRunStartNoScenario(t *testing.T) {
+	path := writeArt(t, "gated.art", `scenario "reports" {
+  var url = env("ARTEMIS_TEST_EVENTS_GATE_URL")
+  step "report" {
+    get "${url}"
+    expect status == 200
+  }
+}
+`)
+
+	events := runArtEvents(t, path)
+
+	want := []string{"run-start", "run-end"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	if files := events[0]["files"]; !reflect.DeepEqual(files, []any{path}) {
+		t.Errorf("run-start files = %v, want [%s]", files, path)
+	}
+	end := events[1]["result"].(map[string]any)
+	if end["status"] != "error" {
+		t.Errorf("run-end status = %v, want error", end["status"])
+	}
+	if msg, _ := end["error"].(string); !strings.Contains(msg, "ARTEMIS_TEST_EVENTS_GATE_URL") {
+		t.Errorf("run-end error = %q, want it to name the absent variable", msg)
 	}
 }

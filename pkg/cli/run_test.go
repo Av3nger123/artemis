@@ -998,3 +998,107 @@ func TestRunDoesNotClaimToHaveReadAnEnvFileWhenThereIsNone(t *testing.T) {
 		t.Errorf("the block claims to have read a .env that is not there:\n%s", stderr)
 	}
 }
+
+// eventLines decodes stdout as one JSON object per line, failing on any line
+// that is not one: a single console line on stdout breaks every reader.
+func eventLines(t *testing.T, stdout string) []map[string]any {
+	t.Helper()
+	var events []map[string]any
+	for i, line := range strings.Split(strings.TrimSuffix(stdout, "\n"), "\n") {
+		var e map[string]any
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatalf("stdout line %d is not one JSON object: %v\n%s", i+1, err, stdout)
+		}
+		events = append(events, e)
+	}
+	return events
+}
+
+// The point of the flag: stdout is events and nothing else, first run-start and
+// last run-end, and the console a person watches is still written -- on stderr.
+func TestEventsPutOneObjectPerLineOnStdoutAndTheConsoleOnStderr(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	stdout, stderr, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--events", "ndjson")
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+
+	events := eventLines(t, stdout)
+	if first := events[0]["event"]; first != "run-start" {
+		t.Errorf("first event = %v, want run-start", first)
+	}
+	last := events[len(events)-1]
+	if last["event"] != "run-end" {
+		t.Fatalf("last event = %v, want run-end", last["event"])
+	}
+	if status := last["result"].(map[string]any)["status"]; status != "pass" {
+		t.Errorf("run-end status = %v, want pass", status)
+	}
+	for _, want := range []string{"scenario: health", "PASS in "} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr does not contain %q:\n%s", want, stderr)
+		}
+	}
+}
+
+// A stream and a stdout report are refused together, before anything runs.
+func TestEventsWithAReportOnStdoutRunsNothing(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--events", "ndjson", "--report", "json")
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "stdout") {
+		t.Errorf("Execute() = %q, want it to say both write to stdout", err)
+	}
+	if stdout != "" {
+		t.Errorf("something ran before the flags were refused:\n%s", stdout)
+	}
+}
+
+// With the report in a file, one run gives both: the stream on stdout and the
+// record of the run in the file.
+func TestEventsWithAReportFileWritesBoth(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	reportPath := filepath.Join(t.TempDir(), "report.json")
+
+	stdout, stderr, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"),
+		"--events", "ndjson", "--report", "json="+reportPath)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
+	}
+	events := eventLines(t, stdout)
+	if last := events[len(events)-1]["event"]; last != "run-end" {
+		t.Errorf("last event = %v, want run-end", last)
+	}
+	raw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("reading the report: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("the report is not one JSON document: %v\n%s", err, raw)
+	}
+	if doc["status"] != "pass" {
+		t.Errorf("report status = %v, want pass", doc["status"])
+	}
+}
+
+// A format artemis does not know is refused before anything runs, and the
+// message names the one it does.
+func TestEventsWithAnUnknownFormatRunsNothing(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+
+	stdout, _, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--events", "xml")
+	if err == nil {
+		t.Fatal("Execute() = nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "ndjson") {
+		t.Errorf("Execute() = %q, want it to name ndjson", err)
+	}
+	if stdout != "" {
+		t.Errorf("something ran before the flag was refused:\n%s", stdout)
+	}
+}
