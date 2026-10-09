@@ -7,6 +7,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/print"
 )
 
 const orders = `import "auth.art"
@@ -156,14 +157,21 @@ func TestAsOnARequestPrefixesItsCapture(t *testing.T) {
 
 const secretColl = "collection \"c\" {\n  request r(secret pw, auth = \"Basic ${pw}\", secret key = \"k\") {\n    post \"x\" {\n      header \"A\" = auth\n      body = {\"p\": pw, \"k\": key}\n    }\n  }\n}\n"
 
-func TestHoistedSecretVarsFollowTheLastVarInUseOrderAndDefaultsReadThem(t *testing.T) {
+func TestHoistedSecretVarsSitAboveTheirUseInUseOrderAndDefaultsReadThem(t *testing.T) {
 	got, diags := run(t, map[string]string{
 		"c.art":    secretColl,
 		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var base = \"b\"\n  use c.r { pw = base }\n  use c.r as two { pw = \"x\" }\n  var tail = 1\n}\n",
 	})
 	noDiags(t, diags)
-	want := "  var tail = 1\n  secret var r_pw = base\n  secret var r_key = \"k\"\n  secret var two_pw = \"x\"\n  secret var two_key = \"k\"\n}\n"
-	if !strings.HasSuffix(got, want) {
+	for _, want := range []string{
+		"  var base = \"b\"\n  secret var r_pw = base\n  secret var r_key = \"k\"\n\n  step \"c.r\"",
+		"  secret var two_pw = \"x\"\n  secret var two_key = \"k\"\n\n  step \"two\"",
+	} {
+		if !contains(got, want) {
+			t.Fatalf("missing\n%s\nin\n%s", want, got)
+		}
+	}
+	if !strings.HasSuffix(got, "  var tail = 1\n}\n") {
 		t.Fatalf("got\n%s", got)
 	}
 	if !contains(got, `header "A" = "Basic ${r_pw}"`) {
@@ -237,6 +245,8 @@ func TestANestedSecretIsNamedUnderEveryEnclosingAlias(t *testing.T) {
 	for _, want := range []string{
 		"secret var a_r_pw = \"p\"", "secret var b_r_pw = \"p\"", "secret var r_pw = \"p\"", "secret var a2_inner_pw = \"q\"",
 		`{"p": a_r_pw}`, `{"p": b_r_pw}`, `{"p": a2_inner_pw}`,
+		"  secret var a_r_pw = \"p\"\n\n  step \"a / c.r\"",
+		"  secret var a2_inner_pw = \"q\"\n\n  step \"a2 / inner\"",
 	} {
 		if !contains(got, want) {
 			t.Errorf("missing %s in\n%s", want, got)
@@ -279,5 +289,24 @@ func TestAnExpandedSecretParameterChecks(t *testing.T) {
 	}
 	if _, cb := check.Check(res.File); cb.Len() != 0 {
 		t.Fatalf("check of the expanded tree: %v", cb.All())
+	}
+}
+
+func TestAHoistedVarSitsAboveItsUseEvenWithALaterVar(t *testing.T) {
+	files := map[string]string{
+		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n    expect status == 200\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"x\" }\n  var y = 1\n}\n",
+	}
+	tree, _ := parser.Parse("main.art", files["main.art"])
+	res, bag := Expand(tree, MapLoader(files))
+	if bag.Len() != 0 {
+		t.Fatalf("expand: %v", bag.All())
+	}
+	if _, cb := check.Check(res.File); cb.Len() != 0 {
+		t.Fatalf("check of the expanded tree: %v", cb.All())
+	}
+	got := print.Canonical(res.File)
+	if !contains(got, "  secret var r_pw = \"x\"\n\n  step \"c.r\"") {
+		t.Fatalf("got\n%s", got)
 	}
 }
