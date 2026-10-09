@@ -70,6 +70,7 @@ Five things in that file are the whole language:
 - Values captured from one step and used in the next, keeping their JSON type
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
+- `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
 - `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
 - A one-way export to pytest or vitest (`artemis build --lang=python|js`), for a team whose tests live in another language
@@ -606,7 +607,8 @@ artemis run ./suite --report json --report junit=junit.xml
 ```
 
 The formats are `json` and `junit`. The flag is repeatable, so one run can
-produce both; a format given twice, and two formats aimed at stdout, are errors.
+produce both; a format given twice, and two formats aimed at stdout, are errors
+-- as is a report on stdout beside `--events`, which has stdout to itself.
 
 With no path the document goes to **stdout**, and the console report moves to
 **stderr**, so stdout holds exactly one JSON document and nothing else:
@@ -773,6 +775,56 @@ Things worth knowing before you point a reporter at it:
 `pkg/cli/testdata/art/report_junit.golden` is a whole document from a real run
 -- the same run as `report_json.golden`, for comparing the two -- and
 `pkg/report/junit.go` is where the dialect is defined.
+
+### Watching a run: `--events ndjson`
+
+`--events ndjson` writes the run to stdout **as it happens**, one JSON object
+per line, for a program that shows a run live -- a UI that ticks steps off as
+they finish. The console report moves to stderr, as it does for a report on
+stdout, so every line of stdout is one event:
+
+```sh
+artemis run ./suite --events ndjson                             # the stream alone
+artemis run ./suite --events ndjson --report json=results.json  # and the record
+```
+
+The stream is not the record of the run; `--report json` still is. A report
+beside `--events` needs a path, because both cannot have stdout: `--events
+ndjson --report json` is refused before anything runs.
+
+The events, in order:
+
+```
+{"event":"run-start","files":["suite/01_login.art","suite/02_items.art"]}
+{"event":"scenario-start","file":"suite/01_login.art","scenario":"login","steps":["get a token"]}
+{"event":"step-start","file":"suite/01_login.art","scenario":"login","step":"get a token","index":0}
+{"event":"step-end","file":"suite/01_login.art","scenario":"login","index":0,"result":{ ...a step of the JSON report... }}
+{"event":"scenario-end","file":"suite/01_login.art","scenario":"login","result":{ ...a scenario of the JSON report, without steps... }}
+{"event":"run-end","result":{ ...the JSON report, without scenarios and failures... }}
+```
+
+Every `result` is the JSON report's own shape, with the same keys, so one model
+reads both. A step's assertions are in its `step-end`: they are only known when
+the step ends.
+
+- **A file that does not compile** is a `scenario-start` with `"scenario":""`
+  and `"steps":[]`, then a `scenario-end` with `"status":"error"` and the first
+  diagnostic in `error`. The caret-gutter diagnostics go to stderr, as always.
+- **A scenario that cannot start** -- vars that will not bind, a `config
+  browser` that will not resolve -- has its `scenario-start`, listing the steps
+  it would have run, and an errored `scenario-end` with no step events between.
+- **A run the environment check stops** lists its files in `run-start` and then
+  goes straight to `run-end`, with `"status":"error"` and the reason in `error`:
+  none of the scenarios that compiled was started. A file that did not compile
+  still gets its pair of events.
+
+The MCP server's `artemis_run` does not pass `--events`: what it returns is
+still the one document `--report json` prints.
+
+`pkg/cli/testdata/art/events_*.golden` are whole streams from real runs -- a
+pass, a failure, a file that does not compile, and `events_report_json.golden`,
+the same run as `report_json.golden` for comparing the two -- and
+`pkg/report/events.go` is where the events are defined.
 
 ### Screenshots of a failed page
 
