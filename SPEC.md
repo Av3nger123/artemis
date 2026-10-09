@@ -871,6 +871,11 @@ That is the price of a collection that checks on its own and means the same
 thing from every scenario that uses it: everything it needs from outside is a
 parameter.
 
+A template may not `capture` a name a step observes -- `status`, `body`, `raw`,
+`headers`, `exit_code`, `stdout`, `stderr`, `page` -- because [`as`](#as)
+renames a use's captures and every read of them, and a later step's `body` would
+be ambiguous. It is the compile error `root-capture`, at the capture's name.
+
 Errors that depend on the use site -- arguments, overrides, a capture clash --
 are reported at the line in the collection they concern, followed by the use
 lines that brought it in, innermost first:

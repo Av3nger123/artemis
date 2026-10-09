@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/parser"
 )
 
@@ -151,5 +152,35 @@ func TestAFailedImportHidesTheUnknownCollection(t *testing.T) {
 	})
 	if !contains(diags, "import-not-found") || contains(diags, "unknown-collection") {
 		t.Fatalf("got\n%s", diags)
+	}
+}
+
+// A template capture named after an observation root -- body here -- would
+// be renamed by as (z_body) along with a later step's read of the root
+// itself, so expect body.y would read the capture. It is refused in the
+// collection, at the capture's name.
+func TestATemplateCaptureMayNotTakeAnObservationRootsName(t *testing.T) {
+	weird := "collection \"weird\" {\n  request r() {\n    get \"http://h/x\"\n    capture body = body.x\n  }\n" +
+		"  flow f() {\n    use r\n    step \"next\" {\n      get \"http://h/y\"\n      expect body.y == 1\n    }\n  }\n}\n"
+	tree, _ := parser.Parse("main.art", "import \"weird.art\"\n\nscenario \"s\" {\n  use weird.f as z\n}\n")
+	_, bag := Expand(tree, MapLoader{"weird.art": weird, "main.art": ""})
+	all := bag.All()
+	if len(all) != 1 {
+		t.Fatalf("want one diagnostic, got %v", all)
+	}
+	d := all[0]
+	if d.Code != diag.RootCapture || d.Span.File != "weird.art" || d.Span.Line != 4 || d.Span.Col != 13 {
+		t.Fatalf("want root-capture at weird.art:4:13, got %+v", d)
+	}
+	if d.Hint != "rename it, e.g. body_value; a later step's `body` would be ambiguous" {
+		t.Fatalf("hint is %q", d.Hint)
+	}
+	for _, root := range []string{"status", "raw", "headers", "exit_code", "stdout", "stderr", "page"} {
+		c := "collection \"c\" {\n  request r() {\n    get \"http://h/x\"\n    capture " + root + " = body.x\n  }\n}\n"
+		tree, _ := parser.Parse("main.art", "import \"c.art\"\n\nscenario \"s\" {\n  use c.r\n}\n")
+		_, bag := Expand(tree, MapLoader{"c.art": c})
+		if all := bag.All(); len(all) != 1 || all[0].Code != diag.RootCapture {
+			t.Errorf("capture %s: got %v", root, all)
+		}
 	}
 }

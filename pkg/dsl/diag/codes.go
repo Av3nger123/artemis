@@ -195,6 +195,7 @@ const (
 	DropAfterExpect     Code = "drop-after-expect"
 	SecretArgument      Code = "secret-argument"
 	DroppedCapture      Code = "dropped-capture"
+	RootCapture         Code = "root-capture"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -253,6 +254,7 @@ var registry = []CodeInfo{
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
 	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
 	{DroppedCapture, Error, "a step a use brought in reads a capture that drop captures removed"},
+	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

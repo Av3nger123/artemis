@@ -24,6 +24,7 @@ non-associative-operator	error	a comparison operator is chained with another
 not-in-scope	error	a name is not bound in this step's type
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-word	error	a word reserved for a later tier is used as a name
+root-capture	error	a collection's template captures under the name of a step's observation, such as body
 secret-argument	error	an argument to a secret parameter is not itself secret
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"

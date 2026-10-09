@@ -95,6 +95,7 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 		}
 	}
 
+	e.rootCaptures(item)
 	ok := !e.bag.HasErrors() && e.silent == silent
 	if ok {
 		// Hoisted secret vars go above the steps that read them: the checker
@@ -142,4 +143,45 @@ func paramVars(params *ast.Params) []ast.Decl {
 		})
 	}
 	return out
+}
+
+// observationRoots is every step type's observation roots: body, status,
+// stdout, page and the rest.
+var observationRoots = func() map[string]bool {
+	m := map[string]bool{}
+	for _, t := range []check.StepType{check.API, check.Terminal, check.Browser} {
+		for _, r := range check.Roots(t) {
+			m[r] = true
+		}
+	}
+	return m
+}()
+
+// rootCaptures reports every capture item writes itself -- not a nested
+// use's, which its own collection's check covers -- that is named after an
+// observation root. `as` renames a use's captures and every template read of
+// them, and a later step's read of the root itself is one: under `as z`,
+// `capture body = ...` then `expect body.y == 1` would read z_body.y.
+func (e *expander) rootCaptures(item ast.Decl) {
+	var bodies [][]ast.Stmt
+	switch it := item.(type) {
+	case *ast.RequestDecl:
+		bodies = append(bodies, it.Body)
+	case *ast.FlowDecl:
+		for _, d := range it.Body {
+			if s, ok := d.(*ast.StepDecl); ok {
+				bodies = append(bodies, s.Body)
+			}
+		}
+	}
+	for _, body := range bodies {
+		for _, st := range body {
+			c, ok := st.(*ast.Capture)
+			if !ok || !observationRoots[c.Name.Value] {
+				continue
+			}
+			e.bag.Error(c.Name.Span, diag.RootCapture, "a collection may not capture %q: it names a step's observation", c.Name.Value).
+				Hintf("rename it, e.g. %s_value; a later step's `%s` would be ambiguous", c.Name.Value, c.Name.Value)
+		}
+	}
 }

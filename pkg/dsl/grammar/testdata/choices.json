@@ -299,6 +299,11 @@
           "severity": "error"
         },
         {
+          "value": "root-capture",
+          "doc": "a collection's template captures under the name of a step's observation, such as body",
+          "severity": "error"
+        },
+        {
           "value": "secret-argument",
           "doc": "an argument to a secret parameter is not itself secret",
           "severity": "error"
