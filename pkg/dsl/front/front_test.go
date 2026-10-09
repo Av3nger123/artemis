@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/front"
 )
 
@@ -41,5 +44,84 @@ func TestIsArtFileIgnoresCase(t *testing.T) {
 		if front.IsArtFile(path) {
 			t.Errorf("IsArtFile(%q) = true, want false", path)
 		}
+	}
+}
+
+func TestCompileWithExpandsAndChecksTheExpandedTree(t *testing.T) {
+	files := expand.MapLoader{
+		"c.art":    "collection \"c\" {\n  request r(u) {\n    get u\n    expect status == 200\n    capture tok = body.t\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { u = \"x\" }\n  step \"next\" {\n    get \"${tok}\"\n    expect status == 200\n  }\n}\n",
+	}
+	u := front.CompileWith("main.art", files["main.art"], files)
+	if u.Bag.HasErrors() {
+		t.Fatal(u.Bag.All())
+	}
+	if u.Tree == u.Expanded {
+		t.Fatal("a file with a use must expand to a new tree")
+	}
+	if u.Info.Steps() != 2 {
+		t.Fatalf("Info is about %d steps; want the 2 expanded ones", u.Info.Steps())
+	}
+	if _, ok := u.Sources["c.art"]; !ok {
+		t.Fatal("Sources must hold the collection, to render its diagnostics")
+	}
+	if _, ok := u.Sources["main.art"]; !ok {
+		t.Fatal("Sources must hold the root file too")
+	}
+}
+
+func TestCompileWithAttachesTheUseChainToCheckerDiagnostics(t *testing.T) {
+	files := expand.MapLoader{
+		"c.art":    "collection \"c\" {\n  request r() {\n    get \"x\"\n    capture tok = body.t\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  step \"a\" {\n    get \"y\"\n    capture tok = body.t\n  }\n  use c.r\n}\n",
+	}
+	u := front.CompileWith("main.art", files["main.art"], files)
+	var found bool
+	for _, d := range u.Bag.All() {
+		if d.Span.File == "c.art" && len(d.UsedFrom) == 1 && d.UsedFrom[0].Line == 8 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want the capture clash in c.art used from main.art:8, got %v", u.Bag.All())
+	}
+}
+
+// An argument naming a scenario capture that a flow also captures: the flow's
+// capture is the second binding of the name, and the checker -- running on the
+// expanded tree -- says so, names the use line, and points at as.
+func TestArgumentCannotShadowFlowCapture(t *testing.T) {
+	auth := "collection \"auth\" {\n  request login(user, password = \"pw\", base = env(\"API_URL\")) {\n" +
+		"    post \"${base}/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
+		"    expect status == 200\n    capture token = body.token\n  }\n}\n"
+	files := expand.MapLoader{
+		"auth.art": auth,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"x\"\n    capture token = body.t\n  }\n  use auth.login { user = token }\n}\n",
+	}
+	u := front.CompileWith("main.art", files["main.art"], files)
+	var got []diag.Diagnostic
+	for _, d := range u.Bag.All() {
+		if d.Code == diag.DuplicateBinding {
+			got = append(got, d)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("want one duplicate-binding, got %v", u.Bag.All())
+	}
+	d := got[0]
+	if d.Span.File != "auth.art" || d.Span.Line != 7 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 8 {
+		t.Fatalf("want the clash at auth.art:7 used from main.art:8, got %+v", d)
+	}
+	if d.Hint != "the capture at line 6 of main.art binds it first\nuse ... as <name> to keep both" {
+		t.Fatalf("hint is %q", d.Hint)
+	}
+}
+
+func TestCompileWithoutImportsIsCompile(t *testing.T) {
+	src := "scenario \"s\" {\n  step \"a\" {\n    get \"x\"\n    expect status == 200\n  }\n}\n"
+	tree, info, bag := front.Compile("a.art", src)
+	u := front.CompileWith("a.art", src, nil)
+	if u.Tree != u.Expanded || ast.Source(u.Tree) != ast.Source(tree) || bag.Len() != u.Bag.Len() || info.Steps() != u.Info.Steps() {
+		t.Fatal("CompileWith must equal Compile for a file with no imports")
 	}
 }

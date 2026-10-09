@@ -86,6 +86,12 @@ type Diagnostic struct {
 	Message     string
 	Hint        string
 	Suggestions []Suggestion
+
+	// UsedFrom is the use lines that brought an expanded node in, innermost
+	// first; empty for source written in place. Each is the span of a use
+	// line in the file it was written in, Via included, so two expansions of
+	// one use line stay two.
+	UsedFrom []token.Span
 }
 
 // Bag collects diagnostics. Collecting many is the normal case: the parser
@@ -199,11 +205,18 @@ func (b *Bag) All() []Diagnostic {
 func equal(a, b Diagnostic) bool {
 	if a.Span != b.Span || a.Code != b.Code || a.Severity != b.Severity ||
 		a.Message != b.Message || a.Hint != b.Hint ||
-		len(a.Suggestions) != len(b.Suggestions) {
+		len(a.Suggestions) != len(b.Suggestions) || len(a.UsedFrom) != len(b.UsedFrom) {
 		return false
 	}
 	for i := range a.Suggestions {
 		if a.Suggestions[i] != b.Suggestions[i] {
+			return false
+		}
+	}
+	// Span comparison includes Via, so two expansions of one use line are two
+	// chains and their diagnostics are both kept.
+	for i := range a.UsedFrom {
+		if a.UsedFrom[i] != b.UsedFrom[i] {
 			return false
 		}
 	}

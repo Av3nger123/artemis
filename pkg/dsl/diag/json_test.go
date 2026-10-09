@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"artemis/pkg/dsl/token"
 )
 
 // TestJSONShape pins the contract a UI parses, field by field, against the
@@ -104,5 +106,18 @@ func TestJSONIsDeterministic(t *testing.T) {
 	first, again := JSONString(b.All()), JSONString(b.All())
 	if first != again {
 		t.Errorf("two renderings of the same diagnostics differ:\n%s\n%s", first, again)
+	}
+}
+
+func TestUsedFromIsInTheJSONOnlyWhenPresent(t *testing.T) {
+	plain := JSONString([]Diagnostic{{Span: token.Span{File: "a", Line: 1, Col: 1}, Code: UnexpectedToken}})
+	if strings.Contains(plain, "usedFrom") {
+		t.Fatal("usedFrom must be omitted when empty")
+	}
+	with := JSONString([]Diagnostic{{Span: token.Span{File: "a", Line: 1, Col: 1}, Code: UnexpectedToken,
+		UsedFrom: []token.Span{{File: "m", Line: 4, Col: 3, Via: 9}}}})
+	compact := strings.Join(strings.Fields(with), "")
+	if !strings.Contains(compact, `"usedFrom":[{"file":"m","line":4,"col":3`) || strings.Contains(with, "via") {
+		t.Fatalf("got %s", with)
 	}
 }

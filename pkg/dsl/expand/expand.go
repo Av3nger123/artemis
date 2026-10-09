@@ -111,7 +111,16 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 		}
 	}
 	res.File = out
-	return res, bag
+
+	// A diagnostic on a token a use copied in -- an override error on a
+	// synthesised token, a bind error inside a nested use -- names the use
+	// lines that brought it in, like the checker's do in pkg/dsl/front.
+	chained := diag.New()
+	for _, d := range bag.All() {
+		d.UsedFrom = res.Chain(d.Span)
+		chained.Add(d)
+	}
+	return res, chained
 }
 
 // needsExpansion reports whether tree holds anything Expand rewrites.

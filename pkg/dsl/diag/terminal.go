@@ -114,6 +114,7 @@ func writeOne(w io.Writer, files *Files, d Diagnostic) error {
 
 	echo(&b, files, d.Span)
 	hint(&b, d.Hint)
+	usedFrom(&b, files, d.UsedFrom)
 
 	_, err := io.WriteString(w, b.String())
 	return err
@@ -255,6 +256,22 @@ func elide(ls []echoLine) []echoLine {
 	out = append(out, head...)
 	out = append(out, echoLine{num: ls[len(ls)-1].num, elided: true})
 	return append(out, ls[len(ls)-1])
+}
+
+// usedFrom writes the use chain, innermost first, one line per use with the
+// use line's source trimmed after it:
+//
+//	used from checkout.art:14:3: use orders.create { sku = "A-1" }
+//
+// A use line in a file the caller did not give is named by position alone.
+func usedFrom(b *strings.Builder, files *Files, chain []token.Span) {
+	for _, s := range chain {
+		fmt.Fprintf(b, "   used from %s:%d:%d", s.File, s.Line, s.Col)
+		if line, ok := files.Line(s.File, s.Line); ok {
+			b.WriteString(": " + strings.TrimSpace(line))
+		}
+		b.WriteString("\n")
+	}
 }
 
 // hintIndent is what a hint's continuation lines are indented by, so they align

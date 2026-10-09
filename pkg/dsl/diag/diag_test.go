@@ -63,6 +63,25 @@ func TestBagKeepsTwoFaultsAtOneSpan(t *testing.T) {
 	}
 }
 
+// TestBagKeepsTwoUsesOfOneLine: a flow used twice expands its inner use line
+// twice, so two diagnostics can share a span and a message and differ only in
+// which expansion of that use line brought them in -- a difference in Via
+// alone. They are two faults, and both are kept.
+func TestBagKeepsTwoUsesOfOneLine(t *testing.T) {
+	s := span("c.art", 3, 5, 3, 10, 40)
+	use := span("c.art", 9, 3, 9, 10, 90)
+	other := use
+	other.Via = 2
+	b := New()
+	b.Add(Diagnostic{Span: s, Code: UnknownField, Message: "m", UsedFrom: []token.Span{use}})
+	b.Add(Diagnostic{Span: s, Code: UnknownField, Message: "m", UsedFrom: []token.Span{other}})
+	b.Add(Diagnostic{Span: s, Code: UnknownField, Message: "m", UsedFrom: []token.Span{other}})
+	b.Add(Diagnostic{Span: s, Code: UnknownField, Message: "m", UsedFrom: []token.Span{other, use}})
+	if got := len(b.All()); got != 3 {
+		t.Fatalf("kept %d of 3 distinct diagnostics", got)
+	}
+}
+
 func TestHasErrors(t *testing.T) {
 	b := New()
 	if b.HasErrors() {
