@@ -44,6 +44,8 @@
 package check
 
 import (
+	"fmt"
+
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
@@ -223,8 +225,17 @@ func (i *Info) EnvNeeds() []EnvNeed {
 // useful than reporting nothing, and nothing here may panic on a nil Action, a
 // nil Expr or a Bad in any position.
 func Check(tree *ast.File) (*Info, *diag.Bag) {
+	return CheckChained(tree, nil)
+}
+
+// CheckChained is Check over an expanded tree: chain is the expansion's
+// Result.Chain, the use lines that brought a span in, innermost first. A
+// diagnostic that names another binding names it by the scenario's use line
+// when a use brought that binding in. A nil chain is Check.
+func CheckChained(tree *ast.File, chain func(token.Span) []token.Span) (*Info, *diag.Bag) {
 	c := &checker{
-		bag: diag.New(),
+		chain: chain,
+		bag:   diag.New(),
 		info: &Info{
 			steps:   map[*ast.StepDecl]StepType{},
 			expects: map[*ast.Expect]Class{},
@@ -247,8 +258,9 @@ func Check(tree *ast.File) (*Info, *diag.Bag) {
 // step's statements see different ones and a field on the checker would make
 // that an ordering bug waiting to happen.
 type checker struct {
-	bag  *diag.Bag
-	info *Info
+	bag   *diag.Bag
+	info  *Info
+	chain func(token.Span) []token.Span // nil outside an expansion
 }
 
 // scenario walks one scenario's body in source order.
@@ -259,8 +271,20 @@ type checker struct {
 // meaningful if the walk is in reading order. ast.Scenario.Body already is.
 func (c *checker) scenario(s *ast.Scenario) {
 	sc := newScope()
+	sc.file = s.Keyword.Span.File
 
-	for _, d := range s.Body {
+	// Every var of the scenario is a name a capture may not take, whether it
+	// is declared above the capture or below: either way the scenario would
+	// hold two values under one name. So the vars are collected before the
+	// walk, while the walk itself still binds them in order for resolution.
+	for i, d := range s.Body {
+		if v, ok := d.(*ast.VarDecl); ok && v != nil && v.Name.Kind == token.Ident {
+			sc.bind(v.Name, "var", i)
+		}
+	}
+
+	for i, d := range s.Body {
+		sc.at = i
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
 			c.config(d, sc)
@@ -286,6 +310,13 @@ func (c *checker) varDecl(v *ast.VarDecl, sc *scope) {
 	}
 	c.expr(v.Value, sc.view(Unknown))
 	if v.Name.Kind == token.Ident {
+		// The vars were bound before the walk, so the first var of a name is
+		// its first binding; any other var of that name is a second value
+		// under it, and lower would quietly keep the last for both.
+		if first := sc.first[v.Name.Value]; first.tok.Span != v.Name.Span {
+			c.clash(v.Name, first, sc)
+			return
+		}
 		sc.addVar(v.Name.Value)
 	}
 }
@@ -331,9 +362,60 @@ func (c *checker) step(s *ast.StepDecl, sc *scope) {
 	// follow, which is the design's "each capture from an *earlier* step".
 	for _, st := range s.Body {
 		if cap, ok := st.(*ast.Capture); ok && cap != nil && cap.Name.Kind == token.Ident {
+			c.rebinds(cap.Name, sc)
 			sc.addCapture(cap.Name.Value)
 		}
 	}
+}
+
+// rebinds reports a capture whose name a var or an earlier capture already
+// holds -- varDecl reports a var whose name an earlier var holds -- and otherwise records it as the name's first binding. SPEC.md: "a
+// capture may not reuse the name of a var or of an earlier capture, because
+// silently shadowing a value is how a scenario comes to assert against the
+// wrong one."
+//
+// When either binding was copied in by a use -- its span is stamped with Via,
+// or it sits in another file than the scenario -- the fix is usually `as`,
+// which prefixes a use's captures, so the hint says so.
+func (c *checker) rebinds(name token.Token, sc *scope) {
+	if token.IsReserved(name.Value) {
+		return // reserved already said what is wrong with this name
+	}
+	first, ok := sc.first[name.Value]
+	if !ok {
+		sc.bind(name, "capture", sc.at)
+		return
+	}
+	c.clash(name, first, sc)
+}
+
+// clash reports name, a var or capture, as a second binding of a name first
+// bound at first.
+//
+// The hint names the first binding where a reader can find it: by its line,
+// or -- when a use brought it in -- by the scenario's use line, since its own
+// line is in the collection and is often the very line the caret is on. A var
+// declared below the second binding "also binds it": it is not first in
+// reading order, only in scope.
+func (c *checker) clash(name token.Token, first binding, sc *scope) {
+	where := fmt.Sprintf("the %s at line %d", first.kind, first.tok.Span.Line)
+	if first.tok.Span.File != name.Span.File {
+		where += " of " + first.tok.Span.File
+	}
+	if first.tok.Span.Via != 0 && c.chain != nil {
+		if ch := c.chain(first.tok.Span); len(ch) > 0 {
+			top := ch[len(ch)-1]
+			where = fmt.Sprintf("the use at %s:%d", top.File, top.Line)
+		}
+	}
+	hint := where + " binds it first"
+	if first.order > sc.at {
+		hint = where + " also binds it"
+	}
+	if sc.fromUse(first.tok.Span) || sc.fromUse(name.Span) {
+		hint += "\nuse ... as <name> to keep both"
+	}
+	c.bag.Error(name.Span, diag.DuplicateBinding, "%q is already bound", name.Value).Hintf("%s", hint)
 }
 
 // expect checks the assertion and records its simple/complex label.

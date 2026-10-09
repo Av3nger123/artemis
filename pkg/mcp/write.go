@@ -60,7 +60,8 @@ func (srv *server) writeTool(ctx context.Context, req *mcp.CallToolRequest, in w
 
 	// The span label is the path the caller asked for, so a diagnostic names
 	// the file they were trying to create.
-	tree, _, bag := front.Compile(in.Path, in.Source)
+	unit := front.CompileWith(in.Path, in.Source, srv.ws.loader())
+	tree, bag := unit.Tree, unit.Bag
 	if bag.HasErrors() {
 		doc := diag.JSONString(bag.All())
 		var envelope map[string]json.RawMessage

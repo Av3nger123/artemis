@@ -26,6 +26,10 @@ func (c *canon) node(n ast.Node) {
 		c.file(v)
 	case *ast.Block:
 		c.blockAfter(nil, "", v, false)
+	case *ast.Params:
+		c.w.push(c.params(v))
+	case *ast.Param:
+		c.w.push(strings.TrimSuffix(strings.TrimPrefix(c.params(&ast.Params{List: []*ast.Param{v}}), "("), ")"))
 	case ast.Decl:
 		c.decl(v)
 	case ast.Stmt:
@@ -37,13 +41,19 @@ func (c *canon) node(n ast.Node) {
 	}
 }
 
-// file is the scenarios, separated by exactly one blank line, then whatever
-// trivia the EOF token is holding -- a file's closing comment lives there, and
-// dropping it would break R3 on the first fixture that has one.
+// file is the top-level declarations, separated by exactly one blank line,
+// then whatever trivia the EOF token is holding -- a file's closing comment
+// lives there, and dropping it would break R3 on the first fixture that has
+// one. Consecutive imports are the exception: they stack with no blank line
+// between them, and the blank line comes after the last.
 func (c *canon) file(f *ast.File) {
 	for i, d := range f.Scenarios {
 		if i > 0 {
-			c.w.blank()
+			_, prevImport := f.Scenarios[i-1].(*ast.Import)
+			_, thisImport := d.(*ast.Import)
+			if !prevImport || !thisImport {
+				c.w.blank()
+			}
 		}
 		c.decl(d)
 	}
@@ -76,6 +86,16 @@ func (c *canon) decl(d ast.Decl) {
 		c.varDecl(v)
 	case *ast.StepDecl:
 		c.step(v)
+	case *ast.Import:
+		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text))
+	case *ast.Collection:
+		c.collection(v)
+	case *ast.RequestDecl:
+		c.requestDecl(v)
+	case *ast.FlowDecl:
+		c.flowDecl(v)
+	case *ast.UseDecl:
+		c.useDecl(v)
 	case *ast.Bad:
 		c.bad(v)
 	}
@@ -192,6 +212,16 @@ func (c *canon) stmt(s ast.Stmt) {
 			join(" ", v.Secret.Text, v.Keyword.Text, v.Name.Text), v.Assign, c.expr(v.Value)))
 	case *ast.BrowserAct:
 		c.line(v.Tokens(nil), assign(join(" ", v.Name.Text, c.expr(v.Target)), v.Assign, c.expr(v.Value)))
+	case *ast.BodySet:
+		left := v.Body.Text
+		for _, p := range v.Path {
+			left += p.Dot.Text + p.Name.Text
+		}
+		c.line(v.Tokens(nil), assign(left, v.Assign, c.expr(v.Value)))
+	case *ast.Drop:
+		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.What.Text))
+	case *ast.In:
+		c.useLines(toks(v.Keyword, v.Step, v.LBrace), join(" ", v.Keyword.Text, v.Step.Text), v.LBrace, v.Lines, v.RBrace)
 	case *ast.Bad:
 		c.bad(v)
 	}

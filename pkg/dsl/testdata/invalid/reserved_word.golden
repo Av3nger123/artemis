@@ -7,7 +7,7 @@ reserved_word.art:18:7: "let" is a reserved word
 reserved_word.art:22:13: "import" is a reserved word
    22 |     capture import = body.data.token
       |             ^^^^^^
-   hint: reserved for a future module system; rename this capture
+   hint: imports a collection file: import "collections/auth.art"; rename this capture
 
 === codes
 reserved-word	error	18:7-18:10

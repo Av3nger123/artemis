@@ -121,6 +121,12 @@ func Init() {
 	}
 	generateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout")
 	generateCmd.Flags().Bool(forceFlag, false, "Replace the file named by -o when it already exists")
+
+	// Expand command: the scenario that will run, with every use written out
+	// as the steps it stands for.
+	RootCmd.AddCommand(expandCmd)
+	expandCmd.Flags().StringP(outFlag, "o", "", "Write the expanded .art file here instead of printing it to stdout")
+	expandCmd.Flags().Bool(forceFlag, false, "Replace the file named by -o when it already exists")
 }
 
 var RootCmd = &cobra.Command{

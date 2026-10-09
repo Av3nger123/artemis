@@ -62,6 +62,8 @@ type Expect struct {
 
 	// Line is the line the `expect` keyword sits on.
 	Line int
+	// File is the file Line is in when it is not the scenario's: see Step.File.
+	File string
 
 	// ExpectedSecret and ActualSecret say which operand of this assertion read
 	// a secret binding. They are decided here, at lowering time, because that
@@ -83,6 +85,8 @@ type Capture struct {
 	// Line is the line the captured *name* sits on, not the expression's: the
 	// name is what a scenario goes and fixes.
 	Line int
+	// File is the file Line is in when it is not the scenario's: see Step.File.
+	File string
 	// Declared is true when the author wrote `secret capture`. A capture can
 	// also be secret without it -- `capture part = match(pw, /x(.)/)` reads a
 	// secret binding -- which is why the scenario walk asks taint.Secret as
@@ -129,6 +133,7 @@ func (e *Expect) Assert(step string, env *eval.Env) result.AssertionResult {
 	// result tree and every judgement in it, and eval.Outcome gains no field.
 	out.ExpectedSecret = e.ExpectedSecret
 	out.ActualSecret = e.ActualSecret
+	out.File = e.File
 	return out
 }
 
@@ -197,6 +202,7 @@ func (c *Capture) errored(step string, err error) result.AssertionResult {
 		Path:     c.Name,
 		Operator: source(c.Value),
 		Line:     c.Line,
+		File:     c.File,
 	}.Errored(err)
 }
 
@@ -251,6 +257,7 @@ func expect(e *ast.Expect, t check.StepType, info *check.Info, secrets map[strin
 		Budget: e.Budget,
 		Class:  info.Class(e),
 		Line:   e.Keyword.Span.Line,
+		File:   e.Keyword.Span.File,
 	}
 	out.ExpectedSecret, out.ActualSecret = operandMarks(e.Value, secrets)
 	if t == check.Browser {

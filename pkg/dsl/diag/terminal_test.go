@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"artemis/pkg/dsl/token"
 )
 
 // TestTabsAreRenderedAsOneSpace covers the trade the renderer makes: columns
@@ -126,4 +128,34 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 	}
 	w.n++
 	return len(p), nil
+}
+
+func TestUsedFromIsRenderedUnderTheEcho(t *testing.T) {
+	files := NewFiles()
+	files.Add("c.art", "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect statu == 200\n  }\n}\n")
+	files.Add("main.art", "import \"c.art\"\n\nscenario \"s\" {\n  use c.r\n}\n")
+	d := Diagnostic{
+		Span:     token.Span{File: "c.art", Line: 4, Col: 12, EndLine: 4, EndCol: 17},
+		Code:     UnknownIdentifier,
+		Message:  `unknown name "statu"`,
+		UsedFrom: []token.Span{{File: "main.art", Line: 4, Col: 3, EndLine: 4, EndCol: 10}},
+	}
+	got := TerminalString(files, []Diagnostic{d})
+	if !strings.Contains(got, "   used from main.art:4:3: use c.r\n") {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+// A use line in a file nobody gave the renderer is still named, by position.
+func TestUsedFromWithoutItsSourceIsAPosition(t *testing.T) {
+	d := Diagnostic{
+		Span:     token.Span{File: "c.art", Line: 4, Col: 12, EndLine: 4, EndCol: 17},
+		Code:     UnknownIdentifier,
+		Message:  `unknown name "statu"`,
+		UsedFrom: []token.Span{{File: "main.art", Line: 4, Col: 3}},
+	}
+	got := TerminalString(NewFiles(), []Diagnostic{d})
+	if !strings.HasSuffix(got, "   used from main.art:4:3\n") {
+		t.Fatalf("got\n%s", got)
+	}
 }

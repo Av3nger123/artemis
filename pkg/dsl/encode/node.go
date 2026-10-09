@@ -37,6 +37,18 @@ const (
 	kindArray      = "array"
 	kindParen      = "paren"
 	kindBad        = "bad"
+
+	// The collection kinds. A collection's request is requestDecl because
+	// request is already the api action's kind.
+	kindImport      = "import"
+	kindCollection  = "collection"
+	kindParam       = "param"
+	kindRequestDecl = "requestDecl"
+	kindFlow        = "flow"
+	kindUse         = "use"
+	kindBodySet     = "bodySet"
+	kindDrop        = "drop"
+	kindIn          = "in"
 )
 
 // node encodes one node, or returns nil for one that is not there -- which a
@@ -74,6 +86,24 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.expect(v)
 	case *ast.Capture:
 		return e.capture(v)
+	case *ast.Import:
+		return e.importDecl(v)
+	case *ast.Collection:
+		return e.collection(v)
+	case *ast.Param:
+		return e.param(v)
+	case *ast.RequestDecl:
+		return e.requestDecl(v)
+	case *ast.FlowDecl:
+		return e.flowDecl(v)
+	case *ast.UseDecl:
+		return e.useDecl(v)
+	case *ast.BodySet:
+		return e.bodySet(v)
+	case *ast.Drop:
+		return e.drop(v)
+	case *ast.In:
+		return e.in(v)
 	case *ast.Bad:
 		return e.bad(v)
 	}

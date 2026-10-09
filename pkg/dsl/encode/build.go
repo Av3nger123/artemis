@@ -41,8 +41,9 @@ func decls(items []value) ([]ast.Decl, error) {
 	return out, nil
 }
 
-// decl builds one declaration: a scenario, or one of the three things a
-// scenario body holds.
+// decl builds one declaration: an import, a collection or a scenario at the
+// top level, or one of the four things a scenario body holds. Which of them
+// is legal where is the grammar's to say, and Decode's reparse says it.
 func decl(v value) (ast.Decl, error) {
 	f, err := v.object()
 	if err != nil {
@@ -61,6 +62,12 @@ func decl(v value) (ast.Decl, error) {
 		return varDecl(f)
 	case kindStep:
 		return step(f)
+	case kindImport:
+		return importDecl(f)
+	case kindCollection:
+		return collection(f)
+	case kindUse:
+		return useDecl(f)
 	}
 	return nil, badKind(f, kind, "a declaration")
 }

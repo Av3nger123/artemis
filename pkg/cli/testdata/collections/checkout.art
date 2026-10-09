@@ -1,0 +1,23 @@
+import "auth.art"
+
+scenario "checkout" {
+  var url = env("API_URL")
+
+  use auth.login { user = "alice", password = "s3cret", base = url }
+
+  use auth.login as bad {
+    user = "alice"
+    password = "wrong"
+    base = url
+    drop expects
+    drop captures
+    expect status == 401
+  }
+
+  step "orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}

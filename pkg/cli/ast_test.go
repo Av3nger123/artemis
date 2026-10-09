@@ -127,7 +127,8 @@ func TestAstFromJSONRefusesAnIncompleteTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, info, bag := frontEnd(path, string(src))
+	u := frontEnd(path, string(src))
+	tree, info, bag := u.Tree, u.Info, u.Bag
 	if !bag.HasErrors() {
 		t.Fatalf("the fixture parses clean, so this test asserts nothing")
 	}

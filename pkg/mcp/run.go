@@ -4,7 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
+
+	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/front"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -61,6 +67,14 @@ func (srv *server) runTool(ctx context.Context, req *mcp.CallToolRequest, in run
 		return nil, nil, err
 	}
 
+	// The run is a subprocess that reads imports from disk on its own, so the
+	// workspace boundary has to be enforced here, before it starts: every
+	// scenario it would load is compiled through the workspace loader first, and
+	// an import that cannot be read through it stops the run.
+	if err := srv.checkImports(target); err != nil {
+		return nil, nil, fmt.Errorf("running %s: %w", in.Path, err)
+	}
+
 	args := []string{"run", target, "--report", "json"}
 	if in.EnvFile != "" {
 		envFile, envErr := srv.ws.resolve(in.EnvFile)
@@ -92,4 +106,49 @@ func (srv *server) runTool(ctx context.Context, req *mcp.CallToolRequest, in run
 		return nil, nil, fmt.Errorf("running %s: artemis wrote something that is not JSON: %s", in.Path, doc)
 	}
 	return document(doc), json.RawMessage(doc), nil
+}
+
+// This is defence in depth, not a sandbox: the subprocess reads the files again.
+// checkImports refuses a run when a scenario under target imports a file the
+// workspace boundary would not let a tool read.
+func (srv *server) checkImports(target string) error {
+	var files []string
+	err := filepath.WalkDir(target, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			// Dot-directories are walked too: being stricter than the CLI's
+			// own walk costs nothing, and being looser would be a hole.
+			return nil
+		}
+		if front.IsArtFile(d.Name()) {
+			files = append(files, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, p := range files {
+		rel, err := filepath.Rel(srv.ws.root, p)
+		if err != nil {
+			return err
+		}
+		abs, err := srv.ws.resolveArt(rel)
+		if err != nil {
+			// A symlink out of the workspace: the run would follow it, so refuse.
+			return fmt.Errorf("%s: is not a .art file inside the workspace", rel)
+		}
+		b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
+		if err != nil {
+			return err
+		}
+		for _, d := range front.CompileWith(rel, string(b), srv.ws.loader()).Bag.All() {
+			if d.Code == diag.ImportNotFound {
+				return fmt.Errorf("%s: %s", rel, d.Message)
+			}
+		}
+	}
+	return nil
 }

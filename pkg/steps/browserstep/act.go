@@ -44,14 +44,14 @@ func perform(d driver, acts []models.Act, name string, deadline time.Time) error
 	for i, a := range acts {
 		left := time.Until(deadline)
 		if left <= 0 {
-			return fmt.Errorf("ran out of time after %s: %s on line %d had none left",
-				plural(i, "action", "actions"), a.Name, a.Line)
+			return fmt.Errorf("ran out of time after %s: %s on %s had none left",
+				plural(i, "action", "actions"), a.Name, where(a))
 		}
 		d.SetTimeout(left)
 		if err := act(d, a); err != nil {
 			// The line, because a browser step's action is many statements and
 			// the step's own line would point at the `step` keyword.
-			return fmt.Errorf("line %d: %w", a.Line, err)
+			return fmt.Errorf("%s: %w", where(a), err)
 		}
 	}
 	return nil
@@ -145,4 +145,14 @@ func logActs(name string, acts []models.Act) {
 		logger.Logger.Info("Browser action",
 			"name", name, "action", a.Name, "target", a.Target, "line", a.Line)
 	}
+}
+
+// where is the line an action was written on, as a failure names it: "line 7",
+// or "auth.art:7" for an action a use brought in from a collection, whose line
+// is not a line of the scenario's file.
+func where(a models.Act) string {
+	if a.File != "" {
+		return fmt.Sprintf("%s:%d", a.File, a.Line)
+	}
+	return fmt.Sprintf("line %d", a.Line)
 }

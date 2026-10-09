@@ -81,14 +81,18 @@ func TestEveryNodeKindIsInAGroup(t *testing.T) {
 // refuses, which is the drift the whole encoding exists to prevent.
 func TestEveryGroupKindIsAcceptedThere(t *testing.T) {
 	builders := map[string]func(fields) error{
-		"declaration":   func(f fields) error { _, err := decl(asValue(f)); return err },
-		"scenarioBody":  func(f fields) error { _, err := decl(asValue(f)); return err },
-		"action":        func(f fields) error { _, err := action(wrap("action", f)); return err },
-		"stepStatement": func(f fields) error { _, err := stepStmt(f); return err },
-		"blockField":    func(f fields) error { _, err := blockField(f); return err },
-		"browserAction": func(f fields) error { _, err := browserAct(f); return err },
-		"block":         func(f fields) error { _, err := blockOf(wrap("block", f), "block", true); return err },
-		"expression":    func(f fields) error { _, err := exprIn(f); return err },
+		"declaration":    func(f fields) error { _, err := decl(asValue(f)); return err },
+		"scenarioBody":   func(f fields) error { _, err := decl(asValue(f)); return err },
+		"action":         func(f fields) error { _, err := action(wrap("action", f)); return err },
+		"stepStatement":  func(f fields) error { _, err := stepStmt(f); return err },
+		"blockField":     func(f fields) error { _, err := blockField(f); return err },
+		"browserAction":  func(f fields) error { _, err := browserAct(f); return err },
+		"block":          func(f fields) error { _, err := blockOf(wrap("block", f), "block", true); return err },
+		"expression":     func(f fields) error { _, err := exprIn(f); return err },
+		"collectionItem": func(f fields) error { _, err := collectionItem(f); return err },
+		"param":          func(f fields) error { _, err := param(f); return err },
+		"flowBody":       func(f fields) error { _, err := flowItem(f); return err },
+		"useLine":        func(f fields) error { _, err := useLine(f); return err },
 	}
 	for _, g := range groupSchemas {
 		build, ok := builders[g.Name]

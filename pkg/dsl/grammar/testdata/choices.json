@@ -78,6 +78,17 @@
         }
       ]
     },
+    "collectionItem": {
+      "doc": "What a collection body holds: a request or a flow.",
+      "values": [
+        {
+          "value": "request"
+        },
+        {
+          "value": "flow"
+        }
+      ]
+    },
     "comparison": {
       "doc": "The grammar's BinOp: the operator dropdown of a simple assertion.",
       "values": [
@@ -129,8 +140,14 @@
       ]
     },
     "declaration": {
-      "doc": "The declarations a scenario body holds, plus scenario itself.",
+      "doc": "The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
       "values": [
+        {
+          "value": "import"
+        },
+        {
+          "value": "collection"
+        },
         {
           "value": "scenario"
         },
@@ -142,6 +159,9 @@
         },
         {
           "value": "step"
+        },
+        {
+          "value": "use"
         }
       ]
     },
@@ -159,13 +179,68 @@
           "severity": "error"
         },
         {
+          "value": "bad-collection-name",
+          "doc": "a collection's name is not an identifier, so no use can name it",
+          "severity": "error"
+        },
+        {
+          "value": "bad-override",
+          "doc": "a line in a use block is not an argument or an override that applies",
+          "severity": "error"
+        },
+        {
           "value": "bad-value",
           "doc": "a value is the wrong kind for the position it is in",
           "severity": "error"
         },
         {
+          "value": "drop-after-expect",
+          "doc": "a drop expects line comes after an expect line in the same use block",
+          "severity": "error"
+        },
+        {
+          "value": "dropped-capture",
+          "doc": "a step a use brought in reads a capture that drop captures removed",
+          "severity": "error"
+        },
+        {
           "value": "duplicate-action",
           "doc": "a step block contains more than one action block",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-argument",
+          "doc": "a use passes the same argument twice",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-binding",
+          "doc": "a capture or var reuses a name a var or an earlier capture binds",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-collection",
+          "doc": "two collections in scope have the same name",
+          "severity": "error"
+        },
+        {
+          "value": "import-cycle",
+          "doc": "a file imports itself, directly or through other files",
+          "severity": "error"
+        },
+        {
+          "value": "import-needs-file",
+          "doc": "a file read from no disk imports another file",
+          "severity": "error"
+        },
+        {
+          "value": "import-not-found",
+          "doc": "an imported file cannot be read",
+          "severity": "error"
+        },
+        {
+          "value": "import-placement",
+          "doc": "an import appears below a collection or a scenario",
           "severity": "error"
         },
         {
@@ -189,6 +264,11 @@
           "severity": "error"
         },
         {
+          "value": "missing-argument",
+          "doc": "a use does not pass a parameter that has no default",
+          "severity": "error"
+        },
+        {
           "value": "missing-separator",
           "doc": "two statements run together with no newline or comma between them",
           "severity": "error"
@@ -209,8 +289,23 @@
           "severity": "error"
         },
         {
+          "value": "reserved-param",
+          "doc": "a parameter is named like a use-block override word, so no use can pass it",
+          "severity": "error"
+        },
+        {
           "value": "reserved-word",
           "doc": "a word reserved for a later tier is used as a name",
+          "severity": "error"
+        },
+        {
+          "value": "root-capture",
+          "doc": "a collection's template captures under the name of a step's observation, such as body",
+          "severity": "error"
+        },
+        {
+          "value": "secret-argument",
+          "doc": "an argument to a secret parameter is not itself secret",
           "severity": "error"
         },
         {
@@ -239,6 +334,16 @@
           "severity": "error"
         },
         {
+          "value": "unknown-argument",
+          "doc": "a use passes an argument the item has no parameter for",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-collection",
+          "doc": "a use names a collection that is not in scope",
+          "severity": "error"
+        },
+        {
           "value": "unknown-config",
           "doc": "a \"config\" names a subject the language does not configure",
           "severity": "error"
@@ -249,8 +354,18 @@
           "severity": "error"
         },
         {
+          "value": "unknown-flow-step",
+          "doc": "an in block names a step the flow does not have",
+          "severity": "error"
+        },
+        {
           "value": "unknown-identifier",
           "doc": "a name is bound nowhere in the file",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-item",
+          "doc": "a use names a request or flow its collection does not declare",
           "severity": "error"
         },
         {
@@ -267,6 +382,22 @@
           "value": "unterminated-string",
           "doc": "a string literal has no closing quote",
           "severity": "error"
+        },
+        {
+          "value": "use-cycle",
+          "doc": "a flow uses itself, directly or through other flows",
+          "severity": "error"
+        }
+      ]
+    },
+    "dropTarget": {
+      "doc": "What a drop line in a use block removes from the template: drop expects or drop captures.",
+      "values": [
+        {
+          "value": "expects"
+        },
+        {
+          "value": "captures"
         }
       ]
     },
@@ -343,7 +474,7 @@
         },
         {
           "value": "in",
-          "purpose": "reserved for a future loop form"
+          "purpose": "used in a use block to target one step of a flow, and reserved for a future loop form"
         },
         {
           "value": "while",
@@ -367,11 +498,11 @@
         },
         {
           "value": "import",
-          "purpose": "reserved for a future module system"
+          "purpose": "imports a collection file: import \"collections/auth.art\""
         },
         {
           "value": "use",
-          "purpose": "reserved for a future module system"
+          "purpose": "expands a collection's request or flow in place: use auth.login { ... }"
         },
         {
           "value": "let",
@@ -540,6 +671,29 @@
         },
         {
           "value": "null"
+        }
+      ]
+    },
+    "useLine": {
+      "doc": "The words that open an override line in a use block. Any other identifier opening a line there is an argument.",
+      "values": [
+        {
+          "value": "header"
+        },
+        {
+          "value": "query"
+        },
+        {
+          "value": "body"
+        },
+        {
+          "value": "drop"
+        },
+        {
+          "value": "expect"
+        },
+        {
+          "value": "in"
         }
       ]
     },

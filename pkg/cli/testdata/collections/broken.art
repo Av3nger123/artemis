@@ -1,0 +1,9 @@
+import "broken_coll.art"
+
+scenario "one" {
+  use bc.r
+}
+
+scenario "two" {
+  use bc.r
+}

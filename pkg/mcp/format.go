@@ -48,7 +48,10 @@ func (srv *server) formatTool(ctx context.Context, req *mcp.CallToolRequest, in 
 		label = sourceLabel
 	}
 
-	tree, _, bag := front.Compile(label, in.Source)
+	// The workspace loader is for the diagnostics only: an import in the file
+	// must not read as an error here. The printer gets Tree, never Expanded.
+	unit := front.CompileWith(label, in.Source, srv.ws.loader())
+	tree, bag := unit.Tree, unit.Bag
 	if bag.HasErrors() {
 		doc := diag.JSONString(bag.All())
 		var envelope map[string]json.RawMessage

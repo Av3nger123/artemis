@@ -233,6 +233,37 @@ func TestScopeRules(t *testing.T) {
 			src:  "scenario \"s\" {\n  step \"t\" {\n    run \"x\" {\n      env { PGPASSWORD = \"s\", ANYTHING_AT_ALL = \"t\" }\n    }\n  }\n}\n",
 		},
 
+		// --- a name is bound once ----------------------------------------
+		{
+			name: "a capture may not reuse a var's name",
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n}\n",
+			want: []string{"duplicate-binding@5:13"},
+		},
+		{
+			name: "a capture may not reuse a var declared below it",
+			src:  "scenario \"s\" {\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  var token = \"a\"\n}\n",
+			want: []string{"duplicate-binding@4:13"},
+		},
+		{
+			name: "a capture may not reuse an earlier step's capture",
+			src:  "scenario \"s\" {\n  step \"a\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  step \"b\" {\n    get \"/y\"\n    capture token = body.u\n  }\n}\n",
+			want: []string{"duplicate-binding@8:13"},
+		},
+		{
+			name: "a capture may not reuse a capture in its own step",
+			src:  step("api", `get "/x"`, `capture token = body.t`, `capture token = body.u`),
+			want: []string{"duplicate-binding@5:13"},
+		},
+		{
+			name: "a var may not reuse an earlier var's name",
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
+			want: []string{"duplicate-binding@3:7"},
+		},
+		{
+			name: "distinct captures and vars are fine",
+			src:  "scenario \"s\" {\n  var a = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture b = body.t\n    capture c = body.u\n  }\n}\n",
+		},
+
 		// --- a Bad node is never reported on twice ------------------------
 		{
 			name: "a bad object literal draws no name error",
@@ -283,4 +314,43 @@ func step(name, action string, stmts ...string) string {
 	}
 	b.WriteString("  }\n}\n")
 	return b.String()
+}
+
+// TestDuplicateBindingNamesTheFirstBinding pins the hint: it says where the
+// name was bound first, by kind and line, because "already bound" alone sends
+// an author hunting through the scenario.
+func TestDuplicateBindingNamesTheFirstBinding(t *testing.T) {
+	cases := []struct{ src, msg, hint string }{
+		{
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n}\n",
+			msg:  `"token" is already bound`,
+			hint: "the var at line 2 binds it first",
+		},
+		{
+			src:  "scenario \"s\" {\n  step \"a\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  step \"b\" {\n    get \"/y\"\n    capture token = body.u\n  }\n}\n",
+			msg:  `"token" is already bound`,
+			hint: "the capture at line 4 binds it first",
+		},
+		{
+			src:  "scenario \"s\" {\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  var token = \"a\"\n}\n",
+			msg:  `"token" is already bound`,
+			hint: "the var at line 6 also binds it",
+		},
+		{
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
+			msg:  `"token" is already bound`,
+			hint: "the var at line 2 binds it first",
+		},
+	}
+	for _, tc := range cases {
+		tree, _ := parser.Parse("t.art", tc.src)
+		_, bag := Check(tree)
+		all := bag.All()
+		if len(all) != 1 || all[0].Code != diag.DuplicateBinding {
+			t.Fatalf("want one duplicate-binding, got %v", all)
+		}
+		if all[0].Message != tc.msg || all[0].Hint != tc.hint {
+			t.Errorf("got %q / %q, want %q / %q", all[0].Message, all[0].Hint, tc.msg, tc.hint)
+		}
+	}
 }

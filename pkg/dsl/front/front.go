@@ -1,5 +1,6 @@
 // Package front is the DSL's front end over one file's source: lex and parse,
-// then resolve names, with the two diagnostic bags merged.
+// expand imported collections' uses, then resolve names, with the diagnostic
+// bags merged.
 //
 // It is its own package because three callers need the same answer about the
 // same file -- the CLI commands, pkg/dsl's corpus goldens, and the MCP server's
@@ -16,6 +17,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/parser"
 )
 
@@ -31,8 +33,58 @@ func IsArtFile(path string) bool {
 	return strings.EqualFold(filepath.Ext(path), Ext)
 }
 
+// Unit is one file through the whole front end.
+type Unit struct {
+	// Tree is the file as written: what fmt, ast and the MCP formatter read.
+	Tree *ast.File
+	// Expanded is what runs: what check, lower and build read. It is Tree
+	// itself when the file has no import, collection or use.
+	Expanded *ast.File
+	// Info is the checker's facts about Expanded.
+	Info *check.Info
+	// Sources is every file read, the root included, by the name its spans
+	// carry -- what a terminal renderer needs to echo a diagnostic in a
+	// collection file.
+	Sources map[string]string
+	// Bag is every diagnostic: the parser's, the expander's and the
+	// checker's, the last two with their use chains.
+	Bag *diag.Bag
+	// Uses is the expansion's use table, which a span's Via indexes (Via-1):
+	// what `artemis expand` reads to say where each step came from.
+	Uses []expand.Use
+}
+
+// CompileWith is the whole front end: parse, expand, check. l reads imported
+// files; nil means the file has no disk to read from, and an import in it is
+// an error.
+//
+// Tree is the file as written -- what fmt and ast read. Expanded is what runs:
+// the same pointer when the file has no import, collection or use, so a file
+// that does not use collections compiles to exactly what Compile gives.
+//
+// The checker runs on the expanded tree, so a fault in a step a use brought in
+// is reported where the step was written, in the collection, and carries the
+// use lines that brought it in as UsedFrom.
+func CompileWith(file, src string, l expand.Loader) *Unit {
+	tree, bag := parser.Parse(file, src)
+	res, eb := expand.Expand(tree, l)
+	bag.Merge(eb)
+	info, checked := check.CheckChained(res.File, res.Chain)
+	for _, d := range checked.All() {
+		d.UsedFrom = res.Chain(d.Span)
+		bag.Add(d)
+	}
+	sources := map[string]string{file: src}
+	for k, v := range res.Sources {
+		sources[k] = v
+	}
+	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: bag, Uses: res.Uses}
+}
+
 // Compile lexes, parses and name-checks src, and returns every diagnostic in
-// file order.
+// file order. It is CompileWith under a nil loader: a file with no import,
+// collection or use compiles exactly as it always did, and an import is the
+// error "import needs a file on disk".
 //
 // The checker's Info comes back beside the bag because it holds the two facts
 // nothing else can re-derive without risking a second answer: every step's type
@@ -44,8 +96,6 @@ func IsArtFile(path string) bool {
 // recovers at statement boundaries and the checker skips only the steps whose
 // action did not parse.
 func Compile(file, src string) (*ast.File, *check.Info, *diag.Bag) {
-	tree, bag := parser.Parse(file, src)
-	info, checked := check.Check(tree)
-	bag.Merge(checked)
-	return tree, info, bag
+	u := CompileWith(file, src, nil)
+	return u.Tree, u.Info, u.Bag
 }

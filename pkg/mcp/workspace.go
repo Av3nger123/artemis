@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/front"
 )
 
@@ -124,4 +125,33 @@ func (w workspace) resolveRunTarget(rel string) (string, error) {
 		return "", fmt.Errorf("%s: not a scenario file (artemis runs %s files)", rel, front.Ext)
 	}
 	return abs, nil
+}
+
+// loader resolves imports through the same boundary every tool uses, so an
+// import is never a way to read outside the workspace.
+func (w workspace) loader() expand.Loader { return wsLoader{w} }
+
+type wsLoader struct{ w workspace }
+
+// Load reads p, written in the file named from. from is the label the tool
+// compiled under, which is workspace-relative when the caller named a real
+// file and a placeholder (or a path outside the workspace) when it did not;
+// either way the joined path goes through resolveArt, so it is refused unless
+// it is a scenario file inside the workspace.
+func (l wsLoader) Load(from, p string) (string, string, error) {
+	rel := filepath.Join(filepath.Dir(from), p)
+	// One fixed error for every refusal and read failure, naming only the path
+	// as written: the resolver's own text carries absolute host paths and
+	// differs for a missing target and an existing one, which would let an
+	// import probe the filesystem outside the workspace.
+	refused := fmt.Errorf("%s is not a .art file inside the workspace", p)
+	abs, err := l.w.resolveArt(rel)
+	if err != nil {
+		return "", "", refused
+	}
+	b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
+	if err != nil {
+		return "", "", refused
+	}
+	return rel, string(b), nil
 }

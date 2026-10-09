@@ -92,20 +92,21 @@ scenario "second" {
 | | |
 | --- | --- |
 | Extension | `.art` |
-| Top level | One or more `scenario "<name>" { ... }` blocks, run in the order they are written |
+| Top level | `import` lines first, then `collection` and `scenario` blocks. Scenarios run in the order they are written; see [Collections](#collections) for the other two |
 | Comments | `#` to the end of the line |
 | Statement separator | A newline, or a comma inside `{ }` where the grammar allows one. No semicolons |
 | Trailing commas | Permitted in objects and arrays |
 | Encoding | UTF-8 |
 
 Nothing is shared between scenarios: each gets its own variables, so what one
-captures is invisible to the next. Nothing is shared between files either.
+captures is invisible to the next. Nothing is shared between files except what a
+file imports: see [Collections](#collections).
 
 ---
 
 ## Inside a scenario
 
-A scenario holds three kinds of declaration, in any order:
+A scenario holds these declarations, in any order:
 
 ```art
 scenario "orders" {
@@ -127,6 +128,7 @@ scenario "orders" {
 | `var` | `var <ident> = <expr>` | A value every step of the scenario can name |
 | `secret` | `secret var ...`, `secret capture ...` | A binding whose value no report prints |
 | `step` | `step "<name>" { ... }` | One action and what to expect of it |
+| `use` | `use <collection>.<item> { ... }` | Steps written once in a collection, expanded in place -- see [Collections](#collections) |
 
 Steps run in the order they are written, one after another, and a scenario's
 steps are never run in parallel: a step reads what the steps above it captured,
@@ -558,8 +560,9 @@ artemis run upgrade.art --screenshots ""           # none
 ### Running files at once
 
 Steps within a scenario are ordered, and so are the scenarios within one file.
-Separate files share nothing: `SPEC.md` already says a scenario's captures are
-invisible to the next, and that nothing is shared between files. So separate
+Separate files share nothing at run time: `SPEC.md` already says a scenario's
+captures are invisible to the next, and an import copies a collection's steps
+into the importing file before anything runs rather than sharing a value. So separate
 files can run at the same time, and `--jobs` says how many:
 
 ```sh
@@ -627,6 +630,359 @@ when a browser step actually fails, so a suite of `api` steps never grows one.
 
 ---
 
+## Collections
+
+A **collection** is a named set of requests and flows, written once and used
+from many scenarios. A `use` names one of them, passes it arguments, and may
+change what it sends and what it expects:
+
+```art
+# collections/auth.art
+collection "auth" {
+
+  request login(user, secret password, base = env("API_URL")) {
+    post "${base}/token" {
+      body = {"username": user, "password": password}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+}
+```
+
+```art
+# collections/orders.art
+import "auth.art"
+
+collection "orders" {
+
+  request create(sku, qty = 1, base = env("API_URL")) {
+    post "${base}/orders" {
+      header "Content-Type" = "application/json"
+      body = {"sku": sku, "qty": qty}
+    }
+    expect status == 201
+    capture order_id = body.data.id
+  }
+
+  flow checkout(user, secret password, base = env("API_URL")) {
+    use auth.login { user = user, password = password, base = base }
+    use create { sku = "A-1", qty = 2, base = base }
+    step "pay" {
+      post "${base}/orders/${order_id}/pay" {
+        header "Authorization" = "Bearer ${token}"
+      }
+      expect status == 200
+    }
+  }
+}
+```
+
+```art
+# checkout.art
+import "collections/orders.art"
+import "collections/auth.art"
+
+scenario "bad password is rejected" {
+  use auth.login as bad {
+    user = "alice"
+    password = "wrong"
+    drop expects
+    drop captures
+    expect status == 401
+  }
+}
+
+scenario "rush order" {
+  var url = env("API_URL")
+  use auth.login { user = "alice", password = env("PW") }
+
+  use orders.create as rush {
+    sku = "A-1"
+    header "X-Priority" = "high"
+    body.qty = 5
+    expect body.data.eta < 3600
+  }
+
+  step "check it" {
+    get "${url}/orders/${rush_order_id}" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}
+
+scenario "checkout" {
+  use orders.checkout as co { user = "alice", password = env("PW") }
+}
+```
+
+**A use is expanded, not called.** Before a file is checked, every `use` in it
+is replaced by the plain steps it stands for, with its arguments substituted and
+its overrides applied. What is checked, run, reported and exported by
+`artemis build` is a file made only of `scenario`, `var` and `step` -- the
+language the rest of this document specifies. There is no runtime function, no
+call stack, and no value shared between scenarios. Expansion works on the syntax
+tree, not on text: an argument is substituted as an expression, so `qty = limit
++ 1` means what it says, and every copied line keeps its place in the
+collection file, so an error in it points there.
+
+### A collection file
+
+| Form | What it is |
+| --- | --- |
+| `collection "<name>" { ... }` | A set of `request` and `flow` items. The name is how a `use` reaches it |
+| `request <name>(<params>) { ... }` | Exactly the body of a `step`: one action, then `expect`, `capture`, `retry` and `timeout` |
+| `flow <name>(<params>) { ... }` | `step`s and `use`s, run in the order they are written |
+| `<ident>` | A required parameter |
+| `<ident> = <expr>` | A parameter with a default. The default may name an earlier parameter, as a `var` may name an earlier `var` |
+| `secret <ident>` | A [secret parameter](#secret-parameters). Either form above may follow `secret` |
+
+A collection's name must be an identifier, because a `use` names it as one:
+`collection "my-orders"` is a compile error at the name, with the hint
+`my_orders`. Required parameters may follow defaulted ones, because arguments
+are always passed by name.
+
+A collection has no `var` of its own. Anything its items share is a parameter
+with a default, so every name a request reads is in its own signature.
+
+Inside a collection, a sibling item is named bare -- `use create` -- and an item
+of an imported collection is named qualified -- `use auth.login`. A bare name is
+legal only inside a collection.
+
+A parameter may not be named `header`, `query`, `body`, `drop`, `expect` or
+`in`. A [use line](#use-lines) is read by its first word, so such a parameter
+could never be passed. Declaring one is a compile error at the parameter:
+
+```
+orders.art:2:13: a parameter cannot be named body: a use block reads body as an override
+   2 |   request r(body, base) {
+     |             ^^^^
+   hint: rename it, for example body_value
+```
+
+### Importing
+
+| | |
+| --- | --- |
+| Form | `import "<path>"` |
+| Where | At the top of the file, before any `collection` or `scenario` |
+| Path | Relative to the importing file. Local files only: no URL, no package, no version |
+| Effect | Each collection in that file is in scope by its own name |
+| Not transitive | `orders.art` importing `auth.art` puts `auth` in scope in `orders.art`, not in a file that imports `orders.art` |
+
+Two collections in scope under one name are a compile error, and so is an
+import cycle, named as its chain: `a.art -> b.art -> a.art`.
+
+A file may hold `collection` blocks, `scenario` blocks, or both. Only scenarios
+run: `artemis run` on a file of only collections runs nothing and passes, so a
+folder run is not upset by a `collections/` folder inside it.
+
+### `use`
+
+```art
+use orders.create as rush {
+  sku = "A-1"
+  body.qty = 5
+}
+```
+
+| | |
+| --- | --- |
+| Form | `use <collection>.<item> [as <ident>] [{ <use line> ... }]` |
+| Where | In a scenario body, wherever a `step` may be, and in a flow body |
+| Effect | Replaced, in place, by the item's steps: a request is one step, a flow is its steps in order. They run where the `use` is written |
+
+A `use` inside a flow is expanded too, to any depth. A `use` that reaches itself
+is a compile error naming the chain.
+
+### Use lines
+
+A use line is read by its first word. A line that opens with `header`, `query`,
+`body`, `drop`, `expect` or `in` is an override; any other line is an argument.
+Lines apply in the order they are written, and a block may put several on one
+line, separated by commas.
+
+| Line | Target | Effect |
+| --- | --- | --- |
+| `<param> = <expr>` | any | Passes an argument. An unknown parameter, a parameter passed twice, and a required one not passed are compile errors at the `use` |
+| `header "<name>" = <expr>` | api step | Replaces the header of that name, compared case-insensitively, or adds one |
+| `query "<name>" = <expr>` | api step | Replaces the same key, or appends one |
+| `body = <expr>` | api step | Replaces the whole body |
+| `body.<path> = <expr>` | api step whose body is an object literal | Sets or adds that field. A template body that is not an object literal is a compile error: override it whole with `body = ...` |
+| `drop expects` | any step | Removes every `expect` the template wrote. It must come before the `use`'s own `expect` lines |
+| `drop captures` | any step | Removes every `capture` the template wrote. It may come anywhere in the block |
+| `expect <expr> [within <dur>]` | any step | Added after the template's remaining expects |
+| `in "<step>" { <use line> ... }` | flow | Applies the override lines inside it -- not arguments, not `in` -- to that step of the flow. An unknown step name is a compile error |
+
+An override that does not fit its target is a compile error: `header` on a
+terminal step, any override on a flow without `in` -- a flow has several steps
+and the line has to say which -- and `in` on a request.
+
+A negative test drops both. `auth.login` captures a token, and a 401 has none:
+a capture the response cannot supply is an [errored assertion](#capture), so
+the bad-password test above writes `drop captures` beside `drop expects`. A
+capture dropped from one step of a flow is gone for the steps after it too. A
+later step of the flow that reads it is the compile error `dropped-capture`, at
+the read: the read never binds to a scenario `var` or capture that happens to
+share the name.
+
+### `as`
+
+`as <ident>` names one use of an item:
+
+- A request's step is named `<ident>`. A flow's steps are named
+  `<ident> / <step>`.
+- Every capture the expansion makes, nested flows included, is prefixed with
+  `<ident>_`, and every read of it inside the expansion is rewritten to match.
+  `use orders.create as rush` captures `rush_order_id`, and the steps after it
+  read that name.
+
+A capture may not reuse a name already bound (see
+[What is in scope](#what-is-in-scope)), and that holds after expansion: two
+uses of a request that captures, without `as`, are the compile error
+`duplicate-binding`, with the hint `use ... as <name> to keep both`.
+
+### Step names
+
+The expanded step's name is what every report shows:
+
+| Use | Expanded step name |
+| --- | --- |
+| `use orders.create` | `orders.create` |
+| `use orders.create as rush` | `rush` |
+| `use orders.checkout`, its step `pay` | `orders.checkout / pay` |
+| `use orders.checkout`, its nested `use auth.login` | `orders.checkout / auth.login` |
+| `use orders.checkout`, its sibling `use create` | `orders.checkout / orders.create`: a sibling is named with its collection, as it would be from outside |
+| `use orders.checkout as co` | `co / pay`, `co / auth.login` |
+
+Two steps may share a name, as they may anywhere else.
+
+### Checking a collection
+
+Every collection is checked on its own, once, before any `use` of it expands.
+An error in it is reported once, against the collection file, and not again per
+use. A collection with an error is never expanded: its uses report nothing more.
+
+A template may read **only** its parameters, its own step's observation, and the
+captures of earlier steps and earlier `use`s in the same flow. Any other name --
+one a scenario would have to supply -- is a compile error, in the collection.
+That is the price of a collection that checks on its own and means the same
+thing from every scenario that uses it: everything it needs from outside is a
+parameter.
+
+A template may not `capture` a name a step observes -- `status`, `body`, `raw`,
+`headers`, `exit_code`, `stdout`, `stderr`, `page` -- because [`as`](#as)
+renames a use's captures and every read of them, and a later step's `body` would
+be ambiguous. It is the compile error `root-capture`, at the capture's name.
+
+Errors that depend on the use site -- arguments, overrides, a capture clash --
+are reported at the line in the collection they concern, followed by the use
+lines that brought it in, innermost first. Two uses of `auth.login` without
+`as`, on lines 4 and 5 of `twice.art`, bind its hoisted secret var and its
+capture twice:
+
+```
+collections/auth.art:4:30: "login_password" is already bound
+   4 |   request login(user, secret password, base = env("API_URL")) {
+     |                              ^^^^^^^^
+   hint: the use at twice.art:4 binds it first
+         use ... as <name> to keep both
+   used from twice.art:5:3: use auth.login { user = "b", password = "y" }
+
+collections/auth.art:9:20: "token" is already bound
+   9 |     secret capture token = body.data.access_token
+     |                    ^^^^^
+   hint: the use at twice.art:4 binds it first
+         use ... as <name> to keep both
+   used from twice.art:5:3: use auth.login { user = "b", password = "y" }
+```
+
+When a use brought the first binding in, the hint names that use's line in the
+scenario; a `var` declared below the second binding "also binds it".
+
+`artemis parse --json` carries the same chain as `usedFrom`: a list of spans,
+innermost first, absent when the diagnostic was written where it is reported.
+
+### Secret parameters
+
+A [`secret`](#secret) binding is secret by name, so a `secret` parameter's
+argument is hoisted into a `secret var` of the scenario and the template reads
+that var:
+
+| | |
+| --- | --- |
+| Name | Every enclosing `as` name, then the `as` name or the item name, then the parameter, joined by `_`: `login_password`, `bad_password`, `co_login_password` |
+| Place | Immediately before the expanded steps of the top-level `use` that introduced it, in use order |
+
+A hoisted var is a `var` like any other, so its name is bound once: two uses of
+one item with a secret argument, without `as`, hoist the same name and are
+`duplicate-binding`, as is a scenario `var` of that name. `as` gives each use its
+own var.
+
+A `var` cannot read a capture, so an argument that reads a capture is not
+hoisted: it is substituted as written, and it has to be secret already -- a
+secret capture, or a value built from one. An argument that reads a plain
+capture is a compile error:
+
+```
+checkout.art:8:43: password is secret in auth.login, so its argument must be secret too
+   8 |   use auth.login { user = "a", password = tok }
+     |                                           ^^^
+   hint: make tok a secret capture
+```
+
+A `secret capture` in a template stays secret after expansion.
+
+### `artemis expand`
+
+`artemis expand checkout.art` prints the file that will run: every import,
+collection and `use` gone, every step a use brought in preceded by a comment
+naming the item, where it is declared, and the scenario's `use` line that
+brought it in. For `checkout.art` above, the second scenario:
+
+```art
+scenario "rush order" {
+  var url = env("API_URL")
+  secret var login_password = env("PW")
+
+  # from auth.login (collections/auth.art:4) via checkout.art:17
+  step "auth.login" {
+    post "${env("API_URL")}/token" { body = {"username": "alice", "password": login_password} }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  # from orders.create (collections/orders.art:6) via checkout.art:19
+  step "rush" {
+    post "${env("API_URL")}/orders" {
+      header "Content-Type" = "application/json"
+      body = {"sku": "A-1", "qty": 5}
+      header "X-Priority" = "high"
+    }
+    expect status == 201
+    capture rush_order_id = body.data.id
+    expect body.data.eta < 3600
+  }
+
+  step "check it" {
+    get "${url}/orders/${rush_order_id}" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+  }
+}
+```
+
+The file is checked first, exactly as `artemis run` checks it, and a file with
+errors prints nothing. `-o <out.art>` writes the result to a file instead, and
+refuses to replace one that is there unless `--force` is given.
+
+A failure in an expanded step names the file its line was written in -- the
+collection's, not the scenario's -- on the console, in the reports, in
+`--events` and in `--trace`. The JSON report's step and assertion entries carry
+that file as `file`; see [The JSON report](#the-json-report).
+
+---
+
 ## What is in scope
 
 An expression can name three things: the step's own observation, the scenario's
@@ -666,8 +1022,17 @@ scope in every step, by name. Naming a capture from a later step, or from this
 step, is a compile error -- the value does not exist yet.
 
 A name that is in scope twice is not possible: a `capture` may not reuse the name
-of a `var` or of an earlier capture, because silently shadowing a value is how a
-scenario comes to assert against the wrong one.
+of a `var` or of an earlier capture, and a `var` may not reuse the name of an
+earlier `var`, because silently shadowing a value is how a scenario comes to
+assert against the wrong one. It is the compile error
+`duplicate-binding`, and it holds after [expansion](#collections): two uses of a
+request that captures need an [`as`](#as) to keep both.
+
+This rule was always here and is newly enforced: a file that reused a name used
+to run with the last value winning, and is now refused at compile time. The fix
+is to rename the second binding -- `capture token_2 = ...` -- and read that name
+after it. `artemis migrate` does this for a YAML scenario that captures a name
+twice, and says so in the file's header.
 
 ---
 
@@ -1066,23 +1431,34 @@ duration that will not parse is a compile error.
 ## Reserved keywords
 
 These are reserved and cannot be used as a name. Using one is a parse error
-saying what it is reserved for:
+saying what it is reserved for, or, for the three the language now uses, what it
+does:
 
 ```
 if  else  for  in  while  parallel  group  fn  return  import  use  let
 setup  teardown  ai
 ```
 
+| Word | Purpose |
+| --- | --- |
+| `import` | Imports a collection file: `import "collections/auth.art"` |
+| `use` | Expands a collection's request or flow in place: `use auth.login { ... }` |
+| `in` | Targets one step of a flow in a use block, and is held for a future loop form |
+
 `ai` is reserved for a possible future agentic assertion. It is **not
 implemented** and will not parse. A CI gate's most valuable property is
 determinism, and an assertion that flakes for unreproducible reasons is worse
 than a missing one.
 
-The keywords the language actually uses are reserved too: `scenario`, `config`,
-`var`, `step`, `run`, `browser`, `expect`, `capture`, `retry`, `timeout`,
-`within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`, `env`, `times`,
-`delay`, the seven HTTP verbs, the operators `and`, `or`, `not`, `contains`,
-`matches`, `exists`, `is`, and the literals `true`, `false`, `null`.
+The keywords the language actually uses are positional, not reserved:
+`scenario`, `config`, `var`, `step`, `run`, `browser`, `expect`, `capture`,
+`retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
+`env`, `times`, `delay`, `collection`, `request`, `flow`, `secret`, `as`,
+`drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
+the operators `and`, `or`, `not`, `contains`, `matches`, `exists`, `is`. Each
+means the keyword only where the grammar expects it, so `var flow = 1` and
+`capture body = ...` are legal. The literals `true`, `false` and `null` are the
+exception: they are never a name.
 
 ---
 
@@ -1093,8 +1469,23 @@ The complete grammar, carried over from the approved design
 grammar is how two grammars come to disagree.
 
 ```ebnf
-File        = { Scenario } ;
-Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl } "}" ;
+File        = { Import } { Collection | Scenario } ;
+Import      = "import" String ;
+Collection  = "collection" String "{" { RequestDecl | FlowDecl } "}" ;
+RequestDecl = "request" Ident Params "{" Action { StepStmt } "}" ;
+FlowDecl    = "flow" Ident Params "{" { StepDecl | UseDecl } "}" ;
+Params      = "(" [ Param { "," Param } ] ")" ;
+Param       = [ "secret" ] Ident [ "=" Expr ] ;
+
+Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
+UseDecl     = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
+ItemRef     = Ident [ "." Ident ] ;
+UseLine     = Ident "=" Expr
+            | ReqField
+            | "body" "." Ident { "." Ident } "=" Expr
+            | "drop" ( "expects" | "captures" )
+            | Expect
+            | "in" String "{" { UseLine } "}" ;
 ConfigDecl  = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
 Setting     = Ident "=" Expr ;
 VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
@@ -1147,6 +1538,9 @@ Array       = "[" [ Expr { "," Expr } ] "]" ;
 Comments are `#` to end of line. Trailing commas are permitted in objects and
 arrays. Statements separate by newline; no semicolons.
 
+A bare `ItemRef`, with no dot, is legal only inside a collection, where it names
+a sibling item. Use lines separate like statements: by a newline or a comma.
+
 `BrowserAct`'s semantics -- which actions take a value, what `wait` waits for,
 what a selector means -- are specified with [`browser` steps](#browser-steps)
 and not here, because a grammar says the shape and not the meaning.
@@ -1160,7 +1554,7 @@ and in what it decides to retry:
 
 | | What it is | Examples |
 | --- | --- | --- |
-| **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse |
+| **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse, an import that does not resolve, a `use` whose arguments or overrides do not fit |
 | **Environment error** | The run cannot start: a variable an `env()` call needs has no value. Nothing executes | an absent `API_URL`, an `API_URL=` with no value |
 | **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
 | **Assertion failure** | The step ran and gave the wrong answer | `status == 200` against a 404 |
@@ -1326,11 +1720,11 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
 | `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
-| `file` | scenario, failure | The path the scenario was read from |
+| `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |
 | `error` | scenario, step, assertion, failure | Why it could not run, or `""`. A scenario's error is a file that would not compile, and such a scenario has no steps |
 | `steps` | scenario | One entry per step the scenario reached |
 | `attempts` | step | How many times the step was tried; `1` unless `retry` asked for more |
-| `line` | step, assertion, failure | The 1-based line of the scenario file it was written on, and `0` when artemis does not know |
+| `line` | step, assertion, failure | The 1-based line it was written on -- in the scenario file, or in the file `file` names -- and `0` when artemis does not know |
 | `assertions` | step | One entry per `expect` the step evaluated, plus one per capture that failed, in the order they were made |
 | `kind` | assertion, failure | What made the assertion: `expect` for every `expect`, whatever its expression does, and `capture` for a capture that could not be read. There is no per-operator kind and no per-step-type one |
 | `path` | assertion, failure | The source text of what was inspected: `body.data.count`. For an expression with no single subject -- an `or` chain, a bare call -- the whole expression; for a capture, the name it captures under |
@@ -1342,8 +1736,11 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `screenshot` | step, failure | The path to a picture of the page, for a [browser step that did not pass](#when-a-browser-step-fails), and `""` for every other step. The path is as the run was given it -- relative to the working directory unless `--screenshots` named an absolute one -- so a CI job uploading it uses the string verbatim. Repeated on the failure entry so the entry stands alone |
 
 Every key is always present, with its zero value rather than omitted, so a `jq`
-expression never has to tell absent from empty. `expected` and `actual` are the
-exception: they are `null`, because either may legitimately be any JSON type.
+expression never has to tell absent from empty. `expected` and `actual` are one
+exception: they are `null`, because either may legitimately be any JSON type. A
+step's and an assertion's `file` is the other: it is absent unless the line is in
+another file than the scenario's. The `--events` stream's step results carry it
+the same way.
 Every list is a list, empty rather than `null`.
 
 **Spec decision.** `kind`, `path` and `operator` are what they are above because
@@ -1373,7 +1770,7 @@ file. Its `time` attribute is in **seconds**, not the milliseconds of
 
 ## The toolchain
 
-Four commands read the language without running any of it, and they read it
+Five commands read the language without running any of it, and they read it
 through the same front end `artemis run` does -- the same lexer, the same
 parser, the same checker -- so none of them can disagree with this document
 about what a file means. The [README](README.md#commands) specifies their flags
@@ -1384,6 +1781,7 @@ and their output.
 | `artemis parse -f x.art` | Every diagnostic the file produces, and a non-zero exit if any is an error. `--json` writes them as one document instead, for an editor or a UI |
 | `artemis fmt [-w] x.art` | The file in canonical layout. Layout only: no string requoted, no expression reassociated, no comment dropped |
 | `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
+| `artemis expand x.art [-o out.art] [--force]` | The file that will run: every `use` replaced by its steps, each preceded by a comment naming where it came from. See [`artemis expand`](#artemis-expand) |
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
 | `artemis build --lang=python\|js [-o dir]` | The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`; js is vitest with `fetch`, `child_process` and `@playwright/test`. The lowering rules are the same for both: one scenario becomes one test, a `capture` a local variable, an `expect` the runner's own assertion, a `within` on a browser assertion playwright's own timeout. Playwright on both sides and under `artemis run` means a browser scenario behaves the same way three ways. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `go` target is reserved and will not be built |
 
@@ -1398,11 +1796,17 @@ printer, so what they produce is already canonical.
 
 Everything here is deliberate. A scenario that uses one of these does not run.
 
+Reuse of requests and steps is [collections](#collections), which expand into
+plain steps before anything runs; there is still no runtime function or module
+concept. Copying the same login into every file was the reuse a scenario author
+needed most, it needs no real abstraction, and expansion delivers it without
+adding one: after expansion the language is unchanged.
+
 | | |
 | --- | --- |
 | **`db` steps** | Designed, specified with the database step type |
 | **Control flow** | `if`, `else`, loops, data-driven tables, `parallel`, `group`. Reserved words, not features |
-| **Functions, imports, fixtures** | `fn`, `return`, `import`, `use`, `let`, `setup`, `teardown`. Reserved words. Reuse is what the host language is for, and `artemis build --lang=...` is the answer to "I need real abstraction" |
+| **Functions, fixtures** | `fn`, `return`, `let`, `setup`, `teardown`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction" |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |

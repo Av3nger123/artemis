@@ -4,6 +4,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/front"
 	"fmt"
 	"io"
@@ -20,18 +21,31 @@ const artExt = front.Ext
 
 func isArtFile(path string) bool { return front.IsArtFile(path) }
 
-// frontEnd is front.Compile under the name every command in this package
-// already calls. The composition itself -- and the reasoning for merging the
-// bags rather than short-circuiting -- moved to pkg/dsl/front, so that the MCP
-// server can run the same front end over a source string rather than growing a
-// second one.
+// frontEnd is the whole front end -- parse, expand, check -- with imports read
+// from disk, relative to the importing file. The composition itself lives in
+// pkg/dsl/front, so that the MCP server runs the same front end over a source
+// string rather than growing a second one.
+//
+// The Unit carries both trees: Tree is the file as written, which is what
+// `artemis fmt` and `artemis ast` print, and Expanded is what runs, which is
+// what `artemis run` and `artemis build` read. Info is about Expanded.
 //
 // pkg/dsl/corpus_test.go keeps its own copy, deliberately. That one tests the
 // front end rather than the CLI, and the two agreeing is what makes the corpus
 // goldens a prediction of what these commands print -- a property that dies the
 // moment both call the same function.
-func frontEnd(file, src string) (*ast.File, *check.Info, *diag.Bag) {
-	return front.Compile(file, src)
+func frontEnd(file, src string) *front.Unit {
+	return front.CompileWith(file, src, expand.DirLoader())
+}
+
+// sourceFiles is every file the unit read, for rendering a diagnostic that
+// points into an imported collection as well as one in the file itself.
+func sourceFiles(u *front.Unit) *diag.Files {
+	files := diag.NewFiles()
+	for name, src := range u.Sources {
+		files.Add(name, src)
+	}
+	return files
 }
 
 // artFile is one file after the front end has run over it: the source, the
@@ -43,12 +57,14 @@ func frontEnd(file, src string) (*ast.File, *check.Info, *diag.Bag) {
 // A UI and a terminal reading different diagnostics about the same file would
 // be the worst possible failure of this contract.
 type artFile struct {
-	path  string
-	src   string
-	tree  *ast.File
-	info  *check.Info
-	diags []diag.Diagnostic
-	fatal bool // the bag holds an error, so the file does not compile
+	path     string
+	src      string
+	unit     *front.Unit
+	tree     *ast.File // the file as written
+	expanded *ast.File // every use replaced by its steps; what info is about
+	info     *check.Info
+	diags    []diag.Diagnostic
+	fatal    bool // the bag holds an error, so the file does not compile
 }
 
 // readArt reads path and runs the front end over it, rendering nothing.
@@ -60,14 +76,16 @@ func readArt(path string) (*artFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree, info, bag := frontEnd(path, string(src))
+	u := frontEnd(path, string(src))
 	return &artFile{
-		path:  path,
-		src:   string(src),
-		tree:  tree,
-		info:  info,
-		diags: bag.All(),
-		fatal: bag.HasErrors(),
+		path:     path,
+		src:      string(src),
+		unit:     u,
+		tree:     u.Tree,
+		expanded: u.Expanded,
+		info:     u.Info,
+		diags:    u.Bag.All(),
+		fatal:    u.Bag.HasErrors(),
 	}, nil
 }
 
@@ -89,9 +107,7 @@ func (f *artFile) render(w io.Writer) error {
 	if len(f.diags) == 0 {
 		return nil
 	}
-	files := diag.NewFiles()
-	files.Add(f.path, f.src)
-	return diag.Terminal(w, files, f.diags)
+	return diag.Terminal(w, sourceFiles(f.unit), f.diags)
 }
 
 // loadArt is readArt plus render: the path every command but `artemis parse
@@ -110,6 +126,20 @@ func loadArt(cmd *cobra.Command, path string) (*ast.File, *check.Info, error) {
 		return f.tree, f.info, err
 	}
 	return f.tree, f.info, f.err()
+}
+
+// loadArtExpanded is loadArt for a caller that runs or exports the file: the
+// tree it answers is the expanded one, with no import and no use left in it,
+// and the Info is about that tree.
+func loadArtExpanded(cmd *cobra.Command, path string) (*ast.File, *check.Info, error) {
+	f, err := readArt(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := f.render(cmd.ErrOrStderr()); err != nil {
+		return f.expanded, f.info, err
+	}
+	return f.expanded, f.info, f.err()
 }
 
 // errorsIn is the one-line reason attached to a non-zero exit. The diagnostics

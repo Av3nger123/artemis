@@ -370,3 +370,68 @@ func TestSourceCommentsAreAlwaysComments(t *testing.T) {
 		t.Errorf("Source =\n%s\nwant it to open with a commented line", src)
 	}
 }
+
+// A YAML scenario may capture a name twice -- a login and a refresh that both
+// keep token -- and a .art file may not bind it twice. The second capture is
+// written token_2, every later read follows it, and the file says so.
+func TestSourceRenamesARecapturedName(t *testing.T) {
+	login := apiStepFor("login")
+	login.Request = Request{URL: "{{base}}/token", Method: "POST"}
+	login.Capture = map[string]Capture{"token": {JSON: "$.token"}}
+	refresh := apiStepFor("refresh")
+	refresh.Request = Request{URL: "{{base}}/refresh", Method: "POST", Headers: map[string]string{"Authorization": "Bearer {{token}}"}}
+	refresh.Capture = map[string]Capture{"token": {JSON: "$.token"}, "base": {JSON: "$.base"}}
+	again := apiStepFor("again")
+	again.Request = Request{URL: "{{base}}/refresh", Method: "POST", Headers: map[string]string{"Authorization": "Bearer {{token}}"}}
+	again.Capture = map[string]Capture{"token": {JSON: "$.token"}, "token_2": {JSON: "$.other"}}
+	me := apiStepFor("me")
+	me.Request = Request{URL: "{{base}}/me", Headers: map[string]string{"Authorization": "Bearer {{token}} {{token_2}}"}}
+
+	src, err := Source(Config{
+		Name:      "poll",
+		Variables: []Variable{{Name: "base", Value: "http://h"}},
+		Steps:     []Step{login, refresh, again, me},
+	}, Comments{File: "# poll a token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `# poll a token
+# The capture "base" of step 2 "refresh" is written base_2 here, because a name is bound once and base already is.
+# The capture "token" of step 2 "refresh" is written token_3 here, because a name is bound once and token already is.
+# The capture "token" of step 3 "again" is written token_4 here, because a name is bound once and token already is.
+scenario "poll" {
+  var base = "http://h"
+
+  step "login" {
+    post "${base}/token"
+    expect status == 200
+    capture token = body.token
+  }
+
+  step "refresh" {
+    post "${base}/refresh" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+    capture base_2 = body.base
+    capture token_3 = body.token
+  }
+
+  step "again" {
+    post "${base_2}/refresh" { header "Authorization" = "Bearer ${token_3}" }
+    expect status == 200
+    capture token_4 = body.token
+    capture token_2 = body.other
+  }
+
+  step "me" {
+    get "${base_2}/me" { header "Authorization" = "Bearer ${token_4} ${token_2}" }
+    expect status == 200
+  }
+}
+`
+	if src != want {
+		t.Errorf("Source =\n%s\nwant\n%s", src, want)
+	}
+	if diags := checks(t, src); len(diags) != 0 {
+		t.Errorf("the migrated file does not check: %v", diags)
+	}
+}

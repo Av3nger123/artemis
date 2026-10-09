@@ -236,6 +236,66 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.Assign)
 		p.node(v.Value, c)
 		p.tok(v.Comma)
+	case *ast.Import:
+		p.tok(v.Keyword)
+		p.tok(v.Path)
+	case *ast.Collection:
+		p.tok(v.Keyword)
+		p.tok(v.Name)
+		p.tok(v.LBrace)
+		p.list(decls(v.Items), c)
+		p.tok(v.RBrace)
+	case *ast.Params:
+		p.tok(v.LParen)
+		for _, x := range v.List {
+			p.node(x, c)
+		}
+		p.tok(v.RParen)
+	case *ast.Param:
+		p.tok(v.Secret)
+		p.tok(v.Name)
+		p.tok(v.Assign)
+		p.node(v.Default, c)
+		p.tok(v.Comma)
+	case *ast.RequestDecl:
+		p.tok(v.Keyword)
+		p.tok(v.Name)
+		p.node(v.Params, c)
+		p.tok(v.LBrace)
+		p.list(stepItems(&ast.StepDecl{Action: v.Action, Body: v.Body}), c)
+		p.tok(v.RBrace)
+	case *ast.FlowDecl:
+		p.tok(v.Keyword)
+		p.tok(v.Name)
+		p.node(v.Params, c)
+		p.tok(v.LBrace)
+		p.list(decls(v.Body), c)
+		p.tok(v.RBrace)
+	case *ast.UseDecl:
+		p.tok(v.Keyword)
+		p.tok(v.Collection)
+		p.tok(v.Dot)
+		p.tok(v.Item)
+		p.tok(v.As)
+		p.tok(v.Alias)
+		p.tok(v.LBrace)
+		p.list(stmts(v.Lines), c)
+		p.tok(v.RBrace)
+	case *ast.BodySet:
+		p.tok(v.Body)
+		for _, pp := range v.Path {
+			p.tok(pp.Dot)
+			p.tok(pp.Name)
+		}
+		p.tok(v.Assign)
+		p.node(v.Value, c)
+		p.tok(v.Comma)
+	case *ast.In:
+		p.tok(v.Keyword)
+		p.tok(v.Step)
+		p.tok(v.LBrace)
+		p.list(stmts(v.Lines), c)
+		p.tok(v.RBrace)
 	case *ast.Interp:
 		for _, s := range v.Segments {
 			p.tok(s.Delim)
@@ -307,7 +367,9 @@ func lineOriented(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl,
 		*ast.Request, *ast.Run, *ast.Browser, *ast.BrowserAct,
-		*ast.Field, *ast.Expect, *ast.Capture:
+		*ast.Field, *ast.Expect, *ast.Capture,
+		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.FlowDecl, *ast.UseDecl,
+		*ast.BodySet, *ast.Drop, *ast.In:
 		return true
 	}
 	return false

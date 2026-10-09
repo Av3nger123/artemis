@@ -580,7 +580,8 @@ func TestGoldenArtFixturesAreCanonical(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		tree, _, bag := frontEnd(path, string(src))
+		u := frontEnd(path, string(src))
+		tree, bag := u.Tree, u.Bag
 		if bag.HasErrors() {
 			return nil
 		}

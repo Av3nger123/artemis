@@ -457,3 +457,36 @@ func TestJSONRedactsASecretOperand(t *testing.T) {
 		t.Errorf("found %d placeholders, want the assertion entry and the failure entry:\n%s", n, out)
 	}
 }
+
+// A step and an assertion a use brought in from a collection carry a file key;
+// one written in the scenario carries none, so a run that never meets a
+// collection writes the document it always did.
+func TestWriteJSONNamesAFileOnlyWhenItIsNotTheScenarios(t *testing.T) {
+	from := &result.StepResult{Name: "auth.login", Line: 2, File: "auth.art"}
+	from.Assert(result.Assertion{Kind: "expect", Line: 6, File: "auth.art"}.Fail())
+	from.Finish(time.Millisecond)
+	own := &result.StepResult{Name: "orders", Line: 9}
+	own.Assert(result.Assertion{Kind: "expect", Line: 10}.Pass())
+	own.Finish(time.Millisecond)
+	sc := &result.ScenarioResult{Name: "checkout", File: "checkout.art", Steps: []*result.StepResult{from, own}}
+	sc.Finish(time.Millisecond)
+	run := result.NewRun()
+	run.Scenarios = []*result.ScenarioResult{sc}
+	run.Finish()
+
+	doc := decode(t, writeJSON(t, run))
+	steps := doc["scenarios"].([]any)[0].(map[string]any)["steps"].([]any)
+	first, second := steps[0].(map[string]any), steps[1].(map[string]any)
+	if first["file"] != "auth.art" || first["assertions"].([]any)[0].(map[string]any)["file"] != "auth.art" {
+		t.Errorf("the used step = %v", first)
+	}
+	if _, has := second["file"]; has {
+		t.Errorf("a step written in the scenario has a file key: %v", second)
+	}
+	if _, has := second["assertions"].([]any)[0].(map[string]any)["file"]; has {
+		t.Errorf("an assertion written in the scenario has a file key: %v", second)
+	}
+	if f := doc["failures"].([]any)[0].(map[string]any); f["file"] != "auth.art" || f["line"] != float64(6) {
+		t.Errorf("failure = %v", f)
+	}
+}

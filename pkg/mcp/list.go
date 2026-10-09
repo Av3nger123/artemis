@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/front"
+	"artemis/pkg/dsl/parser"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -21,7 +24,8 @@ func addList(s *mcp.Server, srv *server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "artemis_list",
 		Description: "List the .art scenario files in the workspace, in path order, " +
-			"as workspace-relative paths. Call this first to find out what " +
+			"as workspace-relative paths, and under `collections` the " +
+			"`collection.item` names each file declares (for a `use`). Call this first to find out what " +
 			"scenarios exist before reading or changing one.",
 		Annotations:  readOnly(),
 		OutputSchema: objectSchema(),
@@ -42,6 +46,7 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 	}
 
 	files := []string{}
+	collections := map[string][]string{}
 	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -65,15 +70,57 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 			return relErr
 		}
 		files = append(files, rel)
+		if items := srv.collectionItems(rel); len(items) > 0 {
+			collections[rel] = items
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("walking %s: %w", in.Dir, err)
 	}
 
-	doc, err := json.Marshal(map[string]any{"workspace": srv.ws.root, "files": files})
+	out := map[string]any{"workspace": srv.ws.root, "files": files}
+	if len(collections) > 0 {
+		out["collections"] = collections
+	}
+	doc, err := json.Marshal(out)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encoding the result: %w", err)
 	}
 	return document(doc), doc, nil
+}
+
+// collectionItems is every `collection.item` the file at abs declares, in
+// source order. The file is parsed and not expanded: what a file declares is
+// read off what it says, and a file that does not compile still lists what
+// did parse. A file that cannot be read lists nothing; artemis_validate is
+// where its problems are reported.
+func (srv *server) collectionItems(rel string) []string {
+	// Through resolveArt, not the walked path: a symlink to a file outside the
+	// workspace is listed as a file but never read.
+	abs, err := srv.ws.resolveArt(rel)
+	if err != nil {
+		return nil
+	}
+	b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
+	if err != nil {
+		return nil
+	}
+	tree, _ := parser.Parse(rel, string(b))
+	var out []string
+	for _, d := range tree.Scenarios {
+		c, ok := d.(*ast.Collection)
+		if !ok {
+			continue
+		}
+		for _, it := range c.Items {
+			switch it := it.(type) {
+			case *ast.RequestDecl:
+				out = append(out, c.Name.Value+"."+it.Name.Text)
+			case *ast.FlowDecl:
+				out = append(out, c.Name.Value+"."+it.Name.Text)
+			}
+		}
+	}
+	return out
 }

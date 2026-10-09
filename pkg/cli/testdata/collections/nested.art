@@ -1,0 +1,7 @@
+import "session.art"
+
+scenario "nested" {
+  var url = env("API_URL")
+
+  use session.start { base = url }
+}

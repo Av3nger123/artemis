@@ -78,7 +78,9 @@ func buildFile(cmd *cobra.Command, path, lang, out string) error {
 		return err
 	}
 
-	tree, _, err := loadArt(cmd, path)
+	// The expanded tree: generated code is flat, a step per step that runs,
+	// with no import or use for a target to have to understand.
+	tree, _, err := loadArtExpanded(cmd, path)
 	if err != nil {
 		return err
 	}

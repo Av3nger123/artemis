@@ -38,9 +38,10 @@ var (
 	// the operator dropdown a form needs for a simple assertion.
 	Comparisons = []string{"==", "!=", "<", "<=", ">", ">=", "contains", "matches"}
 
-	// Blocks are the declarations a scenario body holds, plus `scenario`
-	// itself.
-	Blocks = []string{"scenario", "config", "var", "step"}
+	// Blocks are the top-level declarations of a file -- `import`,
+	// `collection` and `scenario` -- and the declarations a scenario body
+	// holds, `use` among them.
+	Blocks = []string{"import", "collection", "scenario", "config", "var", "step", "use"}
 
 	// StepStatements are the statements legal in a step after its action.
 	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}
@@ -59,6 +60,18 @@ var (
 	// than in the checker so that every field set of the grammar is in one
 	// place and `artemis grammar --json` has nowhere else to look.
 	StepFields = []string{"timeout", "retry"}
+
+	// CollectionItems are what a collection body holds.
+	CollectionItems = []string{"request", "flow"}
+
+	// UseLines are the words that open an override line in a use block. Any
+	// other identifier opening a line there is an argument, which is why a
+	// parameter may not be named one of these.
+	UseLines = []string{"header", "query", "body", "drop", "expect", "in"}
+
+	// DropTargets are what a use's `drop` line can remove from the template:
+	// `drop expects` its expects, `drop captures` its captures.
+	DropTargets = []string{"expects", "captures"}
 
 	// ConfigBlocks are the subjects of a `config` declaration. Only `browser`
 	// has settings today.
@@ -93,6 +106,8 @@ var (
 	wordOperators  = set(WordOperators)
 	builtins       = set(Builtins)
 	reserved       = set(Reserved)
+	useLines       = set(UseLines)
+	dropTargets    = set(DropTargets)
 
 	// comparisonKinds and comparisonWords are Comparisons split by how a token
 	// spells each entry: the six symbols arrive with a Kind of their own, the
@@ -138,6 +153,12 @@ func IsTypeName(word string) bool { return typeNames[word] }
 
 // IsWordOperator reports whether word is an operator spelled as a word.
 func IsWordOperator(word string) bool { return wordOperators[word] }
+
+// IsUseLine reports whether word opens an override line in a use block.
+func IsUseLine(word string) bool { return useLines[word] }
+
+// IsDropTarget reports whether word may follow `drop` in a use block.
+func IsDropTarget(word string) bool { return dropTargets[word] }
 
 // IsBuiltin reports whether word names a callable builtin.
 func IsBuiltin(word string) bool { return builtins[word] }

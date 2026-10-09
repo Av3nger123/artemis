@@ -53,4 +53,8 @@ type Act struct {
 	// whose action is many statements and "the step failed" would not say
 	// which.
 	Line int
+
+	// File is the file Line is in, when that is not the scenario's own -- an
+	// action a use brought in from a collection -- and empty otherwise.
+	File string
 }

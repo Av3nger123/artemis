@@ -29,13 +29,14 @@ type jsonSuggestion struct {
 }
 
 // jsonDiagnostic is one diagnostic. Key order is the struct's order, which is
-// the order the design documents, and hint and suggestions are absent rather
-// than null when there are none -- a client testing truthiness and a client
+// the order the design documents, and usedFrom, hint and suggestions are absent
+// rather than null when there are none -- a client testing truthiness and a client
 // testing presence then agree.
 type jsonDiagnostic struct {
 	Code        Code             `json:"code"`
 	Severity    string           `json:"severity"`
 	Span        jsonSpan         `json:"span"`
+	UsedFrom    []jsonSpan       `json:"usedFrom,omitempty"`
 	Message     string           `json:"message"`
 	Hint        string           `json:"hint,omitempty"`
 	Suggestions []jsonSuggestion `json:"suggestions,omitempty"`
@@ -73,6 +74,7 @@ func JSON(w io.Writer, diags []Diagnostic) error {
 			Code:        d.Code,
 			Severity:    d.Severity.String(),
 			Span:        toJSONSpan(d.Span),
+			UsedFrom:    toJSONSpans(d.UsedFrom),
 			Message:     d.Message,
 			Hint:        d.Hint,
 			Suggestions: toJSONSuggestions(d.Suggestions),
@@ -105,6 +107,19 @@ func toJSONSpan(s token.Span) jsonSpan {
 		EndCol:  s.EndCol,
 		Offset:  s.Offset,
 	}
+}
+
+// toJSONSpans is a use chain on the wire: nil when empty, so the key is
+// absent for source written in place.
+func toJSONSpans(ss []token.Span) []jsonSpan {
+	if len(ss) == 0 {
+		return nil
+	}
+	out := make([]jsonSpan, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, toJSONSpan(s))
+	}
+	return out
 }
 
 func toJSONSuggestions(ss []Suggestion) []jsonSuggestion {

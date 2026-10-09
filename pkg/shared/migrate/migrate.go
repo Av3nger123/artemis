@@ -73,8 +73,10 @@ var StepTypes = []string{apiStep, execStep}
 // the step it was in. A file that errors is not partially written: the caller
 // gets no source at all.
 func Source(config Config, comments Comments) (string, error) {
+	rb := rebind(config)
 	w := &writer{}
 	w.comment(comments.File)
+	w.comment(rb.note())
 	w.line("scenario " + quote(config.Name) + " {")
 	w.indent++
 
@@ -87,7 +89,7 @@ func Source(config Config, comments Comments) (string, error) {
 	}
 
 	for i := range config.Steps {
-		if err := step(w, config.Steps[i], i, comments.stepComment(i)); err != nil {
+		if err := step(w, config.Steps[i], i, comments.stepComment(i), rb.captures[i]); err != nil {
 			return "", err
 		}
 	}
@@ -95,7 +97,7 @@ func Source(config Config, comments Comments) (string, error) {
 	w.indent--
 	w.line("}")
 
-	return canonical(w.String())
+	return canonical(w.String(), rb.reads)
 }
 
 // canonical parses the emitted source and prints it canonically.
@@ -108,12 +110,16 @@ func Source(config Config, comments Comments) (string, error) {
 // clean and fail the checker, which is the design moving two run-time failures
 // to compile time, and refusing to write them would hide the very thing
 // migration is meant to surface.
-func canonical(src string) (string, error) {
+//
+// reads is rebind's: for each step, the names its reads are written under
+// now that an earlier capture was renamed.
+func canonical(src string, reads []map[string]string) (string, error) {
 	tree, bag := parser.Parse("migrated.art", src)
 	if bag.HasErrors() {
 		return "", fmt.Errorf("migration produced source that does not parse, which is a bug in artemis: %v\n%s",
 			bag.All()[0], src)
 	}
+	renameReads(tree, reads)
 	return print.Canonical(tree), nil
 }
 
@@ -122,7 +128,7 @@ func canonical(src string) (string, error) {
 // The order is the order a .art file reads in -- what it does, how long it may
 // take, what is expected of it, what is kept from it -- and is the order ART-38
 // wrote the hand-written fixtures in.
-func step(w *writer, s Step, i int, comment string) error {
+func step(w *writer, s Step, i int, comment string, renamed map[string]string) error {
 	where := fmt.Sprintf("step %d %q", i+1, s.Name)
 
 	w.comment(comment)
@@ -139,7 +145,7 @@ func step(w *writer, s Step, i int, comment string) error {
 	if err := expects(w, s); err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
-	if err := captures(w, s); err != nil {
+	if err := captures(w, s, renamed); err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
 
@@ -368,7 +374,9 @@ func statusOp(op string) string {
 // `stdout`. A bare `$` is refused on an exec step: `$` is the whole parsed
 // document, and `stdout` is the unparsed text, so there is no expression that
 // means the same thing.
-func captures(w *writer, s Step) error {
+//
+// renamed is the captures rebind renamed in this step, by their YAML name.
+func captures(w *writer, s Step, renamed map[string]string) error {
 	jsonRoot, textRoot := "body", "raw"
 	if s.Type == execStep {
 		jsonRoot, textRoot = "stdout", "stdout"
@@ -393,6 +401,9 @@ func captures(w *writer, s Step) error {
 				return fmt.Errorf("capture %q: %w", name, err)
 			}
 			value = expr
+		}
+		if n, ok := renamed[name]; ok {
+			name = n
 		}
 		w.line("capture " + name + " = " + value)
 	}

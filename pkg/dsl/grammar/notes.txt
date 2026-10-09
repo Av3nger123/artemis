@@ -56,6 +56,30 @@ WHAT THE GRAMMAR DOES NOT SAY
   A duration is a string of a number and a unit: "30s", "500ms", "2m". A
   string in a duration position that is not one is a compile error.
 
-  There is no control flow: no conditionals, no loops, no functions, no
-  imports. That is deliberate, and the Reserved list above is what keeps the
-  door open.
+  A collection holds requests and flows that a scenario reuses:
+
+    import "collections/auth.art"           # relative to this file
+
+    scenario "bad password" {
+      use auth.login {                       # collection.item
+        user = "alice"                       # an argument, by name
+        password = "wrong"
+        drop expects                         # the template's expects go,
+        drop captures                        # its captures too: a 401 has no token
+        expect status == 401                 # and this one is added
+      }
+    }
+
+  A use is expanded into plain steps before the file is checked; `artemis
+  expand` prints what will run. Arguments are passed by name. A use line that
+  opens with header, query, body, drop, expect or in is an override, so a
+  parameter may not be named one of those. `as rush` names the step "rush"
+  and prefixes the captures the use makes with rush_. A bare `use item`
+  names a sibling and is legal only inside a collection. Imports are not
+  transitive. A template may read only its parameters, its observation and
+  earlier captures in the same flow.
+
+  A capture may not reuse a var's name or an earlier capture's name.
+
+  There is no control flow: no conditionals, no loops, no functions. That is
+  deliberate, and the Reserved list above is what keeps the door open.

@@ -32,17 +32,40 @@ const wantREADMEScenarios = 5
 // whoever copies it, and that is what keeps the README and the language from
 // drifting apart the way they did before the DSL landed.
 func TestREADMEArtExamplesCompile(t *testing.T) {
+	collections := docCollections(t)
 	scenarios := 0
 	for _, b := range docBlocks(t, readmePath, "art") {
 		if isArtScenario(b) {
 			scenarios++
 		}
-		compileBlock(t, readmePath, b)
+		compileBlock(t, readmePath, b, collections)
 	}
 
 	if scenarios < wantREADMEScenarios {
 		t.Errorf("found %d whole-scenario examples in the README, want at least %d -- did the examples move or lose their ```art fences?",
 			scenarios, wantREADMEScenarios)
+	}
+}
+
+// TestREADMECollectionsAreSPECs holds a collection file the README shows to
+// the one SPEC.md shows under the same path. README examples that import are
+// compiled against SPEC.md's collection blocks, so a README copy that drifted
+// would be a file the README shows and no test compiles anything against.
+func TestREADMECollectionsAreSPECs(t *testing.T) {
+	spec := docCollections(t)
+	for _, b := range docBlocks(t, readmePath, "art") {
+		name := collectionPath(b)
+		if name == "" {
+			continue
+		}
+		want, ok := spec[name]
+		if !ok {
+			t.Errorf("README line %d: %s is not a collection SPEC.md documents", b.line, name)
+			continue
+		}
+		if b.body != want {
+			t.Errorf("README line %d: %s differs from SPEC.md's block for it\nREADME:\n%s\nSPEC.md:\n%s", b.line, name, b.body, want)
+		}
 	}
 }
 

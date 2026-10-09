@@ -21,7 +21,8 @@ const uglyArt = "scenario \"checkout\"   {\n\tvar url=env(\"API_URL\")\n\n\n  st
 // be a second thing to update when a layout rule changes.
 func canonical(t *testing.T, path, src string) string {
 	t.Helper()
-	tree, _, bag := frontEnd(path, src)
+	u := frontEnd(path, src)
+	tree, bag := u.Tree, u.Bag
 	if bag.HasErrors() {
 		t.Fatalf("%s does not parse clean: %v", path, bag.All())
 	}

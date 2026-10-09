@@ -1,0 +1,1092 @@
+{
+  "schemaVersion": 1,
+  "file": "../parser/testdata/collections.art",
+  "scenarios": [
+    {
+      "kind": "import",
+      "path": "auth.art",
+      "span": {
+        "file": "../parser/testdata/collections.art",
+        "line": 1,
+        "col": 1,
+        "endLine": 1,
+        "endCol": 18,
+        "offset": 0
+      }
+    },
+    {
+      "kind": "collection",
+      "name": {
+        "text": "\"orders\"",
+        "value": "orders"
+      },
+      "items": [
+        {
+          "kind": "requestDecl",
+          "name": "create",
+          "params": [
+            {
+              "kind": "param",
+              "name": "sku",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 4,
+                "col": 18,
+                "endLine": 4,
+                "endCol": 22,
+                "offset": 58
+              }
+            },
+            {
+              "kind": "param",
+              "name": "qty",
+              "default": {
+                "kind": "literal",
+                "literal": "number",
+                "text": "1",
+                "value": "1",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 4,
+                  "col": 29,
+                  "endLine": 4,
+                  "endCol": 30,
+                  "offset": 69
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 4,
+                "col": 23,
+                "endLine": 4,
+                "endCol": 31,
+                "offset": 63
+              }
+            },
+            {
+              "kind": "param",
+              "name": "base",
+              "default": {
+                "kind": "call",
+                "callee": "env",
+                "args": [
+                  {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"API_URL\"",
+                    "value": "API_URL",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 4,
+                      "col": 43,
+                      "endLine": 4,
+                      "endCol": 52,
+                      "offset": 83
+                    }
+                  }
+                ],
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 4,
+                  "col": 39,
+                  "endLine": 4,
+                  "endCol": 53,
+                  "offset": 79
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 4,
+                "col": 32,
+                "endLine": 4,
+                "endCol": 53,
+                "offset": 72
+              }
+            }
+          ],
+          "action": {
+            "kind": "request",
+            "method": "post",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "base",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 5,
+                      "col": 13,
+                      "endLine": 5,
+                      "endCol": 17,
+                      "offset": 109
+                    }
+                  }
+                }
+              ],
+              "end": "}/orders\"",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 5,
+                "col": 10,
+                "endLine": 5,
+                "endCol": 26,
+                "offset": 106
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "body",
+                  "value": {
+                    "kind": "object",
+                    "entries": [
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"sku\"",
+                          "value": "sku",
+                          "span": {
+                            "file": "../parser/testdata/collections.art",
+                            "line": 6,
+                            "col": 15,
+                            "endLine": 6,
+                            "endCol": 20,
+                            "offset": 139
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "sku",
+                          "span": {
+                            "file": "../parser/testdata/collections.art",
+                            "line": 6,
+                            "col": 22,
+                            "endLine": 6,
+                            "endCol": 25,
+                            "offset": 146
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"qty\"",
+                          "value": "qty",
+                          "span": {
+                            "file": "../parser/testdata/collections.art",
+                            "line": 6,
+                            "col": 27,
+                            "endLine": 6,
+                            "endCol": 32,
+                            "offset": 151
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "qty",
+                          "span": {
+                            "file": "../parser/testdata/collections.art",
+                            "line": 6,
+                            "col": 34,
+                            "endLine": 6,
+                            "endCol": 37,
+                            "offset": 158
+                          }
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 6,
+                      "col": 14,
+                      "endLine": 6,
+                      "endCol": 38,
+                      "offset": 138
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 6,
+                    "col": 7,
+                    "endLine": 6,
+                    "endCol": 38,
+                    "offset": 131
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 5,
+                "col": 27,
+                "endLine": 7,
+                "endCol": 6,
+                "offset": 123
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/collections.art",
+              "line": 5,
+              "col": 5,
+              "endLine": 7,
+              "endCol": 6,
+              "offset": 101
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 8,
+                    "col": 12,
+                    "endLine": 8,
+                    "endCol": 18,
+                    "offset": 180
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "201",
+                  "value": "201",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 8,
+                    "col": 22,
+                    "endLine": 8,
+                    "endCol": 25,
+                    "offset": 190
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 8,
+                  "col": 12,
+                  "endLine": 8,
+                  "endCol": 25,
+                  "offset": 180
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 8,
+                "col": 5,
+                "endLine": 8,
+                "endCol": 25,
+                "offset": 173
+              },
+              "class": "complex"
+            },
+            {
+              "kind": "capture",
+              "name": "order_id",
+              "value": {
+                "kind": "member",
+                "x": {
+                  "kind": "member",
+                  "x": {
+                    "kind": "ident",
+                    "name": "body",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 9,
+                      "col": 24,
+                      "endLine": 9,
+                      "endCol": 28,
+                      "offset": 217
+                    }
+                  },
+                  "name": "data",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 9,
+                    "col": 24,
+                    "endLine": 9,
+                    "endCol": 33,
+                    "offset": 217
+                  }
+                },
+                "name": "id",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 9,
+                  "col": 24,
+                  "endLine": 9,
+                  "endCol": 36,
+                  "offset": 217
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 9,
+                "col": 5,
+                "endLine": 9,
+                "endCol": 36,
+                "offset": 198
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/collections.art",
+            "line": 4,
+            "col": 3,
+            "endLine": 10,
+            "endCol": 4,
+            "offset": 43
+          }
+        },
+        {
+          "kind": "flow",
+          "name": "checkout",
+          "params": [
+            {
+              "kind": "param",
+              "name": "user",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 12,
+                "col": 17,
+                "endLine": 12,
+                "endCol": 22,
+                "offset": 251
+              }
+            },
+            {
+              "kind": "param",
+              "name": "password",
+              "secret": true,
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 12,
+                "col": 23,
+                "endLine": 12,
+                "endCol": 39,
+                "offset": 257
+              }
+            },
+            {
+              "kind": "param",
+              "name": "base",
+              "default": {
+                "kind": "call",
+                "callee": "env",
+                "args": [
+                  {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"API_URL\"",
+                    "value": "API_URL",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 12,
+                      "col": 51,
+                      "endLine": 12,
+                      "endCol": 60,
+                      "offset": 285
+                    }
+                  }
+                ],
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 12,
+                  "col": 47,
+                  "endLine": 12,
+                  "endCol": 61,
+                  "offset": 281
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 12,
+                "col": 40,
+                "endLine": 12,
+                "endCol": 61,
+                "offset": 274
+              }
+            }
+          ],
+          "body": [
+            {
+              "kind": "use",
+              "collection": "auth",
+              "item": "login",
+              "lines": [
+                {
+                  "kind": "field",
+                  "name": "user",
+                  "value": {
+                    "kind": "ident",
+                    "name": "user",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 13,
+                      "col": 29,
+                      "endLine": 13,
+                      "endCol": 33,
+                      "offset": 327
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 13,
+                    "col": 22,
+                    "endLine": 13,
+                    "endCol": 34,
+                    "offset": 320
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "password",
+                  "value": {
+                    "kind": "ident",
+                    "name": "password",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 13,
+                      "col": 46,
+                      "endLine": 13,
+                      "endCol": 54,
+                      "offset": 344
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 13,
+                    "col": 35,
+                    "endLine": 13,
+                    "endCol": 55,
+                    "offset": 333
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "base",
+                  "value": {
+                    "kind": "ident",
+                    "name": "base",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 13,
+                      "col": 63,
+                      "endLine": 13,
+                      "endCol": 67,
+                      "offset": 361
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 13,
+                    "col": 56,
+                    "endLine": 13,
+                    "endCol": 67,
+                    "offset": 354
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 13,
+                "col": 5,
+                "endLine": 13,
+                "endCol": 69,
+                "offset": 303
+              }
+            },
+            {
+              "kind": "use",
+              "item": "create",
+              "lines": [
+                {
+                  "kind": "field",
+                  "name": "sku",
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"A-1\"",
+                    "value": "A-1",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 14,
+                      "col": 24,
+                      "endLine": 14,
+                      "endCol": 29,
+                      "offset": 391
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 14,
+                    "col": 18,
+                    "endLine": 14,
+                    "endCol": 30,
+                    "offset": 385
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "qty",
+                  "value": {
+                    "kind": "literal",
+                    "literal": "number",
+                    "text": "2",
+                    "value": "2",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 14,
+                      "col": 37,
+                      "endLine": 14,
+                      "endCol": 38,
+                      "offset": 404
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 14,
+                    "col": 31,
+                    "endLine": 14,
+                    "endCol": 39,
+                    "offset": 398
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "base",
+                  "value": {
+                    "kind": "ident",
+                    "name": "base",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 14,
+                      "col": 47,
+                      "endLine": 14,
+                      "endCol": 51,
+                      "offset": 414
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 14,
+                    "col": 40,
+                    "endLine": 14,
+                    "endCol": 51,
+                    "offset": 407
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 14,
+                "col": 5,
+                "endLine": 14,
+                "endCol": 53,
+                "offset": 372
+              }
+            },
+            {
+              "kind": "step",
+              "name": {
+                "text": "\"pay\"",
+                "value": "pay"
+              },
+              "action": {
+                "kind": "request",
+                "method": "post",
+                "url": {
+                  "kind": "interp",
+                  "segments": [
+                    {
+                      "delim": "\"${",
+                      "expr": {
+                        "kind": "ident",
+                        "name": "base",
+                        "span": {
+                          "file": "../parser/testdata/collections.art",
+                          "line": 16,
+                          "col": 15,
+                          "endLine": 16,
+                          "endCol": 19,
+                          "offset": 452
+                        }
+                      }
+                    },
+                    {
+                      "delim": "}/orders/${",
+                      "expr": {
+                        "kind": "ident",
+                        "name": "order_id",
+                        "span": {
+                          "file": "../parser/testdata/collections.art",
+                          "line": 16,
+                          "col": 30,
+                          "endLine": 16,
+                          "endCol": 38,
+                          "offset": 467
+                        }
+                      }
+                    }
+                  ],
+                  "end": "}/pay\"",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 16,
+                    "col": 12,
+                    "endLine": 16,
+                    "endCol": 44,
+                    "offset": 449
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 16,
+                  "col": 7,
+                  "endLine": 16,
+                  "endCol": 44,
+                  "offset": 444
+                }
+              },
+              "body": [
+                {
+                  "kind": "expect",
+                  "value": {
+                    "kind": "binary",
+                    "op": "==",
+                    "x": {
+                      "kind": "ident",
+                      "name": "status",
+                      "span": {
+                        "file": "../parser/testdata/collections.art",
+                        "line": 17,
+                        "col": 14,
+                        "endLine": 17,
+                        "endCol": 20,
+                        "offset": 495
+                      }
+                    },
+                    "y": {
+                      "kind": "literal",
+                      "literal": "number",
+                      "text": "200",
+                      "value": "200",
+                      "span": {
+                        "file": "../parser/testdata/collections.art",
+                        "line": 17,
+                        "col": 24,
+                        "endLine": 17,
+                        "endCol": 27,
+                        "offset": 505
+                      }
+                    },
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 17,
+                      "col": 14,
+                      "endLine": 17,
+                      "endCol": 27,
+                      "offset": 495
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 17,
+                    "col": 7,
+                    "endLine": 17,
+                    "endCol": 27,
+                    "offset": 488
+                  },
+                  "class": "complex"
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 15,
+                "col": 5,
+                "endLine": 18,
+                "endCol": 6,
+                "offset": 425
+              },
+              "stepType": "unknown"
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/collections.art",
+            "line": 12,
+            "col": 3,
+            "endLine": 19,
+            "endCol": 4,
+            "offset": 237
+          },
+          "comments": {
+            "blankAbove": true
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/collections.art",
+        "line": 3,
+        "col": 1,
+        "endLine": 20,
+        "endCol": 2,
+        "offset": 19
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"rush\"",
+        "value": "rush"
+      },
+      "body": [
+        {
+          "kind": "use",
+          "collection": "orders",
+          "item": "create",
+          "alias": "rush",
+          "lines": [
+            {
+              "kind": "field",
+              "name": "sku",
+              "value": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"A-1\"",
+                "value": "A-1",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 24,
+                  "col": 11,
+                  "endLine": 24,
+                  "endCol": 16,
+                  "offset": 580
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 24,
+                "col": 5,
+                "endLine": 24,
+                "endCol": 16,
+                "offset": 574
+              }
+            },
+            {
+              "kind": "field",
+              "name": "header",
+              "key": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"X-Priority\"",
+                "value": "X-Priority",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 25,
+                  "col": 12,
+                  "endLine": 25,
+                  "endCol": 24,
+                  "offset": 597
+                }
+              },
+              "value": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"high\"",
+                "value": "high",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 25,
+                  "col": 27,
+                  "endLine": 25,
+                  "endCol": 33,
+                  "offset": 612
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 25,
+                "col": 5,
+                "endLine": 25,
+                "endCol": 33,
+                "offset": 590
+              }
+            },
+            {
+              "kind": "bodySet",
+              "path": [
+                "qty"
+              ],
+              "value": {
+                "kind": "literal",
+                "literal": "number",
+                "text": "5",
+                "value": "5",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 26,
+                  "col": 16,
+                  "endLine": 26,
+                  "endCol": 17,
+                  "offset": 634
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 26,
+                "col": 5,
+                "endLine": 26,
+                "endCol": 17,
+                "offset": 623
+              }
+            },
+            {
+              "kind": "drop",
+              "what": "expects",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 27,
+                "col": 5,
+                "endLine": 27,
+                "endCol": 17,
+                "offset": 640
+              }
+            },
+            {
+              "kind": "drop",
+              "what": "captures",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 28,
+                "col": 5,
+                "endLine": 28,
+                "endCol": 18,
+                "offset": 657
+              }
+            },
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 29,
+                    "col": 12,
+                    "endLine": 29,
+                    "endCol": 18,
+                    "offset": 682
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "202",
+                  "value": "202",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 29,
+                    "col": 22,
+                    "endLine": 29,
+                    "endCol": 25,
+                    "offset": 692
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 29,
+                  "col": 12,
+                  "endLine": 29,
+                  "endCol": 25,
+                  "offset": 682
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 29,
+                "col": 5,
+                "endLine": 29,
+                "endCol": 25,
+                "offset": 675
+              },
+              "class": "complex"
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/collections.art",
+            "line": 23,
+            "col": 3,
+            "endLine": 30,
+            "endCol": 4,
+            "offset": 542
+          }
+        },
+        {
+          "kind": "use",
+          "collection": "orders",
+          "item": "checkout",
+          "lines": [
+            {
+              "kind": "field",
+              "name": "user",
+              "value": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"alice\"",
+                "value": "alice",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 32,
+                  "col": 12,
+                  "endLine": 32,
+                  "endCol": 19,
+                  "offset": 735
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 32,
+                "col": 5,
+                "endLine": 32,
+                "endCol": 19,
+                "offset": 728
+              }
+            },
+            {
+              "kind": "field",
+              "name": "password",
+              "value": {
+                "kind": "call",
+                "callee": "env",
+                "args": [
+                  {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"PW\"",
+                    "value": "PW",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 33,
+                      "col": 20,
+                      "endLine": 33,
+                      "endCol": 24,
+                      "offset": 762
+                    }
+                  }
+                ],
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 33,
+                  "col": 16,
+                  "endLine": 33,
+                  "endCol": 25,
+                  "offset": 758
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 33,
+                "col": 5,
+                "endLine": 33,
+                "endCol": 25,
+                "offset": 747
+              }
+            },
+            {
+              "kind": "in",
+              "step": {
+                "text": "\"pay\"",
+                "value": "pay"
+              },
+              "lines": [
+                {
+                  "kind": "field",
+                  "name": "header",
+                  "key": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"X-Trace\"",
+                    "value": "X-Trace",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 34,
+                      "col": 23,
+                      "endLine": 34,
+                      "endCol": 32,
+                      "offset": 790
+                    }
+                  },
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"1\"",
+                    "value": "1",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 34,
+                      "col": 35,
+                      "endLine": 34,
+                      "endCol": 38,
+                      "offset": 802
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 34,
+                    "col": 16,
+                    "endLine": 34,
+                    "endCol": 38,
+                    "offset": 783
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 34,
+                "col": 5,
+                "endLine": 34,
+                "endCol": 40,
+                "offset": 772
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/collections.art",
+            "line": 31,
+            "col": 3,
+            "endLine": 35,
+            "endCol": 4,
+            "offset": 702
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/collections.art",
+        "line": 22,
+        "col": 1,
+        "endLine": 36,
+        "endCol": 2,
+        "offset": 522
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    }
+  ]
+}

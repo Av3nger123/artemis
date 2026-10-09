@@ -1,0 +1,31 @@
+import "auth.art"
+
+collection "orders" {
+  request create(sku, qty = 1) {
+    post "x" { body = {"sku": sku} }
+    expect status == 201
+  }
+
+  flow checkout(user) {
+    use auth.login { user = user }
+
+    step "pay" {
+      post "y"
+      expect status == 200
+    }
+  }
+}
+
+scenario "rush" {
+  use orders.create as rush {
+    sku = "A-1"
+    body.qty = 5
+    drop expects
+    drop captures
+    expect status == 202
+  }
+  use orders.checkout {
+    user = "a"
+    in "pay" { header "X" = "1" }
+  }
+}

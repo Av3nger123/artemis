@@ -5,12 +5,15 @@
   ],
   "groups": {
     "declaration": [
-      "scenario"
+      "scenario",
+      "import",
+      "collection"
     ],
     "scenarioBody": [
       "config",
       "var",
-      "step"
+      "step",
+      "use"
     ],
     "action": [
       "request",
@@ -30,6 +33,24 @@
     ],
     "block": [
       "block"
+    ],
+    "collectionItem": [
+      "requestDecl",
+      "flow"
+    ],
+    "param": [
+      "param"
+    ],
+    "flowBody": [
+      "step",
+      "use"
+    ],
+    "useLine": [
+      "field",
+      "bodySet",
+      "drop",
+      "expect",
+      "in"
     ],
     "expression": [
       "ident",
@@ -619,6 +640,267 @@
         {
           "name": "span",
           "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "import",
+      "doc": "`import \"auth.art\"`; imports come before every collection and scenario",
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "doc": "the file imported, decoded: escapes resolved, no quotes"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "collection",
+      "doc": "`collection \"orders\" { request ... flow ... }`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "name",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "absent only in a file the parser recovered past; Decode requires it"
+        },
+        {
+          "name": "items",
+          "type": "node[]",
+          "accepts": "collectionItem",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "param",
+      "doc": "one parameter of a request or a flow: `sku`, `qty = 1`, `secret password`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier a use passes as `name = value`"
+        },
+        {
+          "name": "secret",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `secret` modifier: the value passed is redacted wherever it appears. Absent means false"
+        },
+        {
+          "name": "default",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        }
+      ]
+    },
+    {
+      "kind": "requestDecl",
+      "doc": "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier a use names it by"
+        },
+        {
+          "name": "params",
+          "type": "node[]",
+          "accepts": "param",
+          "optional": true
+        },
+        {
+          "name": "action",
+          "type": "node",
+          "accepts": "action",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "stepStatement",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "flow",
+      "doc": "`flow checkout(user) { step ... use ... }`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier a use names it by"
+        },
+        {
+          "name": "params",
+          "type": "node[]",
+          "accepts": "param",
+          "optional": true
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "flowBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "use",
+      "doc": "`use auth.login as admin { user = \"alice\" ... }`",
+      "fields": [
+        {
+          "name": "collection",
+          "type": "string",
+          "optional": true,
+          "doc": "the collection before the dot; absent for a sibling in the same collection"
+        },
+        {
+          "name": "item",
+          "type": "string",
+          "doc": "the request or flow used"
+        },
+        {
+          "name": "alias",
+          "type": "string",
+          "optional": true,
+          "doc": "the name after `as`"
+        },
+        {
+          "name": "lines",
+          "type": "node[]",
+          "accepts": "useLine",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "bodySet",
+      "doc": "`body.qty = 5` in a use block: one field of a literal body",
+      "fields": [
+        {
+          "name": "path",
+          "type": "string[]",
+          "inputRequired": true,
+          "doc": "the names after `body`, outermost first"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "drop",
+      "doc": "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed",
+      "fields": [
+        {
+          "name": "what",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "expects or captures: what the line removes"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "in",
+      "doc": "`in \"pay\" { ... }` in a use block: overrides aimed at one step of a flow",
+      "fields": [
+        {
+          "name": "step",
+          "type": "name",
+          "optional": true,
+          "inputRequired": true,
+          "doc": "the step's name, as the flow writes it"
+        },
+        {
+          "name": "lines",
+          "type": "node[]",
+          "accepts": "useLine",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
         }
       ]
     },

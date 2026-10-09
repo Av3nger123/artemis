@@ -79,6 +79,10 @@ type AssertionResult struct {
 	// line of its own. A reader of a failure resolves zero against the step's
 	// own line rather than printing it; see Diagnostics.
 	Line int
+	// File is the file Line is a line of when it is not the scenario's own: a
+	// check a use brought in from a collection. Empty otherwise, which is
+	// every check written where it runs.
+	File string
 
 	// ExpectedSecret and ActualSecret report that the operand came from a
 	// binding the scenario declared `secret`, so every report writer prints a
@@ -106,6 +110,7 @@ type Assertion struct {
 	Expected any
 	Actual   any
 	Line     int
+	File     string // see AssertionResult.File
 
 	// ExpectedSecret and ActualSecret are carried through to the recorded
 	// assertion. See AssertionResult.
@@ -139,6 +144,7 @@ func (a Assertion) with(status Status, errMsg string) AssertionResult {
 		Status:         status,
 		Error:          errMsg,
 		Line:           a.Line,
+		File:           a.File,
 		ExpectedSecret: a.ExpectedSecret,
 		ActualSecret:   a.ActualSecret,
 	}
@@ -172,6 +178,9 @@ type StepResult struct {
 	// or zero when it is not known. It is what a step that could not run at all
 	// points at, and the fallback for an assertion with no line of its own.
 	Line int
+	// File is the file Line is a line of when it is not the scenario's own: a
+	// step a use brought in from a collection. Empty otherwise.
+	File string
 
 	// Trace is the path to the file holding what this step sent and what it
 	// saw, and empty when tracing is off. ART-55.

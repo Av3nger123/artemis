@@ -239,6 +239,7 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 			if err != nil {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)
 			}
+			st.relativeTo(sc.Keyword.Span.File)
 			out.Steps = append(out.Steps, st)
 			// After the step, never before it: a capture is not in scope for
 			// the step that writes it.

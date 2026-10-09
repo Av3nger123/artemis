@@ -1,0 +1,17 @@
+scenario "nested" {
+  var url = env("API_URL")
+  secret var login_password = "pw"
+
+  # from auth.login (testdata/collections/auth.art:2) via testdata/collections/nested.art:6
+  step "session.start / auth.login" {
+    post "${url}/token" { body = {"username": "bob", "password": login_password} }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  # from session.start (testdata/collections/session.art:4) via testdata/collections/nested.art:6
+  step "session.start / me" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+  }
+}

@@ -94,7 +94,7 @@ func writeArt(t *testing.T, name, src string) string {
 // covers the commands that run scenarios.
 func resetFrontEndFlags(t *testing.T) {
 	t.Helper()
-	for _, cmd := range []*cobra.Command{parseCmd, astCmd, fmtCmd, grammarCmd, migrateCmd, generateCmd, buildCmd} {
+	for _, cmd := range []*cobra.Command{parseCmd, astCmd, fmtCmd, grammarCmd, migrateCmd, generateCmd, buildCmd, expandCmd} {
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
 			if err := f.Value.Set(f.DefValue); err != nil {
 				t.Fatalf("resetting %s --%s to %q: %v", cmd.Name(), f.Name, f.DefValue, err)
@@ -159,7 +159,7 @@ func TestParseArtReportsEveryErrorAndFails(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		`expected "config", "var" or "step", found "nonsense"`,
+		`expected "config", "var", "step" or "use", found "nonsense"`,
 		`expected "=" and a value after "query"`,
 		`"==" cannot be chained with another comparison`,
 		`step "has nothing to run" has no action block`,

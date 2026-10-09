@@ -76,6 +76,23 @@ func TestSpanIsZero(t *testing.T) {
 	}
 }
 
+func TestViaDoesNotMakeASpanNonZero(t *testing.T) {
+	if !(Span{Via: 3}).IsZero() {
+		t.Fatal("a span with only Via set locates nothing and must stay zero")
+	}
+}
+
+func TestUseLinesAreTheOverrideWords(t *testing.T) {
+	for _, w := range []string{"header", "query", "body", "drop", "expect", "in"} {
+		if !IsUseLine(w) {
+			t.Errorf("IsUseLine(%q) = false", w)
+		}
+	}
+	if IsUseLine("user") {
+		t.Error("IsUseLine(\"user\") = true; an argument name is not a use line")
+	}
+}
+
 func TestKindStringsAreUnique(t *testing.T) {
 	// A duplicated name would make a test failure name the wrong kind, which is
 	// the only thing these strings are for.
@@ -109,6 +126,8 @@ func TestLookupsAgreeWithTheirTables(t *testing.T) {
 		{"WordOperators", WordOperators, IsWordOperator},
 		{"Builtins", Builtins, IsBuiltin},
 		{"Reserved", Reserved, IsReserved},
+		{"UseLines", UseLines, IsUseLine},
+		{"DropTargets", DropTargets, IsDropTarget},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -135,10 +154,18 @@ func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
 		StepFields, ConfigBlocks, BrowserConfigFields, Builtins,
+		CollectionItems, UseLines, DropTargets,
 	}
+	// keywordNotName are the reserved words the language now uses as keywords
+	// as well: `import` and `use` open a declaration, `in` opens a use line.
+	// They stay reserved so that none of them can be a name -- a parameter
+	// named `in` could never be passed, a var named `use` would read as the
+	// start of a use -- and every place they are keywords is a position where
+	// a name is never expected. Any other overlap is still a collision.
+	keywordNotName := map[string]bool{"import": true, "use": true, "in": true}
 	for _, table := range live {
 		for _, w := range table {
-			if IsReserved(w) {
+			if IsReserved(w) && !keywordNotName[w] {
 				t.Errorf("%q is both reserved and part of the grammar", w)
 			}
 		}

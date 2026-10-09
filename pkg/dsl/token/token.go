@@ -27,6 +27,13 @@ type Span struct {
 	EndLine int
 	EndCol  int
 	Offset  int
+
+	// Via is zero for source written where it stands. A token that
+	// pkg/dsl/expand copied out of a collection carries one plus the index of
+	// the use that copied it in the expansion's use table, so two uses of one
+	// request yield spans that compare unequal and a diagnostic can name the
+	// use line. It is not one of the six encoded fields and no JSON writes it.
+	Via int
 }
 
 // IsZero reports whether s locates nothing, which is what a span built in Go

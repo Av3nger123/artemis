@@ -122,6 +122,30 @@ func Children(n Node) []Node {
 			out = append(out, nodes(s.Expr)...)
 		}
 		return out
+	case *Import:
+		return nil
+	case *Collection:
+		return decls(n.Items)
+	case *Params:
+		out := make([]Node, 0, len(n.List))
+		for _, p := range n.List {
+			out = append(out, nodes(p)...)
+		}
+		return out
+	case *Param:
+		return nodes(n.Default)
+	case *RequestDecl:
+		return append(nodes(n.Params), n.items()...)
+	case *FlowDecl:
+		return append(nodes(n.Params), decls(n.Body)...)
+	case *UseDecl:
+		return stmts(n.Lines)
+	case *BodySet:
+		return nodes(n.Value)
+	case *Drop:
+		return nil
+	case *In:
+		return stmts(n.Lines)
 	case *Ident, *Literal, *Bad:
 		return nil
 	}
@@ -140,6 +164,14 @@ func decls(ds []Decl) []Node {
 	out := make([]Node, 0, len(ds))
 	for _, d := range ds {
 		out = append(out, nodes(d)...)
+	}
+	return out
+}
+
+func stmts(ss []Stmt) []Node {
+	out := make([]Node, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, nodes(s)...)
 	}
 	return out
 }

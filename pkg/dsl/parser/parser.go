@@ -84,6 +84,11 @@ type parser struct {
 	// `body = {` open a multi-line object literal while `expect a` followed by
 	// a line starting `and b` stays two statements. See atBoundary.
 	depth int
+
+	// useLines counts the use and in blocks open around the cursor, where a
+	// comma between lines is the usual spelling: a missing separator's hint
+	// offers it there.
+	useLines int
 }
 
 func newParser(toks []token.Token, bag *diag.Bag) *parser {
@@ -165,6 +170,25 @@ func (p *parser) peekWordAt(n int, word string) bool {
 	}
 	t := p.toks[i]
 	return t.Kind == token.Ident && t.Value == word
+}
+
+// peekKindAt reports whether the nth token after the cursor is of kind k,
+// counting the cursor itself as zero and skipping markers as peekWordAt does.
+func (p *parser) peekKindAt(n int, k token.Kind) bool {
+	seen, i := 0, p.i
+	for ; i < len(p.toks); i++ {
+		if p.toks[i].IsMarker() {
+			continue
+		}
+		if seen == n {
+			break
+		}
+		seen++
+	}
+	if i >= len(p.toks) {
+		return false
+	}
+	return p.toks[i].Kind == k
 }
 
 // atBoundary reports whether the cursor is at a statement boundary: a newline
@@ -425,9 +449,13 @@ func (p *parser) requireBoundary(what string) {
 	if p.atBoundary() {
 		return
 	}
+	hint := "statements separate by newline; there are no semicolons"
+	if p.useLines > 0 {
+		hint = "separate with a comma or a newline"
+	}
 	p.errorf(p.peek(), diag.MissingSeparator,
 		"expected a newline after %s, found %s", what, describe(p.peek())).
-		Hintf("statements separate by newline; there are no semicolons")
+		Hintf("%s", hint)
 }
 
 // unclosed reports a bracket the file ended without closing, pointing at the

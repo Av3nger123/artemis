@@ -9,7 +9,8 @@ import "artemis/pkg/dsl/token"
 // carries the file's trailing trivia -- the last newline, a closing comment --
 // and without it the round trip would lose the end of every file.
 //
-// Scenarios is []Decl rather than []*Scenario so that a top-level line that
+// Scenarios holds the file's top level in order: imports, collections and
+// scenarios (and *Bad). It is []Decl rather than []*Scenario so that a top-level line that
 // did not parse can sit in it as a *Bad, which is what keeps Source exact for
 // a broken file.
 type File struct {
@@ -132,6 +133,13 @@ func (s *StepDecl) Tokens(dst []token.Token) []token.Token {
 // items is the action and the statements in the order they appear in the
 // source, found by byte offset rather than remembered, so the ordering cannot
 // disagree with the spans.
+//
+// Offsets compare only within one file and one copy. pkg/dsl/expand builds
+// steps that mix statements copied out of a collection with lines written at
+// the use, elsewhere; so only the items that share File and Via with the
+// action (or, with no action, the first located item) are ordered by offset,
+// and every other item follows them in slice order. A parsed file's items
+// all share both, and order exactly by offset.
 func (s *StepDecl) items() []Node {
 	out := make([]Node, 0, len(s.Body)+1)
 	if !isNil(s.Action) {
@@ -140,12 +148,36 @@ func (s *StepDecl) items() []Node {
 	for _, st := range s.Body {
 		out = append(out, st)
 	}
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j].Span().Offset < out[j-1].Span().Offset; j-- {
-			out[j], out[j-1] = out[j-1], out[j]
+	own, foreign := SplitOrigin(out)
+	for i := 1; i < len(own); i++ {
+		for j := i; j > 0 && own[j].Span().Offset < own[j-1].Span().Offset; j-- {
+			own[j], own[j-1] = own[j-1], own[j]
 		}
 	}
-	return out
+	return append(own, foreign...)
+}
+
+// SplitOrigin splits items into those written where the first located one
+// was -- same File, same Via -- and the rest, each in slice order. An item
+// with a zero span locates nothing and goes with the first group.
+func SplitOrigin(items []Node) (own, foreign []Node) {
+	var ref token.Span
+	for _, it := range items {
+		if sp := it.Span(); !sp.IsZero() {
+			ref = sp
+			break
+		}
+	}
+	own = make([]Node, 0, len(items))
+	for _, it := range items {
+		sp := it.Span()
+		if sp.IsZero() || (sp.File == ref.File && sp.Via == ref.Via) {
+			own = append(own, it)
+		} else {
+			foreign = append(foreign, it)
+		}
+	}
+	return own, foreign
 }
 
 func (s *StepDecl) Span() token.Span { return spanOf(s) }

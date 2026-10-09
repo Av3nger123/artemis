@@ -2,14 +2,29 @@
    text; Ident, String, Number, Regex and Bool are lexical tokens described
    under LEXICAL TOKENS below. Nothing in a .art file is outside this. *)
 
-File          = { Scenario } ;
-Scenario      = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl } "}" ;
+File          = { Import } { Collection | Scenario } ;
+Import        = "import" String ;
+Collection    = "collection" String "{" { RequestDecl | FlowDecl } "}" ;
+RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
+FlowDecl      = "flow" Ident Params "{" { StepDecl | UseDecl } "}" ;
+Params        = "(" [ Param { "," Param } ] ")" ;
+Param         = [ "secret" ] Ident [ "=" Expr ] ;
+
+Scenario      = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
+UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
+ItemRef       = Ident [ "." Ident ] ;
+UseLine       = Ident "=" Expr
+              | ReqField
+              | "body" "." Ident { "." Ident } "=" Expr
+              | "drop" ( "expects" | "captures" )
+              | Expect
+              | "in" String "{" { UseLine } "}" ;
 
 ConfigDecl    = "config" ConfigSubject "{" [ ConfigSetting { Sep ConfigSetting } ] "}" ;
 ConfigSubject = "browser" ;
 ConfigSetting = "headless" "=" Bool | "viewport" "=" Expr ;
 
-VarDecl       = "var" Ident "=" Expr ;
+VarDecl       = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;
 
 Action        = Request | Run | Browser ;
@@ -34,7 +49,7 @@ BrowserAct    = "goto"   Expr
 
 StepStmt      = Expect | Capture | Retry | Timeout ;
 Expect        = "expect" Expr [ "within" String ] ;
-Capture       = "capture" Ident "=" Expr ;
+Capture       = [ "secret" ] "capture" Ident "=" Expr ;
 Retry         = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
 RetryField    = "times" "=" Number | "delay" "=" String ;
 Timeout       = "timeout" "=" String ;

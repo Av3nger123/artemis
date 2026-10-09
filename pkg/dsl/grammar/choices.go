@@ -85,7 +85,7 @@ func Choices() ChoicePoints {
 		SchemaVersion: SchemaVersion,
 		Choices: map[string]Choice{
 			"declaration": words(
-				"The declarations a scenario body holds, plus scenario itself.",
+				"The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
 				token.Blocks),
 			"stepType": stepTypes(),
 			"method":   words("The HTTP verbs. A step whose action opens with one is an api step.", token.Methods),
@@ -99,6 +99,9 @@ func Choices() ChoicePoints {
 			"typeName":           words("The right-hand side of is.", token.TypeNames),
 			"builtin":            words("The functions callable in an expression. Which are in scope depends on the step type; see stepType.", token.Builtins),
 			"configSubject":      words("The subjects of a config declaration.", token.ConfigBlocks),
+			"collectionItem":     words("What a collection body holds: a request or a flow.", token.CollectionItems),
+			"useLine":            words("The words that open an override line in a use block. Any other identifier opening a line there is an argument.", token.UseLines),
+			"dropTarget":         words("What a drop line in a use block removes from the template: drop expects or drop captures.", token.DropTargets),
 			"requestField":       fields("The fields of an api step's action block.", "request"),
 			"runField":           fields("The fields of a run block.", "run"),
 			"retryField":         fields("The fields of a retry block.", "retry"),
