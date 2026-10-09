@@ -145,7 +145,9 @@ func fileName(tree *ast.File) string {
 }
 
 // body is a scenario body with each use replaced by its steps, and the
-// secret vars those uses hoisted appended at the end, in use order.
+// secret vars those uses hoisted inserted, in use order, right after the
+// scenario's last var -- at the top when it has none. The checker binds a
+// var for what comes after it, so that is where the steps can read them.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 	out := make([]ast.Decl, 0, len(decls))
 	sc := newScope(decls)
@@ -156,7 +158,13 @@ func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 		}
 		out = append(out, d)
 	}
-	return append(out, *sc.hoisted...)
+	at := 0
+	for i, d := range out {
+		if _, ok := d.(*ast.VarDecl); ok {
+			at = i + 1
+		}
+	}
+	return slices.Insert(out, at, *sc.hoisted...)
 }
 
 // imports loads every file u imports.

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/parser"
 )
 
@@ -155,7 +156,7 @@ func TestAsOnARequestPrefixesItsCapture(t *testing.T) {
 
 const secretColl = "collection \"c\" {\n  request r(secret pw, auth = \"Basic ${pw}\", secret key = \"k\") {\n    post \"x\" {\n      header \"A\" = auth\n      body = {\"p\": pw, \"k\": key}\n    }\n  }\n}\n"
 
-func TestHoistedSecretVarsGoLastInUseOrderAndDefaultsReadThem(t *testing.T) {
+func TestHoistedSecretVarsFollowTheLastVarInUseOrderAndDefaultsReadThem(t *testing.T) {
 	got, diags := run(t, map[string]string{
 		"c.art":    secretColl,
 		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var base = \"b\"\n  use c.r { pw = base }\n  use c.r as two { pw = \"x\" }\n  var tail = 1\n}\n",
@@ -240,5 +241,43 @@ func TestANestedSecretIsNamedUnderEveryEnclosingAlias(t *testing.T) {
 		if !contains(got, want) {
 			t.Errorf("missing %s in\n%s", want, got)
 		}
+	}
+}
+
+func TestHoistedSecretVarsGoAboveTheSteps(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"c.art":    secretColl,
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var base = \"b\"\n  use c.r { pw = base }\n}\n",
+	})
+	noDiags(t, diags)
+	want := "scenario \"s\" {\n  var base = \"b\"\n  secret var r_pw = base\n  secret var r_key = \"k\"\n\n  step \"c.r\""
+	if !strings.HasPrefix(got, want) {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestHoistedSecretVarsGoAtTheTopWithNoVars(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"c.art":    secretColl,
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"x\" }\n}\n",
+	})
+	noDiags(t, diags)
+	if !strings.HasPrefix(got, "scenario \"s\" {\n  secret var r_pw = \"x\"\n  secret var r_key = \"k\"\n") {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestAnExpandedSecretParameterChecks(t *testing.T) {
+	files := map[string]string{
+		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n    expect status == 200\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"k\" }\n}\n",
+	}
+	tree, _ := parser.Parse("main.art", files["main.art"])
+	res, bag := Expand(tree, MapLoader(files))
+	if bag.Len() != 0 {
+		t.Fatalf("expand: %v", bag.All())
+	}
+	if _, cb := check.Check(res.File); cb.Len() != 0 {
+		t.Fatalf("check of the expanded tree: %v", cb.All())
 	}
 }
