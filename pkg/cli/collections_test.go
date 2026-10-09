@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -279,4 +280,56 @@ func mustRead(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// Two uses of one request with secret arguments each send their own value:
+// with as, each hoists its own var. Without as both hoisted the same name and
+// the last value was sent twice, which is now duplicate-binding.
+func TestTwoUsesOfASecretRequestSendTheirOwnPasswords(t *testing.T) {
+	var mu sync.Mutex
+	var sent []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Password string `json:"password"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		sent = append(sent, body.Password)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if body.Password != "s3cret" {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("API_URL", srv.URL)
+
+	scenario := func(real, bad string) string {
+		return "import \"auth.art\"\n\nscenario \"s\" {\n  var url = env(\"API_URL\")\n" +
+			"  use auth.login" + real + " { user = \"alice\", password = \"s3cret\", base = url }\n" +
+			"  use auth.login" + bad + " { user = \"alice\", password = \"wrong\", base = url, drop captures, drop expects, expect status == 401 }\n}\n"
+	}
+	dir := writeTree(t, t.TempDir(), map[string]string{
+		"auth.art":  mustRead(t, "testdata/collections/auth.art"),
+		"two.art":   scenario(" as real", " as bad"),
+		"clash.art": scenario("", ""),
+	})
+
+	stdout, stderr, err := runCLI(t, "run", filepath.Join(dir, "two.art"), "--report", "json")
+	if err != nil {
+		t.Fatalf("%v\n%s\n%s", err, stdout, stderr)
+	}
+	if strings.Join(sent, ",") != "s3cret,wrong" {
+		t.Fatalf("passwords sent = %v, want each use's own", sent)
+	}
+
+	sent = nil
+	_, stderr, err = runCLI(t, "run", filepath.Join(dir, "clash.art"))
+	if err == nil || !strings.Contains(stderr, `"login_password" is already bound`) {
+		t.Fatalf("want duplicate-binding, got err %v\n%s", err, stderr)
+	}
+	if len(sent) != 0 {
+		t.Fatalf("a file that does not compile sent %v", sent)
+	}
 }

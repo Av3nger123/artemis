@@ -172,8 +172,9 @@ const (
 	BadValue Code = "bad-value"
 
 	// DuplicateBinding is a capture that reuses the name of a var or of an
-	// earlier capture in the same scenario. The span is the capture's name;
-	// the hint says where the name was bound first.
+	// earlier capture in the same scenario, or a var that reuses an earlier
+	// var's. The span is the second binding's name; the hint says where the
+	// name was bound first.
 	DuplicateBinding Code = "duplicate-binding"
 )
 
@@ -236,7 +237,7 @@ var registry = []CodeInfo{
 	{UnknownType, Error, "the right-hand side of \"is\" is not a type name"},
 	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
 	{BadValue, Error, "a value is the wrong kind for the position it is in"},
-	{DuplicateBinding, Error, "a capture reuses the name of a var or of an earlier capture"},
+	{DuplicateBinding, Error, "a capture or var reuses a name a var or an earlier capture binds"},
 	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
 	{ImportNotFound, Error, "an imported file cannot be read"},
 	{ImportCycle, Error, "a file imports itself, directly or through other files"},

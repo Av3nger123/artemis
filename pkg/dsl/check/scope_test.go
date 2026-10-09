@@ -255,6 +255,11 @@ func TestScopeRules(t *testing.T) {
 			want: []string{"duplicate-binding@5:13"},
 		},
 		{
+			name: "a var may not reuse an earlier var's name",
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
+			want: []string{"duplicate-binding@3:7"},
+		},
+		{
 			name: "distinct captures and vars are fine",
 			src:  "scenario \"s\" {\n  var a = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture b = body.t\n    capture c = body.u\n  }\n}\n",
 		},
@@ -325,6 +330,11 @@ func TestDuplicateBindingNamesTheFirstBinding(t *testing.T) {
 			src:  "scenario \"s\" {\n  step \"a\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  step \"b\" {\n    get \"/y\"\n    capture token = body.u\n  }\n}\n",
 			msg:  `"token" is already bound`,
 			hint: "the capture at line 4 binds it first",
+		},
+		{
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
+			msg:  `"token" is already bound`,
+			hint: "the var at line 2 binds it first",
 		},
 	}
 	for _, tc := range cases {

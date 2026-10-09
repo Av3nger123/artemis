@@ -898,6 +898,11 @@ that var:
 | Name | Every enclosing `as` name, then the `as` name or the item name, then the parameter, joined by `_`: `login_password`, `bad_password`, `co_login_password` |
 | Place | Immediately before the expanded steps of the top-level `use` that introduced it, in use order |
 
+A hoisted var is a `var` like any other, so its name is bound once: two uses of
+one item with a secret argument, without `as`, hoist the same name and are
+`duplicate-binding`, as is a scenario `var` of that name. `as` gives each use its
+own var.
+
 A `var` cannot read a capture, so an argument that reads a capture is not
 hoisted: it is substituted as written, and it has to be secret already -- a
 secret capture, or a value built from one. An argument that reads a plain
@@ -1000,8 +1005,9 @@ scope in every step, by name. Naming a capture from a later step, or from this
 step, is a compile error -- the value does not exist yet.
 
 A name that is in scope twice is not possible: a `capture` may not reuse the name
-of a `var` or of an earlier capture, because silently shadowing a value is how a
-scenario comes to assert against the wrong one. It is the compile error
+of a `var` or of an earlier capture, and a `var` may not reuse the name of an
+earlier `var`, because silently shadowing a value is how a scenario comes to
+assert against the wrong one. It is the compile error
 `duplicate-binding`, and it holds after [expansion](#collections): two uses of a
 request that captures need an [`as`](#as) to keep both.
 

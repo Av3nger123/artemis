@@ -3,6 +3,7 @@ package front_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"artemis/pkg/dsl/ast"
@@ -126,5 +127,72 @@ func TestCompileWithoutImportsIsCompile(t *testing.T) {
 	u := front.CompileWith("a.art", src, nil)
 	if u.Tree != u.Expanded || ast.Source(u.Tree) != ast.Source(tree) || bag.Len() != u.Bag.Len() || info.Steps() != u.Info.Steps() {
 		t.Fatal("CompileWith must equal Compile for a file with no imports")
+	}
+}
+
+// secretAuth is a collection whose request takes a secret parameter, so a use
+// of it with a literal argument hoists `secret var login_password`.
+const secretAuth = "collection \"auth\" {\n  request login(user, secret password) {\n" +
+	"    post \"http://h/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
+	"    expect status == 200\n    secret capture token = body.token\n  }\n}\n"
+
+// dupBindings is every duplicate-binding of name in u.
+func dupBindings(u *front.Unit, name string) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, d := range u.Bag.All() {
+		if d.Code == diag.DuplicateBinding && d.Message == `"`+name+`" is already bound` {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// Two uses of one request with a secret argument, without as, would each
+// hoist `secret var login_password`; the second var silently overwrote the
+// first, so both requests sent the second password. It is duplicate-binding.
+func TestTwoUsesHoistingOneSecretVarAreDuplicateBinding(t *testing.T) {
+	files := expand.MapLoader{
+		"auth.art": secretAuth,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"first\" }\n" +
+			"  use auth.login { user = \"a\", password = \"second\", drop captures }\n}\n",
+	}
+	u := front.CompileWith("main.art", files["main.art"], files)
+	got := dupBindings(u, "login_password")
+	if len(got) != 1 {
+		t.Fatalf("want one duplicate-binding of login_password, got %v", u.Bag.All())
+	}
+	d := got[0]
+	if d.Span.File != "auth.art" || d.Span.Line != 2 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 5 {
+		t.Fatalf("want the clash at auth.art:2 used from main.art:5, got %+v", d)
+	}
+	if !strings.Contains(d.Hint, "use ... as <name> to keep both") {
+		t.Fatalf("hint is %q", d.Hint)
+	}
+}
+
+// A scenario's own var of the name a use hoists is a clash too, above or below.
+func TestAScenarioVarClashesWithAHoistedVar(t *testing.T) {
+	for _, main := range []string{
+		"import \"auth.art\"\n\nscenario \"s\" {\n  var login_password = \"x\"\n  use auth.login { user = \"a\", password = \"p\" }\n}\n",
+		"import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"p\" }\n  var login_password = \"x\"\n}\n",
+	} {
+		files := expand.MapLoader{"auth.art": secretAuth, "main.art": main}
+		u := front.CompileWith("main.art", main, files)
+		if got := dupBindings(u, "login_password"); len(got) != 1 {
+			t.Errorf("want one duplicate-binding of login_password, got %v\n%s", u.Bag.All(), main)
+		}
+	}
+}
+
+// With as, each use hoists its own var and the file compiles.
+func TestTwoUsesWithAsHoistTwoVars(t *testing.T) {
+	files := expand.MapLoader{
+		"auth.art": secretAuth,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login as a { user = \"a\", password = \"first\" }\n" +
+			"  use auth.login as b { user = \"a\", password = \"second\" }\n}\n",
+	}
+	u := front.CompileWith("main.art", files["main.art"], files)
+	if u.Bag.HasErrors() {
+		t.Fatal(u.Bag.All())
 	}
 }

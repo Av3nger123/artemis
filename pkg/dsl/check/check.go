@@ -299,6 +299,13 @@ func (c *checker) varDecl(v *ast.VarDecl, sc *scope) {
 	}
 	c.expr(v.Value, sc.view(Unknown))
 	if v.Name.Kind == token.Ident {
+		// The vars were bound before the walk, so the first var of a name is
+		// its first binding; any other var of that name is a second value
+		// under it, and lower would quietly keep the last for both.
+		if first := sc.first[v.Name.Value]; first.tok.Span != v.Name.Span {
+			c.clash(v.Name, first, sc)
+			return
+		}
 		sc.addVar(v.Name.Value)
 	}
 }
@@ -351,7 +358,7 @@ func (c *checker) step(s *ast.StepDecl, sc *scope) {
 }
 
 // rebinds reports a capture whose name a var or an earlier capture already
-// holds, and otherwise records it as the name's first binding. SPEC.md: "a
+// holds -- varDecl reports a var whose name an earlier var holds -- and otherwise records it as the name's first binding. SPEC.md: "a
 // capture may not reuse the name of a var or of an earlier capture, because
 // silently shadowing a value is how a scenario comes to assert against the
 // wrong one."
@@ -368,6 +375,12 @@ func (c *checker) rebinds(name token.Token, sc *scope) {
 		sc.bind(name, "capture")
 		return
 	}
+	c.clash(name, first, sc)
+}
+
+// clash reports name, a var or capture, as a second binding of a name first
+// bound at first.
+func (c *checker) clash(name token.Token, first binding, sc *scope) {
 	where := fmt.Sprintf("the %s at line %d", first.kind, first.tok.Span.Line)
 	if first.tok.Span.File != name.Span.File {
 		where += " of " + first.tok.Span.File

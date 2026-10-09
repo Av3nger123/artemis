@@ -7,7 +7,7 @@ drop-after-expect	error	a drop expects line comes after an expect line in the sa
 dropped-capture	error	a step a use brought in reads a capture that drop captures removed
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
-duplicate-binding	error	a capture reuses the name of a var or of an earlier capture
+duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
 duplicate-collection	error	two collections in scope have the same name
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
