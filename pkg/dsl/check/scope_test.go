@@ -332,6 +332,11 @@ func TestDuplicateBindingNamesTheFirstBinding(t *testing.T) {
 			hint: "the capture at line 4 binds it first",
 		},
 		{
+			src:  "scenario \"s\" {\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  var token = \"a\"\n}\n",
+			msg:  `"token" is already bound`,
+			hint: "the var at line 6 also binds it",
+		},
+		{
 			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
 			msg:  `"token" is already bound`,
 			hint: "the var at line 2 binds it first",

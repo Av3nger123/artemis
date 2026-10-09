@@ -238,20 +238,23 @@ type scope struct {
 	// scenario's own file, which a binding copied in by a use is not.
 	first map[string]binding
 	file  string
+	at    int // the index in the scenario body of the declaration being walked
 }
 
 // binding is one name's first binding: what bound it and its name token.
 type binding struct {
-	kind string // "var" or "capture"
-	tok  token.Token
+	kind  string // "var" or "capture"
+	tok   token.Token
+	order int // its declaration's index in the scenario body
 }
 
 func newScope() *scope { return &scope{first: map[string]binding{}} }
 
-// bind records tok as its name's first binding, unless the name has one.
-func (s *scope) bind(tok token.Token, kind string) {
+// bind records tok, declared at body index order, as its name's first
+// binding, unless the name has one.
+func (s *scope) bind(tok token.Token, kind string, order int) {
 	if _, ok := s.first[tok.Value]; !ok {
-		s.first[tok.Value] = binding{kind: kind, tok: tok}
+		s.first[tok.Value] = binding{kind: kind, tok: tok, order: order}
 	}
 }
 

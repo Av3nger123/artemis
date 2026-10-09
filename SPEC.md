@@ -878,16 +878,28 @@ be ambiguous. It is the compile error `root-capture`, at the capture's name.
 
 Errors that depend on the use site -- arguments, overrides, a capture clash --
 are reported at the line in the collection they concern, followed by the use
-lines that brought it in, innermost first:
+lines that brought it in, innermost first. Two uses of `auth.login` without
+`as`, on lines 4 and 5 of `twice.art`, bind its hoisted secret var and its
+capture twice:
 
 ```
+collections/auth.art:4:30: "login_password" is already bound
+   4 |   request login(user, secret password, base = env("API_URL")) {
+     |                              ^^^^^^^^
+   hint: the use at twice.art:4 binds it first
+         use ... as <name> to keep both
+   used from twice.art:5:3: use auth.login { user = "b", password = "y" }
+
 collections/auth.art:9:20: "token" is already bound
    9 |     secret capture token = body.data.access_token
      |                    ^^^^^
-   hint: the capture at line 9 binds it first
+   hint: the use at twice.art:4 binds it first
          use ... as <name> to keep both
    used from twice.art:5:3: use auth.login { user = "b", password = "y" }
 ```
+
+When a use brought the first binding in, the hint names that use's line in the
+scenario; a `var` declared below the second binding "also binds it".
 
 `artemis parse --json` carries the same chain as `usedFrom`: a list of spans,
 innermost first, absent when the diagnostic was written where it is reported.

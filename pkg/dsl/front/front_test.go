@@ -196,3 +196,22 @@ func TestTwoUsesWithAsHoistTwoVars(t *testing.T) {
 		t.Fatal(u.Bag.All())
 	}
 }
+
+// Two uses of one request that captures: the first binding is the first
+// use's copy of the capture, on the very line the caret is on, so "the capture
+// at line 7 binds it first" points at itself. The hint names the use instead.
+func TestDuplicateBindingHintNamesTheFirstUse(t *testing.T) {
+	files := expand.MapLoader{
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"http://h/token\"\n    expect status == 200\n" +
+			"    capture token = body.token\n  }\n}\n",
+		"twice.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\" }\n  use auth.login { user = \"b\" }\n}\n",
+	}
+	u := front.CompileWith("twice.art", files["twice.art"], files)
+	got := dupBindings(u, "token")
+	if len(got) != 1 {
+		t.Fatalf("want one duplicate-binding of token, got %v", u.Bag.All())
+	}
+	if want := "the use at twice.art:4 binds it first\nuse ... as <name> to keep both"; got[0].Hint != want {
+		t.Fatalf("hint is %q, want %q", got[0].Hint, want)
+	}
+}
