@@ -28,13 +28,24 @@ func prefix(use *ast.UseDecl, c *ast.Collection, item string) string {
 	return c.Name.Value + "." + item
 }
 
-// varPrefix is what a hoisted secret var is named after: the alias, or the
+// varPrefix is what a hoisted secret var is named after: every alias of the
+// uses around this one (sc.aliases, "a_"), then this use's alias or the
 // item's bare name.
-func varPrefix(use *ast.UseDecl, item string) string {
+func varPrefix(sc *scope, use *ast.UseDecl, item string) string {
 	if use.Alias.Text != "" {
-		return use.Alias.Value
+		return sc.aliases + use.Alias.Value
 	}
-	return item
+	return sc.aliases + item
+}
+
+// inside is sc for the uses a flow used as use writes: their hoisted vars
+// are named under use's alias too.
+func (sc *scope) inside(use *ast.UseDecl) *scope {
+	cp := *sc
+	if use.Alias.Text != "" {
+		cp.aliases += use.Alias.Value + "_"
+	}
+	return &cp
 }
 
 // rename names s as written: a String token with the span -- and the Via --
@@ -58,11 +69,13 @@ func (e *expander) renameCaptures(steps []*ast.StepDecl, alias string, via int) 
 		for _, st := range s.Body {
 			if c, ok := st.(*ast.Capture); ok {
 				caps = append(caps, c)
-				seen[c.Name.Value] = true
 			}
 		}
+		// A step's action and expects run before its captures, so only a
+		// later step reads what this one captures.
 		e.renameReads(s, seen, alias, via)
 		for _, c := range caps {
+			seen[c.Name.Value] = true
 			n := alias + "_" + c.Name.Value
 			c.Name.Text, c.Name.Value = n, n
 		}
@@ -106,6 +119,7 @@ type scope struct {
 	secretVars map[string]bool // the secret ones
 	secrets    map[string]bool // secretVars plus the secret captures above this use
 	hoisted    *[]ast.Decl     // secret vars to append to the scenario body, in use order
+	aliases    string          // the enclosing uses' aliases, "a_inner_", prefixing a hoisted var
 }
 
 // newScope is the scope of a scenario body: its vars, and a hoisted list.

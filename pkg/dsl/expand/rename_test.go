@@ -206,3 +206,40 @@ func TestNestedSecretParamFromAFlowParamIsHoistedTwice(t *testing.T) {
 		t.Fatalf("got\n%s", got)
 	}
 }
+
+func TestAsRewritesOnlyReadsInLaterSteps(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"c.art": "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"a\"\n      capture t = body.t\n    }\n" +
+			"    step \"two\" {\n      get \"${t}/b\"\n      expect t2 == null\n      capture t2 = body.x\n    }\n" +
+			"    step \"three\" {\n      get \"${t2}/c\"\n    }\n  }\n" +
+			"  request r() {\n    get \"x\"\n    expect body.token == token\n    capture token = body.token\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var t2 = 1\n  var token = 2\n  use c.f as a {}\n  use c.r as a {}\n}\n",
+	})
+	noDiags(t, diags)
+	for _, want := range []string{
+		`get "${a_t}/b"`, "expect t2 == null", "capture a_t2 = body.x", `get "${a_t2}/c"`,
+		"expect body.token == token", "capture a_token = body.token",
+	} {
+		if !contains(got, want) {
+			t.Errorf("missing %s in\n%s", want, got)
+		}
+	}
+}
+
+func TestANestedSecretIsNamedUnderEveryEnclosingAlias(t *testing.T) {
+	c := "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n  }\n" +
+		"  flow f() {\n    use r { pw = \"p\" }\n  }\n  flow g() {\n    use r as inner { pw = \"q\" }\n  }\n}\n"
+	got, diags := run(t, map[string]string{
+		"c.art":    c,
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.f as a {}\n  use c.f as b {}\n  use c.f {}\n  use c.g as a2 {}\n}\n",
+	})
+	noDiags(t, diags)
+	for _, want := range []string{
+		"secret var a_r_pw = \"p\"", "secret var b_r_pw = \"p\"", "secret var r_pw = \"p\"", "secret var a2_inner_pw = \"q\"",
+		`{"p": a_r_pw}`, `{"p": b_r_pw}`, `{"p": a2_inner_pw}`,
+	} {
+		if !contains(got, want) {
+			t.Errorf("missing %s in\n%s", want, got)
+		}
+	}
+}

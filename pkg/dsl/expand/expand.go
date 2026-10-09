@@ -331,7 +331,7 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, it.Params, sc, varPrefix(sc, use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}
@@ -343,7 +343,7 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 		}
 		return []ast.Decl{s}
 	case *ast.FlowDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, it.Params, sc, varPrefix(sc, use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}
@@ -367,7 +367,7 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 			case *ast.UseDecl:
 				inner := ast.Clone(v, stamp)
 				substLines(inner.Lines, env)
-				for _, x := range e.expandUse(owner, c, inner, via, stack, sc.at(sc.secrets, out)) {
+				for _, x := range e.expandUse(owner, c, inner, via, stack, sc.inside(use).at(sc.secrets, out)) {
 					if s, ok := x.(*ast.StepDecl); ok {
 						named[s] = s.Name.Value
 						steps = append(steps, s)
