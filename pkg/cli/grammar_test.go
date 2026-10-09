@@ -24,7 +24,7 @@ func TestGrammarPrintsTheEBNF(t *testing.T) {
 		t.Error("stdout is not grammar.Document()")
 	}
 	for _, want := range []string{
-		"File          = { Scenario } ;",
+		"File          = { Import } { Collection | Scenario } ;",
 		"LEXICAL TOKENS", "PRECEDENCE", "SCOPES", "EXAMPLE",
 	} {
 		if !strings.Contains(stdout, want) {

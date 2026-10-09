@@ -38,9 +38,10 @@ var (
 	// the operator dropdown a form needs for a simple assertion.
 	Comparisons = []string{"==", "!=", "<", "<=", ">", ">=", "contains", "matches"}
 
-	// Blocks are the declarations a scenario body holds, plus `scenario`
-	// itself.
-	Blocks = []string{"scenario", "config", "var", "step"}
+	// Blocks are the top-level declarations of a file -- `import`,
+	// `collection` and `scenario` -- and the declarations a scenario body
+	// holds, `use` among them.
+	Blocks = []string{"import", "collection", "scenario", "config", "var", "step", "use"}
 
 	// StepStatements are the statements legal in a step after its action.
 	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}

@@ -62,12 +62,102 @@ Five things in that file are the whole language:
 | `capture` | A value pulled out of what the step produced, available by name in every later step |
 | `retry`, `timeout`, `within` | Three different clocks: retry the whole step, bound one attempt, or wait for one assertion to come true |
 
+## Reusing requests
+
+A request or a sequence of steps written once lives in a **collection**, and a
+scenario `use`s it by name, with arguments:
+
+```art
+# collections/auth.art
+collection "auth" {
+
+  request login(user, secret password, base = env("API_URL")) {
+    post "${base}/token" {
+      body = {"username": user, "password": password}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  request me(token, base = env("API_URL")) {
+    get "${base}/me" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}
+```
+
+```art
+# checkout.art
+import "collections/auth.art"
+
+scenario "orders need a token" {
+  var url = env("API_URL")
+  use auth.login { user = "alice", password = env("API_PASSWORD") }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+  }
+}
+
+scenario "an expired token is rejected" {
+  use auth.me {
+    token = "expired"
+    drop expects
+    expect status == 401
+  }
+}
+```
+
+A `use` passes arguments by name, and can change what that one use sends and
+expects: `header`, `query`, `body` and `body.<field>` lines override the
+request, `drop expects` removes the template's expects, and `expect` lines add
+new ones. `as rush` names the step `rush` and its captures `rush_...`, so one
+request can be used twice in a scenario. A `flow` holds several steps and uses,
+and `in "<step>" { ... }` aims an override at one of them.
+
+A `use` is not a call. Before anything is checked, every `use` is replaced by
+the plain steps it stands for, and `artemis expand` prints that file:
+
+```sh
+artemis expand checkout.art
+```
+
+```art
+scenario "orders need a token" {
+  var url = env("API_URL")
+  secret var login_password = env("API_PASSWORD")
+
+  # from auth.login (collections/auth.art:4) via checkout.art:6
+  step "auth.login" {
+    post "${env("API_URL")}/token" { body = {"username": "alice", "password": login_password} }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  step "list the orders" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+  }
+}
+```
+
+A failure in a step a use brought in names the collection file and line it was
+written on. Each collection is checked on its own, once, and may read only its
+parameters, its response and earlier captures in the same flow. The rules are in
+[SPEC.md](SPEC.md#collections).
+
 ## Features
 
 - Scenarios in a real language: lexed, parsed and name-checked before anything runs, with compiler-grade diagnostics -- the source line, a caret, and `did you mean "status"?`
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
+- Collections: write a request or a flow once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
@@ -499,6 +589,23 @@ three widgets or one expression field. Nothing re-derives them.
 A file artemis reports an error for produces no JSON. `--from-json` is a
 conversion and nothing else: it writes canonical source and exits zero whenever
 the document decodes, and refuses a tree holding a node that did not parse.
+
+### `artemis expand`
+
+```sh
+artemis expand checkout.art                      # to stdout
+artemis expand checkout.art -o checkout.flat.art # to a file
+```
+
+The scenario file that will actually run: imports resolved from disk, and every
+`use` replaced by the steps it stands for, each preceded by a comment naming
+the request or flow, the line it is declared on, and the `use` line that
+brought it in. A `secret` parameter's argument appears as a `secret var` just
+above the steps that read it.
+
+The file is checked first, exactly as `artemis run` checks it, and nothing is
+printed for a file with errors. `-o` will not replace an existing file without
+`--force`. See [Reusing requests](#reusing-requests).
 
 ### `artemis grammar`
 
@@ -1073,7 +1180,7 @@ Six tools:
 | `artemis_grammar` | Every finite option set in the language | | | |
 | `artemis_validate` | Every diagnostic in a piece of source text, with codes and suggestions | | | |
 | `artemis_format` | The same source in canonical layout: the bytes `artemis fmt` writes | | | |
-| `artemis_list` | The `.art` files in the workspace, in path order | disk | | |
+| `artemis_list` | The `.art` files in the workspace, in path order, and under `collections` the `collection.item` names each file declares | disk | | |
 | `artemis_write` | Checks source, makes it canonical, writes it | disk | disk | |
 | `artemis_run` | Runs the scenarios and returns the full JSON report | disk | | **yes** |
 
@@ -1112,7 +1219,9 @@ person reads.
 Every path a tool is given is relative to `--workspace`, which defaults to the
 directory the server was started in. A path that leaves the workspace is
 refused, including one that leaves it through a symlink, and `artemis_write`
-will not create a directory to write into.
+will not create a directory to write into. An `import` is held to the same
+rule: `artemis_validate`, `artemis_format`, `artemis_write` and `artemis_run` resolve imports
+inside the workspace, and an import that leaves it is an error, not a read.
 
 ## Checking a command, not an API
 
@@ -1204,10 +1313,13 @@ git diff pkg/cli/testdata
 
 `pkg/shared/readme_test.go` and `pkg/shared/spec_test.go` compile the examples in
 this file and in SPEC.md. Every fenced `art` block goes through the real front
-end -- `pkg/dsl/parser` and `pkg/dsl/check`, the same two the runner uses -- and
+end -- `pkg/dsl/front`, the same one the runner uses -- and
 every block that is a whole scenario has to name-check as well as parse: types
 inferred, every name resolvable, every field known. A fragment is wrapped in the
-part of a scenario its prose puts it in and has to parse there.
+part of a scenario its prose puts it in and has to parse there. A block that
+imports compiles against the collection files SPEC.md documents -- the blocks
+whose first line is `# collections/<name>.art` -- served from memory, so an
+example's imports and the collections it imports cannot drift apart.
 
 So an example in either document that artemis would reject is a failing test,
 not a surprise for whoever copies it. The tests also hold the prose to the code:
@@ -1226,10 +1338,10 @@ command makes -- so it stays an input the command can read.
 ## Not yet
 
 - **`db` steps.** Designed, not implemented.
-- **Control flow, functions, imports.** `if`, loops, `parallel`, `group`, `fn`,
-  `import`, `setup`, `teardown` are reserved words, not features. Reuse is what a
-  host language is for, and code generation is the answer to "I need real
-  abstraction".
+- **Control flow and functions.** `if`, loops, `parallel`, `group`, `fn`,
+  `setup`, `teardown` are reserved words, not features. Reusing a request is
+  [collections](#reusing-requests), which expand into plain steps before
+  anything runs; code generation is the answer to "I need real abstraction".
 - **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
   valuable property is determinism, and an assertion that flakes for
   unreproducible reasons is worse than a missing one.

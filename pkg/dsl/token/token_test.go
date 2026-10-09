@@ -153,11 +153,18 @@ func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
 		StepFields, ConfigBlocks, BrowserConfigFields, Builtins,
-		CollectionItems,
+		CollectionItems, UseLines,
 	}
+	// keywordNotName are the reserved words the language now uses as keywords
+	// as well: `import` and `use` open a declaration, `in` opens a use line.
+	// They stay reserved so that none of them can be a name -- a parameter
+	// named `in` could never be passed, a var named `use` would read as the
+	// start of a use -- and every place they are keywords is a position where
+	// a name is never expected. Any other overlap is still a collision.
+	keywordNotName := map[string]bool{"import": true, "use": true, "in": true}
 	for _, table := range live {
 		for _, w := range table {
-			if IsReserved(w) {
+			if IsReserved(w) && !keywordNotName[w] {
 				t.Errorf("%q is both reserved and part of the grammar", w)
 			}
 		}

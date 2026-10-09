@@ -46,12 +46,13 @@ const wantSpecScenarios = 4
 // wrapped in the part of a scenario its prose puts it in and has to parse. See
 // compileBlock.
 func TestSpecArtExamplesCompile(t *testing.T) {
+	collections := docCollections(t)
 	scenarios := 0
 	for _, b := range docBlocks(t, specPath, "art") {
 		if isArtScenario(b) {
 			scenarios++
 		}
-		compileBlock(t, specPath, b)
+		compileBlock(t, specPath, b, collections)
 	}
 
 	if scenarios < wantSpecScenarios {

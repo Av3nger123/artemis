@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/expand"
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/parser"
 )
 
@@ -71,7 +72,8 @@ func docText(t *testing.T, path string) string {
 // isArtScenario reports whether a block is a whole scenario file rather than an
 // excerpt: its first line that is neither blank nor a comment opens a
 // `scenario`. Everything else -- a lone `expect`, a single `body =` line -- is a
-// fragment the prose has already placed inside something.
+// fragment the prose has already placed inside something. It is what the doc
+// tests count; isArtFile is what they compile whole.
 func isArtScenario(b docBlock) bool {
 	for _, line := range strings.Split(b.body, "\n") {
 		line = strings.TrimSpace(line)
@@ -83,18 +85,74 @@ func isArtScenario(b docBlock) bool {
 	return false
 }
 
-// frontEnd is lex, parse and name-check over one file's source, with the two
-// bags merged.
+// isArtFile reports whether a block is a whole file rather than an excerpt:
+// its first line that is neither blank nor a comment opens a scenario, an
+// import or a collection. A file of collections and a file that imports them
+// are as whole as a scenario is, and are compiled as one.
+func isArtFile(b docBlock) bool {
+	for _, line := range strings.Split(b.body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		for _, opener := range []string{"scenario ", "import ", "collection "} {
+			if strings.HasPrefix(line, opener) {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// collectionPath is the path a documented collection file names in its first
+// line -- `# collections/auth.art` -- and "" for any other block. It is how
+// the documents say which file an example is, so that an example importing
+// "collections/auth.art" can be compiled against the block that is that file.
+func collectionPath(b docBlock) string {
+	first, _, _ := strings.Cut(b.body, "\n")
+	name, ok := strings.CutPrefix(strings.TrimSpace(first), "# ")
+	if !ok || !strings.HasPrefix(name, "collections/") || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
+		return ""
+	}
+	return name
+}
+
+// docCollections is the map loader both doc tests compile importing examples
+// against: SPEC.md's collection blocks, keyed by the path each names in its
+// first line. They are read out of SPEC.md rather than written here, so the
+// collections an example imports are the ones the document shows and the two
+// cannot drift. A block naming a path twice is a fatal error: one of the two
+// would silently be the one that was tested.
+func docCollections(t *testing.T) expand.MapLoader {
+	t.Helper()
+
+	files := expand.MapLoader{}
+	for _, b := range docBlocks(t, specPath, "art") {
+		name := collectionPath(b)
+		if name == "" {
+			continue
+		}
+		if _, dup := files[name]; dup {
+			t.Fatalf("SPEC.md line %d: a second block for %s", b.line, name)
+		}
+		files[name] = b.body
+	}
+	if len(files) == 0 {
+		t.Fatalf("SPEC.md has no block whose first line is # collections/<name>.art -- did the collections examples move?")
+	}
+	return files
+}
+
+// frontEnd is the whole front end over one documented file -- parse, expand
+// its uses against the documented collections, name-check -- with every bag
+// merged, through front.CompileWith, the function `artemis run` compiles with.
 //
-// It is pkg/cli/art.go's function of the same name, less the checker Info
-// neither doc test has any use for. Merging rather than short-circuiting is the
-// point: a block with a syntax error on one line and an unknown field on
-// another reports both, so one test run finds everything wrong with an example.
-func frontEnd(file, src string) *diag.Bag {
-	tree, bag := parser.Parse(file, src)
-	_, checked := check.Check(tree)
-	bag.Merge(checked)
-	return bag
+// Merging rather than short-circuiting is the point: a block with a syntax
+// error on one line and an unknown field on another reports both, so one test
+// run finds everything wrong with an example.
+func frontEnd(file, src string, l expand.Loader) *diag.Bag {
+	return front.CompileWith(file, src, l).Bag
 }
 
 // parseOnly is the front end stopped after the parser, which is as far as a
@@ -112,7 +170,7 @@ func errorsIn(bag *diag.Bag) string {
 		if d.Severity != diag.Error {
 			continue
 		}
-		fmt.Fprintf(&b, "\n  %d:%d: %s [%s]", d.Span.Line, d.Span.Col, d.Message, d.Code)
+		fmt.Fprintf(&b, "\n  %s:%d:%d: %s [%s]", d.Span.File, d.Span.Line, d.Span.Col, d.Message, d.Code)
 	}
 	return b.String()
 }
@@ -125,31 +183,39 @@ func errorsIn(bag *diag.Bag) string {
 // demanding a whole scenario around each would make the document worse to read
 // in exchange for making it testable. So the test supplies what the prose
 // already said, and these are the three levels a fragment can be at: a
-// scenario's declarations, a step's statements, and an action block's fields.
+// scenario's declarations, a step's statements, and an action block's fields --
+// and a collection's items, for a lone request or flow.
 var fragmentContexts = []string{
 	"scenario \"doc\" {\nBLOCK\n}\n",
+	"collection \"doc\" {\nBLOCK\n}\n",
 	"scenario \"doc\" {\n  step \"doc\" {\n    get \"https://example.test\"\nBLOCK\n  }\n}\n",
 	"scenario \"doc\" {\n  step \"doc\" {\n    post \"https://example.test\" {\nBLOCK\n    }\n  }\n}\n",
 }
 
 // compileBlock holds one `art` block to compiling.
 //
-// A whole scenario is parsed as the file it is and must also name-check clean:
+// A whole file is parsed as the file it is and must also name-check clean:
 // every step's type inferred, every name resolvable, every field known. That is
 // the strong check, and it is why a README example cannot drift from the
-// language again.
+// language again. A file that imports is expanded against l, the documented
+// collections; a documented collection file is compiled under the path it
+// names, so its own imports resolve beside it.
 //
 // A fragment is wrapped in each context in turn and has to parse clean in one
 // of them. Parse only, not check: a fragment names values its surrounding prose
 // declares -- `url`, `token`, `limit` -- so resolving names would report an
 // unknown identifier for an example that is correct, and SPEC.md's
 // deliberately-rejected `match()` example is a checker error by design.
-func compileBlock(t *testing.T, doc string, b docBlock) {
+func compileBlock(t *testing.T, doc string, b docBlock, l expand.Loader) {
 	t.Helper()
 
-	if isArtScenario(b) {
-		if bag := frontEnd(doc, b.body); bag.HasErrors() {
-			t.Errorf("%s line %d: this scenario does not compile:%s\n%s", doc, b.line, errorsIn(bag), b.body)
+	if isArtFile(b) {
+		name := collectionPath(b)
+		if name == "" {
+			name = "doc.art"
+		}
+		if bag := frontEnd(name, b.body, l); bag.HasErrors() {
+			t.Errorf("%s line %d: this file does not compile:%s\n%s", doc, b.line, errorsIn(bag), b.body)
 		}
 		return
 	}

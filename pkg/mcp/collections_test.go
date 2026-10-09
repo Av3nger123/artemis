@@ -3,11 +3,12 @@ package mcpserver_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func writeFile(t *testing.T, root, rel, src string) {

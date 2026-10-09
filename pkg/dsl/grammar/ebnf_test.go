@@ -48,8 +48,19 @@ func wordTables() map[string][]string {
 		"BrowserConfigFields": token.BrowserConfigFields,
 		"Builtins":            token.Builtins,
 		"Reserved":            token.Reserved,
+		"CollectionItems":     token.CollectionItems,
+		"UseLines":            token.UseLines,
 	}
 }
+
+// soleWords are terminals that belong to no table because each is the only
+// word its position admits: `secret` before a var, a capture or a parameter,
+// `as` after a use's item, and `expects` after `drop`. A table is a choice
+// point -- a dropdown -- and a position with one option is not one, so the
+// parser spells these directly. Listing them here is what keeps that a
+// decision rather than an accident: a new terminal still has to be put in a
+// table or argued onto this list.
+var soleWords = []string{"secret", "as", "expects"}
 
 // TestEveryTableWordIsATerminal is half of the issue's drift gate. A browser
 // action or a comparison operator added to a token table and not written into
@@ -82,6 +93,9 @@ func TestEveryTerminalIsInATable(t *testing.T) {
 			inSomeTable[w] = table
 		}
 	}
+	for _, w := range soleWords {
+		inSomeTable[w] = "soleWords"
+	}
 	var orphans []string
 	for term := range terminalsInEBNF(t) {
 		if !word.MatchString(term) {
@@ -104,7 +118,7 @@ func TestEveryTerminalIsInATable(t *testing.T) {
 func TestDocumentIsSelfContained(t *testing.T) {
 	doc := Document()
 	for _, want := range []string{
-		"GRAMMAR", "File          = { Scenario } ;",
+		"GRAMMAR", "File          = { Import } { Collection | Scenario } ;",
 		"LEXICAL TOKENS", "SEPARATORS", "PRECEDENCE", "WHAT THE GRAMMAR DOES NOT SAY",
 		"SCOPES", "EXAMPLE",
 	} {

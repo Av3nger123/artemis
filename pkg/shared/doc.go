@@ -2,8 +2,9 @@
 // tests that hold README.md and SPEC.md to the code, and nothing else.
 //
 // Both documents are written in the DSL, so both are compiled: every fenced
-// `art` block goes through the real front end -- pkg/dsl/parser and
-// pkg/dsl/check -- and a whole scenario has to name-check as well as parse. The
+// `art` block goes through the real front end -- pkg/dsl/front, which parses,
+// expands uses against SPEC.md's documented collections, and checks -- and a
+// whole file has to name-check as well as parse. The
 // one YAML block left is `artemis migrate`'s documented input, and it is loaded
 // through pkg/shared/migrate so that it stays an input the command can read.
 //

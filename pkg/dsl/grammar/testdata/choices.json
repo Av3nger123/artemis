@@ -140,8 +140,14 @@
       ]
     },
     "declaration": {
-      "doc": "The declarations a scenario body holds, plus scenario itself.",
+      "doc": "The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
       "values": [
+        {
+          "value": "import"
+        },
+        {
+          "value": "collection"
+        },
         {
           "value": "scenario"
         },
@@ -153,6 +159,9 @@
         },
         {
           "value": "step"
+        },
+        {
+          "value": "use"
         }
       ]
     },
