@@ -1016,6 +1016,12 @@ assert against the wrong one. It is the compile error
 `duplicate-binding`, and it holds after [expansion](#collections): two uses of a
 request that captures need an [`as`](#as) to keep both.
 
+This rule was always here and is newly enforced: a file that reused a name used
+to run with the last value winning, and is now refused at compile time. The fix
+is to rename the second binding -- `capture token_2 = ...` -- and read that name
+after it. `artemis migrate` does this for a YAML scenario that captures a name
+twice, and says so in the file's header.
+
 ---
 
 ## Expressions

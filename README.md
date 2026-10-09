@@ -343,6 +343,11 @@ stream, an unclosed `{{`. Migration will not guess at one. [SPEC.md's *Coming
 from YAML*](SPEC.md#coming-from-yaml) lists the habits that do not carry over
 and what to write instead.
 
+A YAML scenario may capture one name twice -- a login and a refresh that both
+keep `token` -- and a .art file binds a name once. The second capture is written
+`token_2` (the first free suffix), every later read follows it, and a line in the
+header says so.
+
 ## Commands
 
 ### `artemis run`
@@ -472,6 +477,12 @@ has to say something when the answer is yes:
 ```
 suite/01_login.art: ok
 ```
+
+**Newly enforced:** a `capture` or a `var` may not rebind a name that a `var` or
+an earlier capture already binds. SPEC.md always said so; it is now the compile
+error `duplicate-binding`, where before the last value quietly won. A file that
+reuses a name -- a refresh that captures `token` again -- renames the second
+binding, e.g. `token_2`, and reads that name after it.
 
 #### `--json`
 
