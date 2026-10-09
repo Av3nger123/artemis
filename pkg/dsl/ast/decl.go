@@ -9,7 +9,8 @@ import "artemis/pkg/dsl/token"
 // carries the file's trailing trivia -- the last newline, a closing comment --
 // and without it the round trip would lose the end of every file.
 //
-// Scenarios is []Decl rather than []*Scenario so that a top-level line that
+// Scenarios holds the file's top level in order: imports, collections and
+// scenarios (and *Bad). It is []Decl rather than []*Scenario so that a top-level line that
 // did not parse can sit in it as a *Bad, which is what keeps Source exact for
 // a broken file.
 type File struct {
