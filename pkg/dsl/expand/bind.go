@@ -14,8 +14,10 @@ import (
 // so a default that names an earlier parameter sees that parameter's value.
 //
 // An argument is the expression written at the use and keeps its own span; a
-// default is copied out of the collection and stamped.
-func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
+// default is copied out of the collection and stamped. A secret parameter's
+// value goes through secretArg, with sc saying what the use can read, pre
+// naming a hoisted var and ref naming the item in a diagnostic.
+func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, sc *scope, pre, ref string, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
 	var list []*ast.Param
 	if params != nil {
 		list = params.List
@@ -50,6 +52,7 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, sta
 	}
 
 	env := map[string]ast.Expr{}
+	var hoisted []ast.Decl
 	var missing, required []string
 	for _, p := range list {
 		name := p.Name.Value
@@ -61,6 +64,15 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, sta
 		default:
 			missing = append(missing, name)
 		}
+		// Before the next default is substituted, so a default built from a
+		// secret parameter reads the hoisted var and is secret too.
+		if x, bound := env[name]; bound && p.Secret.Text != "" {
+			var v *ast.VarDecl
+			env[name], v = e.secretArg(sc, p, x, pre, ref, stamp)
+			if v != nil {
+				hoisted = append(hoisted, v)
+			}
+		}
 		if isNil(p.Default) {
 			required = append(required, name)
 		}
@@ -69,6 +81,9 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, sta
 		e.bag.Error(use.Item.Span, diag.MissingArgument, "%s needs %s", use.Ref(), strings.Join(missing, ", ")).
 			Hintf("%s requires %s", use.Ref(), strings.Join(required, ", "))
 		ok = false
+	}
+	if ok {
+		*sc.hoisted = append(*sc.hoisted, hoisted...)
 	}
 	return env, ok
 }

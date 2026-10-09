@@ -138,17 +138,19 @@ func fileName(tree *ast.File) string {
 	return "main.art"
 }
 
-// body is a scenario body with each use replaced by its steps.
+// body is a scenario body with each use replaced by its steps, and the
+// secret vars those uses hoisted appended at the end, in use order.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 	out := make([]ast.Decl, 0, len(decls))
+	sc := newScope(decls)
 	for _, d := range decls {
 		if use, ok := d.(*ast.UseDecl); ok {
-			out = append(out, e.expandUse(u, nil, use, 0, nil)...)
+			out = append(out, e.expandUse(u, nil, use, 0, nil, sc.at(nil, out))...)
 			continue
 		}
 		out = append(out, d)
 	}
-	return out
+	return append(out, *sc.hoisted...)
 }
 
 // imports loads every file u imports.
@@ -305,8 +307,12 @@ func keys(m map[string]*ast.Collection) []string {
 // expandUse returns the steps one use stands for. u is the file the use is
 // written in, coll the collection around it (nil in a scenario), parent the
 // Via of the use that copied this one in (0 at the top), and stack the items
-// being expanded around it, for cycle detection.
-func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, parent int, stack []string) []ast.Decl {
+// being expanded around it, for cycle detection. sc is what the use's
+// arguments can read, for its secret parameters.
+//
+// Overrides apply before `as`, so an in block names a step as the flow wrote
+// it; `as` then renames the steps and captures.
+func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, parent int, stack []string, sc *scope) []ast.Decl {
 	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Parent: parent, Ref: use.Ref()})
 	via := len(e.res.Uses)
 
@@ -325,20 +331,26 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, it.Params, stamp)
+		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}
-		s := requestStep(it, stepName(use, c, it.Name.Value), env, stamp)
+		s := requestStep(it, prefix(use, c, it.Name.Value), env, stamp)
 		e.writtenLiteral(s, it.Action)
 		e.override(use, via, []*ast.StepDecl{s}, use.Lines, false, nil)
+		if use.Alias.Text != "" {
+			e.renameCaptures([]*ast.StepDecl{s}, use.Alias.Value, via)
+		}
 		return []ast.Decl{s}
 	case *ast.FlowDecl:
-		env, ok := e.bind(use, it, it.Params, stamp)
+		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}
+		pre := prefix(use, c, it.Name.Value)
 		var out []ast.Decl
+		var steps []*ast.StepDecl
+		named := map[*ast.StepDecl]string{} // each step's name before the prefix
 		own := map[string]*ast.StepDecl{}
 		for _, d := range it.Body {
 			switch v := d.(type) {
@@ -349,23 +361,31 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 				if _, dup := own[v.Name.Value]; !dup {
 					own[v.Name.Value] = s
 				}
+				named[s] = v.Name.Value
 				out = append(out, s)
+				steps = append(steps, s)
 			case *ast.UseDecl:
 				inner := ast.Clone(v, stamp)
 				substLines(inner.Lines, env)
-				out = append(out, e.expandUse(owner, c, inner, via, stack)...)
+				for _, x := range e.expandUse(owner, c, inner, via, stack, sc.at(sc.secrets, out)) {
+					if s, ok := x.(*ast.StepDecl); ok {
+						named[s] = s.Name.Value
+						steps = append(steps, s)
+					}
+					out = append(out, x)
+				}
 			}
 		}
 		e.override(use, via, nil, use.Lines, true, own)
+		for _, s := range steps {
+			rename(s, stepName(pre, named[s]))
+		}
+		if use.Alias.Text != "" {
+			e.renameCaptures(steps, use.Alias.Value, via)
+		}
 		return out
 	}
 	return nil
-}
-
-// stepName is what the step a request expands to is called: its qualified
-// ref, "auth.login".
-func stepName(_ *ast.UseDecl, c *ast.Collection, item string) string {
-	return c.Name.Value + "." + item
 }
 
 // requestStep is r written out as a step called name, with its parameters
@@ -396,10 +416,12 @@ func quote(name string) string {
 	return `"` + r.Replace(name) + `"`
 }
 
-// stampVia marks a copied token as brought in by use number via.
+// stampVia marks a copied token as brought in by use number via. A token
+// that already carries a Via -- copied in by a nested use expanded first --
+// keeps it: it is more specific, and Use.Parent links it to this use.
 func stampVia(via int) func(token.Token) token.Token {
 	return func(t token.Token) token.Token {
-		if !t.Span.IsZero() {
+		if !t.Span.IsZero() && t.Span.Via == 0 {
 			t.Span.Via = via
 		}
 		return t

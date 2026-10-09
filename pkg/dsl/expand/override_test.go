@@ -191,7 +191,7 @@ func TestInDropsAndAddsExpectsOnOneStep(t *testing.T) {
 	flow := "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"a\"\n      expect status == 200\n    }\n    step \"two\" {\n      get \"b\"\n      expect status == 200\n    }\n  }\n}\n"
 	got, diags := run(t, map[string]string{"c.art": flow, "main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.f { in \"two\" { drop expects, expect status == 404 } }\n}\n"})
 	noDiags(t, diags)
-	want := "scenario \"s\" {\n  step \"one\" {\n    get \"a\"\n    expect status == 200\n  }\n\n  step \"two\" {\n    get \"b\"\n    expect status == 404\n  }\n}\n"
+	want := "scenario \"s\" {\n  step \"c.f / one\" {\n    get \"a\"\n    expect status == 200\n  }\n\n  step \"c.f / two\" {\n    get \"b\"\n    expect status == 404\n  }\n}\n"
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}

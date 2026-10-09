@@ -151,7 +151,7 @@ func TestFlowExpandsItsStepsAndNestedUses(t *testing.T) {
 		"main.art": "import \"o.art\"\n\nscenario \"s\" {\n  use orders.buy { item = \"A-1\" }\n}\n",
 	})
 	noDiags(t, diags)
-	for _, want := range []string{`step "look" {`, `get "/items/${"A-1"}"`, `step "orders.create" {`, `body = {"sku": "A-1"}`} {
+	for _, want := range []string{`step "orders.buy / look" {`, `get "/items/${"A-1"}"`, `step "orders.buy / orders.create" {`, `body = {"sku": "A-1"}`} {
 		if !contains(got, want) {
 			t.Fatalf("missing %q in\n%s", want, got)
 		}
