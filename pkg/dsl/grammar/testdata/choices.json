@@ -78,6 +78,17 @@
         }
       ]
     },
+    "collectionItem": {
+      "doc": "What a collection body holds: a request or a flow.",
+      "values": [
+        {
+          "value": "request"
+        },
+        {
+          "value": "flow"
+        }
+      ]
+    },
     "comparison": {
       "doc": "The grammar's BinOp: the operator dropdown of a simple assertion.",
       "values": [
@@ -343,7 +354,7 @@
         },
         {
           "value": "in",
-          "purpose": "reserved for a future loop form"
+          "purpose": "used in a use block to target one step of a flow, and reserved for a future loop form"
         },
         {
           "value": "while",
@@ -367,11 +378,11 @@
         },
         {
           "value": "import",
-          "purpose": "reserved for a future module system"
+          "purpose": "imports a collection file: import \"collections/auth.art\""
         },
         {
           "value": "use",
-          "purpose": "reserved for a future module system"
+          "purpose": "expands a collection's request or flow in place: use auth.login { ... }"
         },
         {
           "value": "let",
@@ -540,6 +551,29 @@
         },
         {
           "value": "null"
+        }
+      ]
+    },
+    "useLine": {
+      "doc": "The words that open an override line in a use block. Any other identifier opening a line there is an argument.",
+      "values": [
+        {
+          "value": "header"
+        },
+        {
+          "value": "query"
+        },
+        {
+          "value": "body"
+        },
+        {
+          "value": "drop"
+        },
+        {
+          "value": "expect"
+        },
+        {
+          "value": "in"
         }
       ]
     },

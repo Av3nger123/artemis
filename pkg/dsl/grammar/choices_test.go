@@ -50,6 +50,8 @@ var owner = map[string]string{
 	"BrowserConfigFields": "configBrowserField",
 	"Builtins":            "builtin",
 	"Reserved":            "reservedWord",
+	"CollectionItems":     "collectionItem",
+	"UseLines":            "useLine",
 }
 
 // TestEveryTableIsAChoicePoint is the gate this issue is graded on.

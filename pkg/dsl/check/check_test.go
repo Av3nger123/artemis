@@ -155,6 +155,16 @@ func TestEveryReservedWordHasAPurpose(t *testing.T) {
 	}
 }
 
+// TestModuleWordsSayWhatTheyDoNow fails when import or use still describes
+// itself as a future feature after it has shipped.
+func TestModuleWordsSayWhatTheyDoNow(t *testing.T) {
+	for _, w := range []string{"import", "use"} {
+		if strings.Contains(purposes[w], "future") {
+			t.Errorf("%q is real now; its purpose still says %q", w, purposes[w])
+		}
+	}
+}
+
 // TestEveryBuiltinHasAnArityAndASignature holds the three tables that describe
 // a call -- token.Builtins, params and signatures -- to each other, so a
 // builtin added to the language cannot reach a user as `() takes 0 arguments`

@@ -76,6 +76,23 @@ func TestSpanIsZero(t *testing.T) {
 	}
 }
 
+func TestViaDoesNotMakeASpanNonZero(t *testing.T) {
+	if !(Span{Via: 3}).IsZero() {
+		t.Fatal("a span with only Via set locates nothing and must stay zero")
+	}
+}
+
+func TestUseLinesAreTheOverrideWords(t *testing.T) {
+	for _, w := range []string{"header", "query", "body", "drop", "expect", "in"} {
+		if !IsUseLine(w) {
+			t.Errorf("IsUseLine(%q) = false", w)
+		}
+	}
+	if IsUseLine("user") {
+		t.Error("IsUseLine(\"user\") = true; an argument name is not a use line")
+	}
+}
+
 func TestKindStringsAreUnique(t *testing.T) {
 	// A duplicated name would make a test failure name the wrong kind, which is
 	// the only thing these strings are for.
@@ -109,6 +126,7 @@ func TestLookupsAgreeWithTheirTables(t *testing.T) {
 		{"WordOperators", WordOperators, IsWordOperator},
 		{"Builtins", Builtins, IsBuiltin},
 		{"Reserved", Reserved, IsReserved},
+		{"UseLines", UseLines, IsUseLine},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -135,6 +153,7 @@ func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
 		StepFields, ConfigBlocks, BrowserConfigFields, Builtins,
+		CollectionItems,
 	}
 	for _, table := range live {
 		for _, w := range table {
