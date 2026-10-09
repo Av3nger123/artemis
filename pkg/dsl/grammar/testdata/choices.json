@@ -199,6 +199,11 @@
           "severity": "error"
         },
         {
+          "value": "dropped-capture",
+          "doc": "a step a use brought in reads a capture that drop captures removed",
+          "severity": "error"
+        },
+        {
           "value": "duplicate-action",
           "doc": "a step block contains more than one action block",
           "severity": "error"

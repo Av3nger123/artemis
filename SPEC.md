@@ -822,8 +822,10 @@ and the line has to say which -- and `in` on a request.
 A negative test drops both. `auth.login` captures a token, and a 401 has none:
 a capture the response cannot supply is an [errored assertion](#capture), so
 the bad-password test above writes `drop captures` beside `drop expects`. A
-capture dropped from one step of a flow is gone for the steps after it too, and
-a later read of it is a compile error, like any other unknown name.
+capture dropped from one step of a flow is gone for the steps after it too. A
+later step of the flow that reads it is the compile error `dropped-capture`, at
+the read: the read never binds to a scenario `var` or capture that happens to
+share the name.
 
 ### `as`
 

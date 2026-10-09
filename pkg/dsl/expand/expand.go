@@ -58,6 +58,7 @@ type expander struct {
 
 	standing map[*ast.Collection]standing // each collection's standalone check
 	silent   int                          // uses refused without a diagnostic of their own
+	dropped  []drop                       // captures drop captures removed, until their top-level use is checked
 }
 
 // unit is one parsed file and the collections it can see by name.
@@ -361,6 +362,17 @@ func keys(m map[string]*ast.Collection) []string {
 // Overrides apply before `as`, so an in block names a step as the flow wrote
 // it; `as` then renames the steps and captures.
 func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, parent int, stack []string, sc *scope) []ast.Decl {
+	out := e.expandOne(u, coll, use, parent, stack, sc)
+	if parent == 0 {
+		e.checkDropped(out)
+	}
+	return out
+}
+
+// expandOne is expandUse less the dropped-capture check, which waits for the
+// whole top-level expansion: a capture dropped in a nested use is read, if at
+// all, by a step of the flow around it.
+func (e *expander) expandOne(u *unit, coll *ast.Collection, use *ast.UseDecl, parent int, stack []string, sc *scope) []ast.Decl {
 	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Parent: parent, Ref: use.Ref()})
 	via := len(e.res.Uses)
 

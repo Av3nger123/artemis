@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"maps"
 	"sort"
 	"strings"
 
@@ -113,6 +114,7 @@ func (e *expander) apply(via int, s *ast.StepDecl, lines []ast.Stmt, inBlock boo
 			// capture of its own, so unlike drop expects it has no place it
 			// must come before.
 			if v.What.Value == "captures" {
+				e.noteDropped(s, v)
 				s.Body = without[*ast.Capture](s.Body)
 				continue
 			}
@@ -319,4 +321,88 @@ func placed(f *ast.Field) *ast.Field {
 	g := ast.Clone(f, identity)
 	g.Comma = token.Token{}
 	return g
+}
+
+// drop is the captures one drop captures line removed from one step.
+type drop struct {
+	step  *ast.StepDecl
+	names map[string]bool
+	at    token.Span // the drop captures line
+}
+
+// noteDropped records the captures line d is about to remove from s, so a
+// later read of one of them can be reported rather than left to bind to
+// whatever the scenario happens to call by that name.
+func (e *expander) noteDropped(s *ast.StepDecl, d *ast.Drop) {
+	names := map[string]bool{}
+	for _, st := range s.Body {
+		if c, ok := st.(*ast.Capture); ok {
+			names[c.Name.Value] = true
+		}
+	}
+	if len(names) > 0 {
+		e.dropped = append(e.dropped, drop{step: s, names: names, at: d.Span()})
+	}
+}
+
+// checkDropped reports, in the steps one top-level use expanded to, every
+// template read of a capture a drop captures line removed.
+//
+// A template may read only its parameters, its observation and the captures
+// of earlier steps in its own flow, and its parameters are substituted by
+// now. So an identifier copied from a template (Via set) that names a dropped
+// capture, in a step after the one it was dropped from, meant that capture:
+// with it gone, the read would bind to a scenario's var of the same name, or
+// to nothing. A later capture of the name binds it again and ends the search.
+// Reads written in the scenario (Via 0) are the author's own and are left to
+// the checker.
+func (e *expander) checkDropped(out []ast.Decl) {
+	var steps []*ast.StepDecl
+	at := map[*ast.StepDecl]int{}
+	for _, d := range out {
+		if s, ok := d.(*ast.StepDecl); ok {
+			at[s] = len(steps)
+			steps = append(steps, s)
+		}
+	}
+	rest := e.dropped[:0:0]
+	for _, dr := range e.dropped {
+		i, ok := at[dr.step]
+		if !ok {
+			rest = append(rest, dr)
+			continue
+		}
+		live := maps.Clone(dr.names)
+		for _, s := range steps[i+1:] {
+			if len(live) == 0 {
+				break
+			}
+			e.reportDroppedReads(s, live, dr.at)
+			for _, st := range s.Body {
+				if c, ok := st.(*ast.Capture); ok {
+					delete(live, c.Name.Value)
+				}
+			}
+		}
+	}
+	e.dropped = rest
+}
+
+// reportDroppedReads reports each template identifier in s naming one of
+// live. A call's callee names a builtin and is never a read.
+func (e *expander) reportDroppedReads(s *ast.StepDecl, live map[string]bool, dropAt token.Span) {
+	callee := map[*ast.Ident]bool{}
+	ast.Inspect(s, func(x ast.Node) {
+		switch v := x.(type) {
+		case *ast.Call:
+			callee[v.Callee] = true
+		case *ast.Ident:
+			if callee[v] || !live[v.Tok.Value] || v.Tok.Span.Via == 0 {
+				return
+			}
+			e.bag.Error(v.Tok.Span, diag.DroppedCapture,
+				"%q was dropped by drop captures at %s:%d; nothing binds it here", v.Tok.Value, dropAt.File, dropAt.Line).
+				Hintf("aim an override at the step that reads it, or keep the capture")
+		}
+	})
 }

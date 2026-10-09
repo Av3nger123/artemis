@@ -4,6 +4,7 @@ bad-collection-name	error	a collection's name is not an identifier, so no use ca
 bad-override	error	a line in a use block is not an argument or an override that applies
 bad-value	error	a value is the wrong kind for the position it is in
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
+dropped-capture	error	a step a use brought in reads a capture that drop captures removed
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a capture reuses the name of a var or of an earlier capture

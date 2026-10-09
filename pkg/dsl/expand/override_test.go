@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/check"
-	"artemis/pkg/dsl/parser"
 )
 
 func useLogin(lines string) map[string]string {
@@ -258,29 +256,46 @@ func TestDropCapturesKeepsTheExpects(t *testing.T) {
 	}
 }
 
-// A capture dropped from one step of a flow is gone for the steps after it
-// too: a later read of it is a free name, which the checker reports.
-func TestDropCapturesInAFlowLeavesALaterReadUnbound(t *testing.T) {
-	files := map[string]string{
-		"c.art":    "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"x\"\n      capture id = body.id\n    }\n    step \"two\" {\n      get \"x/${id}\"\n    }\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.f { in \"one\" { drop captures } }\n}\n",
-	}
-	tree, bag := parser.Parse("main.art", files["main.art"])
-	if bag.HasErrors() {
-		t.Fatalf("main.art does not parse: %v", bag.All())
-	}
-	res, eb := Expand(tree, MapLoader(files))
-	if eb.HasErrors() {
-		t.Fatalf("expansion: %v", eb.All())
-	}
-	_, checked := check.Check(res.File)
-	found := false
-	for _, d := range checked.All() {
-		if strings.Contains(d.Message, `"id"`) {
-			found = true
+// droppedFlow captures id in one step and reads it in the next.
+const droppedFlow = "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"x\"\n      capture id = body.id\n    }\n    step \"two\" {\n      get \"x/${id}\"\n    }\n  }\n}\n"
+
+// A capture dropped from one step of a flow is gone for the steps after it.
+// A later read of it is an error at the read, never a quiet bind to the
+// scenario's own var of the same name -- with or without as, which renames
+// only the captures that are still there.
+func TestAReadOfADroppedCaptureIsAnError(t *testing.T) {
+	for name, use := range map[string]string{
+		"plain": `use c.f { in "one" { drop captures } }`,
+		"as":    `use c.f as co { in "one" { drop captures } }`,
+	} {
+		_, diags := run(t, map[string]string{
+			"c.art":    droppedFlow,
+			"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var id = 1\n  " + use + "\n}\n",
+		})
+		if !contains(diags, "c.art: dropped-capture: \"id\" was dropped by drop captures at main.art:5") {
+			t.Errorf("%s: got %q", name, diags)
 		}
 	}
-	if !found {
-		t.Fatalf("the read of a dropped capture was not reported: %v", checked.All())
+}
+
+// A flow that drops a nested use's capture and then reads it is wrong on its
+// own, so the collection's standalone check reports it, in the collection,
+// before any use could bind the read to a scenario's var.
+func TestAReadOfACaptureDroppedInANestedUseIsAnError(t *testing.T) {
+	_, diags := run(t, map[string]string{
+		"c.art":    "collection \"c\" {\n  request r() {\n    get \"x\"\n    capture id = body.id\n  }\n  flow f() {\n    use r { drop captures }\n    step \"two\" {\n      get \"x/${id}\"\n    }\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var id = 1\n  use c.f\n}\n",
+	})
+	if !contains(diags, "c.art: unknown-identifier: unknown name \"id\"") {
+		t.Fatalf("got %q", diags)
 	}
+}
+
+func TestADroppedCaptureNobodyReadsIsFine(t *testing.T) {
+	flow := strings.Replace(droppedFlow, "${id}", "2", 1)
+	_, diags := run(t, map[string]string{
+		"c.art":    flow,
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var id = 1\n  use c.f { in \"one\" { drop captures } }\n  step \"mine\" {\n    get \"x/${id}\"\n  }\n}\n",
+	})
+	noDiags(t, diags)
 }

@@ -111,9 +111,10 @@ scenario "bad password is rejected" {
 A `use` passes arguments by name, and can change what that one use sends and
 expects: `header`, `query`, `body` and `body.<field>` lines override the
 request, `drop expects` and `drop captures` remove the template's expects and
-captures -- a 401 has no token to capture -- and `expect` lines add new ones. `as rush` names the step `rush` and its captures `rush_...`, so one
-request can be used twice in a scenario. A `flow` holds several steps and uses,
-and `in "<step>" { ... }` aims an override at one of them.
+captures -- a 401 has no token to capture -- and `expect` lines add new ones.
+`as rush` names the step `rush` and its captures `rush_...`, so one request can
+be used twice in a scenario. A `flow` holds several steps and uses, and
+`in "<step>" { ... }` aims an override at one of them.
 
 A `use` is not a call. Before anything is checked, every `use` is replaced by
 the plain steps it stands for, and `artemis expand` prints that file:

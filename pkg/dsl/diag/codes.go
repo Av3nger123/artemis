@@ -193,6 +193,7 @@ const (
 	UnknownFlowStep     Code = "unknown-flow-step"
 	DropAfterExpect     Code = "drop-after-expect"
 	SecretArgument      Code = "secret-argument"
+	DroppedCapture      Code = "dropped-capture"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -250,6 +251,7 @@ var registry = []CodeInfo{
 	{UnknownFlowStep, Error, "an in block names a step the flow does not have"},
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
 	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
+	{DroppedCapture, Error, "a step a use brought in reads a capture that drop captures removed"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.
