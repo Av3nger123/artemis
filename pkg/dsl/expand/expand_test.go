@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"strings"
 	"testing"
 
 	"artemis/pkg/dsl/ast"
@@ -259,5 +260,106 @@ func TestUseRecordsTheItemItExpanded(t *testing.T) {
 	it := res.Uses[0].Item
 	if it.File != "auth.art" || it.Line != 2 {
 		t.Fatalf("Item = %+v, want the request's name at auth.art:2", it)
+	}
+}
+
+// defaulted is orders.art with a defaulted flow parameter that its nested use
+// and its own step both read: line 13 is the flow's parameter list, line 14
+// its nested use, line 16 its step.
+const defaultedAuth = "collection \"auth\" {\n  request login(user, base = \"h\") {\n    post \"${base}/token\"\n" +
+	"    expect status == 200\n    capture token = body.token\n  }\n}\n"
+
+const defaultedOrders = `import "auth.art"
+
+collection "orders" {
+  request create(sku, qty = 1, base = env("API_URL")) {
+    post "${base}/orders" {
+      body = {"sku": sku, "qty": qty}
+    }
+    expect status == 201
+    capture order_id = body.data.id
+  }
+
+  # the flow
+  flow checkout(user, ref, base = env("API_URL")) {
+    use auth.login { user = user, base = base }
+    use create { sku = ref, base = base }
+    step "pay" {
+      post "${base}/orders/${order_id}/pay"
+      expect status == 200
+    }
+  }
+}
+`
+
+// A param default copied into a nested use line, or into a flow's step, has
+// the template's file and Via; it must not pull the use's or the step's span
+// back to the parameter list.
+func TestADefaultDoesNotMoveANestedUseOrAStep(t *testing.T) {
+	files := MapLoader{
+		"auth.art":   defaultedAuth,
+		"orders.art": defaultedOrders,
+		"main.art":   "import \"orders.art\"\n\nscenario \"s\" {\n  use orders.checkout { user = \"a\", ref = \"r\" }\n}\n",
+	}
+	tree, _ := parserParse(files["main.art"])
+	res, bag := Expand(tree, files)
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	body := res.File.Scenarios[0].(*ast.Scenario).Body
+	var login, pay *ast.StepDecl
+	for _, d := range body {
+		if s, ok := d.(*ast.StepDecl); ok {
+			switch s.Name.Value {
+			case "orders.checkout / auth.login":
+				login = s
+			case "orders.checkout / pay":
+				pay = s
+			}
+		}
+	}
+	if login == nil || pay == nil {
+		t.Fatalf("steps missing:\n%v", body)
+	}
+	chain := res.Chain(login.Action.Span())
+	if len(chain) != 2 || chain[0].File != "orders.art" || chain[0].Line != 14 || chain[0].Col != 5 ||
+		chain[1].File != "main.art" || chain[1].Line != 4 {
+		t.Fatalf("chain %+v, want orders.art:14:5 then main.art:4", chain)
+	}
+	if sp := pay.Span(); sp.File != "orders.art" || sp.Line != 16 {
+		t.Fatalf("pay's span %+v, want it to start at orders.art:16", sp)
+	}
+}
+
+// A request block an override synthesises sits at the override line; in a
+// collection declared in the same file as the use, it must not stretch the
+// request's span down to that line.
+func TestASynthesisedBlockDoesNotStretchTheRequest(t *testing.T) {
+	src := "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n  }\n}\n\n" +
+		"scenario \"s\" {\n  use c.r { header \"X\" = \"1\" }\n}\n"
+	tree, _ := parserParse(src)
+	res, bag := Expand(tree, MapLoader{})
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	step := res.File.Scenarios[0].(*ast.Scenario).Body[0].(*ast.StepDecl)
+	if sp := step.Action.Span(); sp.Line != 3 || sp.EndLine != 3 {
+		t.Fatalf("request span %+v, want it on line 3", sp)
+	}
+	if sp := step.Span(); sp.Line != 2 || sp.EndLine != 5 {
+		t.Fatalf("step span %+v, want lines 2-5", sp)
+	}
+}
+
+// A default substituted into an expect must not move the expect above the
+// action: the expanded step prints, and runs, in the order it was written.
+func TestADefaultDoesNotReorderTheStep(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"c.art":    "collection \"c\" {\n  request r(code = 200) {\n    get \"http://x\"\n    expect status == code\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r\n}\n",
+	})
+	noDiags(t, diags)
+	if g, e := strings.Index(got, "get "), strings.Index(got, "expect "); g < 0 || e < g {
+		t.Fatalf("the action must come first:\n%s", got)
 	}
 }

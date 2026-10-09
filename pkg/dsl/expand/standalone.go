@@ -90,7 +90,7 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 				// The flow's parameters are vars of the synthetic scenario, so
 				// an argument naming one needs no substitution.
 				use := ast.Clone(v, identity)
-				steps = append(steps, e.expandUse(u, c, use, 0, stack, sc.at(nil, steps))...)
+				steps = append(steps, e.expandUse(u, c, use, use.Span(), 0, stack, sc.at(nil, steps))...)
 			}
 		}
 	}

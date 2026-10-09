@@ -163,7 +163,7 @@ func (e *expander) request(s *ast.StepDecl, word token.Token) *ast.Request {
 // keyed is a header or query override: replace the value of the field with
 // the same key -- a header's compared case-insensitively -- or add one.
 func (e *expander) keyed(via int, req *ast.Request, f *ast.Field) {
-	b := block(via, req, f.Span())
+	b := block(req)
 	for _, x := range b.Fields {
 		g, ok := x.(*ast.Field)
 		if ok && g.Name.Value == f.Name.Value && sameKey(f.Name.Value == "header", g.Key, f.Key) {
@@ -196,7 +196,7 @@ func (e *expander) wholeBody(via int, s *ast.StepDecl, req *ast.Request, f *ast.
 		g.Value = ast.Clone(f.Value, identity)
 		return
 	}
-	b := block(via, req, f.Span())
+	b := block(req)
 	b.Fields = append(b.Fields, placed(f))
 }
 
@@ -298,12 +298,15 @@ func (e *expander) writtenLiteral(s *ast.StepDecl, a ast.Action) {
 	}
 }
 
-// block is req's field block, made at the override line when it had none.
-func block(via int, req *ast.Request, line token.Span) *ast.Block {
+// block is req's field block, made at the end of the request when it had
+// none: at the override line instead, in a collection declared in the use's
+// own file, it would stretch the request's span down to the use.
+func block(req *ast.Request) *ast.Block {
 	if req.Block == nil {
-		open := at(via, line)
+		end := req.Span()
+		open := end
+		open.Line, open.Col = end.EndLine, end.EndCol
 		shut := open
-		shut.Line, shut.Col = open.EndLine, open.EndCol
 		req.Block = &ast.Block{LBrace: synth(token.LBrace, "{", "", open), RBrace: synth(token.RBrace, "}", "", shut)}
 	}
 	return req.Block

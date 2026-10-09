@@ -136,17 +136,17 @@ func TestHeaderOverrideOnABlocklessRequestMakesABlock(t *testing.T) {
 	if b == nil || len(b.Fields) != 1 {
 		t.Fatalf("block %+v", b)
 	}
-	for _, sp := range []struct {
-		name string
-		at   ast.Node
-	}{{"block", b}} {
-		s := sp.at.Span()
-		if s.File != "main.art" || s.Line != 4 || s.Via != 1 {
-			t.Fatalf("%s span %+v", sp.name, s)
-		}
-	}
-	if b.LBrace.Span.Via != 1 || b.RBrace.Span.Via != 1 || b.LBrace.Span.Line != 4 {
+	// The braces sit at the end of the request, in the collection, so the
+	// request's span stays the request's; the header line keeps the span it
+	// was written with, at the use.
+	if b.LBrace.Span.File != "c.art" || b.LBrace.Span.Line != 3 || b.LBrace.Span.Via != 1 || b.RBrace.Span != b.LBrace.Span {
 		t.Fatalf("braces %+v %+v", b.LBrace.Span, b.RBrace.Span)
+	}
+	if f := b.Fields[0].Span(); f.File != "main.art" || f.Line != 4 {
+		t.Fatalf("header line span %+v", f)
+	}
+	if r := step.Action.Span(); r.File != "c.art" || r.Line != 3 || r.EndLine != 3 {
+		t.Fatalf("request span %+v", r)
 	}
 	if v := b.Fields[0].(*ast.Field).Value.Span(); v.Via != 0 || v.File != "main.art" {
 		t.Fatalf("an override value is written at the use and is not stamped: %+v", v)

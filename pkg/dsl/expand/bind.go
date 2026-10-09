@@ -115,7 +115,7 @@ func takes(item string, names []string) string {
 // builtin, never a parameter.
 //
 // x is rewritten in place, so callers pass a copy; the replacements are fresh
-// copies of env's values, one per occurrence.
+// copies of env's values, one per occurrence, placed by relocate.
 func subst(x ast.Expr, env map[string]ast.Expr) ast.Expr {
 	if isNil(x) {
 		return x
@@ -123,7 +123,7 @@ func subst(x ast.Expr, env map[string]ast.Expr) ast.Expr {
 	switch v := x.(type) {
 	case *ast.Ident:
 		if r, ok := env[v.Tok.Value]; ok && !isNil(r) {
-			return ast.Clone(r, identity)
+			return ast.Clone(r, relocate(v.Tok.Span))
 		}
 	case *ast.Interp:
 		for i := range v.Segments {
@@ -160,6 +160,21 @@ func subst(x ast.Expr, env map[string]ast.Expr) ast.Expr {
 		v.X = subst(v.X, env)
 	}
 	return x
+}
+
+// relocate places a replacement's tokens for the identifier at at: a token
+// written where at was -- same file, same copy -- is moved onto at. That is a
+// parameter's default, copied out of the parameter list; left at its own
+// offset, it would stretch the node it lands in back to that list and sort a
+// statement holding it above the action. An argument written at the use has
+// another file or Via, keeps its span, and Join and SplitOrigin set it aside.
+func relocate(at token.Span) func(token.Token) token.Token {
+	return func(t token.Token) token.Token {
+		if !t.Span.IsZero() && t.Span.File == at.File && t.Span.Via == at.Via {
+			t.Span = at
+		}
+		return t
+	}
 }
 
 // operand is subst for an operand of an operator: a replacement that is

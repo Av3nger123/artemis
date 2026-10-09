@@ -164,7 +164,7 @@ func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 	sc := newScope(decls)
 	for _, d := range decls {
 		if use, ok := d.(*ast.UseDecl); ok {
-			steps := e.expandUse(u, nil, use, 0, nil, sc.at(nil, out))
+			steps := e.expandUse(u, nil, use, use.Span(), 0, nil, sc.at(nil, out))
 			out = append(out, *sc.hoisted...)
 			*sc.hoisted = (*sc.hoisted)[:0]
 			out = append(out, steps...)
@@ -354,15 +354,17 @@ func keys(m map[string]*ast.Collection) []string {
 }
 
 // expandUse returns the steps one use stands for. u is the file the use is
-// written in, coll the collection around it (nil in a scenario), parent the
+// written in, coll the collection around it (nil in a scenario), line the use
+// line's span as written -- taken before any parameter was substituted into
+// a nested use, whose default would otherwise stretch it -- parent the
 // Via of the use that copied this one in (0 at the top), and stack the items
 // being expanded around it, for cycle detection. sc is what the use's
 // arguments can read, for its secret parameters.
 //
 // Overrides apply before `as`, so an in block names a step as the flow wrote
 // it; `as` then renames the steps and captures.
-func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, parent int, stack []string, sc *scope) []ast.Decl {
-	out := e.expandOne(u, coll, use, parent, stack, sc)
+func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, line token.Span, parent int, stack []string, sc *scope) []ast.Decl {
+	out := e.expandOne(u, coll, use, line, parent, stack, sc)
 	if parent == 0 {
 		e.checkDropped(out)
 	}
@@ -372,8 +374,8 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 // expandOne is expandUse less the dropped-capture check, which waits for the
 // whole top-level expansion: a capture dropped in a nested use is read, if at
 // all, by a step of the flow around it.
-func (e *expander) expandOne(u *unit, coll *ast.Collection, use *ast.UseDecl, parent int, stack []string, sc *scope) []ast.Decl {
-	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Parent: parent, Ref: use.Ref()})
+func (e *expander) expandOne(u *unit, coll *ast.Collection, use *ast.UseDecl, line token.Span, parent int, stack []string, sc *scope) []ast.Decl {
+	e.res.Uses = append(e.res.Uses, Use{Span: line, Parent: parent, Ref: use.Ref()})
 	via := len(e.res.Uses)
 
 	owner, c, item, ok := e.resolve(u, coll, use)
@@ -386,7 +388,7 @@ func (e *expander) expandOne(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 	e.res.Uses[via-1].Ref = key
 	if i := slices.Index(stack, key); i >= 0 {
 		chain := append(slices.Clone(stack[i:]), key)
-		e.bag.Error(use.Span(), diag.UseCycle, "use cycle: %s", strings.Join(chain, " -> "))
+		e.bag.Error(line, diag.UseCycle, "use cycle: %s", strings.Join(chain, " -> "))
 		return nil
 	}
 	stack = append(slices.Clone(stack), key)
@@ -429,8 +431,9 @@ func (e *expander) expandOne(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 				steps = append(steps, s)
 			case *ast.UseDecl:
 				inner := ast.Clone(v, stamp)
+				line := inner.Span()
 				substLines(inner.Lines, env)
-				for _, x := range e.expandUse(owner, c, inner, via, stack, sc.inside(use).at(sc.secrets, out)) {
+				for _, x := range e.expandUse(owner, c, inner, line, via, stack, sc.inside(use).at(sc.secrets, out)) {
 					if s, ok := x.(*ast.StepDecl); ok {
 						named[s] = s.Name.Value
 						steps = append(steps, s)
