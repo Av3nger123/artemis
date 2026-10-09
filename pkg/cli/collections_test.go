@@ -47,9 +47,8 @@ func authServer(t *testing.T) *httptest.Server {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			if body.Password != "s3cret" {
-				// Still a token-shaped body: `use auth.login as bad` drops
-				// the request's expects, not its capture, so bad_token has
-				// to be readable off a refusal too.
+				// Still a token-shaped body, so failing.art -- which keeps
+				// the request's capture -- fails on its status expect alone.
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"data":{"access_token":"refused"}}`))
 				return

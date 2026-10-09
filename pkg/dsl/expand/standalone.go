@@ -113,8 +113,14 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 
 	scratch := e.bag
 	e.bag, e.silent = bag, silent
+	ref := c.Name.Value + "." + name.Value
 	for _, d := range scratch.All() {
 		d.Span.Via = 0
+		if d.Code == diag.UnknownIdentifier && len(d.Suggestions) == 0 {
+			// Not a near miss: a name the scenario would have to supply,
+			// which a collection only ever takes as a parameter.
+			d.Hint = "add it as a parameter of " + ref + "\n" + d.Hint
+		}
 		e.bag.Add(d)
 	}
 	return ok

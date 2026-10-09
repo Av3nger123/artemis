@@ -14,7 +14,6 @@ scenario "checkout" {
   # from auth.login (testdata/collections/auth.art:2) via testdata/collections/checkout.art:8
   step "bad" {
     post "${url}/token" { body = {"username": "alice", "password": bad_password} }
-    secret capture bad_token = body.data.access_token
     expect status == 401
   }
 

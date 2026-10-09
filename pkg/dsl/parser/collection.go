@@ -226,6 +226,8 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 		return open, []ast.Stmt{p.recoverTo()}, token.Token{}
 	}
 	defer p.leave()
+	p.useLines++
+	defer func() { p.useLines-- }()
 
 	var lines []ast.Stmt
 	for !p.at(token.RBrace) && !p.at(token.EOF) {

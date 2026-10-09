@@ -241,11 +241,19 @@ func TestAsRewritesOnlyReadsInLaterSteps(t *testing.T) {
 func TestANestedSecretIsNamedUnderEveryEnclosingAlias(t *testing.T) {
 	c := "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n  }\n" +
 		"  flow f() {\n    use r { pw = \"p\" }\n  }\n  flow g() {\n    use r as inner { pw = \"q\" }\n  }\n}\n"
-	got, diags := run(t, map[string]string{
+	files := map[string]string{
 		"c.art":    c,
 		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.f as a {}\n  use c.f as b {}\n  use c.f {}\n  use c.g as a2 {}\n}\n",
-	})
+	}
+	got, diags := run(t, files)
 	noDiags(t, diags)
+	// Placed where the checker binds them for the steps that read them, and
+	// named apart: the expanded tree checks clean.
+	tree, _ := parser.Parse("main.art", files["main.art"])
+	res, _ := Expand(tree, MapLoader(files))
+	if _, cb := check.Check(res.File); cb.Len() != 0 {
+		t.Fatalf("check of the expanded tree: %v", cb.All())
+	}
 	for _, want := range []string{
 		"secret var a_r_pw = \"p\"", "secret var b_r_pw = \"p\"", "secret var r_pw = \"p\"", "secret var a2_inner_pw = \"q\"",
 		`{"p": a_r_pw}`, `{"p": b_r_pw}`, `{"p": a2_inner_pw}`,

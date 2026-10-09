@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/diag"
 )
 
 func mustParse(t *testing.T, src string) *ast.File {
@@ -136,5 +137,18 @@ func TestCollectionNameMustBeAnIdentifier(t *testing.T) {
 		if got := identLike(name); got != want {
 			t.Errorf("identLike(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+// A comma is legal between a use block's lines, so the hint for two lines
+// run together offers it -- not "there are no semicolons".
+func TestMissingSeparatorInAUseBlockOffersAComma(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  use c.r { sku = \"a\" qty = 2 }\n}\n")
+	all := bag.All()
+	if len(all) != 1 || all[0].Code != diag.MissingSeparator {
+		t.Fatalf("want one missing-separator, got %v", all)
+	}
+	if all[0].Hint != "separate with a comma or a newline" {
+		t.Errorf("hint = %q", all[0].Hint)
 	}
 }

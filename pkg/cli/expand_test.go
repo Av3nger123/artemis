@@ -42,7 +42,6 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 		`secret var bad_password = "wrong"`,
 		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/checkout.art:8",
 		`step "bad"`,
-		"capture bad_token",
 		"expect status == 401",
 		`step "orders"`,
 	}
@@ -57,6 +56,9 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 	bad := out[strings.Index(out, `step "bad"`):strings.Index(out, `step "orders"`)]
 	if strings.Contains(bad, "== 200") {
 		t.Errorf("drop expects left the request's expect in step bad:\n%s", bad)
+	}
+	if strings.Contains(bad, "capture") {
+		t.Errorf("drop captures left the request's capture in step bad:\n%s", bad)
 	}
 	if strings.Contains(out, "use ") || strings.Contains(out, "import ") {
 		t.Errorf("the expanded scenario still has a use or an import:\n%s", out)

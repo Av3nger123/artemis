@@ -184,3 +184,17 @@ func TestATemplateCaptureMayNotTakeAnObservationRootsName(t *testing.T) {
 		}
 	}
 }
+
+// A free name in a template is something a scenario would have to supply, and
+// a collection takes everything from outside as a parameter: the hint says so.
+func TestAFreeNameHintSaysAddAParameter(t *testing.T) {
+	tree, _ := parser.Parse("main.art", "import \"c.art\"\n\nscenario \"s\" {\n  var url = \"h\"\n  use c.r { base = \"b\" }\n}\n")
+	_, bag := Expand(tree, MapLoader{"c.art": "collection \"c\" {\n  request r(base) {\n    get \"${url}/x\"\n    expect status == 200\n  }\n}\n"})
+	all := bag.All()
+	if len(all) != 1 || all[0].Code != diag.UnknownIdentifier {
+		t.Fatalf("want one unknown-identifier, got %v", all)
+	}
+	if !strings.HasPrefix(all[0].Hint, "add it as a parameter of c.r\n") {
+		t.Fatalf("hint is %q", all[0].Hint)
+	}
+}
