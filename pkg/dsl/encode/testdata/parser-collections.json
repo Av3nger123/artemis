@@ -423,7 +423,6 @@
               "kind": "use",
               "collection": "auth",
               "item": "login",
-              "alias": "",
               "lines": [
                 {
                   "kind": "field",
@@ -509,9 +508,7 @@
             },
             {
               "kind": "use",
-              "collection": "",
               "item": "create",
-              "alias": "",
               "lines": [
                 {
                   "kind": "field",
@@ -931,7 +928,6 @@
           "kind": "use",
           "collection": "orders",
           "item": "checkout",
-          "alias": "",
           "lines": [
             {
               "kind": "field",

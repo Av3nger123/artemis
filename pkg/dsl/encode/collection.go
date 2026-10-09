@@ -70,14 +70,25 @@ func (e *enc) flowDecl(f *ast.FlowDecl) *obj {
 		comments(append(toks(f.Keyword, f.Name), nodeToks(f.Params)...), f.LBrace, f.RBrace).done()
 }
 
+// useDecl leaves collection out for a bare sibling ref and alias out when
+// there is no `as`: absent, not empty, which is obj.set's rule for a missing
+// value and what the schema promises.
 func (e *enc) useDecl(u *ast.UseDecl) *obj {
 	return start(kindUse, u).
-		set("collection", u.Collection.Text).
+		set("collection", optional(u.Collection.Text)).
 		set("item", u.Item.Text).
-		set("alias", u.Alias.Text).
+		set("alias", optional(u.Alias.Text)).
 		set("lines", e.list(toNodes(u.Lines))).
 		span().
 		comments(toks(u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
+}
+
+// optional is s, or nil -- which set drops -- when s is empty.
+func optional(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (e *enc) bodySet(b *ast.BodySet) *obj {

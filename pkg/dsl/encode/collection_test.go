@@ -48,6 +48,9 @@ func TestUseWithoutABlockDecodesWithoutOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if strings.Contains(string(doc), `"collection": ""`) || strings.Contains(string(doc), `"alias": ""`) {
+		t.Errorf("an absent collection or alias must be left out, not written empty:\n%s", doc)
+	}
 	got, err := Source(doc)
 	if err != nil {
 		t.Fatal(err)
