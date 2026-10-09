@@ -254,3 +254,67 @@ func TestFailuresHeadingAgreesInNumber(t *testing.T) {
 		t.Errorf("Failures() =\n%s\nwant a \"1 failure:\" heading", got)
 	}
 }
+
+// ART-54: a secret operand must not reach the console, and the other side must
+// still be readable -- a block that withheld both would hide the comparison.
+func TestFailuresRedactsASecretOperand(t *testing.T) {
+	step := &result.StepResult{Name: "compare", Line: 4}
+	step.Assert(result.Assertion{
+		Kind: "expect", Path: "pw", Operator: "equals",
+		Expected: "wanted", Actual: "hunter2", Line: 6,
+		ActualSecret: true,
+	}.Fail())
+	step.Finish(time.Millisecond)
+
+	got := render(func(c *Console) { c.Failures(failRun(oneStep("secrets", "s.art", step))) })
+	if strings.Contains(got, "hunter2") {
+		t.Errorf("the credential reached the console:\n%s", got)
+	}
+	if !strings.Contains(got, Redacted) {
+		t.Errorf("want %q in the block:\n%s", Redacted, got)
+	}
+	if !strings.Contains(got, `"wanted"`) {
+		t.Errorf("the other operand must still print:\n%s", got)
+	}
+	// The path is source text, not a value, so it stays: it is what the reader
+	// goes and looks at.
+	if !strings.Contains(got, "pw") {
+		t.Errorf("the subject must still print:\n%s", got)
+	}
+}
+
+// Both sides secret is legal and withholds both.
+func TestFailuresRedactsBothOperands(t *testing.T) {
+	step := &result.StepResult{Name: "compare", Line: 4}
+	step.Assert(result.Assertion{
+		Kind: "expect", Path: "pw", Operator: "equals",
+		Expected: "left-secret", Actual: "right-secret", Line: 6,
+		ExpectedSecret: true, ActualSecret: true,
+	}.Fail())
+	step.Finish(time.Millisecond)
+
+	got := render(func(c *Console) { c.Failures(failRun(oneStep("secrets", "s.art", step))) })
+	for _, leak := range []string{"left-secret", "right-secret"} {
+		if strings.Contains(got, leak) {
+			t.Errorf("%q reached the console:\n%s", leak, got)
+		}
+	}
+}
+
+// The type hint is computed from the real values, because the type of a
+// credential is not the credential and losing the hint would make a withheld
+// failure much harder to diagnose.
+func TestFailuresKeepsTheTypeHintWhenRedacting(t *testing.T) {
+	step := &result.StepResult{Name: "compare", Line: 4}
+	step.Assert(result.Assertion{
+		Kind: "expect", Path: "pw", Operator: "equals",
+		Expected: 200, Actual: "200", Line: 6,
+		ActualSecret: true,
+	}.Fail())
+	step.Finish(time.Millisecond)
+
+	got := render(func(c *Console) { c.Failures(failRun(oneStep("secrets", "s.art", step))) })
+	if !strings.Contains(got, "(number)") || !strings.Contains(got, "(string)") {
+		t.Errorf("the type hint must survive a redaction:\n%s", got)
+	}
+}

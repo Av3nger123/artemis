@@ -362,6 +362,16 @@ func goldenCases(t *testing.T) []goldenCase {
 			},
 		},
 		{
+			// ART-54: a failed `expect` against a secret binding, with the
+			// JSON document as well as the console summary, because both are
+			// places an operand is written. The golden is the assertion that
+			// `hunter2` appears in neither.
+			name:    "secret_redacted",
+			args:    []string{"--report", "json"},
+			wantErr: true,
+			handler: jsonHandler(http.StatusOK, `{"given": "not-the-password"}`),
+		},
+		{
 			// The whole --report json document for a run with something of
 			// every kind in it: a scenario that passed, one with a failed
 			// assertion and an errored step, and a file that would not load
@@ -597,7 +607,9 @@ func eventGoldenCases(t *testing.T) []goldenCase {
 		byName[c.name] = c
 	}
 	var cases []goldenCase
-	for _, name := range []string{"pass", "fail", "template_error", "report_json"} {
+	// secret_redacted: a step-end carries operands, so the stream is one more
+	// place a credential must not appear (ART-54).
+	for _, name := range []string{"pass", "fail", "template_error", "report_json", "secret_redacted"} {
 		c, ok := byName[name]
 		if !ok {
 			t.Fatalf("no golden case named %s to repeat with --events", name)

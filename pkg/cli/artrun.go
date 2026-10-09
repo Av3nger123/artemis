@@ -18,6 +18,7 @@ import (
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/trace"
 )
 
 // This file is the run path: compile a .art file, then run each scenario in
@@ -273,10 +274,15 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 	var (
 		asserts []result.AssertionResult
 		lastErr error
+		// The last attempt's observation, for the trace. Only the last one:
+		// pkg/executor's contract is that a later attempt replaces an earlier
+		// one whole, so a trace of every attempt would describe a step the
+		// result tree beside it does not.
+		roots map[string]any
 	)
 	for i := 1; i <= attempts; i++ {
 		stepResult.Attempts = i
-		asserts, lastErr = attemptArtStep(ctx, rt.reg, st, model, scope, env)
+		asserts, roots, lastErr = attemptArtStep(ctx, rt.reg, st, model, scope, env)
 		if lastErr == nil && result.AllPassed(asserts) {
 			break
 		}
@@ -293,6 +299,9 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 		// case a picture helps most -- a click that timed out says nothing
 		// about what the page was showing.
 		shoot(ctx, rt, scenario, st, stepResult)
+		// And the case a trace helps most: there is no response to read, so
+		// what was sent is the whole of the evidence.
+		record(rt, scenario, st, model, scope, stepResult, roots, lastErr)
 		return
 	}
 	for _, a := range asserts {
@@ -302,6 +311,60 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 	if !stepResult.Passed() {
 		shoot(ctx, rt, scenario, st, stepResult)
 	}
+	// Every step, pass or fail. A trace exists to answer "what actually went
+	// over the wire", and comparing a passing step with a failing one is half
+	// of how that question gets answered.
+	record(rt, scenario, st, model, scope, stepResult, roots, nil)
+}
+
+// record writes one step's trace and stamps its path on the step for the report
+// to name.
+//
+// A trace that could not be written is logged and otherwise ignored: it is
+// evidence about the run, and failing a run because its evidence would not
+// write would be the worst possible report of a disk problem. This is shoot's
+// rule, for shoot's reason.
+func record(rt *runtimeEnv, scenario string, st *lower.Step, model models.Step, scope executor.Scope, stepResult *result.StepResult, roots map[string]any, runErr error) {
+	if rt.traces == nil || rt.traces.Dir == "" {
+		return
+	}
+	path, err := rt.traces.On(trace.Of(
+		scenario, model, stepResult.Attempts, roots, runErr, secretValues(st, scope)...))
+	if err != nil {
+		logger.Logger.Warn("Could not write a trace", "name", model.Name, "error", err.Error())
+		return
+	}
+	stepResult.Trace = path
+}
+
+// secretValues resolves the step's secret bindings to the strings they hold, for
+// the trace to scrub.
+//
+// Only what the scope already has: this evaluates nothing and reads nothing new,
+// so it cannot fail and cannot change what the run did. A binding whose value is
+// not a string -- a secret capture off a number -- is rendered the way a report
+// renders it, because that is the form it would appear in a trace as.
+func secretValues(st *lower.Step, scope executor.Scope) []string {
+	names := st.SecretNames()
+	if len(names) == 0 {
+		return nil
+	}
+	vars := scope.Vars()
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		v, ok := vars[name]
+		if !ok {
+			// Declared secret but never bound: a capture whose step has not run
+			// yet, or one that failed to read. There is no value to scrub.
+			continue
+		}
+		if s, isString := v.(string); isString {
+			out = append(out, s)
+			continue
+		}
+		out = append(out, eval.Render(v))
+	}
+	return out
 }
 
 // shoot photographs the page of a browser step that did not pass, and stamps
@@ -341,10 +404,10 @@ func shoot(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step,
 // The env the assertions see is a second one, with the step's observation as its
 // roots over the same vars. It is built per attempt because the observation is
 // what changed; nothing else about the step did.
-func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step, model models.Step, scope executor.Scope, base *eval.Env) ([]result.AssertionResult, error) {
+func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step, model models.Step, scope executor.Scope, base *eval.Env) ([]result.AssertionResult, map[string]any, error) {
 	roots, err := executor.Observe(ctx, reg, model, scope)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// The live page, for a browser step and for nothing else. It is what makes
 	// `text(".x")` resolve and what the settle loop re-reads the roots through;
@@ -357,7 +420,7 @@ func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step,
 	// Assert before Apply: an expect reads what the step observed, and a
 	// capture writes into the scope the steps *after* this one read.
 	asserts := settle(ctx, st, observed, page)
-	return append(asserts, st.Apply(observed, scope)...), nil
+	return append(asserts, st.Apply(observed, scope)...), roots, nil
 }
 
 // livePage is the page a browser step's assertions read, and nil for a step

@@ -113,6 +113,19 @@ func subject(a result.AssertionResult) string {
 	return strings.Join(parts, " ")
 }
 
+// Redacted is what every writer prints in place of a value that came from a
+// binding the scenario declared `secret`. It is result's, so the console's
+// inline line and these writers cannot disagree about the spelling. ART-54.
+const Redacted = result.Redacted
+
+// operands returns the two sides of an assertion as a reader may see them.
+//
+// It is AssertionResult.Shown under a name this package already reads like, and
+// every writer here goes through it rather than reading Expected and Actual.
+func operands(a result.AssertionResult) (expected, actual any) {
+	return a.Shown()
+}
+
 // describeValues renders the two sides of a comparison, with each side's JSON
 // type named when the two differ.
 //
@@ -120,8 +133,13 @@ func subject(a result.AssertionResult) string {
 // should have been quoted, or should not have been -- readable at all. When both
 // sides are the same type it is left off: naming it on every line would be noise
 // on the nine failures out of ten that are a plain wrong value.
+//
+// The type is computed from the *real* values and the text from the withheld
+// ones. The type of a credential is not the credential, and a redaction that
+// also removed this hint would make a withheld failure far harder to read.
 func describeValues(a result.AssertionResult) (expected, actual string) {
-	expected, actual = renderValue(a.Expected), renderValue(a.Actual)
+	shownExpected, shownActual := operands(a)
+	expected, actual = renderValue(shownExpected), renderValue(shownActual)
 	if wantType, gotType := typeName(a.Expected), typeName(a.Actual); wantType != gotType {
 		expected += "  (" + wantType + ")"
 		actual += "  (" + gotType + ")"

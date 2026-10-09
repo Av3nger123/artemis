@@ -24,6 +24,16 @@ type Console struct {
 }
 
 // NewConsole returns a Console writing to out.
+// Write puts bytes straight onto the console's stream.
+//
+// It exists for a parallel run, which holds each scenario file's output in a
+// buffer of its own and flushes them in file order -- see the runner. Nothing
+// else should use it: every other line this type prints is one of the methods
+// below, and that is what keeps the format in one place.
+func (c *Console) Write(p []byte) (int, error) {
+	return c.out.Write(p)
+}
+
 func NewConsole(out io.Writer) *Console {
 	return &Console{out: out}
 }

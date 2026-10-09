@@ -2,6 +2,7 @@ package result
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -337,5 +338,85 @@ func TestAllPassed(t *testing.T) {
 				t.Errorf("AllPassed() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// ART-54: the two secret marks have to survive the Assertion -> AssertionResult
+// constructors, which is the one thing result does with them.
+func TestAssertionCarriesSecretMarks(t *testing.T) {
+	base := Assertion{
+		Step: "one", Kind: "expect", Path: "pw", Operator: "equals",
+		Expected: "wanted", Actual: "hunter2",
+		ActualSecret: true,
+	}
+	for _, tc := range []struct {
+		name string
+		got  AssertionResult
+	}{
+		{"Fail", base.Fail()},
+		{"Pass", base.Pass()},
+		{"Errored", base.Errored(errors.New("boom"))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !tc.got.ActualSecret {
+				t.Error("ActualSecret did not survive")
+			}
+			if tc.got.ExpectedSecret {
+				t.Error("ExpectedSecret must stay false")
+			}
+			// The tree keeps the true value; redaction belongs to the writers.
+			if tc.got.Actual != "hunter2" {
+				t.Errorf("Actual = %v, want the true value", tc.got.Actual)
+			}
+		})
+	}
+}
+
+// An assertion with no marks must be exactly what it was before ART-54, which is
+// what keeps every existing golden byte-identical.
+func TestAssertionWithoutMarksIsUnchanged(t *testing.T) {
+	got := Assertion{Step: "one", Kind: "expect", Expected: 200, Actual: 404}.Fail()
+	if got.ExpectedSecret || got.ActualSecret {
+		t.Errorf("marks default to true: %+v", got)
+	}
+}
+
+// Describe is the line the console prints under a failed step while the run is
+// still going, and it leaked a credential until ART-54. This is the regression.
+func TestDescribeRedactsASecretOperand(t *testing.T) {
+	a := Assertion{
+		Kind: "expect", Path: "body.given", Operator: "==",
+		Expected: "hunter2", Actual: "not-the-password",
+		ExpectedSecret: true,
+	}.Fail()
+	got := a.Describe()
+	if strings.Contains(got, "hunter2") {
+		t.Errorf("Describe() = %q, which leaks the credential", got)
+	}
+	if !strings.Contains(got, Redacted) {
+		t.Errorf("Describe() = %q, want %q in it", got, Redacted)
+	}
+	if !strings.Contains(got, "not-the-password") {
+		t.Errorf("Describe() = %q, want the other operand kept", got)
+	}
+}
+
+// An assertion with no marks describes exactly as it did before ART-54.
+func TestDescribeUnchangedWithoutMarks(t *testing.T) {
+	a := Assertion{Kind: "expect", Path: "status", Operator: "==", Expected: 200, Actual: 404}.Fail()
+	if got, want := a.Describe(), "status == 200, got 404"; got != want {
+		t.Errorf("Describe() = %q, want %q", got, want)
+	}
+}
+
+// Shown never alters the stored values: the tree stays faithful and redaction
+// belongs to whatever renders it.
+func TestShownLeavesTheTreeIntact(t *testing.T) {
+	a := Assertion{Expected: "e", Actual: "a", ExpectedSecret: true, ActualSecret: true}.Fail()
+	if e, ac := a.Shown(); e != Redacted || ac != Redacted {
+		t.Errorf("Shown() = %v, %v, want both redacted", e, ac)
+	}
+	if a.Expected != "e" || a.Actual != "a" {
+		t.Errorf("Shown() mutated the assertion: %+v", a)
 	}
 }

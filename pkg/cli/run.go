@@ -8,6 +8,7 @@ import (
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/trace"
 	"bytes"
 	"context"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 )
@@ -128,8 +130,10 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// not compile is reported with its caret gutter, and stdout stays exactly
 	// one document when --report asked for one.
 	rt := &runtimeEnv{
-		reg:   executor.Default(),
-		shots: browserstep.NewShots(shotDir(cmd)),
+		reg:    executor.Default(),
+		shots:  browserstep.NewShots(shotDir(cmd)),
+		traces: trace.New(traceDir(cmd)),
+		jobs:   jobsOf(cmd),
 	}
 	if streaming {
 		rt.events = report.NewEvents(out)
@@ -270,6 +274,15 @@ func runFiles(reg *executor.Registry, files []string, rep *report.Console, diagO
 type runtimeEnv struct {
 	reg   *executor.Registry
 	shots *browserstep.Shots
+	// traces writes what each step sent and saw. A nil writer, or one with no
+	// directory, is tracing off -- which is every test that is not about it.
+	traces *trace.Writer
+
+	// jobs is how many scenario files may run at once. Zero and one both mean
+	// one, which is the default and the behaviour every release before ART-56
+	// had.
+	jobs int
+
 	// events is the --events stream, nil when it was not asked for. Every
 	// method on a nil *report.Events writes nothing, so the runner calls them
 	// unconditionally rather than asking first.
@@ -358,7 +371,19 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// ran. A file that compiled only runs if the gate found nothing, which is
 	// the one new case: every scenario that would have run is simply never
 	// started, and the run ends with none of them in it.
-	for _, a := range attempts {
+	// Files that will actually run, done ahead of time so the two paths below
+	// agree about which they are.
+	runnable := len(faults) == 0
+
+	// More than one job: every runnable file runs into its own result tree and
+	// its own buffer, and the ordered loop below drains them. See runParallel
+	// for why the output is buffered rather than streamed.
+	var parallel []*fileOutcome
+	if runnable && rt.workers() > 1 {
+		parallel = runParallel(context.Background(), rt, attempts)
+	}
+
+	for i, a := range attempts {
 		if a.diag.Len() > 0 {
 			diagOut.Write(a.diag.Bytes()) //nolint:errcheck // the console report below already surfaces a run that cannot report
 		}
@@ -366,10 +391,16 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			failScenario(run, rep, rt.events, a.file, a.err)
 			continue
 		}
-		if len(faults) > 0 {
+		if !runnable {
 			continue
 		}
-		runCompiled(context.Background(), rt, a.compiled, run, rep)
+		if parallel == nil {
+			// One job: run it here and now, so the console streams a step at a
+			// time exactly as it always has.
+			runCompiled(context.Background(), rt, a.compiled, run, rep)
+			continue
+		}
+		parallel[i].drainInto(run, rep)
 	}
 	run.Finish()
 	// Finish derives Status from the scenarios, and a gated run can hold
@@ -386,6 +417,100 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// the report and the exit code say.
 	rt.events.RunEnd(run)
 	return run
+}
+
+// workers is how many scenario files may run at once, never less than one.
+func (rt *runtimeEnv) workers() int {
+	if rt == nil || rt.jobs < 1 {
+		return 1
+	}
+	return rt.jobs
+}
+
+// fileOutcome is one file's run, held until the ordered loop is ready for it.
+//
+// A result tree of its own and a console of its own. report.Console is a writer
+// and nothing else, so a second one costs a buffer; a shared one would interleave
+// two files' steps into something no reader could follow.
+type fileOutcome struct {
+	out *bytes.Buffer
+	run *result.RunResult
+}
+
+// drainInto moves one file's output and scenarios into the real run, in the
+// place the ordered loop has reached.
+//
+// The scenarios are appended rather than merged: a RunResult is a list and its
+// Finish derives everything else from it, so file order in equals file order out.
+func (f *fileOutcome) drainInto(run *result.RunResult, rep *report.Console) {
+	if f == nil {
+		return
+	}
+	rep.Write(f.out.Bytes()) //nolint:errcheck // a console that will not take bytes is already reporting nothing
+	run.Scenarios = append(run.Scenarios, f.run.Scenarios...)
+}
+
+// runParallel runs every runnable file, at most rt.workers() at a time, and
+// returns one outcome per attempt in file order.
+//
+// # Why the output is buffered
+//
+// Order is the whole difficulty. A reader of a report, a golden file and a `jq`
+// expression all depend on a scenario's place matching the order files were
+// discovered in -- which the compile pass above goes to some length to preserve
+// -- and so does the console, where a step line has to sit under its own
+// scenario. Two files printing to one console at once produces neither.
+//
+// So a parallel run trades live output for speed: each file's console output is
+// held and flushed when the ordered loop reaches it. A run with one job does not
+// go through here at all, and still streams a step at a time. That is the one
+// visible difference between the two, and it is why `--jobs` is not the default.
+//
+// # What is shared
+//
+// The registry is read-only after Default(). The screenshot and trace writers
+// hold a mutex each, for exactly this. Every scenario's browser session already
+// lives on its own context -- see pkg/session -- and the driver's start() is
+// under a mutex that was written for concurrent askers.
+func runParallel(ctx context.Context, rt *runtimeEnv, attempts []fileAttempt) []*fileOutcome {
+	out := make([]*fileOutcome, len(attempts))
+	// Bounded, not one goroutine per file: a suite of two hundred files against
+	// one service is a way to be rate-limited, not a way to be fast.
+	sem := make(chan struct{}, rt.workers())
+	var wg sync.WaitGroup
+	for i, a := range attempts {
+		if !a.ok {
+			continue
+		}
+		out[i] = &fileOutcome{out: &bytes.Buffer{}, run: result.NewRun()}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(slot *fileOutcome, c compiled) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			runCompiled(ctx, rt, c, slot.run, report.NewConsole(slot.out))
+		}(out[i], a.compiled)
+	}
+	wg.Wait()
+	return out
+}
+
+// jobsFlag is the flag saying how many scenario files may run at once.
+const jobsFlag = "jobs"
+
+// jobsOf reads --jobs, defaulting to one.
+//
+// One is the default rather than the number of CPUs, because the limit on a run
+// of this kind is the system under test and not this process: a suite pointed at
+// a staging API gets rate-limited long before it saturates a laptop, and a
+// default that surprised someone into eight concurrent load generators would be
+// the wrong kind of fast.
+func jobsOf(cmd *cobra.Command) int {
+	n, err := cmd.Flags().GetInt(jobsFlag)
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
 }
 
 // fileAttempt is the outcome of compiling one file, kept in file order until
@@ -508,6 +633,25 @@ func shotDir(cmd *cobra.Command) string {
 	dir, err := cmd.Flags().GetString(screenshotsFlag)
 	if err != nil {
 		return browserstep.DefaultDir
+	}
+	return dir
+}
+
+// traceFlag is the flag naming where each step's trace goes. Empty means do not
+// write any, and that is the default: a trace holds whatever the service
+// answered, so it is something a run opts into rather than something it has to
+// remember to turn off.
+const traceFlag = "trace"
+
+// traceDir is where a step's trace goes: --trace, or nothing.
+//
+// Unlike shotDir there is no default directory to fall back to, because the
+// flag's own default is off. A command with no such flag gets tracing off, which
+// is the safe direction for a wiring mistake.
+func traceDir(cmd *cobra.Command) string {
+	dir, err := cmd.Flags().GetString(traceFlag)
+	if err != nil {
+		return ""
 	}
 	return dir
 }

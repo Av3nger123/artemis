@@ -57,7 +57,7 @@ func TestEventsPinTheStream(t *testing.T) {
 		`{"event":"run-start","files":["suite/items.art"]}`,
 		`{"event":"scenario-start","file":"suite/items.art","scenario":"items","steps":["get item"]}`,
 		`{"event":"step-start","file":"suite/items.art","scenario":"items","step":"get item","index":0}`,
-		`{"event":"step-end","file":"suite/items.art","scenario":"items","index":0,"result":{"name":"get item","status":"fail","duration_ms":12.5,"attempts":1,"line":5,"error":"","screenshot":"","assertions":[{"kind":"status_code","path":"","operator":"equals","expected":200,"actual":200,"status":"pass","error":"","line":11},{"kind":"body","path":"$.status","operator":"equals","expected":"ready","actual":"pending","status":"fail","error":"","line":14}]}}`,
+		`{"event":"step-end","file":"suite/items.art","scenario":"items","index":0,"result":{"name":"get item","status":"fail","duration_ms":12.5,"attempts":1,"line":5,"error":"","screenshot":"","trace":"","assertions":[{"kind":"status_code","path":"","operator":"equals","expected":200,"actual":200,"status":"pass","error":"","line":11},{"kind":"body","path":"$.status","operator":"equals","expected":"ready","actual":"pending","status":"fail","error":"","line":14}]}}`,
 		`{"event":"scenario-end","file":"suite/items.art","scenario":"items","result":{"name":"items","file":"suite/items.art","status":"fail","duration_ms":13,"error":""}}`,
 		`{"event":"run-end","result":{"schema_version":1,"started_at":"2026-03-04T05:06:07Z","duration_ms":14,"status":"fail","passed":false,"error":"","counts":{"scenarios":{"total":1,"passed":0,"failed":1,"errored":0,"skipped":0},"steps":{"total":1,"passed":0,"failed":1,"errored":0,"skipped":0},"assertions":{"total":2,"passed":1,"failed":1,"errored":0,"skipped":0}}}}`,
 	}, "\n") + "\n"

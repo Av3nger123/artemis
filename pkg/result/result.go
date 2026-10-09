@@ -79,6 +79,18 @@ type AssertionResult struct {
 	// line of its own. A reader of a failure resolves zero against the step's
 	// own line rather than printing it; see Diagnostics.
 	Line int
+
+	// ExpectedSecret and ActualSecret report that the operand came from a
+	// binding the scenario declared `secret`, so every report writer prints a
+	// placeholder in its place. ART-54.
+	//
+	// They are per-operand and not one flag, because `expect pw == "hunter2"`
+	// has one secret side and withholding both would hide the comparison
+	// entirely. The tree keeps the true value either way: redaction is the
+	// writer's job, which is what leaves room for a flag that shows a value on
+	// a local run without re-architecting anything.
+	ExpectedSecret bool
+	ActualSecret   bool
 }
 
 // Passed reports whether the assertion did not fail the run.
@@ -94,6 +106,11 @@ type Assertion struct {
 	Expected any
 	Actual   any
 	Line     int
+
+	// ExpectedSecret and ActualSecret are carried through to the recorded
+	// assertion. See AssertionResult.
+	ExpectedSecret bool
+	ActualSecret   bool
 }
 
 // Pass records a as having passed.
@@ -113,15 +130,17 @@ func (a Assertion) Errored(err error) AssertionResult {
 
 func (a Assertion) with(status Status, errMsg string) AssertionResult {
 	return AssertionResult{
-		Step:     a.Step,
-		Kind:     a.Kind,
-		Path:     a.Path,
-		Operator: a.Operator,
-		Expected: a.Expected,
-		Actual:   a.Actual,
-		Status:   status,
-		Error:    errMsg,
-		Line:     a.Line,
+		Step:           a.Step,
+		Kind:           a.Kind,
+		Path:           a.Path,
+		Operator:       a.Operator,
+		Expected:       a.Expected,
+		Actual:         a.Actual,
+		Status:         status,
+		Error:          errMsg,
+		Line:           a.Line,
+		ExpectedSecret: a.ExpectedSecret,
+		ActualSecret:   a.ActualSecret,
 	}
 }
 
@@ -153,6 +172,17 @@ type StepResult struct {
 	// or zero when it is not known. It is what a step that could not run at all
 	// points at, and the fallback for an assertion with no line of its own.
 	Line int
+
+	// Trace is the path to the file holding what this step sent and what it
+	// saw, and empty when tracing is off. ART-55.
+	//
+	// A path and not the trace itself, for the reason Screenshot above is a
+	// path: the report is a verdict and the trace is evidence, and a trace of
+	// every step of a long suite inlined here would make the report the one
+	// document nobody opens. It is a field on the step rather than on an
+	// api-shaped type for Screenshot's reason too -- the result tree is the one
+	// thing pkg/report reads.
+	Trace string
 }
 
 // AllPassed reports whether every assertion in as passed. It is what "is this
@@ -373,7 +403,41 @@ func errText(err error) string {
 	return err.Error()
 }
 
+// Redacted is what stands in for a value that came from a binding the scenario
+// declared `secret`. ART-54.
+//
+// The length is fixed and deliberately unrelated to the value's. A placeholder
+// that kept the length would report the length of a credential, which is a
+// useful fact to an attacker.
+//
+// It lives here rather than in pkg/report because Describe needs it and this
+// package imports nothing else from artemis. pkg/report refers to this one, so
+// there is a single spelling.
+const Redacted = "***"
+
+// Shown returns the two operands as a reader may see them: the real value, or
+// Redacted for a side that came from a secret binding.
+//
+// Everything that prints an operand goes through this -- Describe below, and
+// every writer in pkg/report -- so what withholding means is decided once. The
+// fields themselves keep the true value, because the tree stays faithful and
+// redaction belongs to whatever renders it.
+func (a AssertionResult) Shown() (expected, actual any) {
+	expected, actual = a.Expected, a.Actual
+	if a.ExpectedSecret {
+		expected = Redacted
+	}
+	if a.ActualSecret {
+		actual = Redacted
+	}
+	return expected, actual
+}
+
 // Describe renders an assertion as one line, for an error message or a log.
+//
+// This is the line the console prints under a failed step as the run goes, which
+// makes it an operand site like any other: it went through Shown from ART-54
+// onward, having leaked a credential before that.
 func (a AssertionResult) Describe() string {
 	where := a.Path
 	if where == "" {
@@ -382,5 +446,6 @@ func (a AssertionResult) Describe() string {
 	if a.Error != "" {
 		return fmt.Sprintf("%s %s: %s", where, a.Operator, a.Error)
 	}
-	return fmt.Sprintf("%s %s %v, got %v", where, a.Operator, a.Expected, a.Actual)
+	expected, actual := a.Shown()
+	return fmt.Sprintf("%s %s %v, got %v", where, a.Operator, expected, actual)
 }

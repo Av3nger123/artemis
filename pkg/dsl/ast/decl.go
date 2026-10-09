@@ -69,8 +69,14 @@ func (c *ConfigDecl) Tokens(dst []token.Token) []token.Token {
 func (c *ConfigDecl) Span() token.Span { return spanOf(c) }
 func (c *ConfigDecl) decl()            {}
 
-// VarDecl is `var url = env("API_URL")`.
+// VarDecl is `var url = env("API_URL")`, or `secret var pw = env("API_PASSWORD")`.
 type VarDecl struct {
+	// Secret is the `secret` modifier, and the zero token when it is absent.
+	//
+	// It is a token rather than a bool because pkg/dsl/print reproduces the
+	// file from Tokens and spanOf reads the same slice, so a modifier with no
+	// span would round-trip as a missing word.
+	Secret  token.Token // `secret`, zero when the modifier is absent
 	Keyword token.Token // var
 	Name    token.Token // the Ident being bound
 	Assign  token.Token // =
@@ -78,6 +84,7 @@ type VarDecl struct {
 }
 
 func (v *VarDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, v.Secret)
 	dst = appendTok(dst, v.Keyword)
 	dst = appendTok(dst, v.Name)
 	dst = appendTok(dst, v.Assign)

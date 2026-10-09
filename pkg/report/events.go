@@ -3,6 +3,7 @@ package report
 import (
 	"encoding/json"
 	"io"
+	"sync"
 
 	"artemis/pkg/result"
 )
@@ -37,7 +38,13 @@ import (
 //
 // A nil *Events writes nothing. That is what a run without --events has, and
 // it is what lets the runner call these unconditionally.
+//
+// Under --jobs several files run at once and share one Events, so each write
+// holds a mutex: lines from different files interleave, but never mix within a
+// line. Every event names its file and scenario, which is how a reader tells
+// them apart; the order within one file is the order above.
 type Events struct {
+	mu  sync.Mutex
 	out io.Writer
 }
 
@@ -141,5 +148,7 @@ func (e *Events) emit(v any) {
 	}
 	// Unchecked, as the console's writes are: a watcher that has gone away
 	// is not a reason to stop the run it was watching.
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	_, _ = e.out.Write(append(raw, '\n'))
 }

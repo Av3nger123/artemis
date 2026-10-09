@@ -105,10 +105,17 @@ func varDecl(f fields) (*ast.VarDecl, error) {
 	if err != nil {
 		return nil, err
 	}
+	secret, err := f.flag("secret")
+	if err != nil {
+		return nil, err
+	}
 	d := &ast.VarDecl{
 		Keyword: syn(token.Ident, "var"),
 		Name:    syn(token.Ident, name),
 		Assign:  syn(token.Assign, "="),
+	}
+	if secret {
+		d.Secret = syn(token.Ident, "secret")
 	}
 	if d.Value, err = exprOf(f, "value", true); err != nil {
 		return nil, err
@@ -276,10 +283,17 @@ func capture(f fields) (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	secret, err := f.flag("secret")
+	if err != nil {
+		return nil, err
+	}
 	c := &ast.Capture{
 		Keyword: syn(token.Ident, "capture"),
 		Name:    syn(token.Ident, name),
 		Assign:  syn(token.Assign, "="),
+	}
+	if secret {
+		c.Secret = syn(token.Ident, "secret")
 	}
 	if c.Value, err = exprOf(f, "value", true); err != nil {
 		return nil, err

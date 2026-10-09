@@ -118,7 +118,12 @@ type jsonStep struct {
 	// The path is as the run was given it -- relative to the working directory
 	// unless --screenshots named an absolute one -- so a CI job uploading it
 	// uses the string verbatim.
-	Screenshot string          `json:"screenshot"`
+	Screenshot string `json:"screenshot"`
+	// Trace is the path to the file holding what the step sent and what it saw,
+	// and empty unless --trace asked for one. Present and empty like every other
+	// key here, and a path for the same reason Screenshot is one: a CI job
+	// uploading it uses the string verbatim. ART-55.
+	Trace      string          `json:"trace"`
 	Assertions []jsonAssertion `json:"assertions"`
 }
 
@@ -237,8 +242,7 @@ func fromDiagnostics(diags []result.Diagnostic) []jsonFailure {
 			f.Kind = d.Assertion.Kind
 			f.Path = d.Assertion.Path
 			f.Operator = d.Assertion.Operator
-			f.Expected = d.Assertion.Expected
-			f.Actual = d.Assertion.Actual
+			f.Expected, f.Actual = operands(*d.Assertion)
 			f.Error = d.Assertion.Error
 		}
 		out = append(out, f)
@@ -280,15 +284,17 @@ func fromStep(step *result.StepResult) jsonStep {
 		Line:       step.Line,
 		Error:      step.Error,
 		Screenshot: step.Screenshot,
+		Trace:      step.Trace,
 		Assertions: make([]jsonAssertion, 0, len(step.Assertions)),
 	}
 	for _, a := range step.Assertions {
+		expected, actual := operands(a)
 		out.Assertions = append(out.Assertions, jsonAssertion{
 			Kind:     a.Kind,
 			Path:     a.Path,
 			Operator: a.Operator,
-			Expected: a.Expected,
-			Actual:   a.Actual,
+			Expected: expected,
+			Actual:   actual,
 			Status:   a.Status.String(),
 			Error:    a.Error,
 			Line:     a.Line,
