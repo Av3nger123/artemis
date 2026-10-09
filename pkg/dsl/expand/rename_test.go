@@ -21,8 +21,7 @@ collection "orders" {
     use auth.login { user = user }
     use create { sku = "A-1" }
     step "pay" {
-      post "${order_id}/pay"
-      header "Authorization" = "Bearer ${token}"
+      post "${order_id}/pay" { header "Authorization" = "Bearer ${token}" }
       expect status == 200
     }
   }
@@ -210,14 +209,14 @@ func TestNestedSecretParamFromAFlowParamIsHoistedTwice(t *testing.T) {
 func TestAsRewritesOnlyReadsInLaterSteps(t *testing.T) {
 	got, diags := run(t, map[string]string{
 		"c.art": "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"a\"\n      capture t = body.t\n    }\n" +
-			"    step \"two\" {\n      get \"${t}/b\"\n      expect t2 == null\n      capture t2 = body.x\n    }\n" +
+			"    step \"two\" {\n      get \"${t}/b\"\n      expect status == 200\n      capture t2 = body.x\n    }\n" +
 			"    step \"three\" {\n      get \"${t2}/c\"\n    }\n  }\n" +
-			"  request r() {\n    get \"x\"\n    expect body.token == token\n    capture token = body.token\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var t2 = 1\n  var token = 2\n  use c.f as a {}\n  use c.r as a {}\n}\n",
+			"  request r(token) {\n    get \"x\"\n    expect body.token == token\n    capture token = body.token\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var token = 2\n  use c.f as a {}\n  use c.r as a { token = token }\n}\n",
 	})
 	noDiags(t, diags)
 	for _, want := range []string{
-		`get "${a_t}/b"`, "expect t2 == null", "capture a_t2 = body.x", `get "${a_t2}/c"`,
+		`get "${a_t}/b"`, "capture a_t2 = body.x", `get "${a_t2}/c"`,
 		"expect body.token == token", "capture a_token = body.token",
 	} {
 		if !contains(got, want) {

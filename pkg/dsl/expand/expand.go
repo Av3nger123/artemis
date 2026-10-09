@@ -54,6 +54,9 @@ type expander struct {
 	loading []string         // the import stack, for cycle messages
 	owner   map[*ast.Collection]*unit
 	literal map[*ast.StepDecl]bool // an expanded step whose body was written as an object literal
+
+	standing map[*ast.Collection]standing // each collection's standalone check
+	silent   int                          // uses refused without a diagnostic of their own
 }
 
 // unit is one parsed file and the collections it can see by name.
@@ -63,7 +66,8 @@ type unit struct {
 	deps  []*unit                    // the units this file imports directly
 	own   map[string]*ast.Collection // collections declared in this file
 	scope map[string]*ast.Collection // own plus every imported one
-	ok    bool                       // parsed, imported and standalone-checked without error
+	ok    bool                       // parsed without error
+	lost  bool                       // an import failed, so a collection may be missing from scope
 }
 
 // Expand resolves tree's imports through l and replaces every use in its
@@ -87,6 +91,8 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 		loading: []string{name},
 		owner:   map[*ast.Collection]*unit{},
 		literal: map[*ast.StepDecl]bool{},
+
+		standing: map[*ast.Collection]standing{},
 	}
 	root := &unit{name: name, tree: tree, ok: true}
 	e.imports(root)
@@ -161,12 +167,15 @@ func (e *expander) imports(u *unit) {
 			continue
 		}
 		if e.l == nil {
+			u.lost = true
 			e.bag.Error(imp.Span(), diag.ImportNeedsFile, "import needs a file on disk").
 				Hintf("run the file with artemis run, which reads imports from disk")
 			continue
 		}
 		if dep := e.load(u.name, imp); dep != nil {
 			u.deps = append(u.deps, dep)
+		} else {
+			u.lost = true
 		}
 	}
 }
@@ -201,7 +210,9 @@ func (e *expander) load(from string, imp *ast.Import) *unit {
 }
 
 // index fills u's own collections and its scope: its own plus those of every
-// file it imports directly. Imports are not transitive.
+// file it imports directly. Imports are not transitive. Then it checks each of
+// u's own collections on its own; an imported one was checked when its file
+// was indexed.
 func (e *expander) index(u *unit) {
 	u.own = map[string]*ast.Collection{}
 	u.scope = map[string]*ast.Collection{}
@@ -230,6 +241,9 @@ func (e *expander) index(u *unit) {
 			add(c)
 		}
 	}
+	for _, c := range sortedColls(u) {
+		e.checkCollection(u, c)
+	}
 }
 
 // sortedColls is u's own collections in source order, so diagnostics come
@@ -251,6 +265,12 @@ func (e *expander) resolve(u *unit, c *ast.Collection, use *ast.UseDecl) (owner 
 		name := use.Collection.Value
 		coll = u.scope[name]
 		if coll == nil {
+			if u.lost {
+				// The failed import has been reported, and is most likely
+				// where the collection was.
+				e.silent++
+				return nil, nil, nil, false
+			}
 			r := e.bag.Error(use.Collection.Span, diag.UnknownCollection, "no collection %q is in scope here", name)
 			if !r.DidYouMean(name, keys(u.scope)) {
 				r.Hintf("import the file that declares it")
@@ -263,7 +283,9 @@ func (e *expander) resolve(u *unit, c *ast.Collection, use *ast.UseDecl) (owner 
 		return nil, nil, nil, false
 	}
 	owner = e.owner[coll]
-	if owner == nil || !owner.ok {
+	if owner == nil || !owner.ok || !e.checkCollection(owner, coll) {
+		// Its own errors have been reported once, where it is written.
+		e.silent++
 		return nil, nil, nil, false
 	}
 	var names []string
