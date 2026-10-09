@@ -18,6 +18,13 @@ const (
 	reportStdout = "-"
 )
 
+// eventsFlag is the flag that streams a run as it happens, and eventsNDJSON is
+// its one format: one JSON object per line, on stdout.
+const (
+	eventsFlag   = "events"
+	eventsNDJSON = "ndjson"
+)
+
 // reportWriters maps a --report format to the function that writes it. Adding a
 // format is adding a line here and the writer it names; nothing else in the CLI
 // has to know about it.
@@ -142,4 +149,29 @@ func writeReportFile(write func(io.Writer, *result.RunResult) error, t reportTar
 		return fmt.Errorf("closing %s report %s: %w", t.format, t.path, err)
 	}
 	return nil
+}
+
+// parseEvents reads --events: empty is off, "ndjson" is on, and anything else
+// is refused.
+//
+// The stream is written to stdout, so a report aimed at stdout as well is
+// refused for the reason two stdout reports are: two documents interleaved on
+// one stream are neither of them readable. A report with a path is fine, and
+// is how a caller gets both the live stream and the record of the run.
+//
+// Like parseReports it is checked before discovery, so a mistake costs no run.
+func parseEvents(value string, targets []reportTarget) (bool, error) {
+	if value == "" {
+		return false, nil
+	}
+	if value != eventsNDJSON {
+		return false, fmt.Errorf("--%s %q: unknown format, want %s", eventsFlag, value, eventsNDJSON)
+	}
+	for _, t := range targets {
+		if t.stdout() {
+			return false, fmt.Errorf("--%s %s and --%s %s both write to stdout; give the report a path, as in --%s %s=<path>",
+				eventsFlag, eventsNDJSON, reportFlag, t.format, reportFlag, t.format)
+		}
+	}
+	return true, nil
 }

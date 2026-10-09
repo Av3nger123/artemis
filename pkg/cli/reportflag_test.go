@@ -211,3 +211,75 @@ func TestWriteReportsWritesEveryTarget(t *testing.T) {
 		t.Errorf("the file does not hold a JUnit document:\n%s", raw)
 	}
 }
+
+// --events reads "" as off and "ndjson" as on, and leaves a report that goes
+// to a file alone: the stream has stdout, the report has its path.
+func TestParseEventsReadsTheFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		targets []reportTarget
+		want    bool
+	}{
+		{name: "absent is off"},
+		{name: "ndjson is on", value: "ndjson", want: true},
+		{
+			name:    "a report to a file is fine beside it",
+			value:   "ndjson",
+			targets: []reportTarget{{format: "json", path: "report.json"}},
+			want:    true,
+		},
+		{
+			name:    "a stdout report without events is not this flag's business",
+			targets: []reportTarget{{format: "json"}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseEvents(tc.value, tc.targets)
+			if err != nil {
+				t.Fatalf("parseEvents(%q) = %v, want nil", tc.value, err)
+			}
+			if got != tc.want {
+				t.Errorf("parseEvents(%q) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// Every refusal names what was wrong, and both stdout spellings of a report
+// are refused beside the stream: two documents on one stream are neither of
+// them readable.
+func TestParseEventsRefusals(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		targets []reportTarget
+		want    []string
+	}{
+		{name: "unknown format", value: "xml", want: []string{"xml", "ndjson"}},
+		{
+			name:    "a bare report is stdout",
+			value:   "ndjson",
+			targets: []reportTarget{{format: "json"}},
+			want:    []string{"--events ndjson", "--report json", "stdout", "path"},
+		},
+		{
+			name:    "a dash is stdout said out loud",
+			value:   "ndjson",
+			targets: []reportTarget{{format: "junit", path: "-"}},
+			want:    []string{"--report junit", "stdout"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseEvents(tc.value, tc.targets)
+			if err == nil {
+				t.Fatalf("parseEvents(%q, %+v) = nil, want an error", tc.value, tc.targets)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("parseEvents() = %q, want it to mention %q", err, want)
+				}
+			}
+		})
+	}
+}

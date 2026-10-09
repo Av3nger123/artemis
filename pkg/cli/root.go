@@ -54,6 +54,10 @@ func Init() {
 	// rather than a second flag: --report json --report junit=junit.xml.
 	runCmd.Flags().StringArray(reportFlag, nil,
 		"Write a machine-readable report: "+strings.Join(reportFormats(), "|")+"[=path] (default: stdout, which moves the console report to stderr). Repeatable")
+	// The run as it happens, for a program watching it; --report stays the
+	// record of the run, and goes to a file when this has stdout.
+	runCmd.Flags().String(eventsFlag, "",
+		"Stream the run to stdout as it happens: "+eventsNDJSON+", one JSON object per line. Moves the console report to stderr; a --report then needs a path")
 	runCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
 		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off; the folder is created only when one fails")
 
