@@ -170,13 +170,48 @@
           "severity": "error"
         },
         {
+          "value": "bad-override",
+          "doc": "a line in a use block is not an argument or an override that applies",
+          "severity": "error"
+        },
+        {
           "value": "bad-value",
           "doc": "a value is the wrong kind for the position it is in",
           "severity": "error"
         },
         {
+          "value": "drop-after-expect",
+          "doc": "a drop expects line comes after an expect line in the same use block",
+          "severity": "error"
+        },
+        {
           "value": "duplicate-action",
           "doc": "a step block contains more than one action block",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-argument",
+          "doc": "a use passes the same argument twice",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-collection",
+          "doc": "two collections in scope have the same name",
+          "severity": "error"
+        },
+        {
+          "value": "import-cycle",
+          "doc": "a file imports itself, directly or through other files",
+          "severity": "error"
+        },
+        {
+          "value": "import-needs-file",
+          "doc": "a file read from no disk imports another file",
+          "severity": "error"
+        },
+        {
+          "value": "import-not-found",
+          "doc": "an imported file cannot be read",
           "severity": "error"
         },
         {
@@ -202,6 +237,11 @@
         {
           "value": "missing-action",
           "doc": "a step block contains no action block, so the step has no type",
+          "severity": "error"
+        },
+        {
+          "value": "missing-argument",
+          "doc": "a use does not pass a parameter that has no default",
           "severity": "error"
         },
         {
@@ -235,6 +275,11 @@
           "severity": "error"
         },
         {
+          "value": "secret-argument",
+          "doc": "an argument to a secret parameter is not itself secret",
+          "severity": "error"
+        },
+        {
           "value": "unclosed-block",
           "doc": "a \"{\", \"(\" or \"[\" is never closed",
           "severity": "error"
@@ -260,6 +305,16 @@
           "severity": "error"
         },
         {
+          "value": "unknown-argument",
+          "doc": "a use passes an argument the item has no parameter for",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-collection",
+          "doc": "a use names a collection that is not in scope",
+          "severity": "error"
+        },
+        {
           "value": "unknown-config",
           "doc": "a \"config\" names a subject the language does not configure",
           "severity": "error"
@@ -270,8 +325,18 @@
           "severity": "error"
         },
         {
+          "value": "unknown-flow-step",
+          "doc": "an in block names a step the flow does not have",
+          "severity": "error"
+        },
+        {
           "value": "unknown-identifier",
           "doc": "a name is bound nowhere in the file",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-item",
+          "doc": "a use names a request or flow its collection does not declare",
           "severity": "error"
         },
         {
@@ -287,6 +352,11 @@
         {
           "value": "unterminated-string",
           "doc": "a string literal has no closing quote",
+          "severity": "error"
+        },
+        {
+          "value": "use-cycle",
+          "doc": "a flow uses itself, directly or through other flows",
           "severity": "error"
         }
       ]

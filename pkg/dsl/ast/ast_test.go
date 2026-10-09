@@ -61,6 +61,25 @@ func TestJoinIgnoresZeroSpans(t *testing.T) {
 	}
 }
 
+func TestJoinKeepsToTheFirstSpansFileAndCopy(t *testing.T) {
+	// An expanded step holds tokens copied from a collection file and an
+	// argument written at the use, in another file or another copy. Offsets
+	// from two places do not compare, so the span stays where its first token
+	// was written.
+	kw := token.Span{File: "c.art", Line: 9, Col: 5, EndLine: 9, EndCol: 11, Offset: 120, Via: 1}
+	arg := token.Span{File: "main.art", Line: 2, Col: 3, EndLine: 2, EndCol: 6, Offset: 10}
+	end := token.Span{File: "c.art", Line: 9, Col: 20, EndLine: 9, EndCol: 24, Offset: 135, Via: 1}
+	want := token.Span{File: "c.art", Line: 9, Col: 5, EndLine: 9, EndCol: 24, Offset: 120, Via: 1}
+	if got := Join(kw, arg, end); got != want {
+		t.Fatalf("Join = %+v, want %+v", got, want)
+	}
+	sameFile := arg
+	sameFile.File = "c.art"
+	if got := Join(kw, sameFile, end); got != want {
+		t.Fatalf("Join across copies = %+v, want %+v", got, want)
+	}
+}
+
 func TestSourceConcatenatesTriviaAndText(t *testing.T) {
 	// `var x  = 1` -- two spaces before the `=`, which is the whole reason the
 	// tree holds tokens rather than spans.

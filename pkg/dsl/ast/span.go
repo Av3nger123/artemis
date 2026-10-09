@@ -17,6 +17,13 @@ import (
 // The result's start is the earliest by offset and its end the latest, rather
 // than the first and last argument, because a node built during recovery can
 // hold its tokens out of order.
+//
+// Spans from another file, or from another copy (a different Via), than the
+// first non-zero one are ignored. pkg/dsl/expand builds nodes that mix tokens
+// copied out of a collection with an argument written at the use, and an
+// offset in one place says nothing about an offset in the other; comparing
+// them would move the node's start -- and reorder a step's statements, which
+// are sorted by it.
 func Join(spans ...token.Span) token.Span {
 	out := token.Span{}
 	for _, s := range spans {
@@ -25,6 +32,9 @@ func Join(spans ...token.Span) token.Span {
 		}
 		if out.IsZero() {
 			out = s
+			continue
+		}
+		if s.File != out.File || s.Via != out.Via {
 			continue
 		}
 		if s.Offset < out.Offset {

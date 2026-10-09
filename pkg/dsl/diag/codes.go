@@ -167,6 +167,24 @@ const (
 	BadValue Code = "bad-value"
 )
 
+// The expander's codes: what is wrong with an import or a use.
+const (
+	ImportNeedsFile     Code = "import-needs-file"
+	ImportNotFound      Code = "import-not-found"
+	ImportCycle         Code = "import-cycle"
+	DuplicateCollection Code = "duplicate-collection"
+	UnknownCollection   Code = "unknown-collection"
+	UnknownItem         Code = "unknown-item"
+	UnknownArgument     Code = "unknown-argument"
+	MissingArgument     Code = "missing-argument"
+	DuplicateArgument   Code = "duplicate-argument"
+	UseCycle            Code = "use-cycle"
+	BadOverride         Code = "bad-override"
+	UnknownFlowStep     Code = "unknown-flow-step"
+	DropAfterExpect     Code = "drop-after-expect"
+	SecretArgument      Code = "secret-argument"
+)
+
 // CodeInfo is what the registry knows about a code: its default severity and
 // one line a person can read. Description is documentation, not a message --
 // a diagnostic's Message says what went wrong here, a description says what
@@ -206,6 +224,20 @@ var registry = []CodeInfo{
 	{UnknownType, Error, "the right-hand side of \"is\" is not a type name"},
 	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
 	{BadValue, Error, "a value is the wrong kind for the position it is in"},
+	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
+	{ImportNotFound, Error, "an imported file cannot be read"},
+	{ImportCycle, Error, "a file imports itself, directly or through other files"},
+	{DuplicateCollection, Error, "two collections in scope have the same name"},
+	{UnknownCollection, Error, "a use names a collection that is not in scope"},
+	{UnknownItem, Error, "a use names a request or flow its collection does not declare"},
+	{UnknownArgument, Error, "a use passes an argument the item has no parameter for"},
+	{MissingArgument, Error, "a use does not pass a parameter that has no default"},
+	{DuplicateArgument, Error, "a use passes the same argument twice"},
+	{UseCycle, Error, "a flow uses itself, directly or through other flows"},
+	{BadOverride, Error, "a line in a use block is not an argument or an override that applies"},
+	{UnknownFlowStep, Error, "an in block names a step the flow does not have"},
+	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
+	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.
