@@ -119,3 +119,28 @@ func TestExpandNamesTheScenariosUseForANestedStep(t *testing.T) {
 		t.Errorf("an origin names a use inside the collection:\n%s", out)
 	}
 }
+
+// A use of a sibling is written bare inside its collection, and its origin
+// comment names it qualified anyway, as the step it brings in is named.
+func TestExpandNamesASiblingUseQualified(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"c.art": "collection \"c\" {\n  request r() {\n    get \"http://x\"\n    expect status == 200\n  }\n  flow f() {\n    use r\n  }\n}\n",
+		"s.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.f\n}\n",
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, stderr, err := runCLI(t, "expand", filepath.Join(dir, "s.art"))
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stderr)
+	}
+	if !strings.Contains(out, "# from c.r (") || strings.Contains(out, "# from r (") {
+		t.Errorf("the origin comment does not name c.r:\n%s", out)
+	}
+	if !strings.Contains(out, `step "c.f / c.r"`) {
+		t.Errorf("the step is not named c.f / c.r:\n%s", out)
+	}
+}

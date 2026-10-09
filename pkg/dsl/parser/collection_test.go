@@ -62,9 +62,12 @@ func TestCollectionsFixtureParsesAndRoundTrips(t *testing.T) {
 			kinds = append(kinds, "expect")
 		}
 	}
-	want := "field field bodyset drop expect"
+	want := "field field bodyset drop drop expect"
 	if got := strings.Join(kinds, " "); got != want {
 		t.Fatalf("use lines = %q, want %q", got, want)
+	}
+	if a, b := u.Lines[3].(*ast.Drop).What.Value, u.Lines[4].(*ast.Drop).What.Value; a != "expects" || b != "captures" {
+		t.Fatalf("drop lines = %q, %q", a, b)
 	}
 	in := sc.Body[1].(*ast.UseDecl).Lines[2].(*ast.In)
 	if in.Step.Value != "pay" || len(in.Lines) != 1 {
@@ -101,5 +104,37 @@ func TestParamNamedLikeAUseLineIsAnError(t *testing.T) {
 	_, bag := Parse("t.art", "collection \"c\" {\n  request r(body) { get \"x\" }\n}\n")
 	if !bag.HasErrors() {
 		t.Fatal("a parameter named body cannot be passed and must be reported")
+	}
+}
+
+func TestDropTakesExpectsOrCaptures(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  use c.r { drop capture }\n}\n")
+	all := bag.All()
+	if len(all) != 1 || !strings.Contains(all[0].Message, "\"expects\" or \"captures\"") {
+		t.Fatalf("diagnostics = %v", all)
+	}
+	if !strings.Contains(all[0].Hint, "captures") {
+		t.Errorf("hint = %q, want a did you mean captures", all[0].Hint)
+	}
+}
+
+func TestCollectionNameMustBeAnIdentifier(t *testing.T) {
+	_, bag := Parse("t.art", "collection \"my-coll\" {\n  request r() { get \"x\" }\n}\n")
+	all := bag.All()
+	if len(all) != 1 || all[0].Code != "bad-collection-name" {
+		t.Fatalf("diagnostics = %v", all)
+	}
+	if !strings.Contains(all[0].Hint, "my_coll") {
+		t.Errorf("hint = %q, want it to suggest my_coll", all[0].Hint)
+	}
+	for _, ok := range []string{"auth", "_x", "orders2"} {
+		if _, bag := Parse("t.art", "collection \""+ok+"\" {}\n"); bag.HasErrors() {
+			t.Errorf("%q: %v", ok, bag.All())
+		}
+	}
+	for name, want := range map[string]string{"9lives": "_9lives", "a b": "a_b", "": "_"} {
+		if got := identLike(name); got != want {
+			t.Errorf("identLike(%q) = %q, want %q", name, got, want)
+		}
 	}
 }

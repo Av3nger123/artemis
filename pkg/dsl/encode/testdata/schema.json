@@ -857,8 +857,14 @@
     },
     {
       "kind": "drop",
-      "doc": "`drop expects` in a use block: the used item's expects are not run",
+      "doc": "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed",
       "fields": [
+        {
+          "name": "what",
+          "type": "string",
+          "inputRequired": true,
+          "doc": "expects or captures: what the line removes"
+        },
         {
           "name": "span",
           "type": "span"

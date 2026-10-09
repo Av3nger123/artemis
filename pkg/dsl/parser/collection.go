@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"strings"
+
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
@@ -26,6 +28,11 @@ func (p *parser) parseCollection() ast.Decl {
 		return p.badFrom(c.Keyword)
 	}
 	c.Name = name
+	if !isIdentName(name.Value) {
+		p.errorf(name, diag.BadCollectionName,
+			"a collection name must be an identifier: a use names it as one, so %q could never be used", name.Value).
+			Hintf("name it %s", identLike(name.Value))
+	}
 	open, ok := p.expect(token.LBrace, "\"{\" to open the collection")
 	if !ok {
 		return p.badFrom(c.Keyword, c.Name)
@@ -237,7 +244,7 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected an argument or an override, found %s", describe(p.peek())).
-				Hintf("a use block holds: name = value, header, query, body, drop expects, expect, in \"step\" { ... }")
+				Hintf("a use block holds: name = value, header, query, body, drop expects, drop captures, expect, in \"step\" { ... }")
 			lines = append(lines, p.recoverTo())
 		}
 		if p.i == before {
@@ -253,13 +260,13 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 
 func (p *parser) parseDrop() ast.Stmt {
 	d := &ast.Drop{Keyword: p.next()}
-	what, ok := p.expectIdent("\"expects\" after \"drop\"")
+	what, ok := p.expectIdent("\"expects\" or \"captures\" after \"drop\"")
 	if !ok {
 		return p.badFrom(d.Keyword)
 	}
-	if what.Value != "expects" {
-		p.errorf(what, diag.UnexpectedToken, "expected \"expects\" after \"drop\", found %s", describe(what)).
-			DidYouMean(what.Value, []string{"expects"})
+	if !token.IsDropTarget(what.Value) {
+		p.errorf(what, diag.UnexpectedToken, "expected \"expects\" or \"captures\" after \"drop\", found %s", describe(what)).
+			DidYouMean(what.Value, token.DropTargets)
 	}
 	d.What = what
 	d.Comma = p.endStatement("a drop")
@@ -297,4 +304,39 @@ func (p *parser) parseBodySet() ast.Stmt {
 	b.Value = p.parseExpr()
 	b.Comma = p.endStatement("a body field")
 	return b
+}
+
+// isIdentName reports whether s is spelled like an Ident: a letter or _
+// followed by letters, digits and _.
+func isIdentName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		letter := r == '_' || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z')
+		if !letter && (i == 0 || r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// identLike is s made into an identifier for a hint: every other character
+// becomes _, and a leading digit gets a _ in front. "my-coll" is my_coll.
+func identLike(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if i == 0 && '0' <= r && r <= '9' {
+			b.WriteByte('_')
+		}
+		if r == '_' || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || ('0' <= r && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "_"
+	}
+	return b.String()
 }

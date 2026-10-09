@@ -64,7 +64,8 @@ WHAT THE GRAMMAR DOES NOT SAY
       use auth.login {                       # collection.item
         user = "alice"                       # an argument, by name
         password = "wrong"
-        drop expects                         # the template's expects go
+        drop expects                         # the template's expects go,
+        drop captures                        # its captures too: a 401 has no token
         expect status == 401                 # and this one is added
       }
     }

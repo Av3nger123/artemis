@@ -1,5 +1,6 @@
 action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
+bad-collection-name	error	a collection's name is not an identifier, so no use can name it
 bad-override	error	a line in a use block is not an argument or an override that applies
 bad-value	error	a value is the wrong kind for the position it is in
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block

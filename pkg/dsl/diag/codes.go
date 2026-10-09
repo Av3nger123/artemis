@@ -102,6 +102,11 @@ const (
 	// ReservedParam is a parameter named like a use-block override word, which
 	// no use could ever pass.
 	ReservedParam Code = "reserved-param"
+
+	// BadCollectionName is a collection whose name is not an identifier. A
+	// use names a collection as an identifier, so `collection "my-coll"`
+	// would declare a collection no use could reach.
+	BadCollectionName Code = "bad-collection-name"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -219,6 +224,7 @@ var registry = []CodeInfo{
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{ImportPlacement, Error, "an import appears below a collection or a scenario"},
 	{ReservedParam, Error, "a parameter is named like a use-block override word, so no use can pass it"},
+	{BadCollectionName, Error, "a collection's name is not an identifier, so no use can name it"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},

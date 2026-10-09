@@ -855,6 +855,7 @@
             },
             {
               "kind": "drop",
+              "what": "expects",
               "span": {
                 "file": "../parser/testdata/collections.art",
                 "line": 27,
@@ -862,6 +863,18 @@
                 "endLine": 27,
                 "endCol": 17,
                 "offset": 640
+              }
+            },
+            {
+              "kind": "drop",
+              "what": "captures",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 28,
+                "col": 5,
+                "endLine": 28,
+                "endCol": 18,
+                "offset": 657
               }
             },
             {
@@ -874,11 +887,11 @@
                   "name": "status",
                   "span": {
                     "file": "../parser/testdata/collections.art",
-                    "line": 28,
+                    "line": 29,
                     "col": 12,
-                    "endLine": 28,
+                    "endLine": 29,
                     "endCol": 18,
-                    "offset": 664
+                    "offset": 682
                   }
                 },
                 "y": {
@@ -888,29 +901,29 @@
                   "value": "202",
                   "span": {
                     "file": "../parser/testdata/collections.art",
-                    "line": 28,
+                    "line": 29,
                     "col": 22,
-                    "endLine": 28,
+                    "endLine": 29,
                     "endCol": 25,
-                    "offset": 674
+                    "offset": 692
                   }
                 },
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 28,
+                  "line": 29,
                   "col": 12,
-                  "endLine": 28,
+                  "endLine": 29,
                   "endCol": 25,
-                  "offset": 664
+                  "offset": 682
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 28,
+                "line": 29,
                 "col": 5,
-                "endLine": 28,
+                "endLine": 29,
                 "endCol": 25,
-                "offset": 657
+                "offset": 675
               },
               "class": "complex"
             }
@@ -919,7 +932,7 @@
             "file": "../parser/testdata/collections.art",
             "line": 23,
             "col": 3,
-            "endLine": 29,
+            "endLine": 30,
             "endCol": 4,
             "offset": 542
           }
@@ -939,20 +952,20 @@
                 "value": "alice",
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 31,
+                  "line": 32,
                   "col": 12,
-                  "endLine": 31,
+                  "endLine": 32,
                   "endCol": 19,
-                  "offset": 717
+                  "offset": 735
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 31,
+                "line": 32,
                 "col": 5,
-                "endLine": 31,
+                "endLine": 32,
                 "endCol": 19,
-                "offset": 710
+                "offset": 728
               }
             },
             {
@@ -969,30 +982,30 @@
                     "value": "PW",
                     "span": {
                       "file": "../parser/testdata/collections.art",
-                      "line": 32,
+                      "line": 33,
                       "col": 20,
-                      "endLine": 32,
+                      "endLine": 33,
                       "endCol": 24,
-                      "offset": 744
+                      "offset": 762
                     }
                   }
                 ],
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 32,
+                  "line": 33,
                   "col": 16,
-                  "endLine": 32,
+                  "endLine": 33,
                   "endCol": 25,
-                  "offset": 740
+                  "offset": 758
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 32,
+                "line": 33,
                 "col": 5,
-                "endLine": 32,
+                "endLine": 33,
                 "endCol": 25,
-                "offset": 729
+                "offset": 747
               }
             },
             {
@@ -1012,11 +1025,11 @@
                     "value": "X-Trace",
                     "span": {
                       "file": "../parser/testdata/collections.art",
-                      "line": 33,
+                      "line": 34,
                       "col": 23,
-                      "endLine": 33,
+                      "endLine": 34,
                       "endCol": 32,
-                      "offset": 772
+                      "offset": 790
                     }
                   },
                   "value": {
@@ -1026,40 +1039,40 @@
                     "value": "1",
                     "span": {
                       "file": "../parser/testdata/collections.art",
-                      "line": 33,
+                      "line": 34,
                       "col": 35,
-                      "endLine": 33,
+                      "endLine": 34,
                       "endCol": 38,
-                      "offset": 784
+                      "offset": 802
                     }
                   },
                   "span": {
                     "file": "../parser/testdata/collections.art",
-                    "line": 33,
+                    "line": 34,
                     "col": 16,
-                    "endLine": 33,
+                    "endLine": 34,
                     "endCol": 38,
-                    "offset": 765
+                    "offset": 783
                   }
                 }
               ],
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 33,
+                "line": 34,
                 "col": 5,
-                "endLine": 33,
+                "endLine": 34,
                 "endCol": 40,
-                "offset": 754
+                "offset": 772
               }
             }
           ],
           "span": {
             "file": "../parser/testdata/collections.art",
-            "line": 30,
+            "line": 31,
             "col": 3,
-            "endLine": 34,
+            "endLine": 35,
             "endCol": 4,
-            "offset": 684
+            "offset": 702
           }
         }
       ],
@@ -1067,7 +1080,7 @@
         "file": "../parser/testdata/collections.art",
         "line": 22,
         "col": 1,
-        "endLine": 35,
+        "endLine": 36,
         "endCol": 2,
         "offset": 522
       },

@@ -109,17 +109,18 @@ func (e *expander) apply(via int, s *ast.StepDecl, lines []ast.Stmt, inBlock boo
 				e.setBodyField(via, s, req, v)
 			}
 		case *ast.Drop:
+			// drop captures removes the template's captures. A use adds no
+			// capture of its own, so unlike drop expects it has no place it
+			// must come before.
+			if v.What.Value == "captures" {
+				s.Body = without[*ast.Capture](s.Body)
+				continue
+			}
 			if seenExpect {
 				e.bag.Error(v.Span(), diag.DropAfterExpect, "drop expects must come before this use's own expect lines")
 				continue
 			}
-			kept := s.Body[:0:0]
-			for _, st := range s.Body {
-				if _, ok := st.(*ast.Expect); !ok {
-					kept = append(kept, st)
-				}
-			}
-			s.Body = kept
+			s.Body = without[*ast.Expect](s.Body)
 		case *ast.Expect:
 			seenExpect = true
 			x := ast.Clone(v, identity)
@@ -129,6 +130,18 @@ func (e *expander) apply(via int, s *ast.StepDecl, lines []ast.Stmt, inBlock boo
 			e.bag.Error(v.Span(), diag.BadOverride, "an in block cannot hold another in; it already aims at one step")
 		}
 	}
+}
+
+// without is body less every statement of type T, in a fresh slice: the
+// template's own slice is never written through.
+func without[T ast.Stmt](body []ast.Stmt) []ast.Stmt {
+	kept := body[:0:0]
+	for _, st := range body {
+		if _, ok := st.(T); !ok {
+			kept = append(kept, st)
+		}
+	}
+	return kept
 }
 
 // request is s's api action, or nil -- with a diagnostic at word -- when s is

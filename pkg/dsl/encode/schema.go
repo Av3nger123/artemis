@@ -347,7 +347,8 @@ var nodeSchemas = []nodeSchema{
 		child("value", "expression"),
 		spanField, commentsField,
 	}},
-	{Kind: kindDrop, Doc: "`drop expects` in a use block: the used item's expects are not run", Fields: []fieldSchema{
+	{Kind: kindDrop, Doc: "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed", Fields: []fieldSchema{
+		{Name: "what", Type: "string", InputRequired: true, Doc: "expects or captures: what the line removes"},
 		spanField, commentsField,
 	}},
 	{Kind: kindIn, Doc: "`in \"pay\" { ... }` in a use block: overrides aimed at one step of a flow", Fields: []fieldSchema{

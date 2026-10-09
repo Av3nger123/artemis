@@ -9,6 +9,6 @@ collection "orders" {
   }
 }
 scenario "rush" {
-  use orders.create as rush { sku = "A-1", body.qty = 5, drop expects, expect status == 202 }
+  use orders.create as rush { sku = "A-1", body.qty = 5, drop expects, drop captures, expect status == 202 }
   use orders.checkout { user = "a", in "pay" { header "X" = "1" } }
 }

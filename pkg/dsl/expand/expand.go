@@ -24,7 +24,7 @@ import (
 type Use struct {
 	Span   token.Span // the use line, in the file it was written in
 	Parent int        // 1 + index of the enclosing use, 0 at the top
-	Ref    string     // "orders.create"
+	Ref    string     // "orders.create": qualified, even for a bare sibling ref, once resolved
 	Item   token.Span // the name of the request or flow it expanded; zero when it resolved to nothing
 }
 
@@ -370,6 +370,8 @@ func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, pa
 	}
 	e.res.Uses[via-1].Item = itemSpan(item)
 	key := c.Name.Value + "." + itemName(item)
+	// Qualified even for a bare sibling ref, as the step it names is.
+	e.res.Uses[via-1].Ref = key
 	if i := slices.Index(stack, key); i >= 0 {
 		chain := append(slices.Clone(stack[i:]), key)
 		e.bag.Error(use.Span(), diag.UseCycle, "use cycle: %s", strings.Join(chain, " -> "))

@@ -647,13 +647,6 @@ collection "auth" {
     expect status == 200
     secret capture token = body.data.access_token
   }
-
-  request me(token, base = env("API_URL")) {
-    get "${base}/me" {
-      header "Authorization" = "Bearer ${token}"
-    }
-    expect status == 200
-  }
 }
 ```
 
@@ -690,10 +683,12 @@ collection "orders" {
 import "collections/orders.art"
 import "collections/auth.art"
 
-scenario "an expired token is rejected" {
-  use auth.me {
-    token = "expired"
+scenario "bad password is rejected" {
+  use auth.login as bad {
+    user = "alice"
+    password = "wrong"
     drop expects
+    drop captures
     expect status == 401
   }
 }
@@ -743,9 +738,10 @@ collection file, so an error in it points there.
 | `<ident> = <expr>` | A parameter with a default. The default may name an earlier parameter, as a `var` may name an earlier `var` |
 | `secret <ident>` | A [secret parameter](#secret-parameters). Either form above may follow `secret` |
 
-A `use` names a collection as an identifier, so a collection whose name is not
-one -- `"my-orders"` -- is a collection nothing can use. Required parameters may
-follow defaulted ones, because arguments are always passed by name.
+A collection's name must be an identifier, because a `use` names it as one:
+`collection "my-orders"` is a compile error at the name, with the hint
+`my_orders`. Required parameters may follow defaulted ones, because arguments
+are always passed by name.
 
 A collection has no `var` of its own. Anything its items share is a parameter
 with a default, so every name a request reads is in its own signature.
@@ -810,11 +806,12 @@ line, separated by commas.
 | Line | Target | Effect |
 | --- | --- | --- |
 | `<param> = <expr>` | any | Passes an argument. An unknown parameter, a parameter passed twice, and a required one not passed are compile errors at the `use` |
-| `header <expr> = <expr>` | api step | Replaces the header of that name, compared case-insensitively, or adds one |
-| `query <expr> = <expr>` | api step | Replaces the same key, or appends one |
+| `header "<name>" = <expr>` | api step | Replaces the header of that name, compared case-insensitively, or adds one |
+| `query "<name>" = <expr>` | api step | Replaces the same key, or appends one |
 | `body = <expr>` | api step | Replaces the whole body |
 | `body.<path> = <expr>` | api step whose body is an object literal | Sets or adds that field. A template body that is not an object literal is a compile error: override it whole with `body = ...` |
 | `drop expects` | any step | Removes every `expect` the template wrote. It must come before the `use`'s own `expect` lines |
+| `drop captures` | any step | Removes every `capture` the template wrote. It may come anywhere in the block |
 | `expect <expr> [within <dur>]` | any step | Added after the template's remaining expects |
 | `in "<step>" { <use line> ... }` | flow | Applies the override lines inside it -- not arguments, not `in` -- to that step of the flow. An unknown step name is a compile error |
 
@@ -822,10 +819,11 @@ An override that does not fit its target is a compile error: `header` on a
 terminal step, any override on a flow without `in` -- a flow has several steps
 and the line has to say which -- and `in` on a request.
 
-`drop expects` removes expects and nothing else. A template's captures stay,
-and a capture the response cannot supply is an [errored assertion](#capture),
-so the request a negative test uses is one that captures nothing: `auth.me`
-above, not `auth.login`.
+A negative test drops both. `auth.login` captures a token, and a 401 has none:
+a capture the response cannot supply is an [errored assertion](#capture), so
+the bad-password test above writes `drop captures` beside `drop expects`. A
+capture dropped from one step of a flow is gone for the steps after it too, and
+a later read of it is a compile error, like any other unknown name.
 
 ### `as`
 
@@ -853,6 +851,7 @@ The expanded step's name is what every report shows:
 | `use orders.create as rush` | `rush` |
 | `use orders.checkout`, its step `pay` | `orders.checkout / pay` |
 | `use orders.checkout`, its nested `use auth.login` | `orders.checkout / auth.login` |
+| `use orders.checkout`, its sibling `use create` | `orders.checkout / orders.create`: a sibling is named with its collection, as it would be from outside |
 | `use orders.checkout as co` | `co / pay`, `co / auth.login` |
 
 Two steps may share a name, as they may anywhere else.
@@ -923,14 +922,14 @@ scenario "rush order" {
   var url = env("API_URL")
   secret var login_password = env("PW")
 
-  # from auth.login (collections/auth.art:4) via checkout.art:15
+  # from auth.login (collections/auth.art:4) via checkout.art:17
   step "auth.login" {
     post "${env("API_URL")}/token" { body = {"username": "alice", "password": login_password} }
     expect status == 200
     secret capture token = body.data.access_token
   }
 
-  # from orders.create (collections/orders.art:6) via checkout.art:17
+  # from orders.create (collections/orders.art:6) via checkout.art:19
   step "rush" {
     post "${env("API_URL")}/orders" {
       header "Content-Type" = "application/json"
@@ -1424,11 +1423,11 @@ The keywords the language actually uses are positional, not reserved:
 `scenario`, `config`, `var`, `step`, `run`, `browser`, `expect`, `capture`,
 `retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
 `env`, `times`, `delay`, `collection`, `request`, `flow`, `secret`, `as`,
-`drop`, `expects` (only after `drop`), the seven HTTP verbs, and the operators
-`and`, `or`, `not`, `contains`, `matches`, `exists`, `is`. Each means the
-keyword only where the grammar expects it, so `var flow = 1` and `capture body =
-...` are legal. The literals `true`, `false` and `null` are the exception: they
-are never a name.
+`drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
+the operators `and`, `or`, `not`, `contains`, `matches`, `exists`, `is`. Each
+means the keyword only where the grammar expects it, so `var flow = 1` and
+`capture body = ...` are legal. The literals `true`, `false` and `null` are the
+exception: they are never a name.
 
 ---
 
@@ -1453,7 +1452,7 @@ ItemRef     = Ident [ "." Ident ] ;
 UseLine     = Ident "=" Expr
             | ReqField
             | "body" "." Ident { "." Ident } "=" Expr
-            | "drop" "expects"
+            | "drop" ( "expects" | "captures" )
             | Expect
             | "in" String "{" { UseLine } "}" ;
 ConfigDecl  = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;

@@ -24,6 +24,7 @@ scenario "rush" {
     header "X-Priority" = "high"
     body.qty = 5
     drop expects
+    drop captures
     expect status == 202
   }
   use orders.checkout {

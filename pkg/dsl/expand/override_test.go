@@ -2,9 +2,12 @@ package expand
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/check"
+	"artemis/pkg/dsl/parser"
 )
 
 func useLogin(lines string) map[string]string {
@@ -228,5 +231,56 @@ func TestNestedUseInAFlowOverrides(t *testing.T) {
 	noDiags(t, diags)
 	if contains(got, "status == 200\n") || !contains(got, "expect status != 200") {
 		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestDropCapturesRemovesTheTemplatesCaptures(t *testing.T) {
+	// The negative test drop captures exists for: a 401 has no token to
+	// capture, so the capture has to go as well as the expect. Its order
+	// against the use's own expect does not matter.
+	for _, lines := range []string{
+		"    drop expects\n    drop captures\n    expect status == 401\n",
+		"    drop expects\n    expect status == 401\n    drop captures\n",
+	} {
+		got, diags := run(t, useLogin(lines))
+		noDiags(t, diags)
+		if contains(got, "capture") || contains(got, "status == 200") || !contains(got, "status == 401") {
+			t.Fatalf("got\n%s", got)
+		}
+	}
+}
+
+func TestDropCapturesKeepsTheExpects(t *testing.T) {
+	got, diags := run(t, useLogin("    drop captures\n"))
+	noDiags(t, diags)
+	if contains(got, "capture") || !contains(got, "status == 200") {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+// A capture dropped from one step of a flow is gone for the steps after it
+// too: a later read of it is a free name, which the checker reports.
+func TestDropCapturesInAFlowLeavesALaterReadUnbound(t *testing.T) {
+	files := map[string]string{
+		"c.art":    "collection \"c\" {\n  flow f() {\n    step \"one\" {\n      get \"x\"\n      capture id = body.id\n    }\n    step \"two\" {\n      get \"x/${id}\"\n    }\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.f { in \"one\" { drop captures } }\n}\n",
+	}
+	tree, bag := parser.Parse("main.art", files["main.art"])
+	if bag.HasErrors() {
+		t.Fatalf("main.art does not parse: %v", bag.All())
+	}
+	res, eb := Expand(tree, MapLoader(files))
+	if eb.HasErrors() {
+		t.Fatalf("expansion: %v", eb.All())
+	}
+	_, checked := check.Check(res.File)
+	found := false
+	for _, d := range checked.All() {
+		if strings.Contains(d.Message, `"id"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the read of a dropped capture was not reported: %v", checked.All())
 	}
 }

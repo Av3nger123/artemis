@@ -100,7 +100,7 @@ func (e *enc) bodySet(b *ast.BodySet) *obj {
 }
 
 func (e *enc) drop(d *ast.Drop) *obj {
-	return start(kindDrop, d).span().comments(d.Tokens(nil), zero, zero).done()
+	return start(kindDrop, d).set("what", d.What.Value).span().comments(d.Tokens(nil), zero, zero).done()
 }
 
 func (e *enc) in(n *ast.In) *obj {
@@ -343,14 +343,27 @@ func useLine(f fields) (ast.Stmt, error) {
 	case kindBodySet:
 		return bodySet(f)
 	case kindDrop:
-		d := &ast.Drop{Keyword: syn(token.Ident, "drop"), What: syn(token.Ident, "expects")}
-		return d, plain(f, &d.Keyword)
+		return drop(f)
 	case kindExpect:
 		return expect(f)
 	case kindIn:
 		return in(f)
 	}
 	return nil, badKind(f, kind, "a use line")
+}
+
+// drop is `drop expects` or `drop captures`. what is required: a document
+// that left it out would otherwise silently mean one of the two.
+func drop(f fields) (ast.Stmt, error) {
+	what, err := f.str("what")
+	if err != nil {
+		return nil, err
+	}
+	if !token.IsDropTarget(what) {
+		return nil, fmt.Errorf("%s: %q is %q; want one of %s", f.path, "what", what, strings.Join(token.DropTargets, ", "))
+	}
+	d := &ast.Drop{Keyword: syn(token.Ident, "drop"), What: syn(token.Ident, what)}
+	return d, plain(f, &d.Keyword)
 }
 
 func bodySet(f fields) (ast.Stmt, error) {

@@ -179,6 +179,11 @@
           "severity": "error"
         },
         {
+          "value": "bad-collection-name",
+          "doc": "a collection's name is not an identifier, so no use can name it",
+          "severity": "error"
+        },
+        {
           "value": "bad-override",
           "doc": "a line in a use block is not an argument or an override that applies",
           "severity": "error"
@@ -372,6 +377,17 @@
           "value": "use-cycle",
           "doc": "a flow uses itself, directly or through other flows",
           "severity": "error"
+        }
+      ]
+    },
+    "dropTarget": {
+      "doc": "What a drop line in a use block removes from the template: drop expects or drop captures.",
+      "values": [
+        {
+          "value": "expects"
+        },
+        {
+          "value": "captures"
         }
       ]
     },

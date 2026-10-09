@@ -127,6 +127,7 @@ func TestLookupsAgreeWithTheirTables(t *testing.T) {
 		{"Builtins", Builtins, IsBuiltin},
 		{"Reserved", Reserved, IsReserved},
 		{"UseLines", UseLines, IsUseLine},
+		{"DropTargets", DropTargets, IsDropTarget},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -153,7 +154,7 @@ func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
 		StepFields, ConfigBlocks, BrowserConfigFields, Builtins,
-		CollectionItems, UseLines,
+		CollectionItems, UseLines, DropTargets,
 	}
 	// keywordNotName are the reserved words the language now uses as keywords
 	// as well: `import` and `use` open a declaration, `in` opens a use line.

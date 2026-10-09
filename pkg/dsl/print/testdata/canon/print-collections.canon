@@ -21,6 +21,7 @@ scenario "rush" {
     sku = "A-1"
     body.qty = 5
     drop expects
+    drop captures
     expect status == 202
   }
   use orders.checkout {

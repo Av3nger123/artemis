@@ -101,6 +101,7 @@ func Choices() ChoicePoints {
 			"configSubject":      words("The subjects of a config declaration.", token.ConfigBlocks),
 			"collectionItem":     words("What a collection body holds: a request or a flow.", token.CollectionItems),
 			"useLine":            words("The words that open an override line in a use block. Any other identifier opening a line there is an argument.", token.UseLines),
+			"dropTarget":         words("What a drop line in a use block removes from the template: drop expects or drop captures.", token.DropTargets),
 			"requestField":       fields("The fields of an api step's action block.", "request"),
 			"runField":           fields("The fields of a run block.", "run"),
 			"retryField":         fields("The fields of a retry block.", "retry"),

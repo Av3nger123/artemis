@@ -16,7 +16,7 @@ ItemRef       = Ident [ "." Ident ] ;
 UseLine       = Ident "=" Expr
               | ReqField
               | "body" "." Ident { "." Ident } "=" Expr
-              | "drop" "expects"
+              | "drop" ( "expects" | "captures" )
               | Expect
               | "in" String "{" { UseLine } "}" ;
 

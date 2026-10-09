@@ -69,6 +69,10 @@ var (
 	// parameter may not be named one of these.
 	UseLines = []string{"header", "query", "body", "drop", "expect", "in"}
 
+	// DropTargets are what a use's `drop` line can remove from the template:
+	// `drop expects` its expects, `drop captures` its captures.
+	DropTargets = []string{"expects", "captures"}
+
 	// ConfigBlocks are the subjects of a `config` declaration. Only `browser`
 	// has settings today.
 	ConfigBlocks = []string{"browser"}
@@ -103,6 +107,7 @@ var (
 	builtins       = set(Builtins)
 	reserved       = set(Reserved)
 	useLines       = set(UseLines)
+	dropTargets    = set(DropTargets)
 
 	// comparisonKinds and comparisonWords are Comparisons split by how a token
 	// spells each entry: the six symbols arrive with a Kind of their own, the
@@ -151,6 +156,9 @@ func IsWordOperator(word string) bool { return wordOperators[word] }
 
 // IsUseLine reports whether word opens an override line in a use block.
 func IsUseLine(word string) bool { return useLines[word] }
+
+// IsDropTarget reports whether word may follow `drop` in a use block.
+func IsDropTarget(word string) bool { return dropTargets[word] }
 
 // IsBuiltin reports whether word names a callable builtin.
 func IsBuiltin(word string) bool { return builtins[word] }

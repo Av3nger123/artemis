@@ -78,13 +78,6 @@ collection "auth" {
     expect status == 200
     secret capture token = body.data.access_token
   }
-
-  request me(token, base = env("API_URL")) {
-    get "${base}/me" {
-      header "Authorization" = "Bearer ${token}"
-    }
-    expect status == 200
-  }
 }
 ```
 
@@ -104,10 +97,12 @@ scenario "orders need a token" {
   }
 }
 
-scenario "an expired token is rejected" {
-  use auth.me {
-    token = "expired"
+scenario "bad password is rejected" {
+  use auth.login {
+    user = "alice"
+    password = "wrong"
     drop expects
+    drop captures
     expect status == 401
   }
 }
@@ -115,8 +110,8 @@ scenario "an expired token is rejected" {
 
 A `use` passes arguments by name, and can change what that one use sends and
 expects: `header`, `query`, `body` and `body.<field>` lines override the
-request, `drop expects` removes the template's expects, and `expect` lines add
-new ones. `as rush` names the step `rush` and its captures `rush_...`, so one
+request, `drop expects` and `drop captures` remove the template's expects and
+captures -- a 401 has no token to capture -- and `expect` lines add new ones. `as rush` names the step `rush` and its captures `rush_...`, so one
 request can be used twice in a scenario. A `flow` holds several steps and uses,
 and `in "<step>" { ... }` aims an override at one of them.
 

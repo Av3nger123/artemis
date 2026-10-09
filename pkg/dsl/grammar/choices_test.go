@@ -52,6 +52,7 @@ var owner = map[string]string{
 	"Reserved":            "reservedWord",
 	"CollectionItems":     "collectionItem",
 	"UseLines":            "useLine",
+	"DropTargets":         "dropTarget",
 }
 
 // TestEveryTableIsAChoicePoint is the gate this issue is graded on.
