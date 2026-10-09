@@ -363,7 +363,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			diagOut.Write(a.diag.Bytes()) //nolint:errcheck // the console report below already surfaces a run that cannot report
 		}
 		if !a.ok {
-			failScenario(run, rep, a.file, a.err)
+			failScenario(run, rep, rt.events, a.file, a.err)
 			continue
 		}
 		if len(faults) > 0 {
@@ -419,12 +419,15 @@ func notAScenarioError(file string) error {
 // failScenario records a file artemis could not load as one errored scenario.
 //
 // No name to give it: the file did not load, so all anyone knows about this
-// scenario is where it lives.
-func failScenario(run *result.RunResult, rep *report.Console, file string, err error) {
+// scenario is where it lives. On the event stream that is a scenario-start
+// with no name and no steps, and an errored scenario-end with the reason.
+func failScenario(run *result.RunResult, rep *report.Console, events *report.Events, file string, err error) {
 	scenario := run.NewScenario("", file)
 	rep.Scenario(scenario)
+	events.ScenarioStart(scenario, nil)
 	scenario.Fail(0, err)
 	rep.ScenarioFailed(scenario)
+	events.ScenarioEnd(scenario)
 	logger.Logger.Error("Could not load a scenario", "file", file, "error", err.Error())
 }
 
