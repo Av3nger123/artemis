@@ -88,6 +88,13 @@ func TestRunRefusesAnImportThatLeavesTheWorkspace(t *testing.T) {
 	if err == nil && !res.IsError {
 		t.Fatalf("expected a refusal, got %+v", res)
 	}
+	if err == nil {
+		if txt := toJSON(t, res.Content); !strings.Contains(txt, "outside.art") {
+			t.Fatalf("the refusal must name the import: %s", txt)
+		}
+	} else if !strings.Contains(err.Error(), "outside.art") {
+		t.Fatalf("the refusal must name the import: %v", err)
+	}
 }
 
 func TestListShowsCollections(t *testing.T) {
@@ -98,6 +105,10 @@ func TestListShowsCollections(t *testing.T) {
 	out := toJSON(t, structured(t, call(t, cs, "artemis_list", nil)))
 	if !strings.Contains(out, `"c.r"`) || !strings.Contains(out, `"c.f"`) {
 		t.Fatalf("got %s", out)
+	}
+	cols, _ := structured(t, call(t, cs, "artemis_list", nil))["collections"].(map[string]any)
+	if got := toJSON(t, cols["c.art"]); got != `["c.r","c.f"]` || len(cols) != 1 {
+		t.Fatalf("collections shape: %s", toJSON(t, cols))
 	}
 	if got := listFiles(t, cs, nil); len(got) != 2 {
 		t.Fatalf("files must stay a list of paths: %v", got)
@@ -115,4 +126,37 @@ func toJSON(t *testing.T, v any) string {
 
 func callParams(name string, args map[string]any) *mcp.CallToolParams {
 	return &mcp.CallToolParams{Name: name, Arguments: args}
+}
+
+func TestListDoesNotReadASymlinkOutOfTheWorkspace(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "ws")
+	writeFile(t, root, "keep.art", "scenario \"x\" {}\n")
+	writeFile(t, parent, "outside.art", "collection \"secret\" {\n  request leak() {\n    get \"x\"\n  }\n}\n")
+	if err := os.Symlink(filepath.Join(parent, "outside.art"), filepath.Join(root, "link.art")); err != nil {
+		t.Fatal(err)
+	}
+	cs := connect(t, root)
+	if out := toJSON(t, structured(t, call(t, cs, "artemis_list", nil))); strings.Contains(out, "secret") {
+		t.Fatalf("read through the symlink: %s", out)
+	}
+}
+
+func TestRefusedImportsLeakNoHostPathAndDoNotProbe(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "ws")
+	writeFile(t, root, "keep.art", "scenario \"x\" {}\n")
+	writeFile(t, parent, "exists.art", collSrc)
+	cs := connect(t, root)
+	msg := func(imp string) string {
+		got := validate(t, cs, map[string]any{"file": "main.art", "source": "import \"" + imp + "\"\n"})
+		return toJSON(t, got["diagnostics"])
+	}
+	a, b := msg("../exists.art"), msg("../absent.art")
+	if strings.Contains(a, parent) || strings.Contains(b, parent) || strings.Contains(a, "lstat") {
+		t.Fatalf("leaks a host path: %s / %s", a, b)
+	}
+	if strings.ReplaceAll(a, "exists", "X") != strings.ReplaceAll(b, "absent", "X") {
+		t.Fatalf("existence is observable:\n%s\n%s", a, b)
+	}
 }

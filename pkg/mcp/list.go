@@ -70,7 +70,7 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 			return relErr
 		}
 		files = append(files, rel)
-		if items := collectionItems(p, rel); len(items) > 0 {
+		if items := srv.collectionItems(rel); len(items) > 0 {
 			collections[rel] = items
 		}
 		return nil
@@ -95,8 +95,14 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 // read off what it says, and a file that does not compile still lists what
 // did parse. A file that cannot be read lists nothing; artemis_validate is
 // where its problems are reported.
-func collectionItems(abs, rel string) []string {
-	b, err := os.ReadFile(abs) //nolint:gosec // the walk stayed inside the workspace
+func (srv *server) collectionItems(rel string) []string {
+	// Through resolveArt, not the walked path: a symlink to a file outside the
+	// workspace is listed as a file but never read.
+	abs, err := srv.ws.resolveArt(rel)
+	if err != nil {
+		return nil
+	}
+	b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
 	if err != nil {
 		return nil
 	}

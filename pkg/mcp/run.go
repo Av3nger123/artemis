@@ -108,6 +108,7 @@ func (srv *server) runTool(ctx context.Context, req *mcp.CallToolRequest, in run
 	return document(doc), json.RawMessage(doc), nil
 }
 
+// This is defence in depth, not a sandbox: the subprocess reads the files again.
 // checkImports refuses a run when a scenario under target imports a file the
 // workspace boundary would not let a tool read.
 func (srv *server) checkImports(target string) error {
@@ -134,7 +135,12 @@ func (srv *server) checkImports(target string) error {
 		if err != nil {
 			return err
 		}
-		b, err := os.ReadFile(p) //nolint:gosec // the target was resolved inside the workspace
+		abs, err := srv.ws.resolveArt(rel)
+		if err != nil {
+			// A symlink out of the workspace: the run would follow it, so refuse.
+			return fmt.Errorf("%s: is not a .art file inside the workspace", rel)
+		}
+		b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
 		if err != nil {
 			return err
 		}

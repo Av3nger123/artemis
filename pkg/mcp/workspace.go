@@ -140,13 +140,18 @@ type wsLoader struct{ w workspace }
 // it is a scenario file inside the workspace.
 func (l wsLoader) Load(from, p string) (string, string, error) {
 	rel := filepath.Join(filepath.Dir(from), p)
+	// One fixed error for every refusal and read failure, naming only the path
+	// as written: the resolver's own text carries absolute host paths and
+	// differs for a missing target and an existing one, which would let an
+	// import probe the filesystem outside the workspace.
+	refused := fmt.Errorf("%s is not a .art file inside the workspace", p)
 	abs, err := l.w.resolveArt(rel)
 	if err != nil {
-		return "", "", err
+		return "", "", refused
 	}
 	b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
 	if err != nil {
-		return "", "", err
+		return "", "", refused
 	}
 	return rel, string(b), nil
 }
