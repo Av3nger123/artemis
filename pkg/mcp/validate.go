@@ -63,7 +63,7 @@ func (srv *server) validateTool(ctx context.Context, req *mcp.CallToolRequest, i
 		label = sourceLabel
 	}
 
-	_, _, bag := front.Compile(label, in.Source)
+	bag := front.CompileWith(label, in.Source, srv.ws.loader()).Bag
 	doc := diag.JSONString(bag.All())
 
 	var envelope map[string]json.RawMessage

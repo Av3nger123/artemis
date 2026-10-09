@@ -47,7 +47,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List the .art scenario files in the workspace, in path order, as workspace-relative paths. Call this first to find out what scenarios exist before reading or changing one.",
+    "description": "List the .art scenario files in the workspace, in path order, as workspace-relative paths, and under `collections` the `collection.item` names each file declares (for a `use`). Call this first to find out what scenarios exist before reading or changing one.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
