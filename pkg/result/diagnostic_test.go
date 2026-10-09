@@ -246,3 +246,34 @@ func TestDiagnosticsCopiesEachAssertion(t *testing.T) {
 			diags[0].Assertion.Path, diags[1].Assertion.Path)
 	}
 }
+
+// A step a use brought in from a collection carries the collection's file, and
+// a diagnostic about it names that file: its line is a line of that file. A
+// check with no line of its own falls back to the step, file and all.
+func TestDiagnosticsNameTheFileTheLineIsIn(t *testing.T) {
+	step := &StepResult{Name: "auth.login", Line: 2, File: "auth.art"}
+	step.Assert(Assertion{Kind: "expect", Line: 6, File: "auth.art"}.Fail())
+	step.Assert(Assertion{Kind: "status_code"}.Fail())
+	step.Finish(time.Millisecond)
+	sc := &ScenarioResult{Name: "checkout", File: "checkout.art", Steps: []*StepResult{step}}
+	sc.Finish(time.Millisecond)
+
+	diags := diagRun(t, sc).Diagnostics()
+	if len(diags) != 2 {
+		t.Fatalf("Diagnostics() = %+v", diags)
+	}
+	if d := diags[0]; d.File != "auth.art" || d.Line != 6 {
+		t.Errorf("the check's own line: %s:%d, want auth.art:6", d.File, d.Line)
+	}
+	if d := diags[1]; d.File != "auth.art" || d.Line != 2 {
+		t.Errorf("the step's line: %s:%d, want auth.art:2", d.File, d.Line)
+	}
+
+	errored := &StepResult{Name: "x", Line: 9, File: "auth.art"}
+	errored.Fail(time.Millisecond, errors.New("no route"))
+	sc2 := &ScenarioResult{Name: "s", File: "s.art", Steps: []*StepResult{errored}}
+	sc2.Finish(time.Millisecond)
+	if d := diagRun(t, sc2).Diagnostics()[0]; d.File != "auth.art" || d.Line != 9 {
+		t.Errorf("a step that could not run: %s:%d, want auth.art:9", d.File, d.Line)
+	}
+}

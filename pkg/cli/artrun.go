@@ -201,6 +201,10 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 			// at all -- and an assertion with no line of its own -- still
 			// points somewhere a reader can go (ART-12).
 			stepResult.Line = st.Line
+			// And the file that line is in, when a use brought the step in
+			// from a collection: a line of auth.art is no use against the
+			// scenario's file.
+			stepResult.File = st.File
 			runArtStep(ctx, rt, sc.Name, st, scope, stepResult)
 			logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, stepResult.Duration))
 			// Every step that was reached gets a line, including one artemis

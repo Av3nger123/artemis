@@ -85,6 +85,7 @@ type Act struct {
 	Target ast.Expr
 	Value  ast.Expr
 	Line   int
+	File   string // the file Line is in when it is not the scenario's: see Step.File
 }
 
 // Model evaluates the act against env and returns what browserstep reads.
@@ -101,7 +102,7 @@ type Act struct {
 // it was reading, because a browser block is many statements and "the step
 // could not resolve an expression" would not say which line to go to.
 func (a *Act) Model(env *eval.Env) (models.Act, error) {
-	out := models.Act{Name: a.Name, Line: a.Line}
+	out := models.Act{Name: a.Name, Line: a.Line, File: a.File}
 
 	target, err := text(a.Target, env)
 	if err != nil {
@@ -471,6 +472,7 @@ func acts(b *ast.Browser) []*Act {
 			Target: a.Target,
 			Value:  a.Value,
 			Line:   a.Name.Span.Line,
+			File:   a.Name.Span.File,
 		})
 	}
 	return out

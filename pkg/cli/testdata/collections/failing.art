@@ -1,0 +1,7 @@
+import "auth.art"
+
+scenario "failing" {
+  var url = env("API_URL")
+
+  use auth.login { user = "alice", password = "wrong", base = url }
+}

@@ -86,8 +86,9 @@ func runExpand(cmd *cobra.Command, args []string) error {
 //	# from auth.login (auth.art:2) via checkout.art:6
 //
 // The step's name token carries the Via of the innermost use that copied it
-// in, so that is the use the comment names. A step written in the scenario
-// itself has Via 0 and gets nothing.
+// in, so that use's item is what `from` names; `via` names the scenario's own
+// use line, at the root of the chain. A step written in the scenario itself
+// has Via 0 and gets nothing.
 //
 // A run of hoisted secret vars that follows a step gets a blank line above
 // it, so it reads as part of the use below it and not of the step above.
@@ -130,8 +131,14 @@ func origin(u *front.Unit, via int) (string, bool) {
 		return "", false
 	}
 	use := u.Uses[via-1]
+	// The use the scenario wrote: walk out through every use that copied this
+	// one in, so `via` is a line of the scenario file a reader can go to.
+	top := use
+	for top.Parent > 0 && top.Parent <= len(u.Uses) {
+		top = u.Uses[top.Parent-1]
+	}
 	return fmt.Sprintf("# from %s (%s:%d) via %s:%d",
-		use.Ref, use.Item.File, use.Item.Line, use.Span.File, use.Span.Line), true
+		use.Ref, use.Item.File, use.Item.Line, top.Span.File, top.Span.Line), true
 }
 
 // withComment is leading with an own-line comment after it, in a new slice.

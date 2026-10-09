@@ -84,7 +84,7 @@ func settleOne(ctx context.Context, step string, e *lower.Expect, env *eval.Env,
 		// literal; this is the one that came from a var, and it is the
 		// scenario's mistake rather than the page's -- so it is an errored
 		// assertion naming the expect's line, not a silent one-shot.
-		return result.Assertion{Step: step, Kind: lower.KindExpect, Line: e.Line}.Errored(err)
+		return result.Assertion{Step: step, Kind: lower.KindExpect, Line: e.Line, File: e.File}.Errored(err)
 	}
 
 	deadline := now().Add(budget)

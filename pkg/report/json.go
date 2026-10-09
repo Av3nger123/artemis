@@ -111,7 +111,12 @@ type jsonStep struct {
 	DurationMS float64 `json:"duration_ms"`
 	Attempts   int     `json:"attempts"`
 	Line       int     `json:"line"`
-	Error      string  `json:"error"`
+	// File is the file Line is in, present only when that is not the
+	// scenario's: a step a use brought in from a collection. Omitted rather
+	// than empty, unlike the keys around it, so a run that never meets a
+	// collection writes exactly the document it always did.
+	File  string `json:"file,omitempty"`
+	Error string `json:"error"`
 	// Screenshot is the path to a picture of the page, for a browser step that
 	// did not pass. Always present and empty when there is none, like every
 	// other key here, so a jq expression never has to tell absent from empty.
@@ -139,6 +144,7 @@ type jsonAssertion struct {
 	Status   string `json:"status"`
 	Error    string `json:"error"`
 	Line     int    `json:"line"`
+	File     string `json:"file,omitempty"` // see jsonStep.File
 }
 
 // jsonFailure is one entry of the flat failures array: a result.Diagnostic on the
@@ -282,6 +288,7 @@ func fromStep(step *result.StepResult) jsonStep {
 		DurationMS: millis(step.Duration),
 		Attempts:   step.Attempts,
 		Line:       step.Line,
+		File:       step.File,
 		Error:      step.Error,
 		Screenshot: step.Screenshot,
 		Trace:      step.Trace,
@@ -298,6 +305,7 @@ func fromStep(step *result.StepResult) jsonStep {
 			Status:   a.Status.String(),
 			Error:    a.Error,
 			Line:     a.Line,
+			File:     a.File,
 		})
 	}
 	return out

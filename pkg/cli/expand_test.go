@@ -97,3 +97,25 @@ func TestExpandReportsABrokenCollection(t *testing.T) {
 		t.Fatalf("stdout %q\nstderr %s", out, stderr)
 	}
 }
+
+// A step a flow's own use brought in names the flow's request as where it is
+// from, and the scenario's use line as how it got here: the line a reader of
+// the scenario can find, not one inside the collection.
+func TestExpandNamesTheScenariosUseForANestedStep(t *testing.T) {
+	out, stderr, err := runCLI(t, "expand", "testdata/collections/nested.art")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stderr)
+	}
+	checkFileGolden(t, "testdata/collections/nested.expanded.art", out)
+	for _, want := range []string{
+		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/nested.art:6\n  step \"session.start / auth.login\"",
+		"# from session.start (testdata/collections/session.art:4) via testdata/collections/nested.art:6\n  step \"session.start / me\"",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "via testdata/collections/session.art") {
+		t.Errorf("an origin names a use inside the collection:\n%s", out)
+	}
+}

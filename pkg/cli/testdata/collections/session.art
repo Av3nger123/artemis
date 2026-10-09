@@ -1,0 +1,14 @@
+import "auth.art"
+
+collection "session" {
+  flow start(base) {
+    use auth.login { user = "bob", password = "pw", base = base }
+
+    step "me" {
+      get "${base}/orders" {
+        header "Authorization" = "Bearer ${token}"
+      }
+      expect status == 200
+    }
+  }
+}

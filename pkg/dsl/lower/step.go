@@ -55,6 +55,11 @@ type Step struct {
 	// run at all points at, and the fallback for an assertion with no line of
 	// its own (ART-12).
 	Line int
+	// File is the file Line is a line of, when that is not the scenario's own
+	// file: a step a use brought in was written in a collection. Empty for
+	// everything written where it runs, so nothing that never meets a
+	// collection changes.
+	File string
 
 	// Timeout is `timeout = "5s"`, nil when the step wrote none. It is rendered
 	// onto models.Step.Timeout and read by ART-16's AttemptTimeout, so the
@@ -248,6 +253,7 @@ func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, er
 		Name:        d.Name.Value,
 		Type:        key,
 		Line:        d.Keyword.Span.Line,
+		File:        d.Keyword.Span.File,
 		secretNames: secrets,
 	}
 
@@ -271,6 +277,7 @@ func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, er
 				Name:     it.Name.Value,
 				Value:    it.Value,
 				Line:     it.Name.Span.Line,
+				File:     it.Name.Span.File,
 				Declared: it.Secret.Text != "",
 			})
 		case *ast.Field:
@@ -327,4 +334,27 @@ func text(x ast.Expr, env *eval.Env) (string, error) {
 func trimmed(x ast.Expr, env *eval.Env) (string, error) {
 	s, err := text(x, env)
 	return strings.TrimSpace(s), err
+}
+
+// relativeTo clears every File that is root, the scenario's own file, so a
+// file is named only where it differs from the one the scenario is in.
+func (s *Step) relativeTo(root string) {
+	s.File = otherFile(s.File, root)
+	for _, e := range s.Expects {
+		e.File = otherFile(e.File, root)
+	}
+	for _, c := range s.Captures {
+		c.File = otherFile(c.File, root)
+	}
+	for _, a := range s.Acts {
+		a.File = otherFile(a.File, root)
+	}
+}
+
+// otherFile is file, or "" when it is root.
+func otherFile(file, root string) string {
+	if file == root {
+		return ""
+	}
+	return file
 }

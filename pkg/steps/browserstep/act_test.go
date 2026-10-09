@@ -319,3 +319,13 @@ func TestTheFakeSettlesAfterNReads(t *testing.T) {
 		t.Errorf("reads were %v, want %v", got, want)
 	}
 }
+
+// An action a use brought in from a collection names the collection's file
+// with its line, because the line is not one of the scenario's.
+func TestAnActionFromACollectionNamesItsFile(t *testing.T) {
+	f := newFake()
+	err := perform(f, acts(models.Act{Name: "scroll", Target: ".foot", Line: 7, File: "ui.art"}), "s", far())
+	if err == nil || !strings.Contains(err.Error(), "ui.art:7") {
+		t.Fatalf("perform() = %v, want it to name ui.art:7", err)
+	}
+}

@@ -15,7 +15,8 @@ package result
 // file; a scenario knows its file but not which assertion failed. A diagnostic
 // is the join, so nothing downstream walks four levels to say one sentence.
 type Diagnostic struct {
-	// File is the scenario file, as the run was given it.
+	// File is the file Line is a line of: the scenario file, as the run was
+	// given it, or the collection file a use brought the step in from.
 	File string
 	// Scenario is the scenario's name, empty when its file would not load and
 	// there was no name to read.
@@ -103,11 +104,15 @@ func stepDiagnostics(sc *ScenarioResult, step *StepResult) []Diagnostic {
 		if a.Passed() {
 			continue
 		}
+		line, file := a.Line, a.File
+		if line <= 0 {
+			line, file = step.Line, step.File
+		}
 		out = append(out, Diagnostic{
-			File:       sc.File,
+			File:       fileOf(file, sc.File),
 			Scenario:   sc.Name,
 			Step:       step.Name,
-			Line:       lineOf(a.Line, step.Line),
+			Line:       line,
 			Status:     a.Status,
 			Assertion:  &a,
 			Screenshot: step.Screenshot,
@@ -117,7 +122,7 @@ func stepDiagnostics(sc *ScenarioResult, step *StepResult) []Diagnostic {
 	// errored after an assertion errored has one reason, not two.
 	if len(out) == 0 && !step.Passed() {
 		out = append(out, Diagnostic{
-			File:       sc.File,
+			File:       fileOf(step.File, sc.File),
 			Scenario:   sc.Name,
 			Step:       step.Name,
 			Line:       step.Line,
@@ -129,12 +134,15 @@ func stepDiagnostics(sc *ScenarioResult, step *StepResult) []Diagnostic {
 	return out
 }
 
-// lineOf resolves a check's line against its step's. A check with no line of
-// its own -- a `status_code` the step never wrote, a default `exit_code: 0` --
-// still points at the step, which is the right place to go.
-func lineOf(own, step int) int {
-	if own > 0 {
+// fileOf is the file a line belongs to: its own, when it was written in
+// another file than the scenario's, and the scenario's otherwise.
+//
+// A check with no line of its own -- a `status_code` the step never wrote, a
+// default `exit_code: 0` -- points at the step instead, file and all, which is
+// the right place to go.
+func fileOf(own, scenario string) string {
+	if own != "" {
 		return own
 	}
-	return step
+	return scenario
 }
