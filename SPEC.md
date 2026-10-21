@@ -1144,7 +1144,8 @@ calling one anywhere else is a compile error naming what is in scope there.
 
 Environment variables come from the process environment and from the `.env` file
 in the working directory, or from the file given with `-e`. A file named with
-`-e` that cannot be read is a warning; a missing default `.env` is silent.
+`-e` that cannot be read stops the run with an error that names the file, before
+any step; a missing default `.env` is silent.
 
 Before the first step of a run, artemis reads every `env()` call whose name is
 a plain string literal and reports every one of those variables that has no

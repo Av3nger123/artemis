@@ -50,7 +50,7 @@ that does not compile is one errored scenario: the files after it still run.`,
 //
 // envFile is the path only when godotenv read it, and empty otherwise -- an
 // absent default .env is the normal case, and a `-e prod.env` that could not be
-// read has already been warned about. The environment gate's block names the
+// read never gets here: initRunEnv returns an error for it. The environment gate's block names the
 // file it read, so a run in a directory with no .env must not say "read .env":
 // that sends the reader to inspect a file that is not there instead of at the
 // variable they have to set.
@@ -71,15 +71,19 @@ func initRunEnv(cmd *cobra.Command) (runEnv, error) {
 	}
 	loaded := envFilePath
 	if err := env.InitEnv(envFilePath); err != nil {
+		// A path the user named with --env and that did not load stops the run
+		// before any step: a run that goes on without the variables the user
+		// chose would fail later, with a message about a variable and not the
+		// file. The log is closed here because the caller never gets it.
+		if cmd.Flags().Changed("env") {
+			closer.Close()
+			// err already names the path.
+			return runEnv{}, err
+		}
+		// A missing default .env is the normal case and not worth a line.
 		// Nothing was read, so nothing is reported as read.
 		loaded = ""
 		logger.Logger.Warn("Could not load env file", "path", envFilePath, "error", err.Error())
-		// A missing .env is the normal case and not worth a line; a path the
-		// user named and that did not load is.
-		if cmd.Flags().Changed("env") {
-			// err already names the path.
-			fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
-		}
 	}
 	return runEnv{closer: closer, envFile: loaded}, nil
 }

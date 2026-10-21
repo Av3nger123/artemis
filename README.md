@@ -1043,8 +1043,8 @@ API_PASSWORD=my_secret_key
 artemis run checkout.art -e dev.env
 ```
 
-A file named with `-e` that cannot be read is a warning; a missing default
-`.env` is silent.
+If the file named with `-e` cannot be read, the run stops with an error that
+names the file, before any step. A missing default `.env` is silent.
 
 **Remember not to commit your environment files to version control systems like
 Git, as they may contain sensitive information.**

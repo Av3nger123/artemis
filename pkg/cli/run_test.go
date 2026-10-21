@@ -1102,3 +1102,90 @@ func TestEventsWithAnUnknownFormatRunsNothing(t *testing.T) {
 		t.Errorf("something ran before the flag was refused:\n%s", stdout)
 	}
 }
+
+// envScenarioArt is a scenario whose URL comes from the variable name.
+func envScenarioArt(name string) string {
+	return fmt.Sprintf(`scenario "env" {
+  var url = env(%q)
+  step "ping" {
+    get "${url}"
+    expect status == 200
+  }
+}
+`, name)
+}
+
+// A file that --env names and that cannot be read stops the run before any
+// step, and the error names the file. The server counts requests, so a scenario
+// that ran anyway cannot pass unseen.
+func TestRunStopsWhenTheEnvFileNamedByEnvCannotBeRead(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.WriteHeader(200)
+	}))
+	t.Cleanup(srv.Close)
+	inDir(t, t.TempDir())
+
+	stdout, stderr, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"), "--env", "missing.env")
+	if err == nil {
+		t.Fatalf("Execute() = nil, want an error\nstdout:\n%s", stdout)
+	}
+	if !strings.Contains(err.Error(), "missing.env") {
+		t.Errorf("Execute() = %q, want it to name missing.env", err)
+	}
+	if hits != 0 {
+		t.Errorf("%d requests were sent, want none: a step ran", hits)
+	}
+	if strings.Contains(stdout, "scenario:") || strings.Contains(stderr, "scenario:") {
+		t.Errorf("a scenario started:\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+}
+
+// With no --env, a missing default .env stays silent and the run goes on.
+func TestRunGoesOnWhenTheDefaultEnvFileIsMissing(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	inDir(t, t.TempDir())
+
+	stdout, stderr, err := runStreams(t, namedScenarioArt("health", srv.URL, "ok"))
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	if strings.Contains(stderr, "warning") {
+		t.Errorf("a missing default .env was not silent:\n%s", stderr)
+	}
+}
+
+// A file that --env names and that loads gives the scenario its variables.
+func TestRunLoadsTheEnvFileNamedByEnv(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, "dev.env")
+	const key = "ARTEMIS_TEST_ENV_FLAG_URL"
+	if err := os.WriteFile(envPath, []byte(key+"="+srv.URL+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Unsetenv(key) })
+
+	stdout, stderr, err := runStreams(t, envScenarioArt(key), "--env", envPath)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+}
+
+// A variable that the process already has wins over the --env file.
+func TestRunKeepsProcessVariablesOverTheEnvFile(t *testing.T) {
+	srv := okServer(t, 200, `{"status":"ok"}`)
+	envPath := filepath.Join(t.TempDir(), "dev.env")
+	const key = "ARTEMIS_TEST_ENV_FLAG_WINS"
+	// The file points at a closed port: if it won, the step would fail.
+	if err := os.WriteFile(envPath, []byte(key+"=http://127.0.0.1:1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(key, srv.URL)
+
+	stdout, stderr, err := runStreams(t, envScenarioArt(key), "--env", envPath)
+	if err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+}
