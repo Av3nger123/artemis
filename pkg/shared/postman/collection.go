@@ -2,7 +2,11 @@
 // `artemis migrate` translates, so that `artemis generate` writes `.art`
 // through the same canonical printer rather than a format of its own.
 //
-//	artemis generate -f collection.json [-o scenario.art]
+//	artemis generate -f collection.json -o scenario.art [--flat]
+//
+// Without --flat, generate writes a collection file and a scenario that uses
+// it, and -o is required. With --flat it writes one scenario, to stdout when
+// -o is absent.
 //
 // # Why it goes through migrate
 //

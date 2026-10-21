@@ -1792,7 +1792,7 @@ and their output.
 
 A scenario is converted into this language once, never translated on the fly:
 `artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
-collection.json` for a Postman collection. Both write through `artemis fmt`'s
+collection.json -o x.art` for a Postman collection. Both write through `artemis fmt`'s
 printer, so what they produce is already canonical.
 
 ---
