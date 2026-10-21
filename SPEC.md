@@ -819,6 +819,10 @@ An override that does not fit its target is a compile error: `header` on a
 terminal step, any override on a flow without `in` -- a flow has several steps
 and the line has to say which -- and `in` on a request.
 
+An override applies to an `api` step only. To vary a `terminal` or `browser`
+request, make the value a parameter and pass it as an argument. The error for an
+override on such a step gives the same hint.
+
 A negative test drops both. `auth.login` captures a token, and a 401 has none:
 a capture the response cannot supply is an [errored assertion](#capture), so
 the bad-password test above writes `drop captures` beside `drop expects`. A
@@ -1140,7 +1144,8 @@ calling one anywhere else is a compile error naming what is in scope there.
 
 Environment variables come from the process environment and from the `.env` file
 in the working directory, or from the file given with `-e`. A file named with
-`-e` that cannot be read is a warning; a missing default `.env` is silent.
+`-e` that cannot be read stops the run with an error that names the file, before
+any step; a missing default `.env` is silent.
 
 Before the first step of a run, artemis reads every `env()` call whose name is
 a plain string literal and reports every one of those variables that has no
@@ -1787,7 +1792,7 @@ and their output.
 
 A scenario is converted into this language once, never translated on the fly:
 `artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
-collection.json` for a Postman collection. Both write through `artemis fmt`'s
+collection.json -o x.art` for a Postman collection. Both write through `artemis fmt`'s
 printer, so what they produce is already canonical.
 
 ---

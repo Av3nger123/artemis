@@ -34,13 +34,13 @@ func writeCollection(t *testing.T, name, src string) string {
 	return path
 }
 
-// Without -o: the .art source goes to stdout, nothing goes to stderr, and no
+// --flat without -o: the .art source goes to stdout, nothing goes to stderr, and no
 // file is written. The importer this replaces always wrote a file, into the
 // working directory, whether or not anybody asked.
 func TestGeneratePrintsToStdout(t *testing.T) {
 	path := writeCollection(t, "ping.postman_collection.json", smallCollection)
 
-	stdout, stderr, err := executeArgs(t, "generate", "-f", path)
+	stdout, stderr, err := executeArgs(t, "generate", "-f", path, "--flat")
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
@@ -74,7 +74,7 @@ func TestGenerateWritesTheFileWithOut(t *testing.T) {
 	path := writeCollection(t, "ping.postman_collection.json", smallCollection)
 	out := filepath.Join(filepath.Dir(path), "ping.art")
 
-	stdout, stderr, err := executeArgs(t, "generate", "-f", path, "-o", out)
+	stdout, stderr, err := executeArgs(t, "generate", "-f", path, "--flat", "-o", out)
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
@@ -86,7 +86,7 @@ func TestGenerateWritesTheFileWithOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	piped, _, err := executeArgs(t, "generate", "-f", path)
+	piped, _, err := executeArgs(t, "generate", "-f", path, "--flat")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestGenerateForceReplacesTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, stderr, err := executeArgs(t, "generate", "-f", path, "-o", out, "--force"); err != nil {
+	if _, stderr, err := executeArgs(t, "generate", "-f", path, "--flat", "-o", out, "--force"); err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
 
@@ -179,7 +179,7 @@ func TestGenerateReturnsItsErrors(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			path := writeCollection(t, c.file, c.collection)
 
-			stdout, _, err := executeArgs(t, "generate", "-f", path)
+			stdout, _, err := executeArgs(t, "generate", "-f", path, "--flat")
 			if err == nil {
 				t.Fatalf("Execute() = nil, want an error\nstdout:\n%s", stdout)
 			}
@@ -245,7 +245,7 @@ const goldenCollection = "testdata/postman/kitchen_sink.postman_collection.json"
 // lines a test happens to assert on. Named for `make golden`, which runs
 // `-run TestGolden -update` over this package.
 func TestGoldenPostmanGenerate(t *testing.T) {
-	stdout, stderr, err := executeArgs(t, "generate", "-f", goldenCollection)
+	stdout, stderr, err := executeArgs(t, "generate", "-f", goldenCollection, "--flat")
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
