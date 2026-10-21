@@ -153,9 +153,11 @@ func (e *expander) request(s *ast.StepDecl, word token.Token) *ast.Request {
 	case *ast.Request:
 		return a
 	case *ast.Run:
-		e.bag.Error(word.Span, diag.BadOverride, "%s overrides an api step; this is a terminal step", word.Value)
+		e.bag.Error(word.Span, diag.BadOverride, "%s overrides an api step; this is a terminal step", word.Value).
+			Hintf("only an api step takes an override; make the value a parameter of the request and pass it as an argument")
 	case *ast.Browser:
-		e.bag.Error(word.Span, diag.BadOverride, "%s overrides an api step; this is a browser step", word.Value)
+		e.bag.Error(word.Span, diag.BadOverride, "%s overrides an api step; this is a browser step", word.Value).
+			Hintf("only an api step takes an override; make the value a parameter of the request and pass it as an argument")
 	}
 	return nil
 }

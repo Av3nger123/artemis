@@ -116,6 +116,9 @@ captures -- a 401 has no token to capture -- and `expect` lines add new ones.
 be used twice in a scenario. A `flow` holds several steps and uses, and
 `in "<step>" { ... }` aims an override at one of them.
 
+An override applies to an `api` request only. To vary a terminal or browser
+request, make the value a parameter and pass it as an argument.
+
 A `use` is not a call. Before anything is checked, every `use` is replaced by
 the plain steps it stands for, and `artemis expand` prints that file:
 

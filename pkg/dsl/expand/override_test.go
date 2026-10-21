@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/diag"
 )
 
 func useLogin(lines string) map[string]string {
@@ -298,4 +299,38 @@ func TestADroppedCaptureNobodyReadsIsFine(t *testing.T) {
 		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var id = 1\n  use c.f { in \"one\" { drop captures } }\n  step \"mine\" {\n    get \"x/${id}\"\n  }\n}\n",
 	})
 	noDiags(t, diags)
+}
+
+// An override on a terminal or browser step is refused, and the hint says
+// what to do instead: pass the value as a parameter.
+func TestOverrideOnNonAPIStepHintsAParameter(t *testing.T) {
+	for name, tc := range map[string]struct{ item, kind string }{
+		"terminal": {"run \"true\"\n    expect exit_code == 0", "terminal step"},
+		"browser":  {"browser {\n      goto \"/x\"\n    }\n    expect page.url exists", "browser step"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			files := map[string]string{
+				"c.art":    "collection \"c\" {\n  request r() {\n    " + tc.item + "\n  }\n}\n",
+				"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { header \"X\" = \"1\" }\n}\n",
+			}
+			tree, pb := parserParse(files["main.art"])
+			if pb.HasErrors() {
+				t.Fatalf("main.art does not parse: %v", pb.All())
+			}
+			_, bag := Expand(tree, MapLoader(files))
+			for _, d := range bag.All() {
+				if d.Code != diag.BadOverride {
+					continue
+				}
+				if !contains(d.Message, tc.kind) {
+					t.Errorf("message %q does not name %q", d.Message, tc.kind)
+				}
+				if !contains(d.Hint, "parameter") {
+					t.Errorf("hint %q does not point at a parameter", d.Hint)
+				}
+				return
+			}
+			t.Fatalf("no bad-override diagnostic in %v", bag.All())
+		})
+	}
 }

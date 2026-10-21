@@ -819,6 +819,10 @@ An override that does not fit its target is a compile error: `header` on a
 terminal step, any override on a flow without `in` -- a flow has several steps
 and the line has to say which -- and `in` on a request.
 
+An override applies to an `api` step only. To vary a `terminal` or `browser`
+request, make the value a parameter and pass it as an argument. The error for an
+override on such a step gives the same hint.
+
 A negative test drops both. `auth.login` captures a token, and a 401 has none:
 a capture the response cannot supply is an [errored assertion](#capture), so
 the bad-password test above writes `drop captures` beside `drop expects`. A
