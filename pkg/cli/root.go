@@ -119,8 +119,9 @@ func Init() {
 	if err := generateCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
-	generateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout")
-	generateCmd.Flags().Bool(forceFlag, false, "Replace the file named by -o when it already exists")
+	generateCmd.Flags().StringP(outFlag, "o", "", "Write the scenario .art file here, and the collection file beside it; with --flat, instead of stdout")
+	generateCmd.Flags().Bool(forceFlag, false, "Replace the files that -o names when they already exist")
+	generateCmd.Flags().Bool(flatFlag, false, "Write one scenario with a step for each request, not a collection and a scenario that uses it")
 
 	// Expand command: the scenario that will run, with every use written out
 	// as the steps it stands for.

@@ -186,9 +186,16 @@ already canonically formatted and `artemis fmt` over it changes nothing.
 ### A Postman collection
 
 ```sh
-artemis generate -f orders.postman_collection.json              # to stdout
-artemis generate -f orders.postman_collection.json -o orders.art
+artemis generate -f orders.postman_collection.json -o orders.art         # a collection and a scenario
+artemis generate -f orders.postman_collection.json --flat                # one scenario, to stdout
+artemis generate -f orders.postman_collection.json --flat -o orders.art
 ```
+
+By default, `generate` writes two files: `orders.collection.art` holds one
+`request` for each Postman request, and `orders.art` imports it and holds one
+`use` line for each request. A request gets one parameter for each scenario
+`var` it reads. This mode needs `-o`, and `--force` replaces each of the two
+files. `--flat` writes one scenario with one `step` for each request instead.
 
 Folders nest to any depth and every request becomes one step named by its folder
 path -- `"Orders / Admin / list orders"`. Headers, `url.query` parameters and the
