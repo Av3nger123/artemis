@@ -77,7 +77,8 @@ pkg/dsl/diag diagnostics to emit.`,
 // non-zero exit is kept: --json is a way to read the diagnostics, not a way to
 // make a broken file pass.
 func parseJSON(cmd *cobra.Command, path string) error {
-	f, err := readArt(path)
+	as, _ := cmd.Flags().GetString(asFlag)
+	f, err := readArtAs(path, as)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,7 @@ func Init() {
 	// Parse command: check a scenario file without running any of it.
 	RootCmd.AddCommand(parseCmd)
 	parseCmd.Flags().StringP("file", "f", "", "Path to the .art scenario file")
+	parseCmd.Flags().String(asFlag, "", "Read the file as if it were at this path: its imports resolve from there, and diagnostics name it")
 	parseCmd.Flags().Bool(jsonFlag, false, "Write the diagnostics to stdout as one JSON document, for an editor or a UI, instead of a report on stderr")
 	if err := parseCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
@@ -40,6 +41,7 @@ func Init() {
 	// companion.
 	RootCmd.AddCommand(astCmd)
 	astCmd.Flags().StringP("file", "f", "", "The .art file to read, or -- with --from-json -- the tree to read instead of stdin")
+	astCmd.Flags().String(asFlag, "", "Read the file as if it were at this path: its imports resolve from there, and diagnostics name it")
 	astCmd.Flags().Bool(fromJSONFlag, false, "Read a tree on stdin and write .art source, instead of the other way round")
 
 	// Fmt command: canonical .art formatting, to stdout or over the file.
@@ -68,6 +70,16 @@ func Init() {
 		"Write what each step sent and saw into this folder, one file per step. Off unless given; values from `secret` bindings are withheld")
 	// One by default, and deliberately not the number of CPUs: the limit on a
 	// run like this is the service under test, not this process.
+	// One collection item, or every item of one collection, in place of the
+	// file's scenarios: what an API client's Send needs. See item.go.
+	runCmd.Flags().String(itemFlag, "",
+		"Run one item of a collection file (collection.item), or every item of one collection (collection), instead of its scenarios")
+	runCmd.Flags().StringArray(argFlag, nil,
+		"With --item: pass a parameter as name=value. The value is a string, sent as written. Repeatable")
+	runCmd.Flags().String(argsFileFlag, "",
+		"With --item: read parameters from this JSON file of names to values, so a secret is not on the command line. --arg wins over it")
+	runCmd.Flags().String(capturesFlag, "",
+		"With --item: write every value the item's captures got, secret ones included, to this JSON file (mode 0600)")
 	runCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order, rather than streaming it live")
 
