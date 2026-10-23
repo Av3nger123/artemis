@@ -160,3 +160,25 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// A draft written to a scratch folder reads its imports from where the real
+// file is.
+func TestAstAndParseReadAFileAsIfItWereElsewhere(t *testing.T) {
+	draft := filepath.Join(t.TempDir(), "draft.art")
+	src := "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
+	if err := os.WriteFile(draft, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	as := filepath.Join("testdata", "collections", "draft.art")
+	if _, stderr, err := runCLI(t, "ast", "-f", draft); err == nil {
+		t.Fatalf("without --as the import should not resolve\n%s", stderr)
+	}
+	out, stderr, err := runCLI(t, "ast", "-f", draft, "--as", as)
+	if err != nil || !strings.Contains(out, `"use"`) {
+		t.Fatalf("ast --as: %v\n%s\n%s", err, out, stderr)
+	}
+	out, stderr, err = runCLI(t, "parse", "-f", draft, "--as", as, "--json")
+	if err != nil || !strings.Contains(out, `"diagnostics"`) {
+		t.Fatalf("parse --as: %v\n%s\n%s", err, out, stderr)
+	}
+}

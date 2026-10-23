@@ -20,6 +20,7 @@ func Init() {
 	// Parse command: check a scenario file without running any of it.
 	RootCmd.AddCommand(parseCmd)
 	parseCmd.Flags().StringP("file", "f", "", "Path to the .art scenario file")
+	parseCmd.Flags().String(asFlag, "", "Read the file as if it were at this path: its imports resolve from there, and diagnostics name it")
 	parseCmd.Flags().Bool(jsonFlag, false, "Write the diagnostics to stdout as one JSON document, for an editor or a UI, instead of a report on stderr")
 	if err := parseCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
@@ -40,6 +41,7 @@ func Init() {
 	// companion.
 	RootCmd.AddCommand(astCmd)
 	astCmd.Flags().StringP("file", "f", "", "The .art file to read, or -- with --from-json -- the tree to read instead of stdin")
+	astCmd.Flags().String(asFlag, "", "Read the file as if it were at this path: its imports resolve from there, and diagnostics name it")
 	astCmd.Flags().Bool(fromJSONFlag, false, "Read a tree on stdin and write .art source, instead of the other way round")
 
 	// Fmt command: canonical .art formatting, to stdout or over the file.

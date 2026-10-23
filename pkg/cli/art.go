@@ -72,9 +72,27 @@ type artFile struct {
 // A read failure is a plain error with no artFile: a file that is not there
 // has no contents to be diagnosed about.
 func readArt(path string) (*artFile, error) {
+	return readArtAs(path, "")
+}
+
+// asFlag reads a file as if it were somewhere else: `artemis ast -f
+// /tmp/draft.art --as suite/scenarios/checkout.art`. A client that checks an
+// edit before saving it writes the edit to a scratch file, and the file's
+// imports are relative to where it lives -- so without this, any file that
+// imports a collection fails in the scratch folder for a reason that has
+// nothing to do with the edit.
+const asFlag = "as"
+
+// readArtAs is readArt with the source read from path and everything else --
+// imports, and the file every span and diagnostic names -- as if it were at
+// as. An empty as is path itself.
+func readArtAs(path, as string) (*artFile, error) {
 	src, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named
 	if err != nil {
 		return nil, err
+	}
+	if as != "" {
+		path = as
 	}
 	u := frontEnd(path, string(src))
 	return &artFile{
@@ -118,7 +136,9 @@ func (f *artFile) render(w io.Writer) error {
 // only reports chooses the tree and a caller that writes to disk chooses the
 // error.
 func loadArt(cmd *cobra.Command, path string) (*ast.File, *check.Info, error) {
-	f, err := readArt(path)
+	// A command with no --as answers "" for it, which is path itself.
+	as, _ := cmd.Flags().GetString(asFlag)
+	f, err := readArtAs(path, as)
 	if err != nil {
 		return nil, nil, err
 	}
