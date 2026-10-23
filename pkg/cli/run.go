@@ -109,8 +109,14 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		return err
 	}
 
-	files, err := discover(path)
+	item, captures, err := itemFromFlags(cmd, path)
 	if err != nil {
+		return err
+	}
+	var files []string
+	if item != nil {
+		files = []string{path}
+	} else if files, err = discover(path); err != nil {
 		return err
 	}
 
@@ -134,10 +140,12 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// not compile is reported with its caret gutter, and stdout stays exactly
 	// one document when --report asked for one.
 	rt := &runtimeEnv{
-		reg:    executor.Default(),
-		shots:  browserstep.NewShots(shotDir(cmd)),
-		traces: trace.New(traceDir(cmd)),
-		jobs:   jobsOf(cmd),
+		reg:      executor.Default(),
+		shots:    browserstep.NewShots(shotDir(cmd)),
+		traces:   trace.New(traceDir(cmd)),
+		jobs:     jobsOf(cmd),
+		item:     item,
+		captures: captures,
 	}
 	if streaming {
 		rt.events = report.NewEvents(out)
@@ -161,6 +169,12 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// summary's verdict stays the last line the *run* writes.
 	rep.Failures(run)
 	rep.Summary(run)
+
+	// Whatever the captures got, pass or fail: a send that failed its expect
+	// may still have captured what the next one needs.
+	if err := captures.write(); err != nil {
+		return err
+	}
 
 	// A report that could not be written wins over the run's own failure: the
 	// console has already said the run failed, and the missing report is the
@@ -297,6 +311,11 @@ type runtimeEnv struct {
 	// parameter and that is what its own unit tests drive, so a field here
 	// would have had no caller but itself.
 	envFaults []envFault
+
+	// item is the --item run, nil for a run of a file's scenarios; captures is
+	// where --captures collects, nil when it was not asked for.
+	item     *itemRun
+	captures *captureSink
 }
 
 // runFilesWith is runFiles with the run-wide settings given rather than
@@ -349,7 +368,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			continue
 		}
 		diag := &bytes.Buffer{}
-		c, err := loadArtFile(file, diag)
+		c, err := rt.load(file, diag)
 		// loadArtFile answers a zero compiled when the file would not
 		// compile, and every report below needs the path either way.
 		c.file = file

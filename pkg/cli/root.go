@@ -68,6 +68,16 @@ func Init() {
 		"Write what each step sent and saw into this folder, one file per step. Off unless given; values from `secret` bindings are withheld")
 	// One by default, and deliberately not the number of CPUs: the limit on a
 	// run like this is the service under test, not this process.
+	// One collection item, or every item of one collection, in place of the
+	// file's scenarios: what an API client's Send needs. See item.go.
+	runCmd.Flags().String(itemFlag, "",
+		"Run one item of a collection file (collection.item), or every item of one collection (collection), instead of its scenarios")
+	runCmd.Flags().StringArray(argFlag, nil,
+		"With --item: pass a parameter as name=value. The value is a string, sent as written. Repeatable")
+	runCmd.Flags().String(argsFileFlag, "",
+		"With --item: read parameters from this JSON file of names to values, so a secret is not on the command line. --arg wins over it")
+	runCmd.Flags().String(capturesFlag, "",
+		"With --item: write every value the item's captures got, secret ones included, to this JSON file (mode 0600)")
 	runCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order, rather than streaming it live")
 

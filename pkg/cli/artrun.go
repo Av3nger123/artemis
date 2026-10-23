@@ -58,6 +58,21 @@ func loadArtFile(file string, diagOut io.Writer) (compiled, error) {
 	return compiled{file: file, scenarios: scenarios, needs: needs}, nil
 }
 
+// load compiles one file of the run. The file an --item run is about is
+// compiled from the source with its item's scenario appended, and only that
+// scenario runs: a collection file may hold scenarios of its own, and they were
+// not asked for.
+func (rt *runtimeEnv) load(file string, diagOut io.Writer) (compiled, error) {
+	if rt.item == nil || rt.item.file != file {
+		return loadArtFile(file, diagOut)
+	}
+	scenarios, needs, err := compileArtSource(file, rt.item.src, diagOut)
+	if err != nil {
+		return compiled{}, err
+	}
+	return compiled{file: file, scenarios: scenarios[len(scenarios)-1:], needs: needs}, nil
+}
+
 // runCompiled runs every scenario of one compiled file.
 func runCompiled(ctx context.Context, rt *runtimeEnv, c compiled, run *result.RunResult, rep *report.Console) {
 	for _, sc := range c.scenarios {
@@ -80,12 +95,18 @@ func compileArt(path string, diagOut io.Writer) ([]*lower.Scenario, []check.EnvN
 	if err != nil {
 		return nil, nil, err
 	}
+	return compileArtSource(path, string(src), diagOut)
+}
+
+// compileArtSource is compileArt over source already in hand: an --item run
+// compiles the collection file with the scenario that runs the item appended.
+func compileArtSource(path, src string, diagOut io.Writer) ([]*lower.Scenario, []check.EnvNeed, error) {
 
 	// Imports are read from disk, and what is lowered is the expanded tree:
 	// every use already replaced by the steps it stands for, so the lowerer
 	// and the runner never meet one. A diagnostic may point into an imported
 	// collection, so every file the front end read is there to render it.
-	u := frontEnd(path, string(src))
+	u := frontEnd(path, src)
 	diags := u.Bag.All()
 	if len(diags) > 0 {
 		if err := diag.Terminal(diagOut, sourceFiles(u), diags); err != nil {
@@ -217,6 +238,7 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		return nil
 	})
 	scenario.Finish(time.Since(scenarioStart))
+	rt.captures.take(sc, scope)
 	// A browser that would not close is the scenario's problem and nobody
 	// else's: the steps have already been reported, so this is folded into the
 	// scenario's own status rather than allowed to replace a step's reason.

@@ -938,6 +938,34 @@ checkout.art:8:43: password is secret in auth.login, so its argument must be sec
 
 A `secret capture` in a template stays secret after expansion.
 
+### Running one item
+
+Only scenarios run, so a request is sent by a scenario that uses it. `--item`
+writes that scenario, which is what an API client's Send needs:
+
+```sh
+artemis run collections/auth.art --item auth.login --arg user=alice --args secret.json \
+  --trace traces --captures captures.json
+artemis run collections/orders.art --item orders      # every item, in the order written
+```
+
+| Flag | |
+| --- | --- |
+| `--item <collection>.<item>` | Run that request or flow instead of the file's scenarios |
+| `--item <collection>` | Run every item of the collection in order, captures flowing down as in a scenario. Each item is passed the arguments it has a parameter for |
+| `--arg name=value` | A parameter. The value is a string and is sent as written: `${` in it is not an interpolation. Repeatable |
+| `--args <file>` | Parameters from a JSON object, so a secret stays off the command line. Values keep their JSON type. `--arg` wins over it |
+| `--captures <file>` | Every value the item's captures got, `secret` ones included, as `{"values": {...}, "secret": [...]}`, mode 0600 |
+
+The scenario is appended to the collection file in memory, so every line keeps
+its number and nothing is written beside the file. It is named for the item
+(`auth.login`), and its steps are named as any use's are. A missing or unknown
+argument is the checker's error and stops the run before anything is sent. The
+file's own scenarios, if it has any, do not run.
+
+`--captures` is the one place a secret value leaves a run. A report and a trace
+still withhold it.
+
 ### `artemis expand`
 
 `artemis expand checkout.art` prints the file that will run: every import,

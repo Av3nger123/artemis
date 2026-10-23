@@ -406,6 +406,10 @@ func in(f fields) (ast.Stmt, error) {
 
 // quoteString is s as a string literal the lexer decodes back to s: the
 // escapes it reads, and `\$` only where a `$` would otherwise open `${`.
+// QuoteString writes s as an Artemis string literal that means exactly s: a
+// `${` in it is escaped, so it is never read as an interpolation.
+func QuoteString(s string) string { return quoteString(s) }
+
 func quoteString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
