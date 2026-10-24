@@ -38,12 +38,8 @@ func TestCollectionsFixtureParsesAndRoundTrips(t *testing.T) {
 	if req.Name.Value != "create" || len(req.Params.List) != 3 || req.Params.List[1].Default == nil {
 		t.Fatalf("request parsed wrong: %+v", req)
 	}
-	flow := c.Items[1].(*ast.FlowDecl)
-	if flow.Params.List[1].Secret.Text != "secret" {
+	if pay := c.Items[1].(*ast.RequestDecl); pay.Params.List[1].Secret.Text != "secret" {
 		t.Fatal("secret parameter lost its modifier")
-	}
-	if u := flow.Body[1].(*ast.UseDecl); u.Ref() != "create" {
-		t.Fatalf("sibling ref = %q", u.Ref())
 	}
 	sc := f.Scenarios[2].(*ast.Scenario)
 	u := sc.Body[0].(*ast.UseDecl)
@@ -69,10 +65,6 @@ func TestCollectionsFixtureParsesAndRoundTrips(t *testing.T) {
 	}
 	if a, b := u.Lines[3].(*ast.Drop).What.Value, u.Lines[4].(*ast.Drop).What.Value; a != "expects" || b != "captures" {
 		t.Fatalf("drop lines = %q, %q", a, b)
-	}
-	in := sc.Body[1].(*ast.UseDecl).Lines[2].(*ast.In)
-	if in.Step.Value != "pay" || len(in.Lines) != 1 {
-		t.Fatalf("in block = %+v", in)
 	}
 }
 

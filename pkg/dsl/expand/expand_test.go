@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 )
 
@@ -103,9 +104,9 @@ func TestImportErrors(t *testing.T) {
 		t.Fatalf("got %s", diags)
 	}
 	_, diags = run(t, map[string]string{
-		"main.art": "import \"a.art\"\nimport \"b.art\"\n",
-		"a.art":    "collection \"x\" {}\n",
-		"b.art":    "collection \"x\" {}\n",
+		"main.art": "import \"a/x.art\"\nimport \"b/x.art\"\n",
+		"a/x.art":  "collection \"x\" {}\n",
+		"b/x.art":  "collection \"x\" {}\n",
 	})
 	if !contains(diags, "duplicate-collection") {
 		t.Fatalf("got %s", diags)
@@ -133,42 +134,6 @@ func TestImportsAreNotTransitive(t *testing.T) {
 	}
 }
 
-func TestFlowExpandsItsStepsAndNestedUses(t *testing.T) {
-	got, diags := run(t, map[string]string{
-		"o.art": `collection "orders" {
-  request create(sku) {
-    post "/orders" {
-      body = {"sku": sku}
-    }
-  }
-  flow buy(item) {
-    step "look" {
-      get "/items/${item}"
-    }
-    use create { sku = item }
-  }
-}
-`,
-		"main.art": "import \"o.art\"\n\nscenario \"s\" {\n  use orders.buy { item = \"A-1\" }\n}\n",
-	})
-	noDiags(t, diags)
-	for _, want := range []string{`step "orders.buy / look" {`, `get "/items/${"A-1"}"`, `step "orders.buy / orders.create" {`, `body = {"sku": "A-1"}`} {
-		if !contains(got, want) {
-			t.Fatalf("missing %q in\n%s", want, got)
-		}
-	}
-}
-
-func TestUseCycle(t *testing.T) {
-	_, diags := run(t, map[string]string{
-		"c.art":    "collection \"c\" {\n  flow a() {\n    use b {}\n  }\n  flow b() {\n    use a {}\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.a {}\n}\n",
-	})
-	if !contains(diags, "use-cycle") || !contains(diags, "c.a -> c.b -> c.a") {
-		t.Fatalf("got %s", diags)
-	}
-}
-
 func TestBareRefOutsideCollection(t *testing.T) {
 	_, diags := run(t, map[string]string{
 		"auth.art": auth,
@@ -190,8 +155,8 @@ func TestOperandArgumentIsParenthesised(t *testing.T) {
 	}
 }
 
-// An argument written above the request in another file, or above it in the
-// same file, must not reorder the step: the action still comes first.
+// An argument written above the request, in the scenario's file, must not
+// reorder the step: the action still comes first.
 func TestArgumentDoesNotReorderTheStep(t *testing.T) {
 	got, diags := run(t, map[string]string{
 		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { code = 201 }\n}\n",
@@ -202,13 +167,40 @@ func TestArgumentDoesNotReorderTheStep(t *testing.T) {
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
-	got, diags = run(t, map[string]string{
-		"main.art": "scenario \"s\" {\n  use c.r { code = 201 }\n}\n\ncollection \"c\" {\n  request r(code) {\n    get \"x\"\n    expect status == code\n  }\n}\n",
-	})
-	noDiags(t, diags)
-	if got != want {
-		t.Fatalf("same file: got\n%s\nwant\n%s", got, want)
+}
+
+// A collection file holds one collection, named after the file, and no
+// scenario: an import then names exactly one collection, the file's own.
+func TestACollectionFileHoldsOneCollectionNamedAfterIt(t *testing.T) {
+	for name, tc := range map[string]struct{ file, src, code, hint string }{
+		"named otherwise": {"orders.art", "collection \"shop\" {}\n", "collection-file-name", "name it orders, or rename the file to shop.art"},
+		"file not a name": {"my-orders.art", "collection \"my_orders\" {}\n", "collection-file-name", "rename the file to my_orders.art"},
+		"a second":        {"orders.art", "collection \"orders\" {}\ncollection \"refunds\" {}\n", "second-collection", "move it to a file of its own, refunds.art"},
+		"a scenario too":  {"orders.art", "collection \"orders\" {}\n\nscenario \"s\" {}\n", "scenario-in-collection-file", "move the scenario to a scenario file, which imports orders.art"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			files := MapLoader{tc.file: tc.src, "main.art": "import \"" + tc.file + "\"\n"}
+			tree, _ := parserParse(files["main.art"])
+			_, bag := Expand(tree, files)
+			found := false
+			for _, d := range bag.All() {
+				if string(d.Code) == tc.code && d.Span.File == tc.file && d.Hint == tc.hint {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("want %s at %s with hint %q, got %v", tc.code, tc.file, tc.hint, bag.All())
+			}
+		})
 	}
+	// The file on its own, as `artemis parse` or `run` reads it, is held to the same shape.
+	tree, _ := parser.Parse("orders.art", "collection \"orders\" {}\n\nscenario \"s\" {}\n")
+	if _, bag := Expand(tree, MapLoader{}); !bag.HasErrors() || bag.All()[0].Code != "scenario-in-collection-file" {
+		t.Fatalf("got %v", bag.All())
+	}
+	// One collection, named after its file, and nothing else: no complaint.
+	_, diags := run(t, map[string]string{"orders.art": "collection \"orders\" {}\n", "main.art": "import \"orders.art\"\n"})
+	noDiags(t, diags)
 }
 
 func TestCopiesAreStampedAndChained(t *testing.T) {
@@ -217,7 +209,7 @@ func TestCopiesAreStampedAndChained(t *testing.T) {
 	if bag.Len() != 0 {
 		t.Fatalf("%v", bag.All())
 	}
-	if len(res.Uses) != 1 || res.Uses[0].Ref != "auth.login" || res.Uses[0].Parent != 0 {
+	if len(res.Uses) != 1 || res.Uses[0].Ref != "auth.login" {
 		t.Fatalf("uses %+v", res.Uses)
 	}
 	step := res.File.Scenarios[0].(*ast.Scenario).Body[0].(*ast.StepDecl)
@@ -263,82 +255,15 @@ func TestUseRecordsTheItemItExpanded(t *testing.T) {
 	}
 }
 
-// defaulted is orders.art with a defaulted flow parameter that its nested use
-// and its own step both read: line 13 is the flow's parameter list, line 14
-// its nested use, line 16 its step.
-const defaultedAuth = "collection \"auth\" {\n  request login(user, base = \"h\") {\n    post \"${base}/token\"\n" +
-	"    expect status == 200\n    capture token = body.token\n  }\n}\n"
-
-const defaultedOrders = `import "auth.art"
-
-collection "orders" {
-  request create(sku, qty = 1, base = env("API_URL")) {
-    post "${base}/orders" {
-      body = {"sku": sku, "qty": qty}
-    }
-    expect status == 201
-    capture order_id = body.data.id
-  }
-
-  # the flow
-  flow checkout(user, ref, base = env("API_URL")) {
-    use auth.login { user = user, base = base }
-    use create { sku = ref, base = base }
-    step "pay" {
-      post "${base}/orders/${order_id}/pay"
-      expect status == 200
-    }
-  }
-}
-`
-
-// A param default copied into a nested use line, or into a flow's step, has
-// the template's file and Via; it must not pull the use's or the step's span
-// back to the parameter list.
-func TestADefaultDoesNotMoveANestedUseOrAStep(t *testing.T) {
+// A request block an override synthesises sits at the override line, in the
+// scenario's file; it must not stretch the request's span down to that line.
+func TestASynthesisedBlockDoesNotStretchTheRequest(t *testing.T) {
 	files := MapLoader{
-		"auth.art":   defaultedAuth,
-		"orders.art": defaultedOrders,
-		"main.art":   "import \"orders.art\"\n\nscenario \"s\" {\n  use orders.checkout { user = \"a\", ref = \"r\" }\n}\n",
+		"c.art":    "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\n\n\n\n\n\nscenario \"s\" {\n  use c.r { header \"X\" = \"1\" }\n}\n",
 	}
 	tree, _ := parserParse(files["main.art"])
 	res, bag := Expand(tree, files)
-	if bag.HasErrors() {
-		t.Fatal(bag.All())
-	}
-	body := res.File.Scenarios[0].(*ast.Scenario).Body
-	var login, pay *ast.StepDecl
-	for _, d := range body {
-		if s, ok := d.(*ast.StepDecl); ok {
-			switch s.Name.Value {
-			case "orders.checkout / auth.login":
-				login = s
-			case "orders.checkout / pay":
-				pay = s
-			}
-		}
-	}
-	if login == nil || pay == nil {
-		t.Fatalf("steps missing:\n%v", body)
-	}
-	chain := res.Chain(login.Action.Span())
-	if len(chain) != 2 || chain[0].File != "orders.art" || chain[0].Line != 14 || chain[0].Col != 5 ||
-		chain[1].File != "main.art" || chain[1].Line != 4 {
-		t.Fatalf("chain %+v, want orders.art:14:5 then main.art:4", chain)
-	}
-	if sp := pay.Span(); sp.File != "orders.art" || sp.Line != 16 {
-		t.Fatalf("pay's span %+v, want it to start at orders.art:16", sp)
-	}
-}
-
-// A request block an override synthesises sits at the override line; in a
-// collection declared in the same file as the use, it must not stretch the
-// request's span down to that line.
-func TestASynthesisedBlockDoesNotStretchTheRequest(t *testing.T) {
-	src := "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n  }\n}\n\n" +
-		"scenario \"s\" {\n  use c.r { header \"X\" = \"1\" }\n}\n"
-	tree, _ := parserParse(src)
-	res, bag := Expand(tree, MapLoader{})
 	if bag.HasErrors() {
 		t.Fatal(bag.All())
 	}

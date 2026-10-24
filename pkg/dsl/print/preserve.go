@@ -264,13 +264,6 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.LBrace)
 		p.list(stepItems(&ast.StepDecl{Action: v.Action, Body: v.Body}), c)
 		p.tok(v.RBrace)
-	case *ast.FlowDecl:
-		p.tok(v.Keyword)
-		p.tok(v.Name)
-		p.node(v.Params, c)
-		p.tok(v.LBrace)
-		p.list(decls(v.Body), c)
-		p.tok(v.RBrace)
 	case *ast.UseDecl:
 		p.tok(v.Keyword)
 		p.tok(v.Collection)
@@ -290,12 +283,6 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.Assign)
 		p.node(v.Value, c)
 		p.tok(v.Comma)
-	case *ast.In:
-		p.tok(v.Keyword)
-		p.tok(v.Step)
-		p.tok(v.LBrace)
-		p.list(stmts(v.Lines), c)
-		p.tok(v.RBrace)
 	case *ast.Interp:
 		for _, s := range v.Segments {
 			p.tok(s.Delim)
@@ -368,8 +355,8 @@ func lineOriented(n ast.Node) bool {
 	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl,
 		*ast.Request, *ast.Run, *ast.Browser, *ast.BrowserAct,
 		*ast.Field, *ast.Expect, *ast.Capture,
-		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.FlowDecl, *ast.UseDecl,
-		*ast.BodySet, *ast.Drop, *ast.In:
+		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.UseDecl,
+		*ast.BodySet, *ast.Drop:
 		return true
 	}
 	return false

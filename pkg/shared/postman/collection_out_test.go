@@ -21,6 +21,8 @@ func files(t *testing.T, c Collection) Files {
 	return f
 }
 
+// The collection is named after the file it is written to, not the Postman
+// collection: orders.collection.art holds orders.
 func TestEachRequestBecomesARequestAndAUse(t *testing.T) {
 	c := Collection{
 		Info:      Info{Name: "Orders API"},
@@ -34,7 +36,7 @@ func TestEachRequestBecomesARequestAndAUse(t *testing.T) {
 	}
 	f := files(t, c)
 	for _, want := range []string{
-		`collection "orders_api" {`,
+		`collection "orders" {`,
 		`request ping(base_url) {`,
 		`get "${base_url}/ping"`,
 		`request orders_list() {`,
@@ -47,8 +49,8 @@ func TestEachRequestBecomesARequestAndAUse(t *testing.T) {
 	for _, want := range []string{
 		`import "orders.collection.art"`,
 		`var base_url = "https://api.test"`,
-		`use orders_api.ping { base_url = base_url }`,
-		`use orders_api.orders_list`,
+		`use orders.ping { base_url = base_url }`,
+		`use orders.orders_list`,
 	} {
 		if !strings.Contains(f.Scenario, want) {
 			t.Errorf("scenario does not hold %s:\n%s", want, f.Scenario)
@@ -65,7 +67,7 @@ func TestTwoRequestsOfOneNameGetUniqueNames(t *testing.T) {
 			t.Errorf("collection does not hold %s:\n%s", want, f.Collection)
 		}
 	}
-	for _, want := range []string{"use c.create\n", "use c.create_2\n", "use c.create_3\n"} {
+	for _, want := range []string{"use orders.create\n", "use orders.create_2\n", "use orders.create_3\n"} {
 		if !strings.Contains(f.Scenario, want) {
 			t.Errorf("scenario does not hold %q:\n%s", want, f.Scenario)
 		}

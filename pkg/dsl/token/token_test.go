@@ -83,7 +83,7 @@ func TestViaDoesNotMakeASpanNonZero(t *testing.T) {
 }
 
 func TestUseLinesAreTheOverrideWords(t *testing.T) {
-	for _, w := range []string{"header", "query", "body", "drop", "expect", "in"} {
+	for _, w := range []string{"header", "query", "body", "drop", "expect"} {
 		if !IsUseLine(w) {
 			t.Errorf("IsUseLine(%q) = false", w)
 		}

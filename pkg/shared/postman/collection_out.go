@@ -32,8 +32,9 @@ type Files struct {
 // the step body that migrate.Source writes, so a run of the two files sends
 // what a run of the flat file sends.
 //
-// collectionFile is the name the collection will be written under. The scenario
-// imports it by its base name, so the two files must be written side by side.
+// collectionFile is the name the collection will be written under, and names
+// the collection: orders.collection.art holds orders. The scenario imports it
+// by its base name, so the two files must be written side by side.
 //
 // Two steps may share a name in the flat file; two requests of one collection
 // may not, so the second gets the suffix _2, the third _3, and so on.
@@ -47,10 +48,8 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		vars[v.Name] = true
 	}
 
-	coll := identifier(strings.ToLower(config.Name))
-	if coll == "" {
-		coll = "requests"
-	}
+	// A collection is named after its file: orders.collection.art holds orders.
+	coll := strings.TrimSuffix(filepath.Base(collectionFile), ".collection.art")
 
 	var items strings.Builder
 	var uses []string

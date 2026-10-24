@@ -113,8 +113,12 @@ expects: `header`, `query`, `body` and `body.<field>` lines override the
 request, `drop expects` and `drop captures` remove the template's expects and
 captures -- a 401 has no token to capture -- and `expect` lines add new ones.
 `as rush` names the step `rush` and its captures `rush_...`, so one request can
-be used twice in a scenario. A `flow` holds several steps and uses, and
-`in "<step>" { ... }` aims an override at one of them.
+be used twice in a scenario.
+
+A collection holds single requests; steps in order are a scenario. A
+collection file holds one collection, named after the file -- `auth.art` holds
+`collection "auth"` -- and no scenario, so `import "collections/auth.art"`
+puts exactly `auth` in scope.
 
 An override applies to an `api` request only. To vary a terminal or browser
 request, make the value a parameter and pass it as an argument.
@@ -147,7 +151,7 @@ scenario "orders need a token" {
 
 A failure in a step a use brought in names the collection file and line it was
 written on. Each collection is checked on its own, once, and may read only its
-parameters, its response and earlier captures in the same flow. The rules are in
+parameters and its response. The rules are in
 [SPEC.md](SPEC.md#collections).
 
 ## Features
@@ -156,7 +160,7 @@ parameters, its response and earlier captures in the same flow. The rules are in
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
-- Collections: write a request or a flow once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
+- Collections: write a request once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
@@ -198,8 +202,10 @@ By default, `generate` writes two files: `orders.collection.art` holds one
 files. `--flat` writes one scenario with one `step` for each request instead.
 
 The default output has one `request` for each Postman request, in
-`orders.collection.art`. The collection name and the request name, both made
-into DSL names, form the name of a step: `orders_api.orders_admin_list_orders`.
+`orders.collection.art`, whose collection is named after the file: `orders`.
+The `-o` name must therefore be a DSL name, letters, digits and `_`. The
+collection name and the request name form the name of a step:
+`orders.orders_admin_list_orders`.
 The scenario `orders.art` holds one `use` line for each request:
 
 ```text
@@ -207,7 +213,7 @@ import "orders.collection.art"
 
 scenario "Orders API" {
   var base_url = "https://api.example.com"
-  use orders_api.health_ping { base_url = base_url }
+  use orders.health_ping { base_url = base_url }
 }
 ```
 
@@ -633,7 +639,7 @@ artemis expand checkout.art -o checkout.flat.art # to a file
 
 The scenario file that will actually run: imports resolved from disk, and every
 `use` replaced by the steps it stands for, each preceded by a comment naming
-the request or flow, the line it is declared on, and the `use` line that
+the request, the line it is declared on, and the `use` line that
 brought it in. A `secret` parameter's argument appears as a `secret var` just
 above the steps that read it.
 

@@ -102,7 +102,7 @@ func TestAnArgumentIsSentAsWritten(t *testing.T) {
 }
 
 func TestRunEveryItemOfACollection(t *testing.T) {
-	// Any password will do: session.start logs in with its own.
+	// Every request of the collection, in the order written.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
@@ -112,7 +112,7 @@ func TestRunEveryItemOfACollection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
 	}
-	for _, want := range []string{"session.start / auth.login", "session.start / me"} {
+	for _, want := range []string{"session.login", "session.me"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the report has no %s step:\n%s", want, out)
 		}

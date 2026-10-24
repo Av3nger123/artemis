@@ -27,7 +27,7 @@ func (e *enc) collection(c *ast.Collection) *obj {
 		comments(toks(c.Keyword, c.Name), c.LBrace, c.RBrace).done()
 }
 
-// params is a request's or a flow's parameter list. Its parentheses and commas
+// params is a request's parameter list. Its parentheses and commas
 // are layout; an empty list is absent, and Decode writes `()`.
 func (e *enc) params(ps *ast.Params) []any {
 	if ps == nil {
@@ -61,16 +61,7 @@ func (e *enc) requestDecl(r *ast.RequestDecl) *obj {
 		comments(append(toks(r.Keyword, r.Name), nodeToks(r.Params)...), r.LBrace, r.RBrace).done()
 }
 
-func (e *enc) flowDecl(f *ast.FlowDecl) *obj {
-	return start(kindFlow, f).
-		set("name", f.Name.Text).
-		set("params", e.params(f.Params)).
-		set("body", e.list(toNodes(f.Body))).
-		span().
-		comments(append(toks(f.Keyword, f.Name), nodeToks(f.Params)...), f.LBrace, f.RBrace).done()
-}
-
-// useDecl leaves collection out for a bare sibling ref and alias out when
+// useDecl leaves collection out for a bare ref and alias out when
 // there is no `as`: absent, not empty, which is obj.set's rule for a missing
 // value and what the schema promises.
 func (e *enc) useDecl(u *ast.UseDecl) *obj {
@@ -101,14 +92,6 @@ func (e *enc) bodySet(b *ast.BodySet) *obj {
 
 func (e *enc) drop(d *ast.Drop) *obj {
 	return start(kindDrop, d).set("what", d.What.Value).span().comments(d.Tokens(nil), zero, zero).done()
-}
-
-func (e *enc) in(n *ast.In) *obj {
-	return start(kindIn, n).
-		set("step", nameObj(n.Step)).
-		set("lines", e.list(toNodes(n.Lines))).
-		span().
-		comments(toks(n.Keyword, n.Step), n.LBrace, n.RBrace).done()
 }
 
 // importDecl builds `import "path"` from the decoded path, quoting it the way
@@ -150,7 +133,7 @@ func collection(f fields) (*ast.Collection, error) {
 	return c, braced(f, &c.Keyword, &c.LBrace, &c.RBrace)
 }
 
-// collectionItem is what a collection holds: a request or a flow.
+// collectionItem is what a collection holds: a request.
 func collectionItem(f fields) (ast.Decl, error) {
 	kind, err := f.kind()
 	if err != nil {
@@ -159,8 +142,6 @@ func collectionItem(f fields) (ast.Decl, error) {
 	switch kind {
 	case kindRequestDecl:
 		return requestDecl(f)
-	case kindFlow:
-		return flowDecl(f)
 	}
 	return nil, badKind(f, kind, "a collection item")
 }
@@ -243,53 +224,6 @@ func requestDecl(f fields) (*ast.RequestDecl, error) {
 	return r, braced(f, &r.Keyword, &r.LBrace, &r.RBrace)
 }
 
-func flowDecl(f fields) (*ast.FlowDecl, error) {
-	name, err := f.str("name")
-	if err != nil {
-		return nil, err
-	}
-	fl := &ast.FlowDecl{
-		Keyword: syn(token.Ident, "flow"),
-		Name:    syn(token.Ident, name),
-		LBrace:  syn(token.LBrace, "{"),
-		RBrace:  syn(token.RBrace, "}"),
-	}
-	if fl.Params, err = paramsOf(f); err != nil {
-		return nil, err
-	}
-	body, err := f.list("body")
-	if err != nil {
-		return nil, err
-	}
-	for _, it := range body {
-		o, err := it.object()
-		if err != nil {
-			return nil, err
-		}
-		d, err := flowItem(o)
-		if err != nil {
-			return nil, err
-		}
-		fl.Body = append(fl.Body, d)
-	}
-	return fl, braced(f, &fl.Keyword, &fl.LBrace, &fl.RBrace)
-}
-
-// flowItem is what a flow body holds: a step or a use.
-func flowItem(f fields) (ast.Decl, error) {
-	kind, err := f.kind()
-	if err != nil {
-		return nil, err
-	}
-	switch kind {
-	case kindStep:
-		return step(f)
-	case kindUse:
-		return useDecl(f)
-	}
-	return nil, badKind(f, kind, "a flow item")
-}
-
 // useDecl writes a block when there are lines for it, or comments that were
 // in one; `use a.b {}` and `use a.b` are the same use.
 func useDecl(f fields) (*ast.UseDecl, error) {
@@ -330,8 +264,8 @@ func useDecl(f fields) (*ast.UseDecl, error) {
 	return u, plain(f, &u.Keyword)
 }
 
-// useLine is one line of a use or an in block: an argument (a field), a body
-// field, a drop, an expect, or an in block.
+// useLine is one line of a use block: an argument (a field), a body field, a
+// drop, or an expect.
 func useLine(f fields) (ast.Stmt, error) {
 	kind, err := f.kind()
 	if err != nil {
@@ -346,8 +280,6 @@ func useLine(f fields) (ast.Stmt, error) {
 		return drop(f)
 	case kindExpect:
 		return expect(f)
-	case kindIn:
-		return in(f)
 	}
 	return nil, badKind(f, kind, "a use line")
 }
@@ -382,26 +314,6 @@ func bodySet(f fields) (ast.Stmt, error) {
 		return nil, err
 	}
 	return b, plain(f, &b.Body)
-}
-
-func in(f fields) (ast.Stmt, error) {
-	n := &ast.In{
-		Keyword: syn(token.Ident, "in"),
-		LBrace:  syn(token.LBrace, "{"),
-		RBrace:  syn(token.RBrace, "}"),
-	}
-	var err error
-	if n.Step, err = nameTok(f, "step"); err != nil {
-		return nil, err
-	}
-	lines, err := f.list("lines")
-	if err != nil {
-		return nil, err
-	}
-	if n.Lines, err = stmts(lines, useLine); err != nil {
-		return nil, err
-	}
-	return n, braced(f, &n.Keyword, &n.LBrace, &n.RBrace)
 }
 
 // quoteString is s as a string literal the lexer decodes back to s: the

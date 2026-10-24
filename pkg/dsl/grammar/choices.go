@@ -99,7 +99,7 @@ func Choices() ChoicePoints {
 			"typeName":           words("The right-hand side of is.", token.TypeNames),
 			"builtin":            words("The functions callable in an expression. Which are in scope depends on the step type; see stepType.", token.Builtins),
 			"configSubject":      words("The subjects of a config declaration.", token.ConfigBlocks),
-			"collectionItem":     words("What a collection body holds: a request or a flow.", token.CollectionItems),
+			"collectionItem":     words("What a collection body holds: requests.", token.CollectionItems),
 			"useLine":            words("The words that open an override line in a use block. Any other identifier opening a line there is an argument.", token.UseLines),
 			"dropTarget":         words("What a drop line in a use block removes from the template: drop expects or drop captures.", token.DropTargets),
 			"requestField":       fields("The fields of an api step's action block.", "request"),

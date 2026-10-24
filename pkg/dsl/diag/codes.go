@@ -185,17 +185,19 @@ const (
 	ImportCycle         Code = "import-cycle"
 	DuplicateCollection Code = "duplicate-collection"
 	UnknownCollection   Code = "unknown-collection"
-	UnknownItem         Code = "unknown-item"
-	UnknownArgument     Code = "unknown-argument"
-	MissingArgument     Code = "missing-argument"
-	DuplicateArgument   Code = "duplicate-argument"
-	UseCycle            Code = "use-cycle"
-	BadOverride         Code = "bad-override"
-	UnknownFlowStep     Code = "unknown-flow-step"
-	DropAfterExpect     Code = "drop-after-expect"
-	SecretArgument      Code = "secret-argument"
-	DroppedCapture      Code = "dropped-capture"
-	RootCapture         Code = "root-capture"
+	// A collection file holds one collection, named after the file, and no
+	// scenario: so an import names exactly one collection, the file's own.
+	CollectionFileName       Code = "collection-file-name"
+	SecondCollection         Code = "second-collection"
+	ScenarioInCollectionFile Code = "scenario-in-collection-file"
+	UnknownItem              Code = "unknown-item"
+	UnknownArgument          Code = "unknown-argument"
+	MissingArgument          Code = "missing-argument"
+	DuplicateArgument        Code = "duplicate-argument"
+	BadOverride              Code = "bad-override"
+	DropAfterExpect          Code = "drop-after-expect"
+	SecretArgument           Code = "secret-argument"
+	RootCapture              Code = "root-capture"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -244,16 +246,16 @@ var registry = []CodeInfo{
 	{ImportCycle, Error, "a file imports itself, directly or through other files"},
 	{DuplicateCollection, Error, "two collections in scope have the same name"},
 	{UnknownCollection, Error, "a use names a collection that is not in scope"},
-	{UnknownItem, Error, "a use names a request or flow its collection does not declare"},
+	{CollectionFileName, Error, "a collection is not named after the file it is in"},
+	{SecondCollection, Error, "a file holds more than one collection"},
+	{ScenarioInCollectionFile, Error, "a file holding a collection also holds a scenario"},
+	{UnknownItem, Error, "a use names a request its collection does not declare"},
 	{UnknownArgument, Error, "a use passes an argument the item has no parameter for"},
 	{MissingArgument, Error, "a use does not pass a parameter that has no default"},
 	{DuplicateArgument, Error, "a use passes the same argument twice"},
-	{UseCycle, Error, "a flow uses itself, directly or through other flows"},
 	{BadOverride, Error, "a line in a use block is not an argument or an override that applies"},
-	{UnknownFlowStep, Error, "an in block names a step the flow does not have"},
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
 	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
-	{DroppedCapture, Error, "a step a use brought in reads a capture that drop captures removed"},
 	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
 }
 

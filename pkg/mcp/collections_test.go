@@ -22,7 +22,7 @@ func writeFile(t *testing.T, root, rel, src string) {
 	}
 }
 
-const collSrc = "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n  }\n  flow f() {\n  }\n}\n"
+const collSrc = "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n  }\n  request q() {\n    get \"y\"\n  }\n}\n"
 
 func TestValidateResolvesImportsInsideTheWorkspace(t *testing.T) {
 	root := t.TempDir()
@@ -104,11 +104,11 @@ func TestListShowsCollections(t *testing.T) {
 	writeFile(t, root, "plain.art", "scenario \"x\" {}\n")
 	cs := connect(t, root)
 	out := toJSON(t, structured(t, call(t, cs, "artemis_list", nil)))
-	if !strings.Contains(out, `"c.r"`) || !strings.Contains(out, `"c.f"`) {
+	if !strings.Contains(out, `"c.r"`) || !strings.Contains(out, `"c.q"`) {
 		t.Fatalf("got %s", out)
 	}
 	cols, _ := structured(t, call(t, cs, "artemis_list", nil))["collections"].(map[string]any)
-	if got := toJSON(t, cols["c.art"]); got != `["c.r","c.f"]` || len(cols) != 1 {
+	if got := toJSON(t, cols["c.art"]); got != `["c.r","c.q"]` || len(cols) != 1 {
 		t.Fatalf("collections shape: %s", toJSON(t, cols))
 	}
 	if got := listFiles(t, cs, nil); len(got) != 2 {

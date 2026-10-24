@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"artemis/pkg/dsl/parser"
 	"artemis/pkg/shared/migrate"
 	"artemis/pkg/shared/postman"
 
@@ -37,8 +38,8 @@ var generateCmd = &cobra.Command{
 There are two modes:
 
   collection (the default)  Writes two files. orders.collection.art holds one
-                            'collection' with one 'request' for each Postman
-                            request. orders.art imports it and holds one 'use'
+                            'collection', named orders after the file, with one
+                            'request' for each Postman request. orders.art imports it and holds one 'use'
                             line for each request. This mode needs -o.
   --flat                    Writes one scenario with one 'step' for each
                             request. This is the output before collections.
@@ -194,6 +195,11 @@ func checkGenerateArgs(path, out string, force, flat bool) error {
 	}
 	if !isArtFile(out) {
 		return fmt.Errorf("artemis generate writes %s files; -o %s is not one", artExt, out)
+	}
+	// The collection is named after the file, and a use names it as an identifier.
+	if stem := strings.TrimSuffix(filepath.Base(out), artExt); !flat && !parser.IsIdentName(stem) {
+		return fmt.Errorf("-o %s: the collection is named after the file, and %q cannot name one; try %s%s",
+			out, stem, parser.IdentLike(stem), artExt)
 	}
 	if force {
 		return nil

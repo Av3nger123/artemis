@@ -69,28 +69,6 @@ func (c *canon) requestDecl(r *ast.RequestDecl) {
 	c.close(r.RBrace)
 }
 
-// flowDecl always breaks, and gives each step after the first a blank line
-// above it, as a scenario body does.
-func (c *canon) flowDecl(f *ast.FlowDecl) {
-	head := f.Keyword.Text + " " + f.Name.Text + c.params(f.Params)
-	lead := append(toks(f.Keyword, f.Name), nodeToks(f.Params)...)
-	if len(f.Body) == 0 && !hasComment(f) {
-		c.line(append(lead, toks(f.LBrace, f.RBrace)...), join(" ", head, braces(f.LBrace, f.RBrace)))
-		return
-	}
-	c.line(append(lead, toks(f.LBrace)...), join(" ", head, f.LBrace.Text))
-	c.w.in()
-	c.w.suppress()
-	for i, d := range f.Body {
-		if _, ok := d.(*ast.StepDecl); ok && i > 0 {
-			c.w.blank()
-		}
-		c.decl(d)
-	}
-	c.w.outd()
-	c.close(f.RBrace)
-}
-
 // useDecl is `use a.b as x` and, when there is a block, its lines.
 func (c *canon) useDecl(u *ast.UseDecl) {
 	head := join(" ", u.Keyword.Text, u.Collection.Text+u.Dot.Text+u.Item.Text, u.As.Text, u.Alias.Text)

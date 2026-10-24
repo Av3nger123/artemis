@@ -9,18 +9,8 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// stepName is what an expanded step is called: prefix alone for the step a
-// request expands to (name is ""), else "<prefix> / <name>" -- a flow's
-// written step, or a step a nested use expanded to.
-func stepName(prefix string, name string) string {
-	if name == "" {
-		return prefix
-	}
-	return prefix + " / " + name
-}
-
-// prefix is what a use's steps are named after: its alias when it has one,
-// else the item's qualified ref, "orders.create" even for a bare sibling ref.
+// prefix is what a use's step is named: its alias when it has one, else the
+// request's qualified ref, "orders.create".
 func prefix(use *ast.UseDecl, c *ast.Collection, item string) string {
 	if use.Alias.Text != "" {
 		return use.Alias.Value
@@ -28,40 +18,22 @@ func prefix(use *ast.UseDecl, c *ast.Collection, item string) string {
 	return c.Name.Value + "." + item
 }
 
-// varPrefix is what a hoisted secret var is named after: every alias of the
-// uses around this one (sc.aliases, "a_"), then this use's alias or the
-// item's bare name.
-func varPrefix(sc *scope, use *ast.UseDecl, item string) string {
+// varPrefix is what a hoisted secret var is named after: the use's alias, or
+// the request's bare name.
+func varPrefix(use *ast.UseDecl, item string) string {
 	if use.Alias.Text != "" {
-		return sc.aliases + use.Alias.Value
+		return use.Alias.Value
 	}
-	return sc.aliases + item
+	return item
 }
 
-// inside is sc for the uses a flow used as use writes: their hoisted vars
-// are named under use's alias too.
-func (sc *scope) inside(use *ast.UseDecl) *scope {
-	cp := *sc
-	if use.Alias.Text != "" {
-		cp.aliases += use.Alias.Value + "_"
-	}
-	return &cp
-}
-
-// rename names s as written: a String token with the span -- and the Via --
-// the name it replaces had.
-func rename(s *ast.StepDecl, name string) {
-	s.Name = synth(token.String, quote(name), name, s.Name.Span)
-}
-
-// renameCaptures applies `as alias` to the steps one use expanded to: every
-// capture they make -- nested uses' included -- becomes alias_name, and so
-// does every later read of it in those steps.
+// renameCaptures applies `as alias` to the step one use expanded to: every
+// capture it makes becomes alias_name.
 //
 // Only template material is rewritten: an identifier whose Via is this use's
-// via or a use nested in it. An argument written at the use keeps the Via of
-// the use line, which is outside this use, so it is read in the terms of the
-// scenario (or flow) around the use and is left alone.
+// via. An argument written at the use keeps the Via of the use line, which is
+// outside this use, so it is read in the terms of the scenario around the use
+// and is left alone.
 func (e *expander) renameCaptures(steps []*ast.StepDecl, alias string, via int) {
 	seen := map[string]bool{}
 	for _, s := range steps {
@@ -100,15 +72,9 @@ func (e *expander) renameReads(n ast.Node, names map[string]bool, alias string, 
 	})
 }
 
-// within reports whether a token stamped with Via v was brought in by use
-// via, directly or through a use nested in it.
+// within reports whether a token stamped with Via v was brought in by use via.
 func (e *expander) within(v, via int) bool {
-	for i := v; i > 0 && i <= len(e.res.Uses); i = e.res.Uses[i-1].Parent {
-		if i == via {
-			return true
-		}
-	}
-	return false
+	return v == via
 }
 
 // scope is what a use's arguments can read, for secret parameters: the
@@ -119,7 +85,6 @@ type scope struct {
 	secretVars map[string]bool // the secret ones
 	secrets    map[string]bool // secretVars plus the secret captures above this use
 	hoisted    *[]ast.Decl     // secret vars to append to the scenario body, in use order
-	aliases    string          // the enclosing uses' aliases, "a_inner_", prefixing a hoisted var
 }
 
 // newScope is the scope of a scenario body: its vars, and a hoisted list.

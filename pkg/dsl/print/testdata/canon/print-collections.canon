@@ -6,13 +6,9 @@ collection "orders" {
     expect status == 201
   }
 
-  flow checkout(user) {
-    use auth.login { user = user }
-
-    step "pay" {
-      post "y"
-      expect status == 200
-    }
+  request pay(id) {
+    post "y/${id}"
+    expect status == 200
   }
 }
 
@@ -24,8 +20,5 @@ scenario "rush" {
     drop captures
     expect status == 202
   }
-  use orders.checkout {
-    user = "a"
-    in "pay" { header "X" = "1" }
-  }
+  use orders.pay { id = rush_id, header "X" = "1" }
 }

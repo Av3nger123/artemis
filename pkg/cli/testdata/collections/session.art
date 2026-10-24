@@ -1,14 +1,14 @@
-import "auth.art"
-
 collection "session" {
-  flow start(base) {
-    use auth.login { user = "bob", password = "pw", base = base }
-
-    step "me" {
-      get "${base}/orders" {
-        header "Authorization" = "Bearer ${token}"
-      }
-      expect status == 200
+  request login(base) {
+    post "${base}/token" {
+      body = {"username": "bob", "password": "pw"}
     }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+
+  request me(base) {
+    get "${base}/orders"
+    expect status == 200
   }
 }

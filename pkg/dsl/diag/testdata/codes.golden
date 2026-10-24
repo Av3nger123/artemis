@@ -3,8 +3,8 @@ bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-collection-name	error	a collection's name is not an identifier, so no use can name it
 bad-override	error	a line in a use block is not an argument or an override that applies
 bad-value	error	a value is the wrong kind for the position it is in
+collection-file-name	error	a collection is not named after the file it is in
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
-dropped-capture	error	a step a use brought in reads a capture that drop captures removed
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
@@ -25,6 +25,8 @@ not-in-scope	error	a name is not bound in this step's type
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-word	error	a word reserved for a later tier is used as a name
 root-capture	error	a collection's template captures under the name of a step's observation, such as body
+scenario-in-collection-file	error	a file holding a collection also holds a scenario
+second-collection	error	a file holds more than one collection
 secret-argument	error	an argument to a secret parameter is not itself secret
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"
@@ -35,10 +37,8 @@ unknown-argument	error	a use passes an argument the item has no parameter for
 unknown-collection	error	a use names a collection that is not in scope
 unknown-config	error	a "config" names a subject the language does not configure
 unknown-field	error	an identifier names no field of anything in scope
-unknown-flow-step	error	an in block names a step the flow does not have
 unknown-identifier	error	a name is bound nowhere in the file
-unknown-item	error	a use names a request or flow its collection does not declare
+unknown-item	error	a use names a request its collection does not declare
 unknown-type	error	the right-hand side of "is" is not a type name
 unterminated-regex	error	a regex literal has no closing slash
 unterminated-string	error	a string literal has no closing quote
-use-cycle	error	a flow uses itself, directly or through other flows

@@ -114,11 +114,8 @@ func (srv *server) collectionItems(rel string) []string {
 			continue
 		}
 		for _, it := range c.Items {
-			switch it := it.(type) {
-			case *ast.RequestDecl:
-				out = append(out, c.Name.Value+"."+it.Name.Text)
-			case *ast.FlowDecl:
-				out = append(out, c.Name.Value+"."+it.Name.Text)
+			if r, ok := it.(*ast.RequestDecl); ok {
+				out = append(out, c.Name.Value+"."+r.Name.Text)
 			}
 		}
 	}

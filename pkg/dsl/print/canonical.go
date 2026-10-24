@@ -92,8 +92,6 @@ func (c *canon) decl(d ast.Decl) {
 		c.collection(v)
 	case *ast.RequestDecl:
 		c.requestDecl(v)
-	case *ast.FlowDecl:
-		c.flowDecl(v)
 	case *ast.UseDecl:
 		c.useDecl(v)
 	case *ast.Bad:
@@ -220,8 +218,6 @@ func (c *canon) stmt(s ast.Stmt) {
 		c.line(v.Tokens(nil), assign(left, v.Assign, c.expr(v.Value)))
 	case *ast.Drop:
 		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.What.Text))
-	case *ast.In:
-		c.useLines(toks(v.Keyword, v.Step, v.LBrace), join(" ", v.Keyword.Text, v.Step.Text), v.LBrace, v.Lines, v.RBrace)
 	case *ast.Bad:
 		c.bad(v)
 	}

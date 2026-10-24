@@ -1,4 +1,4 @@
-collection "bc" {
+collection "broken_coll" {
   request r() {
     get "http://127.0.0.1:1/x"
     expect statu == 200
