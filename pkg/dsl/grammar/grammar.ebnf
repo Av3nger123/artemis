@@ -3,7 +3,7 @@
    under LEXICAL TOKENS below. Nothing in a .art file is outside this. *)
 
 File          = { Import } { Collection | Scenario } ;
-Import        = "import" String ;
+Import        = "import" String [ "as" Ident ] ;
 Collection    = "collection" String "{" { RequestDecl } "}" ;
 RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;

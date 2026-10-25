@@ -639,12 +639,18 @@
     },
     {
       "kind": "import",
-      "doc": "`import \"auth.art\"`; imports come before every collection and scenario",
+      "doc": "`import \"auth.art\"` or `import \"Backend APIs.art\" as api`; imports come before every collection and scenario",
       "fields": [
         {
           "name": "path",
           "type": "string",
           "doc": "the file imported, decoded: escapes resolved, no quotes"
+        },
+        {
+          "name": "as",
+          "type": "string",
+          "optional": true,
+          "doc": "the name after `as`, which a use reads the collection by; absent, it is the file's name"
         },
         {
           "name": "span",
@@ -659,7 +665,7 @@
     },
     {
       "kind": "collection",
-      "doc": "`collection \"orders\" { request ... }`: one per file, named after it",
+      "doc": "`collection \"Orders API\" { request ... }`: one per file; its name is a title",
       "fields": [
         {
           "name": "name",

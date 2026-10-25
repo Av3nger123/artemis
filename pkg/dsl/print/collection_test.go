@@ -65,3 +65,18 @@ func use(t *testing.T, f *ast.File, ref string) *ast.UseDecl {
 	}
 	return found
 }
+
+// An import's `as` survives both printers.
+func TestAnImportKeepsItsName(t *testing.T) {
+	src := "import \"Backend APIs.art\" as api\nimport \"auth.art\"\n\nscenario \"s\" {\n  use api.login\n}\n"
+	tree, bag := parser.Parse("t.art", src)
+	if bag.Len() > 0 {
+		t.Fatalf("parse: %v", bag.All())
+	}
+	if got := Canonical(tree); got != src {
+		t.Errorf("canonical:\n%s", got)
+	}
+	if got := Preserving(tree); got != src {
+		t.Errorf("preserve:\n%s", got)
+	}
+}

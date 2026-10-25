@@ -87,7 +87,7 @@ func (c *canon) decl(d ast.Decl) {
 	case *ast.StepDecl:
 		c.step(v)
 	case *ast.Import:
-		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text))
+		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text, v.As.Text, v.Name.Text))
 	case *ast.Collection:
 		c.collection(v)
 	case *ast.RequestDecl:

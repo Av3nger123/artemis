@@ -15,6 +15,7 @@ import (
 func (e *enc) importDecl(i *ast.Import) *obj {
 	return start(kindImport, i).
 		set("path", i.Path.Value).
+		set("as", optional(i.Name.Text)).
 		span().
 		comments(i.Tokens(nil), zero, zero).done()
 }
@@ -94,14 +95,21 @@ func (e *enc) drop(d *ast.Drop) *obj {
 	return start(kindDrop, d).set("what", d.What.Value).span().comments(d.Tokens(nil), zero, zero).done()
 }
 
-// importDecl builds `import "path"` from the decoded path, quoting it the way
+// importDecl builds `import "path" [as name]` from the decoded path, quoting it the way
 // the lexer reads a string back.
 func importDecl(f fields) (*ast.Import, error) {
 	path, err := f.str("path")
 	if err != nil {
 		return nil, err
 	}
+	as, err := f.optStr("as")
+	if err != nil {
+		return nil, err
+	}
 	i := &ast.Import{Keyword: syn(token.Ident, "import"), Path: syn(token.String, quoteString(path))}
+	if as != "" {
+		i.As, i.Name = syn(token.Ident, "as"), syn(token.Ident, as)
+	}
 	return i, plain(f, &i.Keyword)
 }
 

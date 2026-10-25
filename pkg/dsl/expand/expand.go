@@ -62,11 +62,17 @@ type expander struct {
 type unit struct {
 	name  string
 	tree  *ast.File
-	deps  []*unit                    // the units this file imports directly
-	own   map[string]*ast.Collection // collections declared in this file
-	scope map[string]*ast.Collection // own plus every imported one
+	deps  []dep                      // the files this file imports directly
+	own   []*ast.Collection          // collections declared in this file, in source order
+	scope map[string]*ast.Collection // the collection each import names, by that name
 	ok    bool                       // parsed without error
 	lost  bool                       // an import failed, so a collection may be missing from scope
+}
+
+// dep is one import and the file it loaded.
+type dep struct {
+	imp  *ast.Import
+	unit *unit
 }
 
 // Expand resolves tree's imports through l and replaces every use in its
@@ -185,8 +191,8 @@ func (e *expander) imports(u *unit) {
 				Hintf("run the file with artemis run, which reads imports from disk")
 			continue
 		}
-		if dep := e.load(u.name, imp); dep != nil {
-			u.deps = append(u.deps, dep)
+		if loaded := e.load(u.name, imp); loaded != nil {
+			u.deps = append(u.deps, dep{imp: imp, unit: loaded})
 		} else {
 			u.lost = true
 		}
@@ -223,52 +229,54 @@ func (e *expander) load(from string, imp *ast.Import) *unit {
 }
 
 // index checks u's shape (shape.go), then fills u's own collections and its
-// scope: its own plus those of every file it imports directly. Imports are not transitive. Then it checks each of
-// u's own collections on its own; an imported one was checked when its file
-// was indexed.
+// scope: the collection of each file it imports directly, by the import's
+// `as` or else by the file's name (parser.ImportName). A collection's own
+// name is a title, and no use reads it. Imports are not transitive. Then it
+// checks each of u's own collections on its own; an imported one was checked
+// when its file was indexed.
 func (e *expander) index(u *unit) {
 	e.checkShape(u)
-	u.own = map[string]*ast.Collection{}
-	u.scope = map[string]*ast.Collection{}
-	add := func(c *ast.Collection) bool {
-		name := c.Name.Value
-		prev, dup := u.scope[name]
-		if prev == c {
-			return false
-		}
-		if dup {
-			e.bag.Error(c.Name.Span, diag.DuplicateCollection, "collection %q is declared twice", name).
-				Hintf("the first is at %s:%d", prev.Name.Span.File, prev.Name.Span.Line)
-			return false
-		}
-		u.scope[name] = c
-		return true
-	}
 	for _, d := range u.tree.Scenarios {
-		if c, ok := d.(*ast.Collection); ok && add(c) {
-			u.own[c.Name.Value] = c
+		if c, ok := d.(*ast.Collection); ok {
+			u.own = append(u.own, c)
 			e.owner[c] = u
 		}
 	}
-	for _, dep := range u.deps {
-		for _, c := range sortedColls(dep) {
-			add(c)
+	u.scope = map[string]*ast.Collection{}
+	named := map[string]*ast.Import{}
+	for _, d := range u.deps {
+		name, at := d.imp.Name.Value, d.imp.Name.Span
+		if d.imp.Name.Text == "" {
+			var ok bool
+			name, ok = parser.ImportName(d.imp.Path.Value)
+			at = d.imp.Path.Span
+			if !ok {
+				u.lost = true
+				e.bag.Error(at, diag.ImportNeedsName, "a use reads an import by its file's name, and %q cannot be one", name).
+					Hintf("name it: import %s as %s", d.imp.Path.Text, parser.IdentLike(name))
+				continue
+			}
 		}
+		if len(d.unit.own) == 0 {
+			u.lost = true
+			// A file that did not parse has said why already.
+			if d.unit.ok {
+				e.bag.Error(d.imp.Path.Span, diag.ImportNoCollection, "%s holds no collection to use", d.imp.Path.Value).
+					Hintf("import a collection file: a scenario file is run, never imported")
+			}
+			continue
+		}
+		if prev, dup := named[name]; dup {
+			e.bag.Error(at, diag.DuplicateImportName, "two imports are named %s", name).
+				Hintf("the first is on line %d; name one of them another way with as", prev.Span().Line)
+			continue
+		}
+		named[name] = d.imp
+		u.scope[name] = d.unit.own[0]
 	}
-	for _, c := range sortedColls(u) {
+	for _, c := range u.own {
 		e.checkCollection(u, c)
 	}
-}
-
-// sortedColls is u's own collections in source order, so diagnostics come
-// out the same on every run.
-func sortedColls(u *unit) []*ast.Collection {
-	out := make([]*ast.Collection, 0, len(u.own))
-	for _, c := range u.own {
-		out = append(out, c)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name.Span.Offset < out[j].Name.Span.Offset })
-	return out
 }
 
 // resolve finds the collection and request a use names.
@@ -311,9 +319,9 @@ func (e *expander) resolve(u *unit, use *ast.UseDecl) (coll *ast.Collection, ite
 		}
 		names = append(names, n)
 	}
-	r := e.bag.Error(use.Item.Span, diag.UnknownItem, "collection %q has no request %q", coll.Name.Value, use.Item.Value)
+	r := e.bag.Error(use.Item.Span, diag.UnknownItem, "%s has no request %q", use.Collection.Value, use.Item.Value)
 	if !r.DidYouMean(use.Item.Value, names) && len(names) > 0 {
-		r.Hintf("%s has %s", coll.Name.Value, strings.Join(names, ", "))
+		r.Hintf("%s has %s", use.Collection.Value, strings.Join(names, ", "))
 	}
 	return nil, nil, false
 }
@@ -351,12 +359,13 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Ref: use.Ref()})
 	via := len(e.res.Uses)
 
-	c, item, ok := e.resolve(u, use)
+	_, item, ok := e.resolve(u, use)
 	if !ok {
 		return nil
 	}
 	e.res.Uses[via-1].Item = itemSpan(item)
-	key := c.Name.Value + "." + itemName(item)
+	// By the name the use reads the collection by, never its title.
+	key := use.Collection.Value + "." + itemName(item)
 	e.res.Uses[via-1].Ref = key
 	stamp := stampVia(via)
 
@@ -366,7 +375,7 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 		if !ok {
 			return nil
 		}
-		s := requestStep(it, prefix(use, c, it.Name.Value), env, stamp)
+		s := requestStep(it, prefix(use, it.Name.Value), env, stamp)
 		e.writtenLiteral(s, it.Action)
 		e.override(via, s, use.Lines)
 		if use.Alias.Text != "" {

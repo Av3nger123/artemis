@@ -21,8 +21,8 @@ func files(t *testing.T, c Collection) Files {
 	return f
 }
 
-// The collection is named after the file it is written to, not the Postman
-// collection: orders.collection.art holds orders.
+// The collection is titled as the Postman collection is, and the scenario
+// uses it by its file's name: orders.collection.art is orders.
 func TestEachRequestBecomesARequestAndAUse(t *testing.T) {
 	c := Collection{
 		Info:      Info{Name: "Orders API"},
@@ -36,7 +36,7 @@ func TestEachRequestBecomesARequestAndAUse(t *testing.T) {
 	}
 	f := files(t, c)
 	for _, want := range []string{
-		`collection "orders" {`,
+		`collection "Orders API" {`,
 		`request ping(base_url) {`,
 		`get "${base_url}/ping"`,
 		`request orders_list() {`,

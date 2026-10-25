@@ -116,9 +116,9 @@ captures -- a 401 has no token to capture -- and `expect` lines add new ones.
 be used twice in a scenario.
 
 A collection holds single requests; steps in order are a scenario. A
-collection file holds one collection, named after the file -- `auth.art` holds
-`collection "auth"` -- and no scenario, so `import "collections/auth.art"`
-puts exactly `auth` in scope.
+collection file holds one collection, whose name is a title, and no scenario.
+`import "collections/auth.art"` puts it in scope as `auth`, after the file;
+`import "collections/Backend APIs.art" as api` puts it in scope as `api`.
 
 An override applies to an `api` request only. To vary a terminal or browser
 request, make the value a parameter and pass it as an argument.
@@ -202,10 +202,10 @@ By default, `generate` writes two files: `orders.collection.art` holds one
 files. `--flat` writes one scenario with one `step` for each request instead.
 
 The default output has one `request` for each Postman request, in
-`orders.collection.art`, whose collection is named after the file: `orders`.
-The `-o` name must therefore be a DSL name, letters, digits and `_`. The
-collection name and the request name form the name of a step:
-`orders.orders_admin_list_orders`.
+`orders.collection.art`, whose collection is titled as the Postman collection
+is. The scenario uses it by the file's name, `orders` -- or, when the `-o`
+name is not a DSL name, imports it `as` one. That name and the request name
+form the name of a step: `orders.orders_admin_list_orders`.
 The scenario `orders.art` holds one `use` line for each request:
 
 ```text

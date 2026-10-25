@@ -2,21 +2,27 @@ package ast
 
 import "artemis/pkg/dsl/token"
 
-// Import is `import "collections/auth.art"`. It sits in File.Scenarios with
-// the scenarios and collections, because that slice is the file's top level
-// and is what keeps Source exact.
+// Import is `import "collections/auth.art"` or `import "Backend APIs.art" as
+// api`: the name a use reads the file's collection by, which is the file's
+// own name when it has no `as`. It sits in File.Scenarios with the scenarios
+// and collections, because that slice is the file's top level and is what
+// keeps Source exact.
 type Import struct {
 	Keyword token.Token // import
 	Path    token.Token // the String
+	As      token.Token // zero when absent
+	Name    token.Token // the Ident after as; zero when absent
 }
 
 func (i *Import) Tokens(dst []token.Token) []token.Token {
-	return appendTok(appendTok(dst, i.Keyword), i.Path)
+	return appendTok(appendTok(appendTok(appendTok(dst, i.Keyword), i.Path), i.As), i.Name)
 }
 func (i *Import) Span() token.Span { return spanOf(i) }
 func (i *Import) decl()            {}
 
-// Collection is `collection "orders" { request ... }`: single requests, each one action.
+// Collection is `collection "Orders API" { request ... }`: single requests,
+// each one action. Its name is a title, any text: a use reads the collection
+// by the name its file is imported as.
 type Collection struct {
 	Keyword token.Token
 	Name    token.Token

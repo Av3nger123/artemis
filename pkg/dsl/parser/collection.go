@@ -8,7 +8,7 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// parseImport is `import String`.
+// parseImport is `import String [ "as" Ident ]`.
 func (p *parser) parseImport() ast.Decl {
 	imp := &ast.Import{Keyword: p.next()}
 	path, ok := p.expect(token.String, "a file path in quotes")
@@ -16,6 +16,14 @@ func (p *parser) parseImport() ast.Decl {
 		return p.badFrom(imp.Keyword)
 	}
 	imp.Path = path
+	if p.atWord("as") {
+		imp.As = p.next()
+		name, ok := p.expectIdent("the name a use reads it by, after \"as\"")
+		if !ok {
+			return p.badFrom(imp.Tokens(nil)...)
+		}
+		imp.Name = name
+	}
 	p.endDecl("an import")
 	return imp
 }
@@ -28,11 +36,6 @@ func (p *parser) parseCollection() ast.Decl {
 		return p.badFrom(c.Keyword)
 	}
 	c.Name = name
-	if !isIdentName(name.Value) {
-		p.errorf(name, diag.BadCollectionName,
-			"a collection name must be an identifier: a use names it as one, so %q could never be used", name.Value).
-			Hintf("name it %s", identLike(name.Value))
-	}
 	open, ok := p.expect(token.LBrace, "\"{\" to open the collection")
 	if !ok {
 		return p.badFrom(c.Keyword, c.Name)
@@ -287,8 +290,18 @@ func identLike(s string) string {
 	return b.String()
 }
 
-// IsIdentName reports whether s can name a collection: what a use can spell.
+// IsIdentName reports whether s can be what a use names a collection by.
 func IsIdentName(s string) bool { return isIdentName(s) }
+
+// ImportName is the name `import "<path>"` with no `as` gives the file's
+// collection: the file's name less .art, and less a .collection before it
+// (orders.art and orders.collection.art are both orders). ok is false when
+// that cannot be a use's, and the import needs an `as`.
+func ImportName(path string) (name string, ok bool) {
+	base := path[strings.LastIndexAny(path, "/\\")+1:]
+	name = strings.TrimSuffix(strings.TrimSuffix(base, ".art"), ".collection")
+	return name, isIdentName(name)
+}
 
 // IdentLike is s made into an identifier, for a hint.
 func IdentLike(s string) string { return identLike(s) }

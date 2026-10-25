@@ -176,11 +176,6 @@
           "severity": "error"
         },
         {
-          "value": "bad-collection-name",
-          "doc": "a collection's name is not an identifier, so no use can name it",
-          "severity": "error"
-        },
-        {
           "value": "bad-override",
           "doc": "a line in a use block is not an argument or an override that applies",
           "severity": "error"
@@ -188,11 +183,6 @@
         {
           "value": "bad-value",
           "doc": "a value is the wrong kind for the position it is in",
-          "severity": "error"
-        },
-        {
-          "value": "collection-file-name",
-          "doc": "a collection is not named after the file it is in",
           "severity": "error"
         },
         {
@@ -216,8 +206,8 @@
           "severity": "error"
         },
         {
-          "value": "duplicate-collection",
-          "doc": "two collections in scope have the same name",
+          "value": "duplicate-import-name",
+          "doc": "two imports give their collections the same name",
           "severity": "error"
         },
         {
@@ -228,6 +218,16 @@
         {
           "value": "import-needs-file",
           "doc": "a file read from no disk imports another file",
+          "severity": "error"
+        },
+        {
+          "value": "import-needs-name",
+          "doc": "an import has no \"as\" and its file's name cannot be what a use names it by",
+          "severity": "error"
+        },
+        {
+          "value": "import-no-collection",
+          "doc": "an imported file holds no collection",
           "severity": "error"
         },
         {

@@ -102,11 +102,6 @@ const (
 	// ReservedParam is a parameter named like a use-block override word, which
 	// no use could ever pass.
 	ReservedParam Code = "reserved-param"
-
-	// BadCollectionName is a collection whose name is not an identifier. A
-	// use names a collection as an identifier, so `collection "my-coll"`
-	// would declare a collection no use could reach.
-	BadCollectionName Code = "bad-collection-name"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -180,14 +175,16 @@ const (
 
 // The expander's codes: what is wrong with an import or a use.
 const (
-	ImportNeedsFile     Code = "import-needs-file"
-	ImportNotFound      Code = "import-not-found"
-	ImportCycle         Code = "import-cycle"
-	DuplicateCollection Code = "duplicate-collection"
+	ImportNeedsFile Code = "import-needs-file"
+	ImportNotFound  Code = "import-not-found"
+	ImportCycle     Code = "import-cycle"
+	// An import names its file's collection: by `as`, or by the file's name.
+	ImportNeedsName     Code = "import-needs-name"
+	ImportNoCollection  Code = "import-no-collection"
+	DuplicateImportName Code = "duplicate-import-name"
 	UnknownCollection   Code = "unknown-collection"
-	// A collection file holds one collection, named after the file, and no
-	// scenario: so an import names exactly one collection, the file's own.
-	CollectionFileName       Code = "collection-file-name"
+	// A collection file holds one collection and no scenario: so an import
+	// names exactly one collection, the file's own.
 	SecondCollection         Code = "second-collection"
 	ScenarioInCollectionFile Code = "scenario-in-collection-file"
 	UnknownItem              Code = "unknown-item"
@@ -229,7 +226,6 @@ var registry = []CodeInfo{
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{ImportPlacement, Error, "an import appears below a collection or a scenario"},
 	{ReservedParam, Error, "a parameter is named like a use-block override word, so no use can pass it"},
-	{BadCollectionName, Error, "a collection's name is not an identifier, so no use can name it"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},
@@ -244,9 +240,10 @@ var registry = []CodeInfo{
 	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
 	{ImportNotFound, Error, "an imported file cannot be read"},
 	{ImportCycle, Error, "a file imports itself, directly or through other files"},
-	{DuplicateCollection, Error, "two collections in scope have the same name"},
+	{ImportNeedsName, Error, "an import has no \"as\" and its file's name cannot be what a use names it by"},
+	{ImportNoCollection, Error, "an imported file holds no collection"},
+	{DuplicateImportName, Error, "two imports give their collections the same name"},
 	{UnknownCollection, Error, "a use names a collection that is not in scope"},
-	{CollectionFileName, Error, "a collection is not named after the file it is in"},
 	{SecondCollection, Error, "a file holds more than one collection"},
 	{ScenarioInCollectionFile, Error, "a file holding a collection also holds a scenario"},
 	{UnknownItem, Error, "a use names a request its collection does not declare"},

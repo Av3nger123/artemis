@@ -32,9 +32,10 @@ type Files struct {
 // the step body that migrate.Source writes, so a run of the two files sends
 // what a run of the flat file sends.
 //
-// collectionFile is the name the collection will be written under, and names
-// the collection: orders.collection.art holds orders. The scenario imports it
-// by its base name, so the two files must be written side by side.
+// collectionFile is the name the collection will be written under. The
+// collection is titled as the Postman collection is, and the scenario imports
+// it by its base name -- so the two files must be written side by side -- and
+// uses it by the file's name, or by an `as` when that name cannot be a use's.
 //
 // Two steps may share a name in the flat file; two requests of one collection
 // may not, so the second gets the suffix _2, the third _3, and so on.
@@ -48,8 +49,16 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		vars[v.Name] = true
 	}
 
-	// A collection is named after its file: orders.collection.art holds orders.
-	coll := strings.TrimSuffix(filepath.Base(collectionFile), ".collection.art")
+	title := config.Name
+	coll, ok := parser.ImportName(collectionFile)
+	if title == "" {
+		title = coll
+	}
+	importLine := fmt.Sprintf("import %q", filepath.Base(collectionFile))
+	if !ok {
+		coll = identifier(strings.ToLower(coll))
+		importLine += " as " + coll
+	}
 
 	var items strings.Builder
 	var uses []string
@@ -79,7 +88,7 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		uses = append(uses, use)
 	}
 
-	collSrc := fmt.Sprintf("%s\ncollection %q {\n\n%s}\n", firstLine(comments.File), coll, strings.TrimRight(items.String(), "\n")+"\n")
+	collSrc := fmt.Sprintf("%s\ncollection %q {\n\n%s}\n", firstLine(comments.File), title, strings.TrimRight(items.String(), "\n")+"\n")
 
 	head, err := migrate.Source(migrate.Config{Name: config.Name, Type: config.Type, Variables: config.Variables}, comments)
 	if err != nil {
@@ -89,7 +98,7 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 	if i < 0 {
 		return Files{}, fmt.Errorf("the scenario head has no closing brace:\n%s", head)
 	}
-	scenSrc := fmt.Sprintf("import %q\n\n%s\n%s\n}\n", filepath.Base(collectionFile), strings.TrimRight(head[:i], "\n"), strings.Join(uses, "\n"))
+	scenSrc := fmt.Sprintf("%s\n\n%s\n%s\n}\n", importLine, strings.TrimRight(head[:i], "\n"), strings.Join(uses, "\n"))
 
 	collOut, err := canonical("collection", collSrc)
 	if err != nil {

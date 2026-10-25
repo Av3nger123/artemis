@@ -1,16 +1,16 @@
 action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
-bad-collection-name	error	a collection's name is not an identifier, so no use can name it
 bad-override	error	a line in a use block is not an argument or an override that applies
 bad-value	error	a value is the wrong kind for the position it is in
-collection-file-name	error	a collection is not named after the file it is in
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
-duplicate-collection	error	two collections in scope have the same name
+duplicate-import-name	error	two imports give their collections the same name
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
+import-needs-name	error	an import has no "as" and its file's name cannot be what a use names it by
+import-no-collection	error	an imported file holds no collection
 import-not-found	error	an imported file cannot be read
 import-placement	error	an import appears below a collection or a scenario
 invalid-duration	error	a string in a duration position is not a duration

@@ -12,6 +12,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/encode"
 	"artemis/pkg/dsl/lower"
+	"artemis/pkg/dsl/parser"
 	"artemis/pkg/executor"
 
 	"github.com/spf13/cobra"
@@ -106,10 +107,11 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 		return nil, nil, err
 	}
 	base := filepath.Base(path)
+	collName, _, _ := strings.Cut(ref, ".")
 	run := &itemRun{
 		file: path,
 		name: filepath.Join(filepath.Dir(path), strings.TrimSuffix(base, filepath.Ext(base))+".item.art"),
-		src:  "import " + encode.QuoteString(base) + "\n\n" + scenario,
+		src:  "import " + encode.QuoteString(base) + " as " + collName + "\n\n" + scenario,
 	}
 	var sink *captureSink
 	if capturesPath != "" {
@@ -118,9 +120,11 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 	return run, sink, nil
 }
 
-// itemScenario is the scenario that runs ref: `orders.create` is one use of it,
-// `orders` a use of each of its requests in the order they are written,
-// captures passing down as they do in any scenario.
+// itemScenario is the scenario that runs ref: `orders.create` is one use of
+// the file's request create, `orders` a use of each of its requests in the
+// order they are written, captures passing down as they do in any scenario.
+// orders is only the name the scenario imports the file as -- any name a use
+// can read -- and the run, its captures and the report are named by it.
 //
 // Each use is passed the arguments its item has a parameter for. For a single
 // item that is all of them, so a name it does not take is the checker's
@@ -128,18 +132,18 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 // is the checker's error too. Both stop the run before anything is sent.
 func itemScenario(tree *ast.File, ref string, args map[string]any) (string, error) {
 	collName, itemName, _ := strings.Cut(ref, ".")
+	if !parser.IsIdentName(collName) {
+		return "", fmt.Errorf("--item %s: before the dot is the name the run imports the file as, a name a use can read, like %s", ref, parser.IdentLike(collName))
+	}
 	var coll *ast.Collection
-	var names []string
 	for _, d := range tree.Scenarios {
 		if c, ok := d.(*ast.Collection); ok {
-			names = append(names, c.Name.Value)
-			if c.Name.Value == collName {
-				coll = c
-			}
+			coll = c
+			break
 		}
 	}
 	if coll == nil {
-		return "", fmt.Errorf("the file has no collection %s (it has: %s)", collName, listOrNone(names))
+		return "", fmt.Errorf("the file holds no collection")
 	}
 
 	type item struct {

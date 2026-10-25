@@ -108,7 +108,7 @@ func TestImportErrors(t *testing.T) {
 		"a/x.art":  "collection \"x\" {}\n",
 		"b/x.art":  "collection \"x\" {}\n",
 	})
-	if !contains(diags, "duplicate-collection") {
+	if !contains(diags, "duplicate-import-name") {
 		t.Fatalf("got %s", diags)
 	}
 }
@@ -126,7 +126,7 @@ func TestNilLoaderRejectsImport(t *testing.T) {
 func TestImportsAreNotTransitive(t *testing.T) {
 	_, diags := run(t, map[string]string{
 		"main.art": "import \"a.art\"\n\nscenario \"s\" {\n  use b.r {}\n}\n",
-		"a.art":    "import \"b.art\"\n",
+		"a.art":    "import \"b.art\"\n\ncollection \"a\" {}\n",
 		"b.art":    "collection \"b\" {\n  request r() {\n    get \"x\"\n  }\n}\n",
 	})
 	if !contains(diags, "main.art: unknown-collection") {
@@ -169,14 +169,53 @@ func TestArgumentDoesNotReorderTheStep(t *testing.T) {
 	}
 }
 
-// A collection file holds one collection, named after the file, and no
-// scenario: an import then names exactly one collection, the file's own.
-func TestACollectionFileHoldsOneCollectionNamedAfterIt(t *testing.T) {
+// An import names its file's collection, by `as` or by the file's name; the
+// collection's own name is a title no use reads.
+func TestAnImportNamesItsCollection(t *testing.T) {
+	login := strings.Replace(auth, `collection "auth"`, `collection "Backend APIs"`, 1)
+	got, diags := run(t, map[string]string{
+		"Backend APIs.art": login,
+		"main.art":         "import \"Backend APIs.art\" as api\n\nscenario \"s\" {\n  use api.login { user = \"a\", base = \"http://x\" }\n}\n",
+	})
+	noDiags(t, diags)
+	if !contains(got, `step "api.login"`) {
+		t.Fatalf("got\n%s", got)
+	}
+	// With no as, by the file's name, whatever the collection is titled.
+	_, diags = run(t, map[string]string{
+		"orders.collection.art": login,
+		"main.art":              "import \"orders.collection.art\"\n\nscenario \"s\" {\n  use orders.login { user = \"a\", base = \"http://x\" }\n}\n",
+	})
+	noDiags(t, diags)
+
+	for name, tc := range map[string]struct{ main, code, hint string }{
+		"a file name that is not a name": {"import \"my-orders.art\"\n", "import-needs-name", `name it: import "my-orders.art" as my_orders`},
+		"a file with no collection":      {"import \"plain.art\"\n", "import-no-collection", "import a collection file: a scenario file is run, never imported"},
+		"two of one name":                {"import \"my-orders.art\" as x\nimport \"auth.art\" as x\n", "duplicate-import-name", "the first is on line 1; name one of them another way with as"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			files := MapLoader{"my-orders.art": auth, "auth.art": auth, "plain.art": "scenario \"s\" {}\n", "main.art": tc.main}
+			tree, _ := parserParse(tc.main)
+			_, bag := Expand(tree, files)
+			found := false
+			for _, d := range bag.All() {
+				if string(d.Code) == tc.code && d.Span.File == "main.art" && d.Hint == tc.hint {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("want %s with hint %q, got %v", tc.code, tc.hint, bag.All())
+			}
+		})
+	}
+}
+
+// A collection file holds one collection and no scenario: an import then
+// names exactly one collection, the file's own.
+func TestACollectionFileHoldsOneCollection(t *testing.T) {
 	for name, tc := range map[string]struct{ file, src, code, hint string }{
-		"named otherwise": {"orders.art", "collection \"shop\" {}\n", "collection-file-name", "name it orders, or rename the file to shop.art"},
-		"file not a name": {"my-orders.art", "collection \"my_orders\" {}\n", "collection-file-name", "rename the file to my_orders.art"},
-		"a second":        {"orders.art", "collection \"orders\" {}\ncollection \"refunds\" {}\n", "second-collection", "move it to a file of its own, refunds.art"},
-		"a scenario too":  {"orders.art", "collection \"orders\" {}\n\nscenario \"s\" {}\n", "scenario-in-collection-file", "move the scenario to a scenario file, which imports orders.art"},
+		"a second":       {"orders.art", "collection \"orders\" {}\ncollection \"refunds\" {}\n", "second-collection", "move it to a file of its own"},
+		"a scenario too": {"orders.art", "collection \"orders\" {}\n\nscenario \"s\" {}\n", "scenario-in-collection-file", "move the scenario to a scenario file, which imports orders.art"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			files := MapLoader{tc.file: tc.src, "main.art": "import \"" + tc.file + "\"\n"}

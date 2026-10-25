@@ -729,34 +729,29 @@ collection file, so an error in it points there.
 
 | Form | What it is |
 | --- | --- |
-| `collection "<name>" { ... }` | A set of `request` items. The name is how a `use` reaches it |
+| `collection "<title>" { ... }` | A set of `request` items. The title is any text, for people: a `use` reaches the collection by the name its file is [imported](#importing) as |
 | `request <name>(<params>) { ... }` | Exactly the body of a `step`: one action, then `expect`, `capture`, `retry` and `timeout` |
 | `<ident>` | A required parameter |
 | `<ident> = <expr>` | A parameter with a default. The default may name an earlier parameter, as a `var` may name an earlier `var` |
 | `secret <ident>` | A [secret parameter](#secret-parameters). Either form above may follow `secret` |
 
-A collection's name must be an identifier, because a `use` names it as one:
-`collection "my-orders"` is a compile error at the name, with the hint
-`my_orders`. Required parameters may follow defaulted ones, because arguments
-are always passed by name.
+Required parameters may follow defaulted ones, because arguments are always
+passed by name.
 
-A collection file holds **one** collection, named after the file, and nothing
-else: `orders.art` -- or `orders.collection.art`, as `artemis generate` writes
-it -- holds `collection "orders"`. So the import line says exactly what a
-scenario gets, and the file, the collection and every `use orders.x` share one
-name. Each of these is a compile error, wherever the file is read from:
+A collection file holds **one** collection and nothing else, so an import
+names exactly one collection, the file's own. Each of these is a compile
+error, wherever the file is read from:
 
 | Error | Code | Hint |
 | --- | --- | --- |
-| `collection "shop"` in `orders.art` | `collection-file-name` | name it orders, or rename the file to shop.art |
 | a second `collection` in the file | `second-collection` | move it to a file of its own |
 | a `scenario` in the file | `scenario-in-collection-file` | move the scenario to a scenario file, which imports this one |
 
 A collection has no `var` of its own. Anything its items share is a parameter
 with a default, so every name a request reads is in its own signature.
 
-A `use` names an item with its collection -- `use auth.login`. A bare
-`use login` is a compile error.
+A `use` names an item with the name its collection is imported as -- `use
+auth.login`. A bare `use login` is a compile error.
 
 A parameter may not be named `header`, `query`, `body`, `drop` or `expect`. A [use line](#use-lines) is read by its first word, so such a parameter
 could never be passed. Declaring one is a compile error at the parameter:
@@ -772,14 +767,35 @@ orders.art:2:13: a parameter cannot be named body: a use block reads body as an 
 
 | | |
 | --- | --- |
-| Form | `import "<path>"` |
+| Form | `import "<path>" [as <ident>]` |
 | Where | At the top of the file, before any `collection` or `scenario` |
 | Path | Relative to the importing file. Local files only: no URL, no package, no version |
-| Effect | The file's collection is in scope by its name |
+| Effect | The file's collection is in scope by the name after `as`, or else by the file's name less `.art` -- and less a `.collection` before it, so `orders.art` and `orders.collection.art` are both `orders` |
 | Not transitive | `orders.art` importing `auth.art` puts `auth` in scope in `orders.art`, not in a file that imports `orders.art` |
 
-Two collections in scope under one name are a compile error, and so is an
-import cycle, named as its chain: `a.art -> b.art -> a.art`.
+```art
+import "collections/orders.art" as shop
+import "collections/auth.art"
+
+scenario "buy" {
+  use auth.login { user = "alice", password = env("PW") }
+  use shop.create { sku = "A-1", qty = 2 }
+}
+```
+
+A file named `Backend APIs.art` is imported the same way, `as` a name a use
+can read.
+
+The collection's title plays no part: the import line alone says what a use
+reads. Each of these is a compile error at the import:
+
+| Error | Code | Hint |
+| --- | --- | --- |
+| no `as`, and a file name that cannot be one, like `Backend APIs.art` | `import-needs-name` | name it: import "collections/Backend APIs.art" as Backend_APIs |
+| a file with no collection | `import-no-collection` | import a collection file: a scenario file is run, never imported |
+| two imports under one name | `duplicate-import-name` | name one of them another way with as |
+
+So is an import cycle, named as its chain: `a.art -> b.art -> a.art`.
 
 A file holds a collection or scenarios, never both. Only scenarios run:
 `artemis run` on a collection file runs nothing and passes, so a folder run is
@@ -942,14 +958,15 @@ artemis run collections/orders.art --item orders      # every item, in the order
 
 | Flag | |
 | --- | --- |
-| `--item <collection>.<item>` | Run that request |
-| `--item <collection>` | Run every request of the collection in order, captures passing down as in a scenario. Each request is passed the arguments it has a parameter for |
+| `--item <name>.<item>` | Run that request |
+| `--item <name>` | Run every request of the collection in order, captures passing down as in a scenario. Each request is passed the arguments it has a parameter for |
 | `--arg name=value` | A parameter. The value is a string and is sent as written: `${` in it is not an interpolation. Repeatable |
 | `--args <file>` | Parameters from a JSON object, so a secret stays off the command line. Values keep their JSON type. `--arg` wins over it |
 | `--captures <file>` | Every value the item's captures got, `secret` ones included, as `{"values": {...}, "secret": [...]}`, mode 0600 |
 
-The scenario is a file of its own, in memory, beside the collection file and
-importing it, so every line of the collection keeps its number and nothing is
+`<name>` is any name a use can read: the scenario imports the collection file
+`as` it, whatever the collection is titled. The scenario is a file of its own,
+in memory, beside the collection file and importing it, so every line of the collection keeps its number and nothing is
 written to disk; the run is reported under the collection file's path. It is
 named for the item (`auth.login`), and its steps are named as any use's are. A
 missing or unknown argument is the checker's error and stops the run before
@@ -1466,7 +1483,7 @@ setup  teardown  ai
 
 | Word | Purpose |
 | --- | --- |
-| `import` | Imports a collection file: `import "collections/auth.art"` |
+| `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
 | `use` | Expands a collection's request in place: `use auth.login { ... }` |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
@@ -1494,7 +1511,7 @@ grammar is how two grammars come to disagree.
 
 ```ebnf
 File        = { Import } { Collection | Scenario } ;
-Import      = "import" String ;
+Import      = "import" String [ "as" Ident ] ;
 Collection  = "collection" String "{" { RequestDecl } "}" ;
 RequestDecl = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params      = "(" [ Param { "," Param } ] ")" ;

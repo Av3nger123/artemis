@@ -304,11 +304,12 @@ var nodeSchemas = []nodeSchema{
 		word("source", "the exact bytes, trivia included"),
 		spanField,
 	}},
-	{Kind: kindImport, Doc: "`import \"auth.art\"`; imports come before every collection and scenario", Fields: []fieldSchema{
+	{Kind: kindImport, Doc: "`import \"auth.art\"` or `import \"Backend APIs.art\" as api`; imports come before every collection and scenario", Fields: []fieldSchema{
 		word("path", "the file imported, decoded: escapes resolved, no quotes"),
+		{Name: "as", Type: "string", Optional: true, Doc: "the name after `as`, which a use reads the collection by; absent, it is the file's name"},
 		spanField, commentsField,
 	}},
-	{Kind: kindCollection, Doc: "`collection \"orders\" { request ... }`: one per file, named after it", Fields: []fieldSchema{
+	{Kind: kindCollection, Doc: "`collection \"Orders API\" { request ... }`: one per file; its name is a title", Fields: []fieldSchema{
 		recoveredName,
 		list("items", "collectionItem"),
 		spanField, commentsField,

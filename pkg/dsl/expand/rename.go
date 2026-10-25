@@ -10,12 +10,12 @@ import (
 )
 
 // prefix is what a use's step is named: its alias when it has one, else the
-// request's qualified ref, "orders.create".
-func prefix(use *ast.UseDecl, c *ast.Collection, item string) string {
+// ref as the use writes it, "orders.create".
+func prefix(use *ast.UseDecl, item string) string {
 	if use.Alias.Text != "" {
 		return use.Alias.Value
 	}
-	return c.Name.Value + "." + item
+	return use.Collection.Value + "." + item
 }
 
 // varPrefix is what a hoisted secret var is named after: the use's alias, or

@@ -140,8 +140,9 @@ func TestAnItemThatIsNotThere(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "auth has no item logout") || !strings.Contains(err.Error(), "login") {
 		t.Fatalf("err = %v", err)
 	}
-	_, _, err = runCLI(t, "run", "testdata/collections/auth.art", "--item", "billing")
-	if err == nil || !strings.Contains(err.Error(), "no collection billing") {
+	// Before the dot is only the name the run imports the file as.
+	_, _, err = runCLI(t, "run", "testdata/collections/auth.art", "--item", "my-auth.login")
+	if err == nil || !strings.Contains(err.Error(), "like my_auth") {
 		t.Fatalf("err = %v", err)
 	}
 }

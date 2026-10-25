@@ -239,6 +239,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.Import:
 		p.tok(v.Keyword)
 		p.tok(v.Path)
+		p.tok(v.As)
+		p.tok(v.Name)
 	case *ast.Collection:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
