@@ -68,6 +68,8 @@ func decl(v value) (ast.Decl, error) {
 		return collection(f)
 	case kindUse:
 		return useDecl(f)
+	case kindPhase:
+		return phaseDecl(f)
 	}
 	return nil, badKind(f, kind, "a declaration")
 }
@@ -93,6 +95,30 @@ func scenario(f fields) (*ast.Scenario, error) {
 		return nil, err
 	}
 	return s, braced(f, &s.Keyword, &s.LBrace, &s.RBrace)
+}
+
+// phaseDecl builds `setup { ... }` or `teardown { ... }`.
+func phaseDecl(f fields) (*ast.PhaseDecl, error) {
+	which, err := f.str("phase")
+	if err != nil {
+		return nil, err
+	}
+	if which != ast.PhaseSetup && which != ast.PhaseTeardown {
+		return nil, fmt.Errorf("%s: phase is %q, want setup or teardown", f.path, which)
+	}
+	d := &ast.PhaseDecl{
+		Keyword: syn(token.Ident, which),
+		LBrace:  syn(token.LBrace, "{"),
+		RBrace:  syn(token.RBrace, "}"),
+	}
+	body, err := f.list("body")
+	if err != nil {
+		return nil, err
+	}
+	if d.Body, err = decls(body); err != nil {
+		return nil, err
+	}
+	return d, braced(f, &d.Keyword, &d.LBrace, &d.RBrace)
 }
 
 // forClause reads a scenario's optional for clause.

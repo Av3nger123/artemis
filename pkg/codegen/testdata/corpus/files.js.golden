@@ -24,7 +24,8 @@
 //     fetch follows does not send or keep them;
 //   - a file json(), csv() or file() names is found from the directory the
 //     test runs in, by the .art file's path as it was given to `artemis
-//     build`; a file sent as a body has no Content-Type the step did not write.
+//     build`; a file sent as a body has no Content-Type the step did not write;
+//   - teardown stops at its first failing step, where artemis runs every one.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";

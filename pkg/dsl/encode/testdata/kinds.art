@@ -43,7 +43,19 @@ scenario "kinds" {
 }
 
 scenario "row ${n}" for secret n in [1, 2] {
+  setup {
+    step "before" {
+      run "true"
+    }
+  }
+
   step "s" {
     run "echo"
+  }
+
+  teardown {
+    step "after" {
+      run "true"
+    }
   }
 }

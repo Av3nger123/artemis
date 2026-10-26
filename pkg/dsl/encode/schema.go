@@ -99,7 +99,8 @@ type groupSchema struct {
 var groupSchemas = []groupSchema{
 	{"declaration", []string{kindScenario, kindImport, kindCollection}},
 	{"forClause", []string{kindFor}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase}},
+	{"phaseBody", []string{kindStep, kindUse}},
 	{"action", []string{kindRequest, kindRun, kindBrowser}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
 	{"blockField", []string{kindField}},
@@ -227,6 +228,11 @@ var nodeSchemas = []nodeSchema{
 		recoveredName,
 		optChild("for", "forClause"),
 		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindPhase, Doc: "`setup { ... }` or `teardown { ... }`: steps that run before a scenario's own, or after them whatever happened", Fields: []fieldSchema{
+		word("phase", "`setup` or `teardown`"),
+		list("body", "phaseBody"),
 		spanField, commentsField,
 	}},
 	{Kind: kindFor, Doc: "`for user in json(\"users.json\")`: one scenario per row of data", Fields: []fieldSchema{

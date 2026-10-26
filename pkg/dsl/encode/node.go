@@ -46,6 +46,7 @@ const (
 	kindParam       = "param"
 	kindRequestDecl = "requestDecl"
 	kindUse         = "use"
+	kindPhase       = "phase"
 	kindBodySet     = "bodySet"
 	kindDrop        = "drop"
 )
@@ -95,6 +96,12 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.requestDecl(v)
 	case *ast.UseDecl:
 		return e.useDecl(v)
+	case *ast.PhaseDecl:
+		return start(kindPhase, v).
+			set("phase", v.Keyword.Text).
+			set("body", e.list(toNodes(v.Body))).
+			span().
+			comments(toks(v.Keyword), v.LBrace, v.RBrace).done()
 	case *ast.BodySet:
 		return e.bodySet(v)
 	case *ast.Drop:

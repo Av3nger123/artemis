@@ -224,3 +224,35 @@ func SplitOrigin(items []Node) (own, foreign []Node) {
 
 func (s *StepDecl) Span() token.Span { return spanOf(s) }
 func (s *StepDecl) decl()            {}
+
+// PhaseDecl is `setup { ... }` or `teardown { ... }`: steps that run before a
+// scenario's own steps, or after them whatever happened.
+//
+// Keyword says which. Body holds steps and use lines, which pkg/dsl/expand
+// expands in place as it does a scenario's own; the checker holds a phase to
+// where it is written -- setup above the first step, teardown below the last --
+// so the order in the file is the order things run.
+type PhaseDecl struct {
+	Keyword token.Token // setup or teardown
+	LBrace  token.Token
+	Body    []Decl // StepDecl, UseDecl, or Bad
+	RBrace  token.Token
+}
+
+// Phases are the two words a PhaseDecl opens with.
+const (
+	PhaseSetup    = "setup"
+	PhaseTeardown = "teardown"
+)
+
+func (p *PhaseDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, p.Keyword)
+	dst = appendTok(dst, p.LBrace)
+	for _, d := range p.Body {
+		dst = appendNode(dst, d)
+	}
+	return appendTok(dst, p.RBrace)
+}
+
+func (p *PhaseDecl) Span() token.Span { return spanOf(p) }
+func (p *PhaseDecl) decl()            {}

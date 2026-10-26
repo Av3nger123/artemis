@@ -98,6 +98,13 @@ type jsFile struct {
 	// decides whether a step gets a blank line above it. An arrow function
 	// followed by a blank line reads as a mistake.
 	wrote bool
+
+	// nest is how far inside a try, a finally and a teardown step's guard the
+	// lines being written are, added to every line's own level.
+	nest int
+
+	// phase is "setup" or "teardown" while that block's steps are emitted.
+	phase string
 }
 
 // use records that a helper is needed and returns its JavaScript name, so a call
@@ -242,12 +249,13 @@ func jsHeader(source string) string {
 		"//     fetch follows does not send or keep them;\n" +
 		"//   - a file json(), csv() or file() names is found from the directory the\n" +
 		"//     test runs in, by the .art file's path as it was given to `artemis\n" +
-		"//     build`; a file sent as a body has no Content-Type the step did not write.\n"
+		"//     build`; a file sent as a body has no Content-Type the step did not write;\n" +
+		"//   - teardown stops at its first failing step, where artemis runs every one.\n"
 }
 
 // hasBrowserStep reports whether the scenario holds a step that needs a page.
 func hasBrowserStep(sc *lower.Scenario) bool {
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		if st.Type == browserKey {
 			return true
 		}
@@ -312,10 +320,49 @@ func (f *jsFile) scenario(sc *lower.Scenario) error {
 	}
 	f.wrote = len(declared) > 0 || needsPage || session
 
-	for _, st := range sc.Steps {
-		if err := f.emitStep(st); err != nil {
-			return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	// With a teardown, setup and the scenario's own steps go in a try and
+	// teardown in its finally, as in the Python export.
+	teardown := len(sc.Teardown) > 0
+	if teardown {
+		f.line(1, "try {")
+		f.nest++
+		f.wrote = false
+	}
+	if err := f.emitSteps(sc.Setup, "setup"); err != nil {
+		return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	}
+	if err := f.emitSteps(sc.Steps, ""); err != nil {
+		return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	}
+	if teardown {
+		f.nest--
+		f.line(1, "} finally {")
+		f.nest++
+		f.wrote = false
+		for _, st := range sc.Teardown {
+			if len(st.Needs) > 0 {
+				conds := make([]string, len(st.Needs))
+				for i, n := range st.Needs {
+					conds[i] = jsLocal(n) + " !== undefined"
+				}
+				if f.wrote {
+					f.out.WriteString("\n")
+				}
+				f.line(1, "if ("+strings.Join(conds, " && ")+") {")
+				f.nest++
+				f.wrote = false
+			}
+			if err := f.emitSteps([]*lower.Step{st}, "teardown"); err != nil {
+				return fmt.Errorf("scenario %q: %w", sc.Name, err)
+			}
+			if len(st.Needs) > 0 {
+				f.nest--
+				f.line(1, "}")
+			}
 		}
+		f.nest--
+		f.line(1, "}")
+		f.wrote = true
 	}
 	if !f.wrote {
 		// A scenario with no bindings and no steps is a test with an empty body,
@@ -383,7 +430,7 @@ func declarations(sc *lower.Scenario) []string {
 	for _, v := range sc.Vars {
 		add(jsLocal(v.Name))
 	}
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		for _, c := range st.Captures {
 			add(jsLocal(c.Name))
 		}
@@ -391,7 +438,7 @@ func declarations(sc *lower.Scenario) []string {
 
 	used := map[string]bool{}
 	read := map[string]bool{}
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		used[st.Type] = true
 		for _, root := range []string{"cookies", "duration_ms"} {
 			read[root] = read[root] || mentions(st, root)
@@ -492,7 +539,11 @@ func (f *jsFile) emitStep(st *lower.Step) error {
 		f.out.WriteString("\n")
 	}
 	f.wrote = true
-	f.line(1, "// step "+jsQuoteComment(st.Name)+", line "+strconv.Itoa(st.Line))
+	label := "// step "
+	if f.phase != "" {
+		label = "// " + f.phase + " step "
+	}
+	f.line(1, label+jsQuoteComment(st.Name)+", line "+strconv.Itoa(st.Line))
 
 	indent := 1
 	if retried(st) {
@@ -515,6 +566,18 @@ func (f *jsFile) emitStep(st *lower.Step) error {
 	}
 	if retried(st) {
 		f.line(1, "});")
+	}
+	return nil
+}
+
+// emitSteps emits steps of one block, each comment naming the block.
+func (f *jsFile) emitSteps(steps []*lower.Step, phase string) error {
+	f.phase = phase
+	defer func() { f.phase = "" }()
+	for _, st := range steps {
+		if err := f.emitStep(st); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1110,7 +1173,7 @@ func (f *jsFile) millis(x ast.Expr) (string, error) {
 // line writes one line of JavaScript at the given indentation level. Two spaces,
 // which is what prettier would do to the file anyway.
 func (f *jsFile) line(indent int, text string) {
-	f.out.WriteString(strings.Repeat("  ", indent))
+	f.out.WriteString(strings.Repeat("  ", indent+f.nest))
 	f.out.WriteString(text)
 	f.out.WriteString("\n")
 }
@@ -1123,7 +1186,7 @@ func (f *jsFile) line(indent int, text string) {
 // prettier would choose: everything on one line, the object broken out, or every
 // argument broken out because the ones before the object did not fit either.
 func (f *jsFile) optionsCall(indent int, callee string, args, options []string) {
-	pad := strings.Repeat("  ", indent)
+	pad := strings.Repeat("  ", indent+f.nest)
 	object := "{}"
 	if len(options) > 0 {
 		object = "{ " + strings.Join(options, ", ") + " }"

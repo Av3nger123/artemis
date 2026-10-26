@@ -12,6 +12,7 @@ duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
 duplicate-import-name	error	two imports give their collections the same name
+duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-row-name	error	two rows of a data-driven scenario name it alike
 for-no-rows	error	a for clause's data has no rows
 for-source-not-array	error	a for clause's data is not an array of rows
@@ -37,6 +38,8 @@ root-capture	error	a collection's template captures under the name of a step's o
 scenario-in-collection-file	error	a file holding a collection also holds a scenario
 second-collection	error	a file holds more than one collection
 secret-argument	error	an argument to a secret parameter is not itself secret
+setup-after-step	error	a setup block is below a step it would run before
+teardown-before-step	error	a teardown block is above a step it would run after
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"
 unclosed-interpolation-expr	error	a "${" expression is followed by neither "}" nor more string

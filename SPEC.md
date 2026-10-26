@@ -220,6 +220,59 @@ operands the way its own framework does. The value still arrives through
 `art_env` rather than as a literal in the file, so the generated code holds no
 credential of its own.
 
+### `setup` and `teardown`
+
+```art
+scenario "checkout" {
+  var url = env("API_URL")
+
+  setup {
+    step "make a cart" {
+      post "${url}/carts"
+      expect status == 201
+      capture cart_id = body.id
+    }
+  }
+
+  step "pay" {
+    post "${url}/carts/${cart_id}/pay"
+    expect status == 200
+    capture order_id = body.id
+  }
+
+  teardown {
+    step "cancel the order" {
+      delete "${url}/orders/${order_id}"
+    }
+
+    step "drop the cart" {
+      delete "${url}/carts/${cart_id}"
+    }
+  }
+}
+```
+
+`setup` runs before the scenario's own steps and `teardown` after them. Each
+holds steps and [`use`](#use) lines, and a scenario has at most one of each.
+**The file is in run order**: `setup` is written above the first step and
+`teardown` below the last -- `setup-after-step`, `teardown-before-step` and
+`duplicate-phase` are compile errors otherwise -- so the [scope](#what-is-in-scope)
+rule is unchanged: setup's captures are in scope for every step below them,
+and teardown sees every capture above it.
+
+| | |
+| --- | --- |
+| A setup step does not pass | The rest of setup and every one of the scenario's own steps is **skipped**, each naming the setup step that failed. Teardown still runs |
+| One of the scenario's own steps fails | The steps after it run, as they always have. Teardown runs |
+| Teardown | Always runs, every step of it -- after a failure as after a pass, and after a teardown step that failed |
+| A teardown step reads a capture no step made | It is **skipped**, naming the capture: there is nothing to clean up. `cancel the order` above is skipped when `pay` failed before capturing `order_id` |
+| A teardown step fails | The scenario fails: cleanup that did not happen is a fault, and the next run may meet what it left |
+
+A skipped step is `"status": "skip"` in the [JSON report](#the-json-report),
+with the reason in `error`, and setup and teardown steps carry `"phase":
+"setup"` or `"phase": "teardown"`. The console prints them as `setup: make a
+cart`, and JUnit names them `[setup] make a cart`.
+
 ### `config`
 
 **Spec decision.** `config` takes a subject and settings for it. There are two:
@@ -1725,6 +1778,7 @@ setup  teardown  ai
 | --- | --- |
 | `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
 | `use` | Expands a collection's request in place: `use auth.login { ... }` |
+| `setup`, `teardown` | Steps that run before a scenario's own, and after them whatever happened -- see [setup and teardown](#setup-and-teardown) |
 | `for`, `in` | Make a scenario one per row of data: `scenario "..." for user in json("users.json") { ... }` -- see [data-driven scenarios](#data-driven-scenarios) |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
@@ -1993,7 +2047,8 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `schema_version` | run | `1`. It goes up when a key is removed or its meaning changes; a new key does not change it |
 | `started_at` | run | When the run began, RFC 3339 |
 | `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. Not nanoseconds, and not the seconds the JUnit report uses |
-| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. Nothing produces `skip` today; it is in the vocabulary |
+| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. A step is skipped when a [setup](#setup-and-teardown) step before it did not pass, or when it is a teardown step reading a capture no step made; its `error` says which |
+| `phase` | step | `"setup"` or `"teardown"` for a step of a scenario's [setup or teardown](#setup-and-teardown) block. **Omitted** on the scenario's own steps |
 | `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary |
 | `error` | run | Why the run could not proceed at all, and `""` for every run that reached its scenarios. An environment error is the one thing that sets it |
 | `seed` | run | The seed the run's `uuid()`, `random_int()` and `random_string()` drew from, and absent when no scenario called one. Passed back as `artemis run --seed <n>`, it draws the same values |
@@ -2087,8 +2142,8 @@ adding one: after expansion the language is unchanged.
 | | |
 | --- | --- |
 | **`db` steps** | Designed, specified with the database step type |
-| **Control flow** | `if`, `else`, loops, data-driven tables, `parallel`, `group`. Reserved words, not features |
-| **Functions, fixtures** | `fn`, `return`, `let`, `setup`, `teardown`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction" |
+| **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
+| **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |

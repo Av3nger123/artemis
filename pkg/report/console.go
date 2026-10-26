@@ -103,7 +103,7 @@ func (c *Console) Step(step *result.StepResult) {
 	if step == nil {
 		return
 	}
-	fmt.Fprintf(c.out, "  %s %-24s %8s", marker(step.Status), step.Name, dur(step.Duration))
+	fmt.Fprintf(c.out, "  %s %-24s %8s", marker(step.Status), phased(step), dur(step.Duration))
 	if step.Attempts > 1 {
 		fmt.Fprintf(c.out, "  (%d attempts)", step.Attempts)
 	}
@@ -174,4 +174,14 @@ func (c *Console) tally(label string, t result.Tally) {
 		fmt.Fprint(c.out, ")")
 	}
 	fmt.Fprintln(c.out)
+}
+
+// phased is a step's name as the console prints it: with the block it ran in in
+// front, for a setup or teardown step, so a skipped "create cart" reads as the
+// setup that failed and not as the scenario's own step.
+func phased(step *result.StepResult) string {
+	if step.Phase == "" {
+		return step.Name
+	}
+	return step.Phase + ": " + step.Name
 }

@@ -16,6 +16,11 @@
       "config",
       "var",
       "step",
+      "use",
+      "phase"
+    ],
+    "phaseBody": [
+      "step",
       "use"
     ],
     "action": [
@@ -271,6 +276,32 @@
           "name": "body",
           "type": "node[]",
           "accepts": "scenarioBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "phase",
+      "doc": "`setup { ... }` or `teardown { ... }`: steps that run before a scenario's own, or after them whatever happened",
+      "fields": [
+        {
+          "name": "phase",
+          "type": "string",
+          "doc": "`setup` or `teardown`"
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "phaseBody",
           "optional": true
         },
         {

@@ -302,6 +302,11 @@
           "severity": "error"
         },
         {
+          "value": "duplicate-phase",
+          "doc": "a scenario has two setup blocks or two teardown blocks",
+          "severity": "error"
+        },
+        {
           "value": "duplicate-row-name",
           "doc": "two rows of a data-driven scenario name it alike",
           "severity": "error"
@@ -424,6 +429,16 @@
         {
           "value": "secret-argument",
           "doc": "an argument to a secret parameter is not itself secret",
+          "severity": "error"
+        },
+        {
+          "value": "setup-after-step",
+          "doc": "a setup block is below a step it would run before",
+          "severity": "error"
+        },
+        {
+          "value": "teardown-before-step",
+          "doc": "a teardown block is above a step it would run after",
           "severity": "error"
         },
         {

@@ -89,6 +89,12 @@ type Scenario struct {
 
 	// Steps are the scenario's steps in source order.
 	Steps []*Step
+
+	// Setup and Teardown are its setup and teardown blocks' steps, in source
+	// order. Setup runs before Steps and stops them when it fails; Teardown
+	// runs after them whatever happened.
+	Setup    []*Step
+	Teardown []*Step
 }
 
 // Row is where a data-driven scenario's row came from: the file its data was
@@ -265,6 +271,7 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 		out.Row = &Row{Source: sc.Row.Source, Index: sc.Row.Index}
 	}
 	secrets := secretVars(sc)
+	captured := map[string]bool{}
 	for _, d := range sc.Body {
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
@@ -298,14 +305,64 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)
 			}
 			st.relativeTo(sc.Keyword.Span.File)
+			st.Needs = needs(d, captured)
 			out.Steps = append(out.Steps, st)
 			// After the step, never before it: a capture is not in scope for
 			// the step that writes it.
 			addSecretCaptures(secrets, st)
+			addCaptured(captured, st)
+		case *ast.PhaseDecl:
+			for _, inner := range d.Body {
+				switch inner := inner.(type) {
+				case *ast.VarDecl:
+					// A use's hoisted var, bound with the scenario's own.
+					if inner.Name.Kind == token.Ident {
+						out.Vars = append(out.Vars, &Var{Name: inner.Name.Value, Value: inner.Value, Line: inner.Name.Span.Line})
+					}
+				case *ast.StepDecl:
+					st, err := step(inner, info, secrets)
+					if err != nil {
+						return nil, fmt.Errorf("scenario %q: %s: %w", out.Name, d.Keyword.Value, err)
+					}
+					st.relativeTo(sc.Keyword.Span.File)
+					st.Needs = needs(inner, captured)
+					if d.Keyword.Value == ast.PhaseSetup {
+						out.Setup = append(out.Setup, st)
+					} else {
+						out.Teardown = append(out.Teardown, st)
+					}
+					addSecretCaptures(secrets, st)
+					addCaptured(captured, st)
+				}
+			}
 		}
 		// *ast.Bad and anything else: already reported by the parser.
 	}
 	return out, nil
+}
+
+// addCaptured adds the names st captures to captured.
+func addCaptured(captured map[string]bool, st *Step) {
+	for _, c := range st.Captures {
+		captured[c.Name] = true
+	}
+}
+
+// needs is the captures of earlier steps that d reads: the names a teardown
+// step checks are in scope before it runs, so a cleanup of something a failed
+// step never created is skipped rather than an error.
+func needs(d *ast.StepDecl, captured map[string]bool) []string {
+	var out []string
+	seen := map[string]bool{}
+	ast.Inspect(d, func(n ast.Node) {
+		id, ok := n.(*ast.Ident)
+		if !ok || !captured[id.Name()] || seen[id.Name()] {
+			return
+		}
+		seen[id.Name()] = true
+		out = append(out, id.Name())
+	})
+	return out
 }
 
 // secretVars is the names of the scenario's `secret var` declarations.

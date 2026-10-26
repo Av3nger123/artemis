@@ -115,7 +115,11 @@ type jsonRow struct {
 }
 
 type jsonStep struct {
-	Name       string  `json:"name"`
+	Name string `json:"name"`
+	// Phase is "setup" or "teardown" for a step of a scenario's setup or
+	// teardown block, and omitted for one of its own steps -- so a scenario
+	// with neither writes the document it always did.
+	Phase      string  `json:"phase,omitempty"`
 	Status     string  `json:"status"`
 	DurationMS float64 `json:"duration_ms"`
 	Attempts   int     `json:"attempts"`
@@ -298,6 +302,7 @@ func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
 func fromStep(step *result.StepResult) jsonStep {
 	out := jsonStep{
 		Name:       step.Name,
+		Phase:      step.Phase,
 		Status:     step.Status.String(),
 		DurationMS: millis(step.Duration),
 		Attempts:   step.Attempts,

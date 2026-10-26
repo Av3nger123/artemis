@@ -53,6 +53,8 @@ func Children(n Node) []Node {
 		return decls(n.Body)
 	case *ForClause:
 		return nodes(n.Source)
+	case *PhaseDecl:
+		return decls(n.Body)
 	case *ConfigDecl:
 		return nodes(n.Block)
 	case *VarDecl:

@@ -171,6 +171,8 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 		return p.parseStep()
 	case p.atWord("use"):
 		return p.parseUse()
+	case p.atWord("setup"), p.atWord("teardown"):
+		return p.parsePhase()
 	}
 
 	// `secret` before a word it cannot modify gets its own message. Falling
@@ -185,9 +187,43 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 	}
 
 	p.errorf(p.peek(), diag.UnexpectedToken,
-		"expected \"config\", \"var\", \"step\" or \"use\", found %s", describe(p.peek())).
-		DidYouMean(p.peek().Value, []string{"config", "var", "step", "use"})
+		"expected \"config\", \"var\", \"step\", \"use\", \"setup\" or \"teardown\", found %s", describe(p.peek())).
+		DidYouMean(p.peek().Value, []string{"config", "var", "step", "use", "setup", "teardown"})
 	return p.recoverTo()
+}
+
+// parsePhase is `setup { ... }` or `teardown { ... }`: the steps and use lines
+// that run before the scenario's own steps, or after them.
+func (p *parser) parsePhase() ast.Decl {
+	d := &ast.PhaseDecl{Keyword: p.next()}
+	open, ok := p.expect(token.LBrace, `"{" to open `+d.Keyword.Value)
+	if !ok {
+		return p.badFrom(d.Keyword)
+	}
+	d.LBrace = open
+	for !p.at(token.RBrace) && !p.at(token.EOF) {
+		before := p.i
+		switch {
+		case p.atWord("step"):
+			d.Body = append(d.Body, p.parseStep())
+		case p.atWord("use"):
+			d.Body = append(d.Body, p.parseUse())
+		default:
+			p.errorf(p.peek(), diag.UnexpectedToken,
+				"expected \"step\" or \"use\" in %s, found %s", d.Keyword.Value, describe(p.peek())).
+				Hintf("a %s block holds steps; a var belongs to the scenario", d.Keyword.Value)
+			d.Body = append(d.Body, p.recoverTo())
+		}
+		if p.i == before {
+			d.Body = append(d.Body, &ast.Bad{Toks: []token.Token{p.consumeRaw()}})
+		}
+	}
+	if p.at(token.EOF) {
+		p.unclosed(open, d.Keyword.Value)
+		return d
+	}
+	d.RBrace = p.next()
+	return d
 }
 
 // parseConfig is `config <ident> { Setting... }`.

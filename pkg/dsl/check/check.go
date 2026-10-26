@@ -292,8 +292,67 @@ func (c *checker) scenario(s *ast.Scenario) {
 			c.varDecl(d, sc)
 		case *ast.StepDecl:
 			c.step(d, sc)
+		case *ast.PhaseDecl:
+			// A phase's steps are walked where the phase is written, which
+			// is where they run: setup's captures are in scope for every
+			// step below, and teardown sees everything above it.
+			for _, inner := range d.Body {
+				switch inner := inner.(type) {
+				case *ast.StepDecl:
+					c.step(inner, sc)
+				case *ast.VarDecl:
+					c.varDecl(inner, sc)
+				}
+			}
 		}
 		// *ast.Bad and anything else: the parser has already reported it.
+	}
+	c.phases(s)
+}
+
+// phases holds setup and teardown to where they run: setup above the
+// scenario's first step, teardown below its last, at most one of each. With
+// the file in run order, the scope rule needs nothing new -- a capture is in
+// scope below the step that makes it, in a phase as anywhere -- and a reader
+// never has to know that the order on the page is not the order of the run.
+func (c *checker) phases(s *ast.Scenario) {
+	var setup, teardown *ast.PhaseDecl
+	stepSeen := false
+	for _, d := range s.Body {
+		switch d := d.(type) {
+		case *ast.StepDecl:
+			stepSeen = true
+			if teardown != nil {
+				c.bag.Error(teardown.Keyword.Span, diag.TeardownBeforeStep,
+					"teardown is above the step %q, and it runs after every step", d.Name.Value).
+					Hintf("move teardown { ... } below the scenario's last step")
+				teardown = &ast.PhaseDecl{} // reported once
+			}
+		case *ast.PhaseDecl:
+			switch d.Keyword.Value {
+			case ast.PhaseSetup:
+				if setup != nil {
+					c.bag.Error(d.Keyword.Span, diag.DuplicatePhase, "this scenario already has a setup block").
+						Hintf("put every setup step in the one setup { ... }")
+					continue
+				}
+				setup = d
+				if stepSeen {
+					c.bag.Error(d.Keyword.Span, diag.SetupAfterStep,
+						"setup is below a step, and it runs before every step").
+						Hintf("move setup { ... } above the scenario's first step")
+				}
+			case ast.PhaseTeardown:
+				if teardown != nil && teardown.Keyword.Text != "" {
+					c.bag.Error(d.Keyword.Span, diag.DuplicatePhase, "this scenario already has a teardown block").
+						Hintf("put every teardown step in the one teardown { ... }")
+					continue
+				}
+				if teardown == nil {
+					teardown = d
+				}
+			}
+		}
 	}
 }
 

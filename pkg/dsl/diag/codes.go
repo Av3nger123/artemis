@@ -213,6 +213,11 @@ const (
 	ForNoRows          Code = "for-no-rows"
 	DuplicateRowName   Code = "duplicate-row-name"
 	BadRowName         Code = "bad-row-name"
+
+	// setup and teardown, held to where they run.
+	SetupAfterStep     Code = "setup-after-step"
+	TeardownBeforeStep Code = "teardown-before-step"
+	DuplicatePhase     Code = "duplicate-phase"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -281,6 +286,9 @@ var registry = []CodeInfo{
 	{ForNoRows, Error, "a for clause's data has no rows"},
 	{DuplicateRowName, Error, "two rows of a data-driven scenario name it alike"},
 	{BadRowName, Error, "a data-driven scenario's name reads something other than its row"},
+	{SetupAfterStep, Error, "a setup block is below a step it would run before"},
+	{TeardownBeforeStep, Error, "a teardown block is above a step it would run after"},
+	{DuplicatePhase, Error, "a scenario has two setup blocks or two teardown blocks"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

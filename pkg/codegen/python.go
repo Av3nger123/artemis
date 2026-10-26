@@ -81,6 +81,15 @@ type pyFile struct {
 	// which is what decides whether a step gets a blank line above it. A `def`
 	// followed by a blank line reads as a mistake.
 	wrote bool
+
+	// nest is how far inside a try, a finally and a teardown step's guard the
+	// lines being written are: every line is indented by it as well as by its
+	// own level, so a step reads the same wherever it is emitted.
+	nest int
+
+	// phase is "setup" or "teardown" while that block's steps are emitted,
+	// which is what each step's comment names.
+	phase string
 }
 
 // use records that a helper is needed and returns its Python name, so a call
@@ -178,7 +187,8 @@ func header(source string) string {
 		"#     such moment;\n" +
 		"#   - a file json(), csv() or file() names is found from the directory the\n" +
 		"#     test runs in, by the .art file's path as it was given to `artemis\n" +
-		"#     build`; a file sent as a body has no Content-Type the step did not write.\n"
+		"#     build`; a file sent as a body has no Content-Type the step did not write;\n" +
+		"#   - teardown stops at its first failing step, where artemis runs every one.\n"
 }
 
 // scenario emits one test function.
@@ -186,7 +196,7 @@ func (f *pyFile) scenario(sc *lower.Scenario) error {
 	name := unique(testName(sc.Name), f.taken)
 
 	needsPage := false
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		if st.Type == browserKey {
 			needsPage = true
 		}
@@ -231,15 +241,71 @@ func (f *pyFile) scenario(sc *lower.Scenario) error {
 	}
 	f.wrote = len(sc.Vars) > 0 || needsPage || session
 
-	if len(sc.Vars) == 0 && !needsPage && len(sc.Steps) == 0 {
+	if len(sc.Vars) == 0 && !needsPage && len(sc.Steps)+len(sc.Setup)+len(sc.Teardown) == 0 {
 		// A scenario with no body at all still has to be a function.
 		f.line(1, "pass")
 		return nil
 	}
 
-	for _, st := range sc.Steps {
-		if err := f.emitStep(st); err != nil {
+	// With a teardown, setup and the scenario's own steps go in a try and
+	// teardown in its finally: a failed step raises, which skips the steps
+	// after it -- setup's failing skips the scenario's own -- and teardown
+	// runs either way, as it does under the interpreter.
+	teardown := len(sc.Teardown) > 0
+	if teardown {
+		f.line(1, "try:")
+		f.nest++
+		f.wrote = false
+	}
+	if err := f.emitSteps(sc.Setup, "setup"); err != nil {
+		return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	}
+	if err := f.emitSteps(sc.Steps, ""); err != nil {
+		return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	}
+	if !teardown {
+		return nil
+	}
+	if len(sc.Setup)+len(sc.Steps) == 0 {
+		f.line(1, "pass")
+	}
+	f.nest--
+	f.line(1, "finally:")
+	f.nest++
+	f.wrote = false
+	for _, st := range sc.Teardown {
+		// A teardown step that reads a capture no step made has nothing to
+		// clean up, and is skipped, as the interpreter skips it.
+		if len(st.Needs) > 0 {
+			conds := make([]string, len(st.Needs))
+			for i, n := range st.Needs {
+				conds[i] = quote(local(n)) + " in locals()"
+			}
+			if f.wrote {
+				f.out.WriteString("\n")
+			}
+			f.line(1, "if "+strings.Join(conds, " and ")+":")
+			f.nest++
+			f.wrote = false
+		}
+		if err := f.emitSteps([]*lower.Step{st}, "teardown"); err != nil {
 			return fmt.Errorf("scenario %q: %w", sc.Name, err)
+		}
+		if len(st.Needs) > 0 {
+			f.nest--
+		}
+	}
+	f.nest--
+	return nil
+}
+
+// emitSteps emits steps of one block, each comment naming the block.
+func (f *pyFile) emitSteps(steps []*lower.Step, phase string) error {
+	f.phase = phase
+	defer func() { f.phase = "" }()
+	for _, st := range steps {
+		if err := f.emitStep(st); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -314,7 +380,11 @@ func (f *pyFile) emitStep(st *lower.Step) error {
 		f.out.WriteString("\n")
 	}
 	f.wrote = true
-	f.line(1, "# step "+pyQuoteComment(st.Name)+", line "+strconv.Itoa(st.Line))
+	label := "# step "
+	if f.phase != "" {
+		label = "# " + f.phase + " step "
+	}
+	f.line(1, label+pyQuoteComment(st.Name)+", line "+strconv.Itoa(st.Line))
 
 	indent := 1
 	if retried(st) {
@@ -930,7 +1000,7 @@ func formatSeconds(d time.Duration) string {
 
 // line writes one line of Python at the given indentation level.
 func (f *pyFile) line(indent int, text string) {
-	f.out.WriteString(strings.Repeat("    ", indent))
+	f.out.WriteString(strings.Repeat("    ", indent+f.nest))
 	f.out.WriteString(text)
 	f.out.WriteString("\n")
 }
@@ -939,7 +1009,7 @@ func (f *pyFile) line(indent int, text string) {
 // does not. The threshold is PEP 8's 88 columns, which is what black would do to
 // the file anyway.
 func (f *pyFile) callLine(indent int, callee string, args []string) {
-	pad := strings.Repeat("    ", indent)
+	pad := strings.Repeat("    ", indent+f.nest)
 	oneLine := pad + callee + "(" + strings.Join(args, ", ") + ")"
 	if len(oneLine) <= 88 && !strings.Contains(oneLine, "\n") {
 		f.out.WriteString(oneLine + "\n")

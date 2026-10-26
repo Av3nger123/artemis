@@ -149,6 +149,13 @@ func needsExpansion(tree *ast.File) bool {
 				if _, ok := b.(*ast.UseDecl); ok {
 					return true
 				}
+				if phase, ok := b.(*ast.PhaseDecl); ok {
+					for _, pb := range phase.Body {
+						if _, ok := pb.(*ast.UseDecl); ok {
+							return true
+						}
+					}
+				}
 			}
 		}
 	}
@@ -173,9 +180,20 @@ func fileName(tree *ast.File) string {
 // steps, in use order: there they see the vars the use's arguments see, and
 // the checker binds them for the steps that read them.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
+	return e.bodyIn(u, decls, newScope(decls))
+}
+
+// bodyIn is body with the scenario's scope given, so a use inside setup or
+// teardown is expanded knowing the scenario's vars, as one beside its steps is.
+func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 	out := make([]ast.Decl, 0, len(decls))
-	sc := newScope(decls)
 	for _, d := range decls {
+		if phase, ok := d.(*ast.PhaseDecl); ok {
+			cp := *phase
+			cp.Body = e.bodyIn(u, phase.Body, sc)
+			out = append(out, &cp)
+			continue
+		}
 		if use, ok := d.(*ast.UseDecl); ok {
 			steps := e.expandUse(u, use, sc.at(nil, out))
 			out = append(out, *sc.hoisted...)

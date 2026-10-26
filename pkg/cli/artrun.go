@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"artemis/pkg/dsl/check"
@@ -244,8 +245,10 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		Headless: cfg.Headless,
 		Viewport: cfg.Viewport,
 	}, func(ctx context.Context) error {
-		for i, st := range sc.Steps {
-			rt.events.StepStart(scenario, i, st.Name)
+		index := 0
+		// one runs a step, or records why it was skipped, and reports it.
+		one := func(phase string, st *lower.Step, skip string) *result.StepResult {
+			rt.events.StepStart(scenario, index, st.Name)
 			stepResult := scenario.NewStep(st.Name)
 			// The line the step was written on, so a step that could not run
 			// at all -- and an assertion with no line of its own -- still
@@ -255,14 +258,45 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 			// from a collection: a line of auth.art is no use against the
 			// scenario's file.
 			stepResult.File = st.File
-			runArtStep(ctx, rt, sc.Name, st, scope, gen, stepResult)
+			stepResult.Phase = phase
+			switch missing := missingNeeds(st, scope); {
+			case skip != "":
+				stepResult.Skip(skip)
+			case phase == result.PhaseTeardown && len(missing) > 0:
+				// Cleanup of something no step created: there is nothing to
+				// clean, so it is skipped, and says what was never captured.
+				stepResult.Skip(fmt.Sprintf("needs %s, which no step before it captured", strings.Join(missing, ", ")))
+			default:
+				runArtStep(ctx, rt, sc.Name, st, scope, gen, stepResult)
+			}
 			logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, stepResult.Duration))
 			// Every step that was reached gets a line, including one artemis
-			// could not execute.
+			// could not execute and one it skipped.
 			rep.Step(stepResult)
 			// After the console's line and after any screenshot, so the
 			// result a watcher gets is the one the report will hold.
-			rt.events.StepEnd(scenario, i, stepResult)
+			rt.events.StepEnd(scenario, index, stepResult)
+			index++
+			return stepResult
+		}
+
+		// Setup first. One that does not pass leaves nothing for the
+		// scenario's own steps to stand on, so the rest of setup and every
+		// step after it is skipped -- naming the setup step that failed.
+		skip := ""
+		for _, st := range sc.Setup {
+			if r := one(result.PhaseSetup, st, skip); skip == "" && r.Status != result.StatusPass {
+				skip = fmt.Sprintf("setup step %q did not pass", st.Name)
+			}
+		}
+		// The scenario's own steps. A failing one does not stop the next, as
+		// it never has: each says what it found.
+		for _, st := range sc.Steps {
+			one("", st, skip)
+		}
+		// Teardown always, every step of it, after a failure as after a pass.
+		for _, st := range sc.Teardown {
+			one(result.PhaseTeardown, st, "")
 		}
 		return nil
 	})
@@ -281,14 +315,28 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	logger.Logger.Info("Testing ended")
 }
 
-// stepNames is the names of a scenario's steps in order, for scenario-start: a
-// watcher can lay the whole scenario out before its first step runs.
+// stepNames is the names of a scenario's steps in the order they run -- setup,
+// its own, teardown -- for scenario-start: a watcher can lay the whole scenario
+// out before its first step runs.
 func stepNames(sc *lower.Scenario) []string {
-	names := make([]string, 0, len(sc.Steps))
-	for _, st := range sc.Steps {
-		names = append(names, st.Name)
+	names := make([]string, 0, len(sc.Setup)+len(sc.Steps)+len(sc.Teardown))
+	for _, steps := range [][]*lower.Step{sc.Setup, sc.Steps, sc.Teardown} {
+		for _, st := range steps {
+			names = append(names, st.Name)
+		}
 	}
 	return names
+}
+
+// missingNeeds is the captures st reads that the scope does not hold.
+func missingNeeds(st *lower.Step, scope executor.Scope) []string {
+	var out []string
+	for _, name := range st.Needs {
+		if _, ok := scope.Get(name); !ok {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // runArtStep attempts st until it passes or its attempts run out, and records

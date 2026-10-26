@@ -154,6 +154,9 @@ func (a Assertion) with(status Status, errMsg string) AssertionResult {
 type StepResult struct {
 	// Name is the step's name from the scenario.
 	Name string
+	// Phase is PhaseSetup or PhaseTeardown for a step of the scenario's setup
+	// or teardown, and empty for one of its own steps.
+	Phase string
 	// Status is derived from the assertions by Finish, or set outright by Fail
 	// and Skip.
 	Status Status
@@ -235,6 +238,12 @@ func (s *StepResult) Fail(dur time.Duration, err error) {
 	s.Status = StatusError
 	s.Error = errText(err)
 }
+
+// The phases a step can run in: a scenario's setup, its teardown, or neither.
+const (
+	PhaseSetup    = "setup"
+	PhaseTeardown = "teardown"
+)
 
 // Skip closes the step as never run.
 func (s *StepResult) Skip(reason string) {

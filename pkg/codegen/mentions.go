@@ -45,10 +45,18 @@ func httpCookies(sc *lower.Scenario) ast.Expr {
 // hasAPIStep reports whether sc sends any request, which is what decides
 // whether it needs a session at all.
 func hasAPIStep(sc *lower.Scenario) bool {
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		if st.Request != nil {
 			return true
 		}
 	}
 	return false
+}
+
+// allSteps is every step of sc in the order it runs: setup, its own, teardown.
+func allSteps(sc *lower.Scenario) []*lower.Step {
+	out := make([]*lower.Step, 0, len(sc.Setup)+len(sc.Steps)+len(sc.Teardown))
+	out = append(out, sc.Setup...)
+	out = append(out, sc.Steps...)
+	return append(out, sc.Teardown...)
 }
