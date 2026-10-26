@@ -388,3 +388,50 @@ func TestSecretsObservedWholeRootDropsItsPaths(t *testing.T) {
 		t.Errorf("ObservedPaths still lists body: %v", got.ObservedPaths)
 	}
 }
+
+// A name the alternatives of a block both capture is secret after the block when
+// either captured it secretly, whichever branch is written first: the run takes
+// one branch, the report is written for the other too, and withholding a value
+// that did not need it is the only safe way to be wrong.
+func TestSecretsCaptureInEitherBranchIsSecretAfterTheBlock(t *testing.T) {
+	plain := `step "plain" {
+      post "/token" { body = {"u": "alice"} }
+      capture token = body.data.access_token
+    }`
+	secret := `step "secret" {
+      post "/token" { body = {"u": "alice"} }
+      secret capture token = body.data.access_token
+    }`
+	for name, branches := range map[string][2]string{
+		"secret in if":   {secret, plain},
+		"secret in else": {plain, secret},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sc, scope := bound(t, `scenario "s" {
+  var mode = "a"
+
+  if mode == "a" {
+    `+branches[0]+`
+  } else {
+    `+branches[1]+`
+  }
+
+  step "after" {
+    get "/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+  }
+}`)
+			if got := sc.Steps[2].Name; got != "after" {
+				t.Fatalf("step 2 is %q, want the step after the block", got)
+			}
+			scope.Set("token", "a-token")
+			m, err := sc.Steps[2].Model(envOf(scope))
+			if err != nil {
+				t.Fatalf("Model() = %v", err)
+			}
+			if !m.Secrets.Headers["Authorization"] {
+				t.Error("after the block, a token one branch captured secretly must be withheld")
+			}
+		})
+	}
+}

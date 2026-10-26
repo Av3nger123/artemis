@@ -34,6 +34,18 @@ type docBlock struct {
 func docBlocks(t *testing.T, path, lang string) []docBlock {
 	t.Helper()
 
+	blocks := fencedBlocks(t, path, lang)
+	if len(blocks) == 0 {
+		t.Fatalf("no ```%s blocks found in %s", lang, path)
+	}
+	return blocks
+}
+
+// fencedBlocks is docBlocks for a document that may have none: one guide among
+// several, where the test asserts on what all of them hold together.
+func fencedBlocks(t *testing.T, path, lang string) []docBlock {
+	t.Helper()
+
 	lines := strings.Split(docText(t, path), "\n")
 	var blocks []docBlock
 	for i := 0; i < len(lines); i++ {
@@ -49,10 +61,6 @@ func docBlocks(t *testing.T, path, lang string) []docBlock {
 		}
 		blocks = append(blocks, docBlock{line: open, body: strings.Join(lines[i+1:end], "\n") + "\n"})
 		i = end
-	}
-
-	if len(blocks) == 0 {
-		t.Fatalf("no ```%s blocks found in %s", lang, path)
 	}
 	return blocks
 }

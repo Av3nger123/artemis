@@ -35,6 +35,24 @@ names from data rows. `SPEC.md` documents each.
    the checker holds each branch to the captures it can rely on, and the report
    stays in source order whatever order parallel branches finished in.
 
+## Not yet
+
+Held back on purpose, with the word for each reserved so it can arrive without a
+breaking change.
+
+- **Functions and loops over a list.** `fn`, `return`, `group` and `while` are
+  reserved words, not features. Reusing a request is a
+  [collection](docs/scenarios.md#reusing-requests), running a scenario per row of
+  data is a `for` clause on the scenario, and polling is
+  [`repeat ... until`](docs/blocks.md) -- all of them expand or lower into plain
+  steps the checker can see through.
+- **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
+  valuable property is determinism, and an assertion that flakes for
+  unreproducible reasons is worse than a missing one.
+- **Request and response detail in a report.** The report stays a verdict.
+  `--trace` writes what each step sent and got back to a file per step instead
+  -- see [Tracing a run](docs/reports.md#tracing-a-run).
+
 ## Removed
 
 **`artemis build`**, on 2026-10-26, before any release. It exported a `.art`

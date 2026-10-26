@@ -16,7 +16,7 @@ If this document and anything else disagree, this document is right.
 > places where this spec decides something that design left open are marked
 > **spec decision**. All four step types are specified here.
 > YAML is not a runtime format: it is an input to `artemis migrate`, and the
-> [README](README.md) documents the commands.
+> [docs/cli.md](docs/cli.md) documents the commands.
 
 ---
 
@@ -1660,7 +1660,7 @@ key that is not an identifier. An index into an array takes a number.
 
 A path that does not resolve against the actual observation is **not** a compile
 error -- nothing knows the shape of the response until it arrives. It is an
-[errored assertion](#the-three-kinds-of-failure) with the reason.
+[errored assertion](#the-four-kinds-of-failure) with the reason.
 
 ### Operators
 
@@ -2530,7 +2530,7 @@ record.
 `--report junit` writes the same run as JUnit XML, where a scenario is a
 `<testsuite>` and a step is a `<testcase>` whose `classname` is the scenario's
 file. Its `time` attribute is in **seconds**, not the milliseconds of
-`duration_ms`. The [README](README.md#junit-xml) specifies that dialect.
+`duration_ms`. [docs/reports.md](docs/reports.md#junit-xml) specifies that dialect.
 
 ---
 
@@ -2539,7 +2539,7 @@ file. Its `time` attribute is in **seconds**, not the milliseconds of
 Five commands read the language without running any of it, and they read it
 through the same front end `artemis run` does -- the same lexer, the same
 parser, the same checker -- so none of them can disagree with this document
-about what a file means. The [README](README.md#commands) specifies their flags
+about what a file means. [docs/cli.md](docs/cli.md) specifies their flags
 and their output.
 
 | Command | What it does |
