@@ -42,9 +42,7 @@ func TestBuildPrintsToStdout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want nothing", stderr)
-	}
+	onlyTheDeprecation(t, stdout, stderr)
 	for _, want := range []string{
 		"ONE-WAY EXPORT",
 		"def test_checkout():",
@@ -114,9 +112,7 @@ func TestBuildPrintsJavaScriptToStdout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want nothing", stderr)
-	}
+	onlyTheDeprecation(t, stdout, stderr)
 	for _, want := range []string{
 		"ONE-WAY EXPORT",
 		`import { expect, test } from "vitest";`,
@@ -278,5 +274,18 @@ func TestBuildIsStableAcrossRuns(t *testing.T) {
 	}
 	if first != again {
 		t.Error("two builds of the same file printed different bytes")
+	}
+}
+
+// onlyTheDeprecation holds a successful build to what it prints besides its
+// output: the deprecation warning, on stderr and nowhere else -- a warning on
+// stdout would land inside a module redirected to a file.
+func onlyTheDeprecation(t *testing.T, stdout, stderr string) {
+	t.Helper()
+	if want := "warning: artemis build is deprecated; " + buildDeprecation + "\n"; stderr != want {
+		t.Errorf("stderr = %q, want only the deprecation warning", stderr)
+	}
+	if strings.Contains(stdout, "deprecated") {
+		t.Errorf("stdout carries the deprecation warning:\n%s", stdout)
 	}
 }

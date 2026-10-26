@@ -25,27 +25,27 @@ names from data rows. `SPEC.md` documents each.
    `cookies` root; `duration_ms` on every step.
 4. **Selection.** `tags = [...]`, `--tags "smoke and not slow"`, `--grep`, and
    `artemis list`. The environment check covers only what was selected.
+5. **`db` steps.** `db <url> { sql, args }` against PostgreSQL, MySQL, SQLite,
+   SQL Server and Oracle, and `db <url> { command }` against MongoDB and Redis,
+   binding `rows`, `affected` and `result`; one pool per URL per run. A default
+   build carries the PostgreSQL, MySQL and SQLite drivers and `make build-full`
+   every one. CI runs the server tests against all six in service containers.
 
 ## Next
 
-### Suites in `artemis build`
+### `artemis build`: deprecated, then removed
 
-`artemis build` exports one file's scenarios, and a `suite.art` runs once for a
-whole folder, so a scenario that reads `suite.<name>` is refused today rather
-than exported with nothing behind the name. The export is a pytest
-`conftest.py` with a session-scoped fixture per suite and a vitest
-`globalSetup`, built from the same suite file; what it needs from `build` is
-an output that is a directory of modules rather than one.
+Deprecated on 2026-10-26. `artemis build` exported a `.art` file as pytest or
+vitest, held to `artemis run` by a conformance corpus run three ways in CI. That
+cost every language feature three implementations -- suites and `db` steps were
+never exported for that reason -- and a Python and Node toolchain in CI, for
+something an AI assistant does well on request: translating one scenario into
+the test framework a team already uses.
 
-### `db` steps in `artemis build`
-
-`db` steps run SQL against PostgreSQL, MySQL, SQLite, SQL Server and Oracle, and
-commands against MongoDB and Redis, with CI running the server tests against
-every one of them in service containers. What is left is exporting them: pytest
-and vitest through an `art_db(url)` helper that picks a client by scheme, held to
-the interpreter by a conformance file -- SQLite in-process, the others against
-the same service containers. Until then `artemis build` refuses a db step,
-naming it.
+It still works and warns when run; it gains nothing new. The removal, a release
+later, deletes `pkg/codegen` and `pkg/cli/build.go` with their tests and
+goldens, the Python and Node steps in CI, and the `art_*` helpers' mention in
+SPEC.md.
 
 ## Ideas
 

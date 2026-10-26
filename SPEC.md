@@ -212,12 +212,12 @@ goes.
 A `secret` binding that no step reads is not an error. A file under edit must
 still compile.
 
-`secret` reaches artemis's own reports and traces, and no further. `artemis
-build` exports a scenario as a test for another runner, and that runner has no
-idea what a secret is: a generated pytest or vitest test that fails prints both
-operands the way its own framework does. The value still arrives through
-`art_env` rather than as a literal in the file, so the generated code holds no
-credential of its own.
+`secret` reaches artemis's own reports and traces, and no further. The
+deprecated `artemis build` exports a scenario as a test for another runner, and
+that runner has no idea what a secret is: a generated pytest or vitest test that
+fails prints both operands the way its own framework does. The value still
+arrives through `art_env` rather than as a literal in the file, so the generated
+code holds no credential of its own.
 
 ### `setup` and `teardown`
 
@@ -363,9 +363,8 @@ the scenario declares.
 | What it may hold | A suite runs setup and teardown, not steps of its own (`suite-has-step`). A suite block belongs in a file named `suite.art` (`suite-file-name`), and a `suite.art` holds the suite and no scenario (`suite-has-scenario`) |
 
 `artemis run suite/` never runs `suite.art` as a scenario file; it runs with the
-scenarios under it. `artemis build` does not export a suite yet, and refuses a
-scenario that reads `suite`, naming it, rather than export a test with nothing
-behind the name.
+scenarios under it. The deprecated `artemis build` does not export a suite, and
+refuses a scenario that reads `suite`, naming it.
 
 ### `config`
 
@@ -1132,8 +1131,7 @@ scenario "checkout" {
 
 **A use is expanded, not called.** Before a file is checked, every `use` in it
 is replaced by the plain steps it stands for, with its arguments substituted and
-its overrides applied. What is checked, run, reported and exported by
-`artemis build` is a file made only of `scenario`, `var` and `step` -- the
+its overrides applied. What is checked, run and reported is a file made only of `scenario`, `var` and `step` -- the
 language the rest of this document specifies. There is no runtime function, no
 call stack, and no value shared between scenarios. Expansion works on the syntax
 tree, not on text: an argument is substituted as an expression, so `qty = limit
@@ -2413,7 +2411,7 @@ and their output.
 | `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
 | `artemis expand x.art [-o out.art] [--force]` | The file that will run: every `use` replaced by its steps, each preceded by a comment naming where it came from. See [`artemis expand`](#artemis-expand) |
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
-| `artemis build --lang=python\|js [-o dir]` | The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`; js is vitest with `fetch`, `child_process` and `@playwright/test`. The lowering rules are the same for both: one scenario becomes one test, a `capture` a local variable, an `expect` the runner's own assertion, a `within` on a browser assertion playwright's own timeout. Playwright on both sides and under `artemis run` means a browser scenario behaves the same way three ways. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `go` target is reserved and will not be built |
+| `artemis build --lang=python\|js [-o dir]` | **Deprecated**, to be removed in a future release; it warns when run and refuses `db` steps and suites. The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`; js is vitest with `fetch`, `child_process` and `@playwright/test`. The lowering rules are the same for both: one scenario becomes one test, a `capture` a local variable, an `expect` the runner's own assertion, a `within` on a browser assertion playwright's own timeout. Playwright on both sides and under `artemis run` means a browser scenario behaves the same way three ways. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `go` target is reserved and will not be built |
 
 A scenario is converted into this language once, never translated on the fly:
 `artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
@@ -2434,9 +2432,8 @@ adding one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **`db` steps in `artemis build`** | `artemis build` refuses a scenario with a db step, naming it, until both targets can open a database; see `ROADMAP.md` |
 | **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
-| **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
+| **Functions** | `fn`, `return`, `let`. Reserved words. A general-purpose language -- a test framework an AI assistant can translate a scenario into -- is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |

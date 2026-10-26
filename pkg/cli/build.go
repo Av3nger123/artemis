@@ -16,10 +16,20 @@ import (
 // whose language is implicit would change meaning as targets land.
 const langFlag = "lang"
 
+// buildDeprecation is why build is going: keeping three backends -- the
+// interpreter and two exports -- in step costs every feature three
+// implementations and a Python and Node toolchain in CI, and translating one
+// scenario into pytest or vitest when a team wants one is a request an AI
+// assistant answers well. It keeps working until the release that removes it.
+const buildDeprecation = "it will be removed in a future release. `artemis run` is how a .art file runs; " +
+	"to get a scenario as pytest or vitest, ask an AI assistant to translate the .art file."
+
 var buildCmd = &cobra.Command{
 	Use:   "build --lang=python|js [-o <dir>] <file.art>",
-	Short: "Export a .art file as tests in another language",
-	Long: `Export a scenario file as a test file for another runner.
+	Short: "Export a .art file as tests in another language (deprecated)",
+	Long: `Deprecated: ` + buildDeprecation + `
+
+Export a scenario file as a test file for another runner.
 
 	artemis build --lang=python checkout.art            # to stdout
 	artemis build --lang=python -o tests/ checkout.art  # tests/test_checkout.py
@@ -51,6 +61,10 @@ created if it is not there, and the path of each file written is printed. There
 is no --force: the output is derived, and regenerating it is the point.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// On stderr, and not through cobra's Deprecated, which writes to the
+		// command's output: `artemis build ... > test_x.py` would put the
+		// warning in the generated module.
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: artemis build is deprecated; "+buildDeprecation)
 		lang, err := cmd.Flags().GetString(langFlag)
 		if err != nil {
 			return fmt.Errorf("reading --%s flag: %w", langFlag, err)
