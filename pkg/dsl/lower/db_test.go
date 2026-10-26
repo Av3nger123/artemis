@@ -79,3 +79,38 @@ func dbModelOf(t *testing.T, src string, vars map[string]any) models.Step {
 	}
 	return m
 }
+
+// A command's objects keep the order they were written in -- a Mongo
+// command's name is its first key, a sort's keys are its order -- all the way
+// down.
+func TestADBCommandKeepsItsKeyOrder(t *testing.T) {
+	m := dbModelOf(t, `scenario "s" {
+  var status = "paid"
+
+  step "find" {
+    db "mongodb://localhost:27017/shop" {
+      command = {"find": "orders", "filter": {"status": status}, "sort": {"z": 1, "a": -1}}
+    }
+  }
+}
+`, map[string]any{"status": "paid"})
+	want := models.Doc{
+		{Key: "find", Value: "orders"},
+		{Key: "filter", Value: models.Doc{{Key: "status", Value: "paid"}}},
+		{Key: "sort", Value: models.Doc{{Key: "z", Value: 1.0}, {Key: "a", Value: -1.0}}},
+	}
+	if !reflect.DeepEqual(m.DB.Command, want) {
+		t.Errorf("command = %#v\nwant %#v", m.DB.Command, want)
+	}
+	argv := dbModelOf(t, `scenario "s" {
+  var n = 2
+
+  step "get" {
+    db "redis://localhost:6379" { command = ["GET", "session:${n}"] }
+  }
+}
+`, map[string]any{"n": 2.0}).DB.Command
+	if !reflect.DeepEqual(argv, []any{"GET", "session:2"}) {
+		t.Errorf("argv = %#v", argv)
+	}
+}

@@ -903,8 +903,13 @@ scenario "an order lands in the database" {
 | Field | Form | Rules |
 | --- | --- | --- |
 | the connection | `db <expr>` | Required, and the first thing in the block. A URL; its scheme picks the database |
-| `sql` | `sql = <expr>` | Required. The statement as text, or a [`file()`](#data-and-files) whose contents are the SQL |
-| `args` | `args = [<expr>, ...]` | At most one. Values bound to the statement's placeholders, **keeping their types** |
+| `sql` | `sql = <expr>` | For a SQL database. The statement as text, or a [`file()`](#data-and-files) whose contents are the SQL |
+| `args` | `args = [<expr>, ...]` | At most one, with `sql`. Values bound to the statement's placeholders, **keeping their types** |
+| `command` | `command = <expr>` | For MongoDB and Redis, in place of `sql`. See [commands](#mongodb-and-redis-command) |
+
+A step has exactly one of `sql` and `command`: neither is `db-needs-statement`,
+both is `db-statement-conflict`, and a URL written out that is sent the kind it
+does not take -- `sql` to `mongodb://` -- is `db-statement-kind`.
 
 | Scheme | Database |
 | --- | --- |
@@ -913,6 +918,8 @@ scenario "an order lands in the database" {
 | `sqlite:` | SQLite: `sqlite:app.db`, `sqlite:///abs/app.db`, `sqlite::memory:`. A relative path is relative to where artemis was run, like a `run` step's `cwd` |
 | `sqlserver://` | SQL Server and Azure SQL: `sqlserver://user:pw@host:1433?database=shop`. The URL's path names an instance, not a database |
 | `oracle://` | Oracle: `oracle://user:pw@host:1521/SERVICE` |
+| `mongodb://`, `mongodb+srv://` | MongoDB: `mongodb://user:pw@host:27017/shop?authSource=admin`. The path names the database, and is required |
+| `redis://`, `rediss://` | Redis and Valkey: `redis://:pw@host:6379/0`, `rediss://` over TLS |
 
 A connection is a value, so it lives where a credential does: a `secret var`, a
 [suite](#suites-suiteart)'s var read as `suite.db`, an `env()` call. A URL written
@@ -932,6 +939,7 @@ text, for a `json` column; a `file()` is bound as its bytes.
 | --- | --- | --- |
 | `rows` | array of objects | The rows a query returned, each keyed by column name. `[]` for a statement that returns none |
 | `affected` | number or null | How many rows a statement changed, or a query returned; `null` when the database does not say |
+| `result` | any | A command's reply. `null` for `sql` |
 
 A row's values arrive as the scenario would have written them:
 
@@ -983,6 +991,52 @@ A database that refuses the connection, SQL it rejects and a timeout are
 **assertion failure**. A [trace](#tracing-a-step) of a db step records the URL
 with its password replaced by `***` whether or not the URL is secret, the
 statement, and the args.
+
+### MongoDB and Redis: `command`
+
+```art
+scenario "a paid order is cached" {
+  secret var mongo = env("MONGO_URL")
+  secret var cache = env("REDIS_URL")
+
+  step "the order" {
+    db mongo {
+      command = {"find": "orders", "filter": {"status": "paid"}, "sort": {"_id": -1}, "limit": 1}
+    }
+    expect len(rows) == 1
+    capture order_id = rows[0]._id
+  }
+
+  step "by its id" {
+    db mongo { command = {"find": "orders", "filter": {"_id": {"$oid": order_id}}} }
+    expect rows[0].status == "paid"
+  }
+
+  step "the cache has it" {
+    db cache { command = ["GET", "order:${order_id}"] }
+    expect result == "paid"
+  }
+}
+```
+
+A database that takes no SQL takes its own command, written the way its own
+shell takes it:
+
+| Database | `command` | `rows` | `affected` | `result` |
+| --- | --- | --- | --- | --- |
+| MongoDB | The document `db.runCommand()` takes, its first key the command: `{"find": "orders", "filter": {...}}` | The documents of a command that answers with a cursor -- `find`, `aggregate`, `listCollections`, `listIndexes` -- read to the end, past the first batch | The reply's `n` -- what an `insert`, `update` or `delete` counted -- or the number of documents a cursor returned | Any other command's reply document; `null` for a cursor |
+| Redis | Its words as an array, as `redis-cli` takes them: `["SET", "k", "v", "EX", 60]` | `[]` | `null` | The reply: a string, a number, an array, an object for a map reply, and `null` for a key that is not there, which is an answer and not an error |
+
+**An object written out keeps its key order**, because MongoDB reads it: a
+command's name is its first key, and a `sort`'s keys are its order. An object
+from a var has no written order and is sent with its keys sorted. A whole
+number is sent as a 32-bit integer when it fits and a double when not, as
+`mongosh` sends them. A value of a BSON type JSON has no spelling for is written
+in **Extended JSON**: `{"$oid": id}` is an ObjectId -- how a filter finds a
+document by an `_id` a step captured -- `{"$date": "2026-10-26T09:30:15Z"}` a
+date, `{"$numberDecimal": "19.99"}` a decimal, `{"$numberLong": "42"}` a 64-bit
+integer. A reply reads the other way: an ObjectId is its hex string, a date an
+RFC 3339 time, a decimal a number by the rule above.
 
 ---
 
@@ -1392,7 +1446,7 @@ What the observation binds depends on the step's type:
 | `api` | `status`, `body`, `raw`, `headers`, `cookies` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
 | `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
-| `db` | `rows`, `affected` -- [specified with the step type](#what-a-db-step-binds) |
+| `db` | `rows`, `affected`, `result` -- [specified with the step type](#what-a-db-step-binds) |
 | every step | `duration_ms` |
 
 | Root | Type | What it is |
@@ -1409,6 +1463,7 @@ What the observation binds depends on the step's type:
 | `page.title` | string | The document's title |
 | `rows` | array | The rows a db step's query returned, each an object keyed by column name |
 | `affected` | number or null | How many rows a db step's statement changed, or its query returned |
+| `result` | any | A db step's command reply, for MongoDB and Redis |
 
 Naming a root that the step's type does not bind is a **compile error**, and the
 message lists the roots that are in scope:
@@ -2016,7 +2071,7 @@ determinism, and an assertion that flakes for unreproducible reasons is worse
 than a missing one.
 
 The keywords the language actually uses are positional, not reserved:
-`scenario`, `config`, `var`, `step`, `run`, `browser`, `db`, `sql`, `expect`, `capture`,
+`scenario`, `config`, `var`, `step`, `run`, `browser`, `db`, `sql`, `command`, `expect`, `capture`,
 `retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
 `env`, `times`, `delay`, `collection`, `request`, `secret`, `as`,
 `drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
@@ -2064,7 +2119,7 @@ Run         = "run" Expr [ "{" { RunField } "}" ] ;
 RunField    = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
             | "env" "{" [ Setting { Sep Setting } ] "}" ;
 DB          = "db" Expr [ "{" { DBField } "}" ] ;
-DBField     = "sql" "=" Expr | "args" "=" Array ;
+DBField     = "sql" "=" Expr | "args" "=" Array | "command" "=" Expr ;
 Browser     = "browser" "{" { BrowserAct } "}" ;
 BrowserAct  = "goto"   Expr
             | "click"  Expr
@@ -2374,7 +2429,7 @@ adding one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **`db` steps beyond SQL** | MongoDB and Redis are planned; see `ROADMAP.md`. `artemis build` refuses a scenario with a db step, naming it, until both targets can open a database |
+| **`db` steps in `artemis build`** | `artemis build` refuses a scenario with a db step, naming it, until both targets can open a database; see `ROADMAP.md` |
 | **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
 | **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |

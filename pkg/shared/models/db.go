@@ -30,6 +30,46 @@ type DB struct {
 	// script: every statement in it, in order.
 	SQLFile string
 	Args    []any
+
+	// Command is what a database that takes no SQL runs, in place of SQL: a
+	// Doc for MongoDB, its command document; an []any for Redis, its argv.
+	// Values inside it are in the evaluator's domain, with an object written
+	// out as a Doc so its keys keep the order they were written in -- a Mongo
+	// command's name is its first key, and a sort's keys are its order.
+	Command any
+}
+
+// Doc is an object whose keys are in the order the scenario wrote them.
+type Doc []Field
+
+// Field is one key of a Doc and its value.
+type Field struct {
+	Key   string
+	Value any
+}
+
+// Map is the Doc as a plain object, its order dropped: what a trace writes.
+func (d Doc) Map() map[string]any {
+	out := make(map[string]any, len(d))
+	for _, f := range d {
+		out[f.Key] = Plain(f.Value)
+	}
+	return out
+}
+
+// Plain is v with every Doc in it made a plain object.
+func Plain(v any) any {
+	switch t := v.(type) {
+	case Doc:
+		return t.Map()
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = Plain(e)
+		}
+		return out
+	}
+	return v
 }
 
 // FileArg is a `file()` bound to a placeholder: its bytes are the value, read

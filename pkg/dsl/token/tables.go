@@ -54,13 +54,21 @@ var (
 	RunFields = []string{"args", "cwd", "stdin", "env"}
 
 	// DBFields are the fields of a `db` block: the SQL to run and the values
-	// bound to its placeholders.
-	DBFields = []string{"sql", "args"}
+	// bound to its placeholders, or the command a database that takes no SQL
+	// runs.
+	DBFields = []string{"sql", "args", "command"}
 
 	// DBSchemes are the connection URL schemes a db step has a driver for,
 	// which is what a literal URL is checked against. pkg/steps/dbstep
 	// registers exactly these, and a test holds the two lists equal.
-	DBSchemes = []string{"postgres", "postgresql", "mysql", "sqlite", "sqlserver", "oracle"}
+	DBSchemes = []string{
+		"postgres", "postgresql", "mysql", "sqlite", "sqlserver", "oracle",
+		"mongodb", "mongodb+srv", "redis", "rediss",
+	}
+
+	// DBCommandSchemes are the DBSchemes whose databases take a `command`
+	// rather than `sql`: MongoDB a command document, Redis an argv.
+	DBCommandSchemes = []string{"mongodb", "mongodb+srv", "redis", "rediss"}
 
 	// RetryFields are the fields of a `retry` block.
 	RetryFields = []string{"times", "delay"}

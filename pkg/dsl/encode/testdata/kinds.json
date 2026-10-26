@@ -1303,6 +1303,7 @@
           "scope": [
             "rows",
             "affected",
+            "result",
             "duration_ms",
             "num",
             "re",

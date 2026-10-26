@@ -4,7 +4,7 @@ db_step.art:11:8: artemis has no driver for "postgress://app@localhost/orders"
       |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    hint: did you mean "postgres://app@localhost/orders"?
 
-db_step.art:16:5: this db step has no sql to run
+db_step.art:16:5: this db step has no sql or command to run
    16 |     db pg
       |     ^^
    hint: db pg { sql = "SELECT 1" }
@@ -17,15 +17,35 @@ db_step.art:21:13: args are bound to the placeholders of sql, and this db step h
 db_step.art:26:7: unknown field "query"
    26 |       query = "SELECT 1"
       |       ^^^^^
-   hint: a db block holds: sql, args
+   hint: a db block holds: sql, args, command
 
 db_step.art:33:12: "status" is not in scope in a db step
    33 |     expect status == 200
       |            ^^^^^^
-   hint: a db step binds rows, affected, duration_ms
+   hint: a db step binds rows, affected, result, duration_ms
 
-db_step.art:38:12: "rows" is not in scope in an api step
-   38 |     expect rows[0].id == 1
+db_step.art:39:7: this db step already runs sql, and a command would be a second statement
+   39 |       command = ["PING"]
+      |       ^^^^^^^
+   hint: a SQL database takes sql = ...; MongoDB and Redis take command = ...
+
+db_step.art:44:43: mongodb takes a command, not sql
+   44 |     db "mongodb://localhost:27017/shop" { sql = "SELECT 1" }
+      |                                           ^^^
+   hint: command = {"find": "orders", "filter": {"status": "paid"}}
+
+db_step.art:48:38: postgres takes sql, not a command
+   48 |     db "postgres://localhost/shop" { command = {"find": "orders"} }
+      |                                      ^^^^^^^
+   hint: sql = "SELECT 1"
+
+db_step.art:54:7: args are bound to the placeholders of sql, and a command carries its values in itself
+   54 |       args = [1]
+      |       ^^^^
+   hint: command = ["GET", "session:${sid}"]
+
+db_step.art:61:12: "rows" is not in scope in an api step
+   61 |     expect rows[0].id == 1
       |            ^^^^
    hint: an api step binds status, body, raw, headers, cookies, duration_ms
 
@@ -35,4 +55,8 @@ db-needs-statement	error	16:5-16:7
 db-args-without-sql	error	21:13-21:17
 unknown-field	error	26:7-26:12
 not-in-scope	error	33:12-33:18
-not-in-scope	error	38:12-38:16
+db-statement-conflict	error	39:7-39:14
+db-statement-kind	error	44:43-44:46
+db-statement-kind	error	48:38-48:45
+db-args-without-sql	error	54:7-54:11
+not-in-scope	error	61:12-61:16

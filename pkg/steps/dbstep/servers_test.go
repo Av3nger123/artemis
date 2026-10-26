@@ -187,12 +187,18 @@ func TestAgainstServers(t *testing.T) {
 
 // A wrong password is a step error that names the server and not the password.
 func TestAWrongPasswordIsNamedWithoutIt(t *testing.T) {
+	envs := []string{"ARTEMIS_TEST_MONGO_URL", "ARTEMIS_TEST_REDIS_URL"}
 	for _, c := range servers {
-		env := c.env
+		envs = append(envs, c.env)
+	}
+	for _, env := range envs {
 		t.Run(env, func(t *testing.T) {
 			url := os.Getenv(env)
 			if url == "" {
 				t.Skipf("%s is not set", env)
+			}
+			if !strings.Contains(url, "@") {
+				t.Skipf("%s has no credentials to get wrong", env)
 			}
 			bad := strings.Replace(url, "@", "x-wrong-hunter2@", 1)
 			_, err := Executor{}.Observe(context.Background(), models.Step{Type: StepType, DB: models.DB{URL: bad, SQL: "SELECT 1"}}, nil)

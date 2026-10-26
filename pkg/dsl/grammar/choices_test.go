@@ -48,6 +48,7 @@ var owner = map[string]string{
 	"RunFields":           "runField",
 	"DBFields":            "dbField",
 	"DBSchemes":           "dbScheme",
+	"DBCommandSchemes":    "dbCommandScheme",
 	"RetryFields":         "retryField",
 	"StepFields":          "stepField",
 	"ConfigBlocks":        "configSubject",

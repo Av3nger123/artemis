@@ -48,7 +48,7 @@ RunField      = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
               | "env" "{" [ EnvSetting { Sep EnvSetting } ] "}" ;
 EnvSetting    = Ident "=" Expr ;
 DB            = "db" Expr [ "{" [ DBField { Sep DBField } ] "}" ] ;
-DBField       = "sql" "=" Expr | "args" "=" Array ;
+DBField       = "sql" "=" Expr | "args" "=" Array | "command" "=" Expr ;
 Browser       = "browser" "{" { BrowserAct } "}" ;
 BrowserAct    = "goto"   Expr
               | "click"  Expr

@@ -62,6 +62,21 @@ jobs:
         options: >-
           --health-cmd healthcheck.sh
           --health-interval 5s --health-timeout 5s --health-retries 60
+      mongo:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: app
+          MONGO_INITDB_ROOT_PASSWORD: "p@ss:w/rd"
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1})'"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 5s --health-retries 30
     steps:
       - uses: actions/checkout@v4
 
@@ -127,6 +142,8 @@ jobs:
           ARTEMIS_TEST_MYSQL_URL: mysql://app:p%40ss%3Aw%2Frd@127.0.0.1:3306/shop
           ARTEMIS_TEST_SQLSERVER_URL: sqlserver://sa:Art3mis%21Pass@localhost:1433?database=master
           ARTEMIS_TEST_ORACLE_URL: oracle://app:Art3misApp@localhost:1521/FREEPDB1
+          ARTEMIS_TEST_MONGO_URL: mongodb://app:p%40ss%3Aw%2Frd@localhost:27017/shop?authSource=admin
+          ARTEMIS_TEST_REDIS_URL: redis://localhost:6379/0
         run: go test -race -coverprofile=coverage.out ./...
 
       - name: coverage

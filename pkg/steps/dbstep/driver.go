@@ -19,9 +19,16 @@ type Driver interface {
 }
 
 // Conn is an open connection to one database, safe for concurrent use.
+//
+// A database takes one of the two statements: a SQL database SQL, MongoDB and
+// Redis a Command. The other method answers with an error saying which to
+// write, so one interface serves every database.
 type Conn interface {
 	// SQL runs one statement, or a whole script, and reports what it did.
 	SQL(ctx context.Context, st Statement, args []any) (Result, error)
+	// Command runs a database's own command: a models.Doc for MongoDB, an
+	// argv for Redis.
+	Command(ctx context.Context, cmd any) (Result, error)
 	// Close releases the connection. Only Pools calls it.
 	Close() error
 }
@@ -42,6 +49,8 @@ type Result struct {
 	// Affected is how many rows a statement changed, or a query returned,
 	// and nil when the driver cannot say.
 	Affected *float64
+	// Value is a command's reply, in the evaluator's domain; nil for SQL.
+	Value any
 }
 
 // drivers is the scheme table: which Driver a URL's scheme opens.

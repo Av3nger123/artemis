@@ -13,10 +13,11 @@ import (
 
 // DB is a db step's action: `db orders_db { sql = "...", args = [...] }`.
 type DB struct {
-	Conn ast.Expr
-	SQL  ast.Expr
-	Args ast.Expr
-	Line int
+	Conn    ast.Expr
+	SQL     ast.Expr
+	Args    ast.Expr
+	Command ast.Expr
+	Line    int
 
 	// secretNames are the bindings declared `secret` and in scope for this
 	// step, read by Model for the same reason Request.secretNames is.
@@ -35,6 +36,8 @@ func dbAction(d *ast.DB) *DB {
 			out.SQL = f.Value
 		case "args":
 			out.Args = f.Value
+		case "command":
+			out.Command = f.Value
 		}
 		// Any other name is an unknown field the checker reported.
 	}
@@ -71,9 +74,14 @@ func (d *DB) Model(env *eval.Env) (models.DB, models.Secrets, error) {
 	if out.Args, err = dbArgs(d.Args, env); err != nil {
 		return out, marks, err
 	}
+	if d.Command != nil {
+		if out.Command, err = ordered(d.Command, env); err != nil {
+			return out, marks, fmt.Errorf("command: %w", err)
+		}
+	}
 
 	marks.URL = taint.Secret(d.Conn, d.secretNames)
-	marks.SQL = taint.Secret(d.SQL, d.secretNames)
+	marks.SQL = taint.Secret(d.SQL, d.secretNames) || taint.Secret(d.Command, d.secretNames)
 	marks.Args = taint.Secret(d.Args, d.secretNames)
 	return out, marks, nil
 }
@@ -101,6 +109,50 @@ func dbArgs(x ast.Expr, env *eval.Env) ([]any, error) {
 		out = append(out, a)
 	}
 	return out, nil
+}
+
+// ordered evaluates a command, keeping the order of every object written out:
+// an object literal is a models.Doc of its keys as written, an array literal
+// is evaluated element by element, and anything else -- a var, a call -- is
+// its value, whose object keys have no order to keep. A file is a FileArg,
+// for a database that sends one as its bytes.
+func ordered(x ast.Expr, env *eval.Env) (any, error) {
+	switch t := x.(type) {
+	case *ast.Paren:
+		return ordered(t.X, env)
+	case *ast.Object:
+		doc := make(models.Doc, 0, len(t.Entries))
+		for _, en := range t.Entries {
+			key, err := text(en.Key, env)
+			if err != nil {
+				return nil, err
+			}
+			v, err := ordered(en.Value, env)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", key, err)
+			}
+			doc = append(doc, models.Field{Key: key, Value: v})
+		}
+		return doc, nil
+	case *ast.Array:
+		out := make([]any, 0, len(t.Elems))
+		for i, el := range t.Elems {
+			v, err := ordered(el.Value, env)
+			if err != nil {
+				return nil, fmt.Errorf("[%d]: %w", i, err)
+			}
+			out = append(out, v)
+		}
+		return out, nil
+	}
+	v, err := eval.Eval(x, env)
+	if err != nil {
+		return nil, err
+	}
+	if f, ok := v.(eval.File); ok {
+		return models.FileArg(f.Abs), nil
+	}
+	return v, nil
 }
 
 // maxExact is the largest whole number a float64 holds exactly. A number past

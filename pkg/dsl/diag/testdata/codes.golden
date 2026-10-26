@@ -9,7 +9,9 @@ data-file-missing	error	json(), csv() or file() names a path where there is no f
 data-not-csv	error	csv() names a file that is not CSV
 data-not-json	error	json() names a file that is not JSON
 db-args-without-sql	error	a db step binds args with no sql to bind them to
-db-needs-statement	error	a db step has no sql to run
+db-needs-statement	error	a db step has no sql or command to run
+db-statement-conflict	error	a db step has both sql and a command
+db-statement-kind	error	a db step sends sql to a database that takes a command, or the other way round
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice

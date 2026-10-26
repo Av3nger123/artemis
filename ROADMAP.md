@@ -37,19 +37,15 @@ than exported with nothing behind the name. The export is a pytest
 `globalSetup`, built from the same suite file; what it needs from `build` is
 an output that is a directory of modules rather than one.
 
-### `db` steps, the rest
+### `db` steps in `artemis build`
 
-`db <url> { sql, args }` runs against PostgreSQL, MySQL, SQLite, SQL Server and
-Oracle, with `rows` and `affected`, a pool per URL per run, and traces that never
-print a password; CI runs the server tests against all four servers in service
-containers. What is left, in order:
-
-1. **MongoDB and Redis.** A `command` field -- a command document for Mongo, an
-   argv for Redis -- and a `result` root for the reply; Mongo's cursor fills
-   `rows`.
-2. **`artemis build`.** Export db steps to pytest and vitest through an
-   `art_db(url)` helper that picks a client by scheme, held to the interpreter by
-   a conformance file: SQLite in-process, the others against service containers.
+`db` steps run SQL against PostgreSQL, MySQL, SQLite, SQL Server and Oracle, and
+commands against MongoDB and Redis, with CI running the server tests against
+every one of them in service containers. What is left is exporting them: pytest
+and vitest through an `art_db(url)` helper that picks a client by scheme, held to
+the interpreter by a conformance file -- SQLite in-process, the others against
+the same service containers. Until then `artemis build` refuses a db step,
+naming it.
 
 ## Ideas
 

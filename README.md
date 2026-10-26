@@ -172,7 +172,7 @@ parameters and its response. The rules are in
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
 - `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
-- `db` steps against PostgreSQL, MySQL, SQLite, SQL Server and Oracle: run SQL with typed `args`, assert on `rows` and `affected`, seed from an SQL file in `setup`
+- `db` steps against PostgreSQL, MySQL, SQLite, SQL Server and Oracle -- SQL with typed `args`, `rows` and `affected`, a seed script in `setup` -- and against MongoDB and Redis with their own commands
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
 - A one-way export to pytest or vitest (`artemis build --lang=python|js`), for a team whose tests live in another language
 - One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
@@ -1418,6 +1418,28 @@ and shared by every step that names the same URL, and a trace never prints the
 password in it. [SPEC.md's *`db` steps*](SPEC.md#db-steps) specifies how each
 column type reads.
 
+MongoDB and Redis take their own commands instead of SQL -- a command document
+as `db.runCommand()` takes it, the words `redis-cli` takes -- and the reply is
+`result`:
+
+```art
+scenario "the session is cached" {
+  secret var mongo = env("MONGO_URL")
+  secret var cache = env("REDIS_URL")
+
+  step "the user" {
+    db mongo { command = {"find": "users", "filter": {"email": "a@example.test"}} }
+    expect len(rows) == 1
+    capture user_id = rows[0]._id
+  }
+
+  step "their session" {
+    db cache { command = ["GET", "session:${user_id}"] }
+    expect result == "active"
+  }
+}
+```
+
 ## Development
 
 ```sh
@@ -1481,9 +1503,8 @@ command makes -- so it stays an input the command can read.
 
 ## Not yet
 
-- **More databases.** `db` steps run SQL against PostgreSQL, MySQL, SQLite, SQL
-  Server and Oracle. MongoDB and Redis are next; see `ROADMAP.md`. `artemis
-  build` refuses a scenario with a db step until it can export one.
+- **`db` steps in `artemis build`.** It refuses a scenario with a db step until
+  it can export one; see `ROADMAP.md`.
 - **Control flow and functions.** `if`, loops, `parallel`, `group` and `fn`
   are reserved words, not features. Reusing a request is
   [collections](#reusing-requests), and running a scenario per row of data is a

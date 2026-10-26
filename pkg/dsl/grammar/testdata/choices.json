@@ -205,6 +205,23 @@
         }
       ]
     },
+    "dbCommandScheme": {
+      "doc": "The db schemes whose databases take a command rather than sql: MongoDB and Redis.",
+      "values": [
+        {
+          "value": "mongodb"
+        },
+        {
+          "value": "mongodb+srv"
+        },
+        {
+          "value": "redis"
+        },
+        {
+          "value": "rediss"
+        }
+      ]
+    },
     "dbField": {
       "doc": "The fields of a db block.",
       "values": [
@@ -215,6 +232,10 @@
         {
           "value": "args",
           "valueKind": "array"
+        },
+        {
+          "value": "command",
+          "valueKind": "any"
         }
       ]
     },
@@ -238,6 +259,18 @@
         },
         {
           "value": "oracle"
+        },
+        {
+          "value": "mongodb"
+        },
+        {
+          "value": "mongodb+srv"
+        },
+        {
+          "value": "redis"
+        },
+        {
+          "value": "rediss"
         }
       ]
     },
@@ -339,7 +372,17 @@
         },
         {
           "value": "db-needs-statement",
-          "doc": "a db step has no sql to run",
+          "doc": "a db step has no sql or command to run",
+          "severity": "error"
+        },
+        {
+          "value": "db-statement-conflict",
+          "doc": "a db step has both sql and a command",
+          "severity": "error"
+        },
+        {
+          "value": "db-statement-kind",
+          "doc": "a db step sends sql to a database that takes a command, or the other way round",
           "severity": "error"
         },
         {
@@ -941,6 +984,7 @@
           "roots": [
             "rows",
             "affected",
+            "result",
             "duration_ms"
           ],
           "functions": [

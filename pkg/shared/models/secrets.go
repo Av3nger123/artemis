@@ -47,7 +47,8 @@ type Secrets struct {
 	// Stdin is true when a terminal step's stdin read a secret binding.
 	Stdin bool
 
-	// SQL is true when a db step's statement read a secret binding.
+	// SQL is true when a db step's statement -- its sql or its command --
+	// read a secret binding.
 	SQL bool
 
 	// Parts marks a form's fields by position, as Acts marks browser acts.

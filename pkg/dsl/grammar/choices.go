@@ -107,6 +107,7 @@ func Choices() ChoicePoints {
 			"runField":           fields("The fields of a run block.", "run"),
 			"dbField":            fields("The fields of a db block.", "db"),
 			"dbScheme":           words("The connection URL schemes a db step has a driver for.", token.DBSchemes),
+			"dbCommandScheme":    words("The db schemes whose databases take a command rather than sql: MongoDB and Redis.", token.DBCommandSchemes),
 			"retryField":         fields("The fields of a retry block.", "retry"),
 			"stepField":          fields("The fields of a step itself, as against of its action block.", "step"),
 			"configBrowserField": fields("The settings of a config browser block.", "configBrowser"),

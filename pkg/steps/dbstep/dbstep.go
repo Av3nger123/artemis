@@ -35,6 +35,9 @@ const (
 	// RootAffected is how many rows a statement changed, or a query
 	// returned, and null when the driver cannot say.
 	RootAffected = "affected"
+	// RootResult is a command's reply: a Redis reply, a Mongo command's
+	// reply document. Null for sql.
+	RootResult = "result"
 )
 
 // Executor is the db step.
@@ -73,13 +76,17 @@ func (e Executor) Observe(ctx context.Context, step models.Step, _ executor.Scop
 	if strings.TrimSpace(spec.URL) == "" {
 		return nil, errors.New("db step has no connection URL: its value was empty")
 	}
-	st, err := statement(spec)
-	if err != nil {
-		return nil, err
-	}
-	args, err := bind(spec.Args)
-	if err != nil {
-		return nil, err
+	var (
+		st   Statement
+		args []any
+	)
+	if spec.Command == nil {
+		if st, err = statement(spec); err != nil {
+			return nil, err
+		}
+		if args, err = bind(spec.Args); err != nil {
+			return nil, err
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -97,7 +104,12 @@ func (e Executor) Observe(ctx context.Context, step models.Step, _ executor.Scop
 		}
 		return nil, err
 	}
-	res, err := conn.SQL(ctx, st, args)
+	var res Result
+	if spec.Command != nil {
+		res, err = conn.Command(ctx, spec.Command)
+	} else {
+		res, err = conn.SQL(ctx, st, args)
+	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return nil, fmt.Errorf("no result from %s within %s", Redact(spec.URL), timeout)
 	}
@@ -117,7 +129,7 @@ func (r Result) roots() map[string]any {
 	if r.Affected != nil {
 		affected = *r.Affected
 	}
-	return map[string]any{RootRows: rows, RootAffected: affected}
+	return map[string]any{RootRows: rows, RootAffected: affected, RootResult: r.Value}
 }
 
 // statement is the SQL the step runs: its text, or the contents of its file --

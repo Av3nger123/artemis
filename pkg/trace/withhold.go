@@ -111,6 +111,13 @@ func sent(step models.Step) map[string]any {
 		if len(step.DB.Args) > 0 {
 			out["args"] = dbArgs(step.DB.Args, s.Args)
 		}
+		if step.DB.Command != nil {
+			if s.SQL {
+				out["command"] = Redacted
+			} else {
+				out["command"] = dbCommand(models.Plain(step.DB.Command))
+			}
+		}
 		return out
 	}
 	return map[string]any{}
@@ -348,6 +355,28 @@ func dbArgs(args []any, secret bool) any {
 		}
 	}
 	return out
+}
+
+// dbCommand is a command as a trace writes it: a file in it by its path and
+// size, as everywhere else a trace names a file.
+func dbCommand(v any) any {
+	switch t := v.(type) {
+	case models.FileArg:
+		return fileSent(string(t))
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = dbCommand(e)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			out[k] = dbCommand(e)
+		}
+		return out
+	}
+	return v
 }
 
 // clamp cuts every string in a tree down to MaxBytes and names what it cut.

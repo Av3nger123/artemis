@@ -33,6 +33,29 @@ scenario "orders" {
     expect status == 200
   }
 
+  step "sql and a command" {
+    db pg {
+      sql = "SELECT 1"
+      command = ["PING"]
+    }
+  }
+
+  step "sql to mongodb" {
+    db "mongodb://localhost:27017/shop" { sql = "SELECT 1" }
+  }
+
+  step "a command to postgres" {
+    db "postgres://localhost/shop" { command = {"find": "orders"} }
+  }
+
+  step "args with a command" {
+    db "redis://localhost:6379" {
+      command = ["GET", "k"]
+      args = [1]
+    }
+    expect result == "v"
+  }
+
   step "rows outside a db step" {
     get "https://example.com/orders"
     expect rows[0].id == 1

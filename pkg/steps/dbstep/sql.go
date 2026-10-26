@@ -67,6 +67,11 @@ type sqlConn struct {
 
 func (c *sqlConn) Close() error { return c.db.Close() }
 
+// Command is not something a SQL database runs.
+func (c *sqlConn) Command(context.Context, any) (Result, error) {
+	return Result{}, fmt.Errorf("%s takes sql = \"...\", not a command", c.d.name)
+}
+
 // SQL runs st: a script whole, a query for its rows, a statement for its
 // count. See the package doc for which is which.
 func (c *sqlConn) SQL(ctx context.Context, st Statement, args []any) (Result, error) {

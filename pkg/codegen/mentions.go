@@ -127,7 +127,7 @@ func readsInAction(st *lower.Step, name string) bool {
 		exprs = append(exprs, a.Target, a.Value)
 	}
 	if d := st.DB; d != nil {
-		exprs = append(exprs, d.Conn, d.SQL, d.Args)
+		exprs = append(exprs, d.Conn, d.SQL, d.Args, d.Command)
 	}
 	for _, x := range exprs {
 		if readsName(x, name) {
