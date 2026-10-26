@@ -33,18 +33,42 @@ const (
 	Page
 )
 
-// Param is one parameter: what it wants, in the words a diagnostic uses, and
-// which literal kinds satisfy it.
+// Type is what the evaluator converts an argument to before a builtin sees it.
+type Type int
+
+const (
+	// TypeString is text. Anything else is a step error naming the argument.
+	TypeString Type = iota
+	// TypeNumber is a number, or a string that reads as one -- the rule the
+	// ordering operators already follow.
+	TypeNumber
+	// TypePattern is a regular expression, or a string compiled as one.
+	TypePattern
+	// TypeAny is any value, passed through as it is.
+	TypeAny
+)
+
+// Param is one parameter: what it wants, in the words a diagnostic uses, which
+// literal kinds satisfy it at compile time, and what it is at run time.
 //
 // Only a *literal* is judged at compile time -- an identifier or an
-// interpolation could hold anything and the checker does not evaluate -- so a
-// parameter is a phrase plus a small set of token kinds.
+// interpolation could hold anything and the checker does not evaluate -- so the
+// compile-time half of a parameter is a phrase plus a small set of token kinds.
 type Param struct {
 	// Want is the phrase after "must be": "a string", "a regular expression".
 	Want string
 	// Kinds are the literal kinds that satisfy it. A literal of any other kind
 	// is reported; a non-literal is left to run time.
 	Kinds []token.Kind
+	// Type is what the evaluator converts the argument to.
+	Type Type
+	// OneOf, when it is not empty, is every string the parameter accepts: a
+	// literal outside it is a compile error with a did-you-mean, and a value
+	// outside it is a step error.
+	OneOf []string
+	// Whole is a number that must have no fractional part: a count, a length,
+	// a bound.
+	Whole bool
 }
 
 // Accepts reports whether a literal of kind k satisfies the parameter.
@@ -57,15 +81,29 @@ func (p Param) Accepts(k token.Kind) bool {
 	return false
 }
 
+// TimeFormats are what now() can answer in: a timestamp, a date, or seconds or
+// milliseconds since the Unix epoch.
+var TimeFormats = []string{"rfc3339", "date", "unix", "unix_ms"}
+
 var (
 	// String is a variable name, a selector, an attribute name, the text to
-	// search: every parameter but match()'s pattern.
-	String = Param{Want: "a string", Kinds: []token.Kind{token.String}}
+	// search or to encode.
+	String = Param{Want: "a string", Kinds: []token.Kind{token.String}, Type: TypeString}
 
 	// Pattern is match()'s second argument. A string is allowed as well as a
 	// regex literal, which is the rule `matches` already follows, so a pattern
 	// can live in a var.
-	Pattern = Param{Want: "a regular expression", Kinds: []token.Kind{token.Regex, token.String}}
+	Pattern = Param{Want: "a regular expression", Kinds: []token.Kind{token.Regex, token.String}, Type: TypePattern}
+
+	// WholeNumber is a count or a bound: random_int()'s, random_string()'s.
+	WholeNumber = Param{Want: "a whole number", Kinds: []token.Kind{token.Number}, Type: TypeNumber, Whole: true}
+
+	// Value is anything an expression can produce but a regular expression,
+	// which is a pattern and not a value: len(), to_json(), number(), string().
+	Value = Param{Want: "a value", Kinds: []token.Kind{token.String, token.Number, token.Bool, token.Null}, Type: TypeAny}
+
+	// Format is now()'s format name.
+	Format = Param{Want: "a time format", Kinds: []token.Kind{token.String}, Type: TypeString, OneOf: TimeFormats}
 )
 
 // Fn is one builtin.
@@ -75,8 +113,8 @@ type Fn struct {
 	// a call may pass.
 	Params []Param
 	// Min is the fewest. It is below len(Params) only for a builtin whose
-	// trailing parameters are optional -- env()'s default value -- and equal
-	// to it for every other.
+	// trailing parameters are optional -- env()'s default value, now()'s
+	// format -- and equal to it for every other.
 	Min   int
 	Scope Scope
 	// Signature is what a call looks like, for the hint under an arity or a
@@ -87,7 +125,7 @@ type Fn struct {
 // Max is the most arguments a call may pass.
 func (f Fn) Max() int { return len(f.Params) }
 
-// table is every builtin, in the order a reader meets them: the two callable
+// table is every builtin, in the order a reader meets them: the ones callable
 // everywhere, then the five that read a page. Names returns this order, and
 // `artemis grammar --json` lists it, so it is not alphabetical on purpose.
 var table = []Fn{
@@ -95,6 +133,43 @@ var table = []Fn{
 		Signature: `env("API_URL") or env("PORT", "8080")`},
 	{Name: "match", Params: []Param{String, Pattern}, Min: 2, Scope: Everywhere,
 		Signature: `match(raw, /id=([0-9]+)/)`},
+
+	// Test data: a value a run makes up rather than reads. The random ones draw
+	// from the scenario's seeded generator, so --seed reproduces them.
+	{Name: "uuid", Scope: Everywhere, Signature: `uuid()`},
+	{Name: "now", Params: []Param{Format}, Min: 0, Scope: Everywhere,
+		Signature: `now() or now("unix_ms")`},
+	{Name: "random_int", Params: []Param{WholeNumber, WholeNumber}, Min: 2, Scope: Everywhere,
+		Signature: `random_int(1, 100)`},
+	{Name: "random_string", Params: []Param{WholeNumber}, Min: 1, Scope: Everywhere,
+		Signature: `random_string(12)`},
+
+	// Encoding and hashing, for a header an API wants built rather than typed.
+	{Name: "base64", Params: []Param{String}, Min: 1, Scope: Everywhere,
+		Signature: `base64("user:password")`},
+	{Name: "base64_decode", Params: []Param{String}, Min: 1, Scope: Everywhere,
+		Signature: `base64_decode(body.content)`},
+	{Name: "url_encode", Params: []Param{String}, Min: 1, Scope: Everywhere,
+		Signature: `url_encode("a b&c")`},
+	{Name: "sha256", Params: []Param{String}, Min: 1, Scope: Everywhere,
+		Signature: `sha256(raw)`},
+	{Name: "hmac_sha256", Params: []Param{String, String}, Min: 2, Scope: Everywhere,
+		Signature: `hmac_sha256(key, raw)`},
+	{Name: "jwt_claims", Params: []Param{String}, Min: 1, Scope: Everywhere,
+		Signature: `jwt_claims(token)`},
+
+	// Values: between JSON text and a value, and between types.
+	{Name: "to_json", Params: []Param{Value}, Min: 1, Scope: Everywhere,
+		Signature: `to_json({"id": 1})`},
+	{Name: "from_json", Params: []Param{String}, Min: 1, Scope: Everywhere,
+		Signature: `from_json(body.payload)`},
+	{Name: "len", Params: []Param{Value}, Min: 1, Scope: Everywhere,
+		Signature: `len(body.items)`},
+	{Name: "number", Params: []Param{Value}, Min: 1, Scope: Everywhere,
+		Signature: `number(row.quantity)`},
+	{Name: "string", Params: []Param{Value}, Min: 1, Scope: Everywhere,
+		Signature: `string(body.id)`},
+
 	{Name: "text", Params: []Param{String}, Min: 1, Scope: Page,
 		Signature: `text("[role=status]")`},
 	{Name: "value", Params: []Param{String}, Min: 1, Scope: Page,
@@ -105,6 +180,12 @@ var table = []Fn{
 		Signature: `count(".invoice")`},
 	{Name: "visible", Params: []Param{String}, Min: 1, Scope: Page,
 		Signature: `visible(".modal")`},
+}
+
+// Random is whether name draws from the scenario's random generator, which is
+// what decides whether a run's seed is worth reporting.
+func Random(name string) bool {
+	return name == "uuid" || name == "random_int" || name == "random_string"
 }
 
 // byName is table keyed by name, built once so a lookup and the table cannot

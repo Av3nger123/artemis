@@ -136,6 +136,12 @@ func (c *Console) Summary(run *result.RunResult) {
 	if run.Passed() {
 		verdict = "PASS"
 	}
+	// A failed run whose scenarios drew random values says how to draw the same
+	// ones again; a passing run, or one that drew nothing, has nothing to
+	// reproduce and says nothing.
+	if !run.Passed() && run.Seed != nil {
+		fmt.Fprintf(c.out, "%-11s %d  (rerun with --seed %d for the same values)\n", "Seed", *run.Seed, *run.Seed)
+	}
 	fmt.Fprintf(c.out, "%s in %s\n", verdict, dur(run.Duration))
 }
 

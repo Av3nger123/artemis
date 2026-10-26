@@ -1,0 +1,44 @@
+=== terminal
+bad_value_builtin.art:11:19: now()'s argument must be one of rfc3339, date, unix, unix_ms, not "dat"
+   11 |   var stamp = now("dat")
+      |                   ^^^^^
+   hint: did you mean "date"?
+
+bad_value_builtin.art:12:19: now()'s argument must be one of rfc3339, date, unix, unix_ms, not "iso"
+   12 |   var when  = now("iso")
+      |                   ^^^^^
+   hint: now() or now("unix_ms")
+
+bad_value_builtin.art:13:15: random_int()'s bounds are the wrong way round: 10 is above 1
+   13 |   var qty   = random_int(10, 1)
+      |               ^^^^^^^^^^^^^^^^^
+   hint: random_int(1, 10)
+
+bad_value_builtin.art:14:26: random_int()'s argument must be a whole number, not 1.5
+   14 |   var half  = random_int(1.5, 2)
+      |                          ^^^
+   hint: random_int(1, 100)
+
+bad_value_builtin.art:15:29: random_string() makes 1 to 256 characters, and this call asks for 0
+   15 |   var none  = random_string(0)
+      |                             ^
+   hint: random_string(12)
+
+bad_value_builtin.art:16:19: len()'s argument must be a value, not a regex
+   16 |   var size  = len(/x/)
+      |                   ^^^
+   hint: len(body.items)
+
+bad_value_builtin.art:17:22: base64()'s argument must be a string, not a number
+   17 |   var token = base64(1)
+      |                      ^
+   hint: base64("user:password")
+
+=== codes
+bad-value	error	11:19-11:24	suggest: "date"
+bad-value	error	12:19-12:24
+bad-value	error	13:15-13:32
+bad-value	error	14:26-14:29
+bad-value	error	15:29-15:30
+bad-value	error	16:19-16:22
+bad-value	error	17:22-17:23

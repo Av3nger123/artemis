@@ -1,0 +1,26 @@
+# Every value builtin once, in the positions a scenario writes them: a var, a
+# query, a header, a body and an expect.
+
+scenario "values" {
+  var id    = uuid()
+  var when  = now("unix_ms")
+  var pick  = random_int(1, 10)
+  var word  = random_string(8)
+  var basic = base64("user:password")
+
+  step "send them" {
+    post "https://example.test/orders" {
+      header "Authorization" = "Basic ${basic}"
+      header "X-Signature" = hmac_sha256("key", to_json({"id": id}))
+      query "q" = url_encode("a b")
+      body = {"id": id, "at": when, "pick": pick, "word": word, "digest": sha256(word)}
+    }
+    expect status == 201
+    expect jwt_claims(body.token).sub == id
+    expect from_json(body.payload).ok == true
+    expect len(body.items) == number("3")
+    expect string(body.count) == "3"
+    expect base64_decode(body.blob) == "hi"
+    expect now() exists
+  }
+}

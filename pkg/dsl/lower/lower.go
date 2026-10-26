@@ -154,11 +154,14 @@ func (c *BrowserConfig) Resolve(env *eval.Env) (Browser, error) {
 // evaluated against the vars already bound, so `var b = a` sees `a` only when
 // `a` is above it, and the first var that cannot be evaluated stops the
 // scenario. A scenario whose variables do not resolve has nothing worth running.
-func (s *Scenario) Bind(scope executor.Scope) error {
+//
+// gen is the scenario's generator, so `var id = uuid()` draws from the same
+// seeded sequence as the steps after it; nil draws from the process's own.
+func (s *Scenario) Bind(scope executor.Scope, gen *eval.Gen) error {
 	if s == nil {
 		return nil
 	}
-	env := &eval.Env{Vars: scope.Vars()}
+	env := &eval.Env{Vars: scope.Vars(), Gen: gen}
 	for _, v := range s.Vars {
 		val, err := eval.Eval(v.Value, env)
 		if err != nil {

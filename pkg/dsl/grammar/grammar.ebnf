@@ -72,6 +72,9 @@ Array         = "[" [ Expr { "," Expr } [ "," ] ] "]" ;
 (* Builtin is the closed set of callables. Which of them are in scope depends
    on the step type: see SCOPES below. *)
 Builtin       = "env" | "match"
+              | "uuid" | "now" | "random_int" | "random_string"
+              | "base64" | "base64_decode" | "url_encode" | "sha256" | "hmac_sha256" | "jwt_claims"
+              | "to_json" | "from_json" | "len" | "number" | "string"
               | "text" | "value" | "attr" | "count" | "visible" ;
 
 (* Reserved words are not reachable from File. They lex as ordinary

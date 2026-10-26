@@ -62,6 +62,51 @@
           "value": "match"
         },
         {
+          "value": "uuid"
+        },
+        {
+          "value": "now"
+        },
+        {
+          "value": "random_int"
+        },
+        {
+          "value": "random_string"
+        },
+        {
+          "value": "base64"
+        },
+        {
+          "value": "base64_decode"
+        },
+        {
+          "value": "url_encode"
+        },
+        {
+          "value": "sha256"
+        },
+        {
+          "value": "hmac_sha256"
+        },
+        {
+          "value": "jwt_claims"
+        },
+        {
+          "value": "to_json"
+        },
+        {
+          "value": "from_json"
+        },
+        {
+          "value": "len"
+        },
+        {
+          "value": "number"
+        },
+        {
+          "value": "string"
+        },
+        {
           "value": "text"
         },
         {
@@ -610,7 +655,22 @@
           ],
           "functions": [
             "env",
-            "match"
+            "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string"
           ]
         },
         {
@@ -622,7 +682,22 @@
           ],
           "functions": [
             "env",
-            "match"
+            "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string"
           ]
         },
         {
@@ -633,6 +708,21 @@
           "functions": [
             "env",
             "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string",
             "text",
             "value",
             "attr",

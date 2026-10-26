@@ -31,15 +31,34 @@ const (
 	jsHelperRegExp   = "art_regexp"
 	jsHelperMatches  = "art_matches"
 	jsHelperMatch    = "art_match"
-	jsHelperText     = "art_text"
-	jsHelperValue    = "art_value"
-	jsHelperAttr     = "art_attr"
-	jsHelperExit     = "art_exit"
-	jsHelperArgv     = "art_argv"
-	jsHelperGoto     = "art_goto"
-	jsHelperRetry    = "art_retry"
-	jsHelperWithin   = "art_within"
-	jsHelperBrowser  = "art_browser"
+
+	// The value builtins, one helper each and named as in Python.
+	jsHelperStr          = "art_str"
+	jsHelperUUID         = "art_uuid"
+	jsHelperNow          = "art_now"
+	jsHelperWhole        = "art_whole"
+	jsHelperRandomInt    = "art_random_int"
+	jsHelperRandomString = "art_random_string"
+	jsHelperBase64       = "art_base64"
+	jsHelperBase64Decode = "art_base64_decode"
+	jsHelperURLEncode    = "art_url_encode"
+	jsHelperSHA256       = "art_sha256"
+	jsHelperHMACSHA256   = "art_hmac_sha256"
+	jsHelperJWTClaims    = "art_jwt_claims"
+	jsHelperToJSON       = "art_to_json"
+	jsHelperFromJSON     = "art_from_json"
+	jsHelperLen          = "art_len"
+	jsHelperNumber       = "art_number"
+	jsHelperString       = "art_string"
+	jsHelperText         = "art_text"
+	jsHelperValue        = "art_value"
+	jsHelperAttr         = "art_attr"
+	jsHelperExit         = "art_exit"
+	jsHelperArgv         = "art_argv"
+	jsHelperGoto         = "art_goto"
+	jsHelperRetry        = "art_retry"
+	jsHelperWithin       = "art_within"
+	jsHelperBrowser      = "art_browser"
 )
 
 // jsHelper is one emitted definition: its JavaScript source, the imported
@@ -315,6 +334,224 @@ function art_is(value, want) {
 }
 `,
 }, {
+	name: jsHelperStr,
+	src: `function art_str(name, value) {
+  // The text a builtin's argument has to be: eval converts each argument to
+  // what its parameter takes, and a value that is not text is a mistake.
+  if (typeof value !== "string") {
+    throw new TypeError(` + "`${name}()'s argument must be a string, got ${JSON.stringify(value)}`" + `);
+  }
+  return value;
+}
+`,
+}, {
+	name:    jsHelperUUID,
+	imports: []string{"node:crypto.randomUUID"},
+	src: `function art_uuid() {
+  // ` + "`uuid()`" + `: a random version 4 UUID. The interpreter seeds its generator
+  // so --seed repeats a failed run; a generated test is not repeating one.
+  return randomUUID();
+}
+`,
+}, {
+	name: jsHelperNow,
+	src: `function art_now(format = "rfc3339") {
+  // ` + "`now()`" + `: the time in UTC, as a timestamp with no fraction, a date, or
+  // seconds or milliseconds since the epoch -- eval's four formats and no other.
+  const moment = new Date();
+  switch (format) {
+    case "rfc3339":
+      return moment.toISOString().replace(/\.\d+Z$/, "Z");
+    case "date":
+      return moment.toISOString().slice(0, 10);
+    case "unix":
+      return Math.floor(moment.getTime() / 1000);
+    case "unix_ms":
+      return moment.getTime();
+  }
+  throw new Error(
+    ` + "`now()'s argument must be one of rfc3339, date, unix, unix_ms, got ${JSON.stringify(format)}`" + `,
+  );
+}
+`,
+}, {
+	name:  jsHelperWhole,
+	needs: []string{jsHelperNumber},
+	src: `function art_whole(name, value) {
+  // A count or a bound, read the way eval reads one: a number, or text that
+  // reads as one, with no fractional part and small enough to be exact.
+  const number = art_number(value);
+  if (!Number.isInteger(number) || Math.abs(number) > 2 ** 53) {
+    throw new Error(` + "`${name}()'s argument must be a whole number, got ${JSON.stringify(value)}`" + `);
+  }
+  return number;
+}
+`,
+}, {
+	name:  jsHelperRandomInt,
+	needs: []string{jsHelperWhole},
+	src: `function art_random_int(low, high) {
+  // ` + "`random_int(min, max)`" + `: a whole number from min to max, both included.
+  low = art_whole("random_int", low);
+  high = art_whole("random_int", high);
+  if (low > high) {
+    throw new Error(` + "`random_int()'s bounds are the wrong way round: ${low} is above ${high}`" + `);
+  }
+  return low + Math.floor(Math.random() * (high - low + 1));
+}
+`,
+}, {
+	name:  jsHelperRandomString,
+	needs: []string{jsHelperWhole},
+	src: `function art_random_string(length) {
+  // ` + "`random_string(n)`" + `: n characters of a-z and 0-9, n from 1 to 256.
+  length = art_whole("random_string", length);
+  if (length < 1 || length > 256) {
+    throw new Error(
+      ` + "`random_string() makes 1 to 256 characters, and this call asks for ${length}`" + `,
+    );
+  }
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  for (let i = 0; i < length; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+}
+`,
+}, {
+	name:  jsHelperBase64,
+	needs: []string{jsHelperStr},
+	src: `function art_base64(text) {
+  // ` + "`base64(text)`" + `: standard base64, padded.
+  return Buffer.from(art_str("base64", text), "utf8").toString("base64");
+}
+`,
+}, {
+	name:  jsHelperBase64Decode,
+	needs: []string{jsHelperStr},
+	src: `function art_base64_decode(text) {
+  // ` + "`base64_decode(text)`" + `: standard or URL-safe base64, padded or not. Buffer
+  // skips a character it cannot read rather than refusing it, so the text is
+  // checked first: eval refuses it, and the two have to agree.
+  const clean = art_str("base64_decode", text).trim().replace(/-/g, "+").replace(/_/g, "/");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(clean) || clean.replace(/=+$/, "").length % 4 === 1) {
+    throw new Error(` + "`base64_decode()'s argument is not base64: ${JSON.stringify(text)}`" + `);
+  }
+  return Buffer.from(clean, "base64").toString("utf8");
+}
+`,
+}, {
+	name:  jsHelperURLEncode,
+	needs: []string{jsHelperStr},
+	src: `function art_url_encode(text) {
+  // ` + "`url_encode(text)`" + `: query escaping, a space as +. encodeURIComponent
+  // leaves five characters Go's url.QueryEscape escapes, and writes a space as
+  // %20, so both are put right after it.
+  return encodeURIComponent(art_str("url_encode", text))
+    .replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+    .replace(/%20/g, "+");
+}
+`,
+}, {
+	name:    jsHelperSHA256,
+	imports: []string{"node:crypto.createHash"},
+	needs:   []string{jsHelperStr},
+	src: `function art_sha256(text) {
+  // ` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, in lower-case hex.
+  return createHash("sha256").update(art_str("sha256", text), "utf8").digest("hex");
+}
+`,
+}, {
+	name:    jsHelperHMACSHA256,
+	imports: []string{"node:crypto.createHmac"},
+	needs:   []string{jsHelperStr},
+	src: `function art_hmac_sha256(key, text) {
+  // ` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text under the key, in
+  // lower-case hex.
+  return createHmac("sha256", art_str("hmac_sha256", key))
+    .update(art_str("hmac_sha256", text), "utf8")
+    .digest("hex");
+}
+`,
+}, {
+	name:  jsHelperJWTClaims,
+	needs: []string{jsHelperStr, jsHelperBase64Decode},
+	src: `function art_jwt_claims(token) {
+  // ` + "`jwt_claims(token)`" + `: the token's payload, decoded and NOT verified. A test
+  // asserts what a token says; whether the right key signed it is the
+  // service's business.
+  const parts = art_str("jwt_claims", token).trim().split(".");
+  if (parts.length !== 3) {
+    throw new Error(
+      ` + "`jwt_claims()'s argument is not a JWT: it has ${parts.length} part(s), and a JWT has 3`" + `,
+    );
+  }
+  const claims = JSON.parse(art_base64_decode(parts[1]));
+  if (claims === null || typeof claims !== "object" || Array.isArray(claims)) {
+    throw new Error("jwt_claims(): the token's payload is not an object");
+  }
+  return claims;
+}
+`,
+}, {
+	name: jsHelperToJSON,
+	src: `function art_to_json(value) {
+  // ` + "`to_json(value)`" + `: compact JSON with its keys in order -- the text the
+  // interpreter makes of the same value.
+  const plain = (item) => {
+    if (item instanceof RegExp) throw new TypeError("to_json() cannot write a regular expression");
+    if (Array.isArray(item)) return item.map(plain);
+    if (item !== null && typeof item === "object") {
+      return Object.fromEntries(Object.keys(item).sort().map((key) => [key, plain(item[key])]));
+    }
+    return item;
+  };
+  return JSON.stringify(plain(value));
+}
+`,
+}, {
+	name:  jsHelperFromJSON,
+	needs: []string{jsHelperStr},
+	src: `function art_from_json(text) {
+  // ` + "`from_json(text)`" + `: the value JSON text holds.
+  return JSON.parse(art_str("from_json", text));
+}
+`,
+}, {
+	name: jsHelperLen,
+	src: `function art_len(value) {
+  // ` + "`len(value)`" + `: the characters in a string -- code points, as Go counts
+  // runes, not UTF-16 units -- the items in an array, the keys of an object.
+  if (typeof value === "string") return [...value].length;
+  if (Array.isArray(value)) return value.length;
+  if (value !== null && typeof value === "object" && !(value instanceof RegExp)) {
+    return Object.keys(value).length;
+  }
+  throw new TypeError(` + "`len() measures a string, an array or an object, not ${JSON.stringify(value)}`" + `);
+}
+`,
+}, {
+	name: jsHelperNumber,
+	src: `function art_number(value) {
+  // ` + "`number(value)`" + `: a number, or text that reads as one. A boolean is not a
+  // number, and neither is empty text, which Number() would read as zero.
+  let result = NaN;
+  if (typeof value === "number") result = value;
+  else if (typeof value === "string" && value.trim() !== "") result = Number(value.trim());
+  if (!Number.isFinite(result)) {
+    throw new Error(` + "`number() cannot read ${JSON.stringify(value)} as a number`" + `);
+  }
+  return result;
+}
+`,
+}, {
+	name:  jsHelperString,
+	needs: []string{jsHelperRender},
+	src: `function art_string(value) {
+  // ` + "`string(value)`" + `: the text the value has in an interpolation.
+  return art_render(value);
+}
+`,
+}, {
 	name: jsHelperText,
 	src: `async function art_text(page, selector) {
   // ` + "`text(sel)`" + `: the first match's text content, or null for no match.
@@ -485,7 +722,7 @@ var jsByName = func() map[string]jsHelper {
 // vitest's for a module with no browser step, and @playwright/test's for one
 // with. See jsFile.module.
 var jsImportGroups = [][]string{
-	{"node:child_process"},
+	{"node:child_process", "node:crypto"},
 	{"vitest", "@playwright/test"},
 }
 
@@ -494,6 +731,7 @@ var jsImportGroups = [][]string{
 // is what jshelpers_test.go checks.
 var jsImportable = words(
 	"node:child_process.spawnSync",
+	"node:crypto.randomUUID", "node:crypto.createHash", "node:crypto.createHmac",
 	"vitest.test", "vitest.expect", "vitest.onTestFinished",
 	"@playwright/test.chromium", "@playwright/test.expect",
 )

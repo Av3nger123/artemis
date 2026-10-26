@@ -1,0 +1,23 @@
+# The value builtins' arguments, each of the wrong kind or out of the range the
+# builtin can answer for.
+#
+# Each is a literal, so each is settled before the run: a format that is not
+# one of now()'s four, a bound with a fraction, bounds the wrong way round, a
+# length random_string() will not make, a regex where a value goes and a number
+# where text goes. The same mistakes arriving through a var are run-time
+# errors with the same words.
+
+scenario "made up" {
+  var stamp = now("dat")
+  var when = now("iso")
+  var qty = random_int(10, 1)
+  var half = random_int(1.5, 2)
+  var none = random_string(0)
+  var size = len(/x/)
+  var token = base64(1)
+
+  step "use them" {
+    get "/orders/${qty}"
+    expect status == 200
+  }
+}

@@ -180,7 +180,16 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	// environment is reached through `env("NAME")`, which is an expression the
 	// evaluator resolves like any other.
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	// The scenario's generator: uuid(), now() and the random builtins draw
+	// from it in its vars and its steps alike, seeded so that --seed draws
+	// the same values again.
+	gen := eval.NewGen(rt.seed, rt.seedKey(file), sc.Name)
+	defer func() {
+		if gen.Used() {
+			rt.drew.Store(true)
+		}
+	}()
+	if err := sc.Bind(scope, gen); err != nil {
 		// A scenario whose variables do not resolve has nothing worth running,
 		// and it gets no steps -- which is the shape of a file that would not
 		// load, and is reported the same way.
@@ -196,7 +205,7 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	// config that will not resolve fails the scenario -- the same shape as
 	// Bind failing, and the alternative is a scenario that reaches its first
 	// browser step and only then discovers it cannot open one.
-	cfg, err := sc.Browser.Resolve(&eval.Env{Vars: scope.Vars()})
+	cfg, err := sc.Browser.Resolve(&eval.Env{Vars: scope.Vars(), Gen: gen})
 	if err != nil {
 		scenario.Fail(0, err)
 		rep.ScenarioFailed(scenario)
@@ -225,7 +234,7 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 			// from a collection: a line of auth.art is no use against the
 			// scenario's file.
 			stepResult.File = st.File
-			runArtStep(ctx, rt, sc.Name, st, scope, stepResult)
+			runArtStep(ctx, rt, sc.Name, st, scope, gen, stepResult)
 			logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, stepResult.Duration))
 			// Every step that was reached gets a line, including one artemis
 			// could not execute.
@@ -268,13 +277,13 @@ func stepNames(sc *lower.Scenario) []string {
 // mix of two tries. An attempt is one worth stopping on when it ran at all and
 // every assertion it made -- every `expect`, and every `capture` that had to be
 // read -- passed.
-func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, stepResult *result.StepResult) {
+func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, gen *eval.Gen, stepResult *result.StepResult) {
 	start := time.Now()
 
 	// The step's own scope with no roots on it: a URL, a command or a retry
 	// count may read a var or an earlier step's capture, and cannot read this
 	// step's own status.
-	env := &eval.Env{Vars: scope.Vars()}
+	env := &eval.Env{Vars: scope.Vars(), Gen: gen}
 
 	// Resolve the whole step before anything runs. Model evaluates the action
 	// and the per-step policy, which is where a retry delay or a timeout that
@@ -441,7 +450,7 @@ func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step,
 	// `text(".x")` resolve and what the settle loop re-reads the roots through;
 	// a nil one means there is nothing an assertion could wait for.
 	page := livePage(ctx, st.Type)
-	observed := &eval.Env{Roots: roots, Vars: base.Vars, Lookup: base.Lookup}
+	observed := &eval.Env{Roots: roots, Vars: base.Vars, Lookup: base.Lookup, Gen: base.Gen}
 	if page != nil {
 		observed.Elements = page.Elements()
 	}

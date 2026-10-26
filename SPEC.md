@@ -1170,11 +1170,15 @@ Parentheses group: `expect (a == 1 or a == 2) and b exists`.
 | `env("NAME")` | The environment variable `NAME`. A variable that is not set, that is empty, or that holds only space characters has no value, and a call with no default is an error |
 | `env("NAME", "default")` | The same, with `default` when `NAME` has no value. `env("FLAG", "")` is how a scenario asks for an empty value |
 | `match(<text>, /re/)` | The text the regex matched: capturing group 1 when the pattern has one, the whole match when it does not |
+| `uuid()`, `now()`, `random_int()`, `random_string()` | A value the run makes up: [test data](#making-and-converting-values) |
+| `base64()`, `base64_decode()`, `url_encode()`, `sha256()`, `hmac_sha256()`, `jwt_claims()` | An encoding, a hash or a token's claims: [test data](#making-and-converting-values) |
+| `to_json()`, `from_json()`, `len()`, `number()`, `string()` | A value turned into another: [test data](#making-and-converting-values) |
 | `text()`, `value()`, `attr()`, `count()`, `visible()` | What an element on the page says -- [in a `browser` step only](#what-a-browser-step-binds) |
 
-`env()` and `match()` are callable in every scope, including a `var`'s value.
-The five element functions are callable in a `browser` step and nowhere else:
-calling one anywhere else is a compile error naming what is in scope there.
+`env()`, `match()` and the value builtins are callable in every scope,
+including a `var`'s value. The five element functions are callable in a
+`browser` step and nowhere else: calling one anywhere else is a compile error
+naming what is in scope there.
 
 `env()` is an ordinary expression and is legal wherever an expression is -- in a
 `var`, in a URL, in a header, in a `body`, in an `expect`.
@@ -1256,6 +1260,66 @@ answering false -- the text was there and the question was asked.
 The first argument is the text to search and the second is the pattern. The
 pattern may be a regex literal or a string, which is the same rule `matches`
 follows, so a pattern can live in a `var`.
+
+### Making and converting values
+
+```art
+scenario "sign up" {
+  var url   = env("API_URL")
+  var id    = uuid()
+  var email = "user-${random_string(8)}@example.test"
+  var basic = base64("admin:secret")
+
+  step "create the user" {
+    post "${url}/users" {
+      header "Authorization" = "Basic ${basic}"
+      header "X-Signature" = hmac_sha256(env("SIGNING_KEY"), to_json({"id": id}))
+      body = {"id": id, "email": email, "created": now()}
+    }
+    expect status == 201
+    expect len(body.roles) > 0
+    expect jwt_claims(body.token).sub == id
+  }
+}
+```
+
+| Builtin | Returns |
+| --- | --- |
+| `uuid()` | A random version 4 UUID, as a string |
+| `now()`, `now("<format>")` | The time in UTC. `"rfc3339"`, the default, is `2026-10-26T09:30:15Z`; `"date"` is `2026-10-26`; `"unix"` and `"unix_ms"` are seconds and milliseconds since the epoch, as numbers |
+| `random_int(min, max)` | A whole number from `min` to `max`, both included |
+| `random_string(n)` | `n` characters of `a`-`z` and `0`-`9`, `n` from 1 to 256 |
+| `base64(text)` | Standard base64, padded |
+| `base64_decode(text)` | The text base64 holds. Standard and URL-safe, padded or not, are all read |
+| `url_encode(text)` | Query escaping: `a b&c` is `a+b%26c` |
+| `sha256(text)` | The SHA-256 of the text's UTF-8 bytes, in lower-case hex |
+| `hmac_sha256(key, text)` | The HMAC-SHA256 of the text under the key, in lower-case hex |
+| `jwt_claims(token)` | A JWT's payload as an object, **without** checking its signature: a test asserts what a token says, and checking who signed it is the service's job |
+| `to_json(value)` | The value as compact JSON, keys in order |
+| `from_json(text)` | The value JSON text holds |
+| `len(value)` | The characters in a string, the items in an array or the keys of an object |
+| `number(value)` | A number, or a string that reads as one |
+| `string(value)` | The text the value has in an interpolation: `string(x)` is `"${x}"` |
+
+A literal argument a builtin cannot use is a compile error: `now("iso")` with
+a did-you-mean, `random_int(10, 1)`, `random_int(1.5, 2)`, `random_string(0)`.
+The same mistake arriving through a `var`, and every argument a builtin cannot
+answer for -- `number("abc")`, `len(1)`, `base64_decode("%%")`, a token that is
+not a JWT -- is an errored assertion with the reason.
+
+A value is made where it is written and then kept. A `var` is evaluated once,
+so `var id = uuid()` is one UUID for the whole scenario; a step's request is
+evaluated once, so a [`retry`](#retry) resends the same `random_string()`; an
+`expect` is evaluated on every attempt.
+
+**Random values are reproducible.** Each scenario draws from its own generator,
+seeded from the run's seed, the scenario's name and its file's path within what
+was run -- not from the order scenarios run in, so `--jobs 8` draws what
+`--jobs 1` does, and `artemis run suite` and `artemis run .` inside `suite/`
+draw alike. A run that
+drew a random value and failed prints its seed, and `artemis run --seed <n>`
+draws the same values again. The [JSON report](#the-json-report) carries it as
+`seed`. `now()` reads the clock and is not reproducible; assert on its shape.
 
 ### How a value renders
 
@@ -1755,6 +1819,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. Nothing produces `skip` today; it is in the vocabulary |
 | `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary |
 | `error` | run | Why the run could not proceed at all, and `""` for every run that reached its scenarios. An environment error is the one thing that sets it |
+| `seed` | run | The seed the run's `uuid()`, `random_int()` and `random_string()` drew from, and absent when no scenario called one. Passed back as `artemis run --seed <n>`, it draws the same values |
 | `counts` | run | Totals per level, each a `{total, passed, failed, errored, skipped}` tally, so nobody walks the tree to say "2 of 5 assertions failed" |
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |

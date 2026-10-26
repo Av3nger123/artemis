@@ -485,6 +485,14 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 		return src(f.use(jsHelperEnv) + "(" + args[0].src + ")"), nil
 	case "match":
 		return src(f.use(jsHelperMatch) + "(" + args[0].src + ", " + args[1].src + ")"), nil
+	case "uuid", "now", "random_int", "random_string", "base64", "base64_decode", "url_encode",
+		"sha256", "hmac_sha256", "jwt_claims", "to_json", "from_json", "len", "number", "string":
+		// One helper per value builtin, named for it and as in Python.
+		srcs := make([]string, len(args))
+		for i, a := range args {
+			srcs[i] = a.src
+		}
+		return src(f.use("art_"+name) + "(" + strings.Join(srcs, ", ") + ")"), nil
 	case "text":
 		return asyncSrc(f.use(jsHelperText) + "(page, " + args[0].src + ")"), nil
 	case "value":

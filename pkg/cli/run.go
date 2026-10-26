@@ -15,10 +15,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	mathrand "math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/spf13/cobra"
 )
@@ -144,6 +146,8 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		shots:    browserstep.NewShots(shotDir(cmd)),
 		traces:   trace.New(traceDir(cmd)),
 		jobs:     jobsOf(cmd),
+		seed:     seedOf(cmd),
+		root:     path,
 		item:     item,
 		captures: captures,
 	}
@@ -301,6 +305,18 @@ type runtimeEnv struct {
 	// had.
 	jobs int
 
+	// seed is what every scenario's random generator is derived from, with
+	// the scenario's file and name; drew is set once any scenario drew from
+	// one, which is what puts the seed in the report. Atomic because files
+	// run at once under --jobs.
+	seed uint64
+	drew atomic.Bool
+	// root is the path `run` was given, which a scenario's file is named
+	// relative to when its generator is seeded: `artemis run suite` from the
+	// repository and `artemis run .` from inside suite/ must draw the same
+	// values for the same seed.
+	root string
+
 	// events is the --events stream, nil when it was not asked for. Every
 	// method on a nil *report.Events writes nothing, so the runner calls them
 	// unconditionally rather than asking first.
@@ -436,6 +452,10 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		run.Status = result.StatusError
 		run.Error = envGateError(faults).Error()
 	}
+	if rt.drew.Load() {
+		seed := rt.seed
+		run.Seed = &seed
+	}
 	// After the gate has had its say about the status, so run-end says what
 	// the report and the exit code say.
 	rt.events.RunEnd(run)
@@ -520,6 +540,37 @@ func runParallel(ctx context.Context, rt *runtimeEnv, attempts []fileAttempt) []
 
 // jobsFlag is the flag saying how many scenario files may run at once.
 const jobsFlag = "jobs"
+
+// seedFlag is the flag fixing the seed the random builtins draw from.
+const seedFlag = "seed"
+
+// seedKey is file as a scenario's generator is seeded with it: its path within
+// what was run, with forward slashes. A path as given would change with the
+// directory a run started in, and the same seed would draw different values
+// from the same suite.
+func (rt *runtimeEnv) seedKey(file string) string {
+	base := rt.root
+	if info, err := os.Stat(base); err == nil && !info.IsDir() {
+		base = filepath.Dir(base)
+	}
+	if base != "" {
+		if rel, err := filepath.Rel(base, file); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(filepath.Base(file))
+}
+
+// seedOf reads --seed, or makes a new seed when it was not given: a run that
+// drew random values and failed prints the seed it used, and passing that back
+// is how the same values are drawn again.
+func seedOf(cmd *cobra.Command) uint64 {
+	if cmd.Flags().Changed(seedFlag) {
+		n, _ := cmd.Flags().GetUint64(seedFlag)
+		return n
+	}
+	return mathrand.Uint64()
+}
 
 // jobsOf reads --jobs, defaulting to one.
 //

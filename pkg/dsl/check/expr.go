@@ -256,12 +256,64 @@ func (c *checker) call(x *ast.Call, v *view) {
 			"%s()'s %sargument must be %s, not %s", name, which, ps[i].Want, describeLiteral(lit)).
 			Hintf("%s", fn.Signature)
 	}
+	c.literalArgs(x, fn)
 	if name == "env" {
 		c.envName(x)
 		c.envNeed(x)
 	}
 	if name == "match" && len(x.Args) == 2 {
 		c.groups(x.Args[1].Value)
+	}
+}
+
+// literalArgs judges the literal arguments a builtin's parameters say more
+// about than their kind: a format from a fixed set, a whole number, and the
+// two bounds random_int() and random_string() put on theirs. Only a literal is
+// judged, as above; a value that came out of a var is pkg/eval's, with the same
+// reason.
+func (c *checker) literalArgs(x *ast.Call, fn builtin.Fn) {
+	nums := make([]*float64, len(x.Args))
+	for i, a := range x.Args {
+		lit, ok := a.Value.(*ast.Literal)
+		if !ok || lit == nil || i >= len(fn.Params) || !fn.Params[i].Accepts(lit.Kind()) {
+			continue
+		}
+		p := fn.Params[i]
+		switch lit.Kind() {
+		case token.String:
+			if len(p.OneOf) > 0 && !contains(p.OneOf, lit.Tok.Value) {
+				ref := c.bag.Error(lit.Span(), diag.BadValue, "%s()'s argument must be one of %s, not %q",
+					fn.Name, strings.Join(p.OneOf, ", "), lit.Tok.Value)
+				if !ref.DidYouMean(lit.Tok.Value, p.OneOf) {
+					ref.Hintf("%s", fn.Signature)
+				}
+			}
+		case token.Number:
+			f, err := strconv.ParseFloat(lit.Tok.Value, 64)
+			if err != nil {
+				continue
+			}
+			if p.Whole && f != float64(int64(f)) {
+				c.bag.Error(lit.Span(), diag.BadValue, "%s()'s argument must be a whole number, not %s",
+					fn.Name, lit.Tok.Text).Hintf("%s", fn.Signature)
+				continue
+			}
+			nums[i] = &f
+		}
+	}
+	switch fn.Name {
+	case "random_int":
+		if len(nums) == 2 && nums[0] != nil && nums[1] != nil && *nums[0] > *nums[1] {
+			c.bag.Error(x.Span(), diag.BadValue, "random_int()'s bounds are the wrong way round: %s is above %s",
+				x.Args[0].Value.(*ast.Literal).Tok.Text, x.Args[1].Value.(*ast.Literal).Tok.Text).
+				Hintf("random_int(%s, %s)", x.Args[1].Value.(*ast.Literal).Tok.Text, x.Args[0].Value.(*ast.Literal).Tok.Text)
+		}
+	case "random_string":
+		if len(nums) == 1 && nums[0] != nil && (*nums[0] < 1 || *nums[0] > 256) {
+			c.bag.Error(x.Args[0].Value.Span(), diag.BadValue,
+				"random_string() makes 1 to 256 characters, and this call asks for %s",
+				x.Args[0].Value.(*ast.Literal).Tok.Text).Hintf("%s", fn.Signature)
+		}
 	}
 }
 

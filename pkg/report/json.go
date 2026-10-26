@@ -70,6 +70,7 @@ type jsonRunSummary struct {
 	Status        string     `json:"status"`
 	Passed        bool       `json:"passed"`
 	Error         string     `json:"error"`
+	Seed          *uint64    `json:"seed,omitempty"`
 	Counts        jsonCounts `json:"counts"`
 }
 
@@ -225,6 +226,7 @@ func fromRunSummary(run *result.RunResult) jsonRunSummary {
 		Status:        run.Status.String(),
 		Passed:        run.Passed(),
 		Error:         run.Error,
+		Seed:          run.Seed,
 		Counts:        fromCounts(run.Counts()),
 	}
 }

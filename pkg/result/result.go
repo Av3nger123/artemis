@@ -305,6 +305,10 @@ type RunResult struct {
 	Error string
 	// Scenarios are the scenarios it ran, in order.
 	Scenarios []*ScenarioResult
+	// Seed is the seed the run's random builtins drew from, and nil when no
+	// scenario called one: a seed is worth reporting only when passing it
+	// back with --seed would reproduce something.
+	Seed *uint64
 
 	now func() time.Time
 }

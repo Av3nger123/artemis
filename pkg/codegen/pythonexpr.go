@@ -397,6 +397,11 @@ func (f *pyFile) call(c *ast.Call) (string, error) {
 			return "", err
 		}
 		return f.use(helperMatch) + "(" + args[0] + ", " + p + ")", nil
+	case "uuid", "now", "random_int", "random_string", "base64", "base64_decode", "url_encode",
+		"sha256", "hmac_sha256", "jwt_claims", "to_json", "from_json", "len", "number", "string":
+		// One helper per value builtin, named for it, so the call reads as the
+		// .art did and the rule it follows is the helper's docstring.
+		return f.use("art_"+name) + "(" + strings.Join(args, ", ") + ")", nil
 	case "text":
 		return f.use(helperText) + "(page, " + args[0] + ")", nil
 	case "value":

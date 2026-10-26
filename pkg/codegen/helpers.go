@@ -24,14 +24,34 @@ const (
 	helperContains = "art_contains"
 	helperMatches  = "art_matches"
 	helperMatch    = "art_match"
-	helperText     = "art_text"
-	helperValue    = "art_value"
-	helperAttr     = "art_attr"
-	helperArgv     = "art_argv"
-	helperGoto     = "art_goto"
-	helperRetry    = "art_retry"
-	helperWithin   = "art_within"
-	helperBrowser  = "browser"
+
+	// The value builtins: one helper each, named for the builtin, so a reader
+	// of a generated file can find the rule in SPEC.md by the name.
+	helperStr          = "art_str"
+	helperUUID         = "art_uuid"
+	helperNow          = "art_now"
+	helperWhole        = "art_whole"
+	helperRandomInt    = "art_random_int"
+	helperRandomString = "art_random_string"
+	helperBase64       = "art_base64"
+	helperBase64Decode = "art_base64_decode"
+	helperURLEncode    = "art_url_encode"
+	helperSHA256       = "art_sha256"
+	helperHMACSHA256   = "art_hmac_sha256"
+	helperJWTClaims    = "art_jwt_claims"
+	helperToJSON       = "art_to_json"
+	helperFromJSON     = "art_from_json"
+	helperLen          = "art_len"
+	helperNumber       = "art_number"
+	helperString       = "art_string"
+	helperText         = "art_text"
+	helperValue        = "art_value"
+	helperAttr         = "art_attr"
+	helperArgv         = "art_argv"
+	helperGoto         = "art_goto"
+	helperRetry        = "art_retry"
+	helperWithin       = "art_within"
+	helperBrowser      = "browser"
 )
 
 // helper is one emitted definition: its Python source, the modules it imports
@@ -209,6 +229,207 @@ def art_is(value, want):
     return found.group(1) if compiled.groups == 1 else found.group(0)
 `,
 }, {
+	name: helperStr,
+	src: `def art_str(name, value):
+    """The text a builtin's argument has to be. eval converts each argument to
+    what its parameter takes, and a value that is not text is a mistake in the
+    expression rather than something to coerce."""
+    if not isinstance(value, str):
+        raise TypeError("%s()'s argument must be a string, got %r" % (name, value))
+    return value
+`,
+}, {
+	name:    helperUUID,
+	imports: []string{"uuid"},
+	src: `def art_uuid():
+    """` + "`uuid()`" + `: a random version 4 UUID. The interpreter draws it from a
+    seeded generator so --seed repeats a failed run's values; a generated test is
+    not repeating an interpreter run, so it draws from Python's own."""
+    return str(uuid.uuid4())
+`,
+}, {
+	name:    helperNow,
+	imports: []string{"datetime"},
+	src: `def art_now(format="rfc3339"):
+    """` + "`now()`" + `: the time in UTC, as a timestamp with no fraction, a date, or
+    seconds or milliseconds since the epoch -- eval's four formats and no other."""
+    moment = datetime.datetime.now(datetime.timezone.utc)
+    if format == "rfc3339":
+        return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if format == "date":
+        return moment.strftime("%Y-%m-%d")
+    if format == "unix":
+        return int(moment.timestamp())
+    if format == "unix_ms":
+        return int(moment.timestamp() * 1000)
+    raise ValueError(
+        "now()'s argument must be one of rfc3339, date, unix, unix_ms, got %r" % (format,))
+`,
+}, {
+	name:  helperWhole,
+	needs: []string{helperNumber},
+	src: `def art_whole(name, value):
+    """A count or a bound, read the way eval reads one: a number, or text that
+    reads as one, with no fractional part and small enough to be exact."""
+    number = art_number(value)
+    if number != int(number) or abs(number) > 2 ** 53:
+        raise ValueError("%s()'s argument must be a whole number, got %r" % (name, value))
+    return int(number)
+`,
+}, {
+	name:    helperRandomInt,
+	imports: []string{"random"},
+	needs:   []string{helperWhole},
+	src: `def art_random_int(low, high):
+    """` + "`random_int(min, max)`" + `: a whole number from min to max, both included."""
+    low, high = art_whole("random_int", low), art_whole("random_int", high)
+    if low > high:
+        raise ValueError(
+            "random_int()'s bounds are the wrong way round: %d is above %d" % (low, high))
+    return random.randint(low, high)
+`,
+}, {
+	name:    helperRandomString,
+	imports: []string{"random"},
+	needs:   []string{helperWhole},
+	src: `def art_random_string(length):
+    """` + "`random_string(n)`" + `: n characters of a-z and 0-9, n from 1 to 256."""
+    length = art_whole("random_string", length)
+    if length < 1 or length > 256:
+        raise ValueError(
+            "random_string() makes 1 to 256 characters, and this call asks for %d" % (length,))
+    return "".join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(length))
+`,
+}, {
+	name:    helperBase64,
+	imports: []string{"base64"},
+	needs:   []string{helperStr},
+	src: `def art_base64(text):
+    """` + "`base64(text)`" + `: standard base64, padded."""
+    return base64.b64encode(art_str("base64", text).encode("utf-8")).decode("ascii")
+`,
+}, {
+	name:    helperBase64Decode,
+	imports: []string{"base64"},
+	needs:   []string{helperStr},
+	src: `def art_base64_decode(text):
+    """` + "`base64_decode(text)`" + `: standard or URL-safe base64, padded or not --
+    the four spellings an API hands back, none of which a test should have to
+    name."""
+    text = art_str("base64_decode", text).strip().replace("-", "+").replace("_", "/")
+    text += "=" * (-len(text) % 4)
+    return base64.b64decode(text, validate=True).decode("utf-8", "replace")
+`,
+}, {
+	name:    helperURLEncode,
+	imports: []string{"urllib.parse"},
+	needs:   []string{helperStr},
+	src: `def art_url_encode(text):
+    """` + "`url_encode(text)`" + `: query escaping, a space as +, which is Go's
+    url.QueryEscape and what the interpreter sends."""
+    return urllib.parse.quote_plus(art_str("url_encode", text))
+`,
+}, {
+	name:    helperSHA256,
+	imports: []string{"hashlib"},
+	needs:   []string{helperStr},
+	src: `def art_sha256(text):
+    """` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, in lower-case hex."""
+    return hashlib.sha256(art_str("sha256", text).encode("utf-8")).hexdigest()
+`,
+}, {
+	name:    helperHMACSHA256,
+	imports: []string{"hashlib", "hmac"},
+	needs:   []string{helperStr},
+	src: `def art_hmac_sha256(key, text):
+    """` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text under the key, in
+    lower-case hex."""
+    return hmac.new(art_str("hmac_sha256", key).encode("utf-8"),
+                    art_str("hmac_sha256", text).encode("utf-8"), hashlib.sha256).hexdigest()
+`,
+}, {
+	name:    helperJWTClaims,
+	imports: []string{"json"},
+	needs:   []string{helperStr, helperBase64Decode},
+	src: `def art_jwt_claims(token):
+    """` + "`jwt_claims(token)`" + `: the token's payload, decoded and NOT verified. A test
+    asserts what a token says; whether the right key signed it is the service's
+    business."""
+    parts = art_str("jwt_claims", token).strip().split(".")
+    if len(parts) != 3:
+        raise ValueError(
+            "jwt_claims()'s argument is not a JWT: it has %d part(s), and a JWT has 3" % len(parts))
+    claims = json.loads(art_base64_decode(parts[1]))
+    if not isinstance(claims, dict):
+        raise ValueError("jwt_claims(): the token's payload is not an object")
+    return claims
+`,
+}, {
+	name:    helperToJSON,
+	imports: []string{"json"},
+	src: `def art_to_json(value):
+    """` + "`to_json(value)`" + `: compact JSON with its keys in order, a whole number
+    without a trailing .0 -- the text the interpreter makes of the same value."""
+    def plain(item):
+        if item is None or isinstance(item, (bool, str)):
+            return item
+        if isinstance(item, float) and item.is_integer():
+            return int(item)
+        if isinstance(item, (int, float)):
+            return item
+        if isinstance(item, dict):
+            return {key: plain(inner) for key, inner in item.items()}
+        if isinstance(item, (list, tuple)):
+            return [plain(inner) for inner in item]
+        raise TypeError("to_json() cannot write %r" % (item,))
+    return json.dumps(plain(value), separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+`,
+}, {
+	name:    helperFromJSON,
+	imports: []string{"json"},
+	needs:   []string{helperStr},
+	src: `def art_from_json(text):
+    """` + "`from_json(text)`" + `: the value JSON text holds."""
+    return json.loads(art_str("from_json", text))
+`,
+}, {
+	name: helperLen,
+	src: `def art_len(value):
+    """` + "`len(value)`" + `: the characters in a string, the items in an array, the
+    keys of an object -- and an error for anything else, not a zero."""
+    if isinstance(value, (str, list, dict)):
+        return len(value)
+    raise TypeError("len() measures a string, an array or an object, not %r" % (value,))
+`,
+}, {
+	name:    helperNumber,
+	imports: []string{"math"},
+	src: `def art_number(value):
+    """` + "`number(value)`" + `: a number, or text that reads as one. A boolean is not a
+    number, and neither is text that reads as infinity or NaN."""
+    if isinstance(value, bool) or value is None:
+        raise ValueError("number() cannot read %r as a number" % (value,))
+    if isinstance(value, (int, float)):
+        result = float(value)
+    elif isinstance(value, str):
+        try:
+            result = float(value.strip())
+        except ValueError:
+            raise ValueError("number() cannot read %r as a number" % (value,)) from None
+    else:
+        raise ValueError("number() cannot read %r as a number" % (value,))
+    if math.isnan(result) or math.isinf(result):
+        raise ValueError("number() cannot read %r as a number" % (value,))
+    return result
+`,
+}, {
+	name:  helperString,
+	needs: []string{helperRender},
+	src: `def art_string(value):
+    """` + "`string(value)`" + `: the text the value has in an interpolation."""
+    return art_render(value)
+`,
+}, {
 	name: helperText,
 	src: `def art_text(page, selector):
     """` + "`text(sel)`" + `: the first match's text content, or None for no match.
@@ -374,15 +595,23 @@ var byName = func() map[string]helper {
 // both the driver and Playwright's own expect, and splitting them would let a
 // file import one without the other.
 var importLines = map[string]string{
-	"json":       "import json",
-	"os":         "import os",
-	"re":         "import re",
-	"time":       "import time",
-	"subprocess": "import subprocess",
-	"pytest":     "import pytest",
-	"requests":   "import requests",
-	"urllib":     "from urllib.parse import urljoin, urlparse",
-	"playwright": "from playwright.sync_api import expect, sync_playwright",
+	"base64":       "import base64",
+	"datetime":     "import datetime",
+	"hashlib":      "import hashlib",
+	"hmac":         "import hmac",
+	"json":         "import json",
+	"math":         "import math",
+	"os":           "import os",
+	"random":       "import random",
+	"re":           "import re",
+	"urllib.parse": "import urllib.parse",
+	"uuid":         "import uuid",
+	"time":         "import time",
+	"subprocess":   "import subprocess",
+	"pytest":       "import pytest",
+	"requests":     "import requests",
+	"urllib":       "from urllib.parse import urljoin, urlparse",
+	"playwright":   "from playwright.sync_api import expect, sync_playwright",
 }
 
 // importGroups are the imports in the order they are written: the standard
@@ -390,6 +619,6 @@ var importLines = map[string]string{
 // between -- isort's grouping, which is what a linter in a Python repo would do
 // to the file anyway.
 var importGroups = [][]string{
-	{"json", "os", "re", "subprocess", "time", "urllib"},
+	{"base64", "datetime", "hashlib", "hmac", "json", "math", "os", "random", "re", "subprocess", "time", "urllib", "urllib.parse", "uuid"},
 	{"pytest", "requests", "playwright"},
 }

@@ -160,6 +160,7 @@ parameters and its response. The rules are in
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
+- Test data made up where it is needed -- `uuid()`, `now()`, `random_string()` -- reproducible with `--seed`, and builtins for base64, hashes, HMAC signatures, JWT claims and JSON
 - Collections: write a request once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
@@ -1202,6 +1203,27 @@ live, which is why it is the default.
 One is also the default because the limit here is the service, not the machine.
 A suite pointed at a staging API will meet a rate limit long before it saturates
 a laptop, so the number is yours to choose.
+
+### Reproducing random test data
+
+`uuid()`, `random_int()` and `random_string()` make test data up, so a sign-up
+test does not collide with the last run's user. Every scenario draws from its own
+generator, seeded from the run's seed, the scenario's name and its file's path
+within the suite, so a failed run says how to draw the same values again:
+
+```
+Seed        8817265503411  (rerun with --seed 8817265503411 for the same values)
+FAIL in 1.2s
+```
+
+```sh
+artemis run suite/ --seed 8817265503411
+```
+
+The seed is in the JSON report as `seed`, and only when a scenario drew a random
+value. The rest of the value builtins -- `now()`, `base64()`, `sha256()`,
+`hmac_sha256()`, `jwt_claims()`, `to_json()`, `len()` and the others -- are in
+[SPEC.md](SPEC.md#making-and-converting-values).
 
 ## The MCP server
 

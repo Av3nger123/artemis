@@ -20,10 +20,19 @@ func TestEveryBuiltinHasASpelling(t *testing.T) {
 		if fn.Scope == builtin.Page {
 			stepType = "browser"
 		}
-		// A string satisfies every parameter, match()'s pattern included.
+		// An argument each parameter accepts: one of its strings when it has a
+		// fixed set, a number for a number, and a string for the rest --
+		// match()'s pattern included.
 		args := make([]string, fn.Max())
-		for i := range args {
-			args[i] = `"x"`
+		for i, p := range fn.Params {
+			switch {
+			case len(p.OneOf) > 0:
+				args[i] = `"` + p.OneOf[0] + `"`
+			case p.Type == builtin.TypeNumber:
+				args[i] = "1"
+			default:
+				args[i] = `"x"`
+			}
 		}
 		expression := name + "(" + strings.Join(args, ", ") + `) == "x"`
 		scenarios, err := lower.File(parse(t, "builtin.art", scenarioAround(stepType, expression)), nil)

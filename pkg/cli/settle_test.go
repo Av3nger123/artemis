@@ -413,7 +413,7 @@ func TestABudgetThatWillNotParseIsAnErroredAssertion(t *testing.T) {
 	// The scope the runner would have bound, because the budget is a var and a
 	// `within` is evaluated against the same names an expect is.
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	if err := sc.Bind(scope, nil); err != nil {
 		t.Fatal(err)
 	}
 	env := envFor(t, b)

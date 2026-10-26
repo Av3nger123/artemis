@@ -497,13 +497,14 @@ func evalIndex(i *ast.Index, env *Env) (any, error) {
 	}
 }
 
-// evalCall calls a builtin: env() and match() everywhere, and the element
-// functions in a browser step.
+// evalCall calls a builtin: env(), match() and the value builtins everywhere,
+// and the element functions in a browser step.
 //
-// match() is handled before the argument loop because it is the one builtin
-// whose arguments are not all strings: its second is a regex. Everything else
-// takes string arguments -- a variable name, a selector, an attribute name --
-// and a value of another type there is a mistake in the expression.
+// match() is handled before the argument loop because its pattern compiles
+// with the same asRegexp `matches` uses. Every other argument is converted to
+// what pkg/dsl/builtin says its parameter takes -- a string for a variable
+// name or a selector, a number for a bound, anything for len() -- and a value
+// that cannot be is a mistake in the expression, reported as one.
 func evalCall(c *ast.Call, env *Env) (any, error) {
 	if c.Callee == nil {
 		return nil, errorf(c.Span(), "this call has no function name")
@@ -534,25 +535,25 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		return evalMatch(c, env)
 	}
 
-	args := make([]string, 0, high)
-	for _, a := range c.Args {
+	fn, _ := builtin.Lookup(name)
+	args := make([]any, len(c.Args))
+	for i, a := range c.Args {
 		v, err := Eval(a.Value, env)
 		if err != nil {
 			return nil, err
 		}
-		s, ok := v.(string)
-		if !ok {
-			return nil, errorf(a.Value.Span(), "%s()'s argument must be a string, got %s at %s", name, typeOf(v), exprText(a.Value))
+		if args[i], err = argument(name, fn.Params[i], a.Value, v); err != nil {
+			return nil, err
 		}
-		args = append(args, s)
 	}
 
 	if name == "env" {
 		var fallback *string
 		if len(args) == 2 {
-			fallback = &args[1]
+			s := args[1].(string)
+			fallback = &s
 		}
-		v, err := env.getenv(args[0], fallback)
+		v, err := env.getenv(args[0].(string), fallback)
 		if err != nil {
 			// getenv's error is package-level text, not span-shaped -- Absent
 			// is also Task 3's check-time error, which has no expression to
@@ -562,22 +563,26 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		}
 		return v, nil
 	}
+	if fn.Scope != builtin.Page {
+		return evalValueFn(c, name, args, env)
+	}
 
 	page := env.elements()
 	if page == nil {
 		return nil, errorf(c.Span(), "%s() needs a browser page, and this step has none", name)
 	}
+	sel := args[0].(string)
 	switch name {
 	case "text":
-		return page.Text(args[0])
+		return page.Text(sel)
 	case "value":
-		return page.Value(args[0])
+		return page.Value(sel)
 	case "attr":
-		return page.Attr(args[0], args[1])
+		return page.Attr(sel, args[1].(string))
 	case "count":
-		return page.Count(args[0])
+		return page.Count(sel)
 	case "visible":
-		return page.Visible(args[0])
+		return page.Visible(sel)
 	}
 	// A name pkg/dsl/builtin knows and this switch does not: a builtin added to
 	// the table without an evaluation. TestEveryBuiltinEvaluates catches it

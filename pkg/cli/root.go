@@ -82,6 +82,8 @@ func Init() {
 		"With --item: write every value the item's captures got, secret ones included, to this JSON file (mode 0600)")
 	runCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order, rather than streaming it live")
+	runCmd.Flags().Uint64(seedFlag, 0,
+		"Seed uuid(), random_int() and random_string() with this number, to draw the values a failed run printed (default: a new seed every run)")
 
 	// Build command: a .art file out as tests in another language. --lang is
 	// required rather than defaulted, so an invocation that means python today

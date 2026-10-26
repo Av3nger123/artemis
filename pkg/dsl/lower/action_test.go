@@ -18,7 +18,7 @@ func bound(t *testing.T, src string) (*Scenario, executor.Scope) {
 	t.Helper()
 	sc := one(t, src)
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	if err := sc.Bind(scope, nil); err != nil {
 		t.Fatalf("Bind() = %v, want nil", err)
 	}
 	return sc, scope

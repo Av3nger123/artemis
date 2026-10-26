@@ -24,13 +24,19 @@ func TestEveryEntryIsCoherent(t *testing.T) {
 			t.Errorf("%s() is in the table twice", f.Name)
 		}
 		seen[f.Name] = true
-		if f.Min < 1 || f.Min > f.Max() {
+		if f.Min < 0 || f.Min > f.Max() {
 			t.Errorf("%s(): accepts %d to %d arguments, which is not a range a call can satisfy",
 				f.Name, f.Min, f.Max())
 		}
 		for i, p := range f.Params {
 			if p.Want == "" || len(p.Kinds) == 0 {
 				t.Errorf("%s()'s parameter %d says nothing about what it takes", f.Name, i)
+			}
+			if len(p.OneOf) > 0 && p.Type != TypeString {
+				t.Errorf("%s()'s parameter %d lists the strings it accepts and is not a string", f.Name, i)
+			}
+			if p.Whole && p.Type != TypeNumber {
+				t.Errorf("%s()'s parameter %d is a whole number and is not a number", f.Name, i)
 			}
 		}
 		if !strings.HasPrefix(f.Signature, f.Name+"(") {
@@ -52,7 +58,7 @@ func TestLookupsAgreeWithTheTable(t *testing.T) {
 			t.Errorf("Arity(%q) = %d, %d, %v; the table says %d to %d", name, low, high, ok, f.Min, f.Max())
 		}
 	}
-	for _, name := range []string{"", "Env", "len", "body"} {
+	for _, name := range []string{"", "Env", "length", "body"} {
 		if Is(name) {
 			t.Errorf("Is(%q) is true; it is not a builtin", name)
 		}
@@ -80,11 +86,13 @@ func TestScopesPartitionTheTable(t *testing.T) {
 	}
 }
 
-// env() and match() are the two callable everywhere, which is what SPEC.md's
-// builtins section says; the element functions are browser-only.
+// env(), match() and the value builtins are callable everywhere, which is what
+// SPEC.md's builtins section says; the element functions are browser-only.
 func TestTheScopesAreTheSpecs(t *testing.T) {
-	if got := strings.Join(In(Everywhere), ","); got != "env,match" {
-		t.Errorf("callable everywhere: %s, want env,match", got)
+	for _, name := range []string{"env", "match", "uuid", "now", "len"} {
+		if f, _ := Lookup(name); f.Scope != Everywhere {
+			t.Errorf("%s() is not callable everywhere", name)
+		}
 	}
 	if got := strings.Join(In(Page), ","); got != "text,value,attr,count,visible" {
 		t.Errorf("callable in a browser step: %s, want text,value,attr,count,visible", got)
@@ -99,5 +107,20 @@ func TestNoBuiltinIsReserved(t *testing.T) {
 		if token.IsReserved(name) {
 			t.Errorf("%s() is a builtin and a reserved word", name)
 		}
+	}
+}
+
+// Random names exactly the builtins that draw from the generator, each of which
+// is in the table: a seed is reported for a run that called one, so a name here
+// that no call can reach would make the seed line unreachable too.
+func TestRandomNamesRealBuiltins(t *testing.T) {
+	n := 0
+	for _, name := range Names() {
+		if Random(name) {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Errorf("%d builtins draw from the generator, want uuid, random_int and random_string", n)
 	}
 }

@@ -149,7 +149,7 @@ func TestBindEvaluatesVarsInOrder(t *testing.T) {
 }`)
 
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	if err := sc.Bind(scope, nil); err != nil {
 		t.Fatalf("Bind() = %v, want nil", err)
 	}
 	if got, _ := scope.Get("a"); got != 1.0 {
@@ -363,7 +363,7 @@ func TestBindStopsAtAVarThatWillNotEvaluate(t *testing.T) {
 }`)
 
 	scope := executor.NewScope()
-	err := sc.Bind(scope)
+	err := sc.Bind(scope, nil)
 	if err == nil {
 		t.Fatal("Bind() = nil, want an error for a var that will not evaluate")
 	}
@@ -389,7 +389,7 @@ func TestABadBrowserConfigFromAnExpressionIsAnError(t *testing.T) {
 }`)
 
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	if err := sc.Bind(scope, nil); err != nil {
 		t.Fatalf("Bind() = %v, want nil", err)
 	}
 	if _, err := sc.Browser.Resolve(envOf(scope)); err == nil {
