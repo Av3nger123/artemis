@@ -157,7 +157,7 @@ parameters and its response. The rules are in
 ## Features
 
 - Scenarios in a real language: lexed, parsed and name-checked before anything runs, with compiler-grade diagnostics -- the source line, a caret, and `did you mean "status"?`
-- Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
+- Four step types: `api` for an HTTP call, `terminal` for a command, `browser` for a page, `db` for a database. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
 - A `suite.art` per folder: one login, once per run, for every scenario below it -- its values read as `suite.token` and its cookies copied into each scenario
@@ -172,6 +172,7 @@ parameters and its response. The rules are in
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
 - `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
+- `db` steps against PostgreSQL, MySQL and SQLite: run SQL with typed `args`, assert on `rows` and `affected`, seed from an SQL file in `setup`
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
 - A one-way export to pytest or vitest (`artemis build --lang=python|js`), for a team whose tests live in another language
 - One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
@@ -1360,6 +1361,61 @@ what a failed command is diagnosed from.
 the `run` block -- `args`, `cwd`, `stdin`, `env` -- and the 1 MiB per attempt
 each stream is kept up to.
 
+## Checking what landed in the database
+
+An API that answered 201 has said it saved the order; a `db` step checks that
+it did. The action is `db` and the connection URL, whose scheme picks the
+database -- `postgres://`, `mysql://` or `sqlite:` -- and the block holds the
+SQL and the values bound to its placeholders:
+
+```art
+scenario "an order is saved as paid" {
+  var url = env("API_URL")
+  secret var orders_db = env("ORDERS_DB")
+
+  setup {
+    step "seed" {
+      db orders_db { sql = file("fixtures/seed.sql") }
+    }
+  }
+
+  step "pay" {
+    post "${url}/orders" { body = {"sku": "A-1", "pay": true} }
+    expect status == 201
+    capture order_id = body.id
+  }
+
+  step "the row says paid" {
+    db orders_db {
+      sql  = "SELECT status, total FROM orders WHERE id = $1"
+      args = [order_id]
+    }
+    retry { times = 5, delay = "1s" }
+    expect rows[0].status == "paid"
+    expect rows[0].total > 0
+  }
+
+  teardown {
+    step "remove it" {
+      db orders_db {
+        sql  = "DELETE FROM orders WHERE id = $1"
+        args = [order_id]
+      }
+      expect affected == 1
+    }
+  }
+}
+```
+
+`rows` is the query's rows, each an object keyed by column name, and `affected`
+is how many rows a statement changed. SQL goes to the database as written, so
+its placeholders are the database's own: `$1` for PostgreSQL, `?` for MySQL and
+SQLite. An SQL file run with no `args` is a script, every statement in it, which
+is how the setup above seeds the database. A connection is opened once per run
+and shared by every step that names the same URL, and a trace never prints the
+password in it. [SPEC.md's *`db` steps*](SPEC.md#db-steps) specifies how each
+column type reads.
+
 ## Development
 
 ```sh
@@ -1423,7 +1479,9 @@ command makes -- so it stays an input the command can read.
 
 ## Not yet
 
-- **`db` steps.** Designed, not implemented.
+- **More databases.** `db` steps run SQL against PostgreSQL, MySQL and SQLite.
+  SQL Server, Oracle, MongoDB and Redis are next; see `ROADMAP.md`. `artemis
+  build` refuses a scenario with a db step until it can export one.
 - **Control flow and functions.** `if`, loops, `parallel`, `group` and `fn`
   are reserved words, not features. Reusing a request is
   [collections](#reusing-requests), and running a scenario per row of data is a

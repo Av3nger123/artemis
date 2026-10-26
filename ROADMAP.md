@@ -37,16 +37,21 @@ than exported with nothing behind the name. The export is a pytest
 `globalSetup`, built from the same suite file; what it needs from `build` is
 an output that is a directory of modules rather than one.
 
-### `db` steps
+### `db` steps, the rest
 
-A step type that runs a query and binds its rows, beside `api`, `terminal` and
-`browser`. Designed earlier and never built. The work is mostly integration:
-a driver per database (Postgres, MySQL, SQLite first; others behind the same
-interface), a connection named once per scenario or suite rather than per step,
-and a rule for what a query's rows look like as a value -- an array of objects,
-keyed by column name, in the evaluator's JSON domain like a response body.
-Connection strings are secrets, so they go through `secret var` and the taint
-walk like any credential.
+Phase one shipped `db <url> { sql, args }` against PostgreSQL, MySQL and SQLite,
+with `rows` and `affected`, a pool per URL per run, and traces that never print
+a password; CI runs the server tests against PostgreSQL and MySQL service
+containers. What is left, in order:
+
+1. **SQL Server and Oracle.** A dialect row each in `pkg/steps/dbstep` (pure-Go
+   drivers, so the binary stays static), plus `OUTPUT` in the query classifier.
+2. **MongoDB and Redis.** A `command` field -- a command document for Mongo, an
+   argv for Redis -- and a `result` root for the reply; Mongo's cursor fills
+   `rows`.
+3. **`artemis build`.** Export db steps to pytest and vitest through an
+   `art_db(url)` helper that picks a client by scheme, held to the interpreter by
+   a conformance file: SQLite in-process, the others against service containers.
 
 ## Ideas
 

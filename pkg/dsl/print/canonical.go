@@ -206,6 +206,9 @@ func (c *canon) action(a ast.Action) {
 	case *ast.Run:
 		c.blockAfter(append(toks(v.Keyword), nodeToks(v.Command)...),
 			join(" ", v.Keyword.Text, c.expr(v.Command)), v.Block, false)
+	case *ast.DB:
+		c.blockAfter(append(toks(v.Keyword), nodeToks(v.Conn)...),
+			join(" ", v.Keyword.Text, c.expr(v.Conn)), v.Block, false)
 	case *ast.Browser:
 		c.browser(v)
 	case *ast.Bad:

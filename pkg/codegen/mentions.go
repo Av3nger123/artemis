@@ -64,6 +64,7 @@ func allSteps(sc *lower.Scenario) []*lower.Step {
 }
 
 // refuseSuites is an error for a file a target cannot export faithfully yet: a
+// scenario with a db step, a
 // suite.art, or a scenario that reads `suite`. A suite's setup runs once for a
 // whole folder under the interpreter, and an export of one scenario has no such
 // place to run it -- emitting `suite["token"]` with nothing defining it would
@@ -78,6 +79,11 @@ func refuseSuites(tree *ast.File, scenarios []*lower.Scenario) error {
 		}
 	}
 	for _, sc := range scenarios {
+		for _, st := range allSteps(sc) {
+			if st.DB != nil {
+				return fmt.Errorf("line %d: step %q of scenario %q is a db step, which artemis build does not export yet", st.Line, st.Name, sc.Name)
+			}
+		}
 		declared := false
 		for _, v := range sc.Vars {
 			declared = declared || v.Name == "suite"
@@ -119,6 +125,9 @@ func readsInAction(st *lower.Step, name string) bool {
 	}
 	for _, a := range st.Acts {
 		exprs = append(exprs, a.Target, a.Value)
+	}
+	if d := st.DB; d != nil {
+		exprs = append(exprs, d.Conn, d.SQL, d.Args)
 	}
 	for _, x := range exprs {
 		if readsName(x, name) {

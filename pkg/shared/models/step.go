@@ -29,7 +29,7 @@ import (
 
 // Step is one step of a scenario, resolved and ready to run.
 //
-// Which action a step reads -- Request, Exec or Browser -- is decided by Type,
+// Which action a step reads -- Request, Exec, Browser or DB -- is decided by Type,
 // which is the registry key pkg/executor dispatches on. They sit beside each
 // other rather than behind an interface because a Step is one struct for every
 // step type, which is what lets the runner own retries, timeouts and the result
@@ -45,6 +45,9 @@ type Step struct {
 	// Browser is the `browser` step's action: the statements to perform in the
 	// scenario's page, in source order and fully rendered.
 	Browser Browser
+	// DB is the `db` step's action: one statement and the database to run it
+	// against, fully rendered.
+	DB DB
 
 	// Retry is how many times this step may be attempted and how long to wait
 	// between attempts. The runner owns the loop; this is the policy.

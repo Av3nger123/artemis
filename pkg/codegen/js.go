@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/lower"
 	"artemis/pkg/dsl/token"
 )
@@ -447,7 +446,7 @@ func declarations(sc *lower.Scenario) []string {
 			read[root] = read[root] || mentions(st, root)
 		}
 	}
-	for _, t := range check.StepTypes() {
+	for _, t := range exportTypes() {
 		key, ok := lower.TypeKey(t)
 		if !ok || !used[key] || key == browserKey {
 			// A browser step's root is `page`, which is bound once as a const

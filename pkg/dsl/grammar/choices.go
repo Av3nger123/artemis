@@ -90,7 +90,7 @@ func Choices() ChoicePoints {
 				token.Blocks),
 			"stepType": stepTypes(),
 			"method":   words("The HTTP verbs. A step whose action opens with one is an api step.", token.Methods),
-			"action":   words("The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step.", token.Actions),
+			"action":   words("The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step, db is a db step.", token.Actions),
 			"stepStatement": words(
 				"The statements legal in a step after its action block.",
 				token.StepStatements),
@@ -105,6 +105,8 @@ func Choices() ChoicePoints {
 			"dropTarget":         words("What a drop line in a use block removes from the template: drop expects or drop captures.", token.DropTargets),
 			"requestField":       fields("The fields of an api step's action block.", "request"),
 			"runField":           fields("The fields of a run block.", "run"),
+			"dbField":            fields("The fields of a db block.", "db"),
+			"dbScheme":           words("The connection URL schemes a db step has a driver for.", token.DBSchemes),
 			"retryField":         fields("The fields of a retry block.", "retry"),
 			"stepField":          fields("The fields of a step itself, as against of its action block.", "step"),
 			"configBrowserField": fields("The settings of a config browser block.", "configBrowser"),

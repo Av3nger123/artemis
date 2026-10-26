@@ -35,7 +35,7 @@ HTTPSetting   = "cookies" "=" Bool ;
 VarDecl       = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;
 
-Action        = Request | Run | Browser ;
+Action        = Request | Run | Browser | DB ;
 Request       = Method String [ "{" [ ReqField { Sep ReqField } ] "}" ] ;
 Method        = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
 ReqField      = "header" String "=" Expr
@@ -47,6 +47,8 @@ Run           = "run" Expr [ "{" [ RunField { Sep RunField } ] "}" ] ;
 RunField      = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
               | "env" "{" [ EnvSetting { Sep EnvSetting } ] "}" ;
 EnvSetting    = Ident "=" Expr ;
+DB            = "db" Expr [ "{" [ DBField { Sep DBField } ] "}" ] ;
+DBField       = "sql" "=" Expr | "args" "=" Array ;
 Browser       = "browser" "{" { BrowserAct } "}" ;
 BrowserAct    = "goto"   Expr
               | "click"  Expr

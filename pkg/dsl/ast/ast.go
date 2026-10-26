@@ -63,8 +63,8 @@ type Stmt interface {
 
 // Action is a step's action block, the one thing in a step that decides the
 // step's type. There is no `type:` key: *Request is an api step, *Run a
-// terminal step, *Browser a browser step, and pkg/dsl/check reads nothing but
-// which of the three this is to know.
+// terminal step, *Browser a browser step, *DB a db step, and pkg/dsl/check
+// reads nothing but which of the four this is to know.
 type Action interface {
 	Node
 	action()

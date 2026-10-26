@@ -19,9 +19,10 @@ var (
 	// type comes from its action, so this list *is* the api-step predicate.
 	Methods = []string{"get", "post", "put", "patch", "delete", "head", "options"}
 
-	// Actions are the three action-block openers, one per step type. `run` is
-	// terminal, `browser` is browser, and an HTTP verb from Methods is api.
-	Actions = []string{"run", "browser"}
+	// Actions are the action-block openers that are not an HTTP verb, one per
+	// step type: `run` is terminal, `browser` is browser, `db` is db, and an
+	// HTTP verb from Methods is api.
+	Actions = []string{"run", "browser", "db"}
 
 	// BrowserActions are the statements legal inside a `browser` block.
 	BrowserActions = []string{"goto", "click", "fill", "select", "press", "hover", "upload", "wait"}
@@ -51,6 +52,15 @@ var (
 
 	// RunFields are the fields of a `run` block.
 	RunFields = []string{"args", "cwd", "stdin", "env"}
+
+	// DBFields are the fields of a `db` block: the SQL to run and the values
+	// bound to its placeholders.
+	DBFields = []string{"sql", "args"}
+
+	// DBSchemes are the connection URL schemes a db step has a driver for,
+	// which is what a literal URL is checked against. pkg/steps/dbstep
+	// registers exactly these, and a test holds the two lists equal.
+	DBSchemes = []string{"postgres", "postgresql", "mysql", "sqlite"}
 
 	// RetryFields are the fields of a `retry` block.
 	RetryFields = []string{"times", "delay"}

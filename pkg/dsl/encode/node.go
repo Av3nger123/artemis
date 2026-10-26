@@ -20,6 +20,7 @@ const (
 	kindStep       = "step"
 	kindRequest    = "request"
 	kindRun        = "run"
+	kindDB         = "db"
 	kindBrowser    = "browser"
 	kindBrowserAct = "browserAct"
 	kindBlock      = "block"
@@ -76,6 +77,8 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.request(v)
 	case *ast.Run:
 		return e.run(v)
+	case *ast.DB:
+		return e.db(v)
 	case *ast.Browser:
 		return e.browser(v)
 	case *ast.BrowserAct:
@@ -243,6 +246,14 @@ func (e *enc) run(r *ast.Run) *obj {
 		set("block", e.node(r.Block)).
 		span().
 		comments(append(toks(r.Keyword), nodeToks(r.Command)...), zero, zero).done()
+}
+
+func (e *enc) db(d *ast.DB) *obj {
+	return start(kindDB, d).
+		set("conn", e.node(d.Conn)).
+		set("block", e.node(d.Block)).
+		span().
+		comments(append(toks(d.Keyword), nodeToks(d.Conn)...), zero, zero).done()
 }
 
 func (e *enc) browser(b *ast.Browser) *obj {

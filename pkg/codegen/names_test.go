@@ -33,7 +33,7 @@ func TestLocalRenamesOnlyWhatItHasTo(t *testing.T) {
 // function holds every step of its scenario: a var called `status` would be
 // clobbered by the api step that binds the root.
 func TestLocalRenamesAroundEveryRootOfEveryStepType(t *testing.T) {
-	for _, typ := range check.StepTypes() {
+	for _, typ := range exportTypes() {
 		for _, root := range check.Roots(typ) {
 			if local(root) == root {
 				t.Errorf("local(%q) = %q; %s binds that root", root, root, typ)

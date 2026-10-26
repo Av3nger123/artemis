@@ -43,6 +43,7 @@ func wordTables() map[string][]string {
 		"StepStatements":      token.StepStatements,
 		"RequestFields":       token.RequestFields,
 		"RunFields":           token.RunFields,
+		"DBFields":            token.DBFields,
 		"RetryFields":         token.RetryFields,
 		"StepFields":          token.StepFields,
 		"ConfigBlocks":        token.ConfigBlocks,

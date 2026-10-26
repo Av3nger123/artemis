@@ -51,6 +51,19 @@ var (
 	browserKey  = typeKey(check.Browser)
 )
 
+// exportTypes are the step types a build target exports: every type but db,
+// which refuseSuites turns away until both targets can open a database. A db
+// step's roots are therefore no name a generated file has to keep clear of.
+func exportTypes() []check.StepType {
+	var out []check.StepType
+	for _, t := range check.StepTypes() {
+		if t != check.DB {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 func typeKey(t check.StepType) string {
 	k, _ := lower.TypeKey(t)
 	return k

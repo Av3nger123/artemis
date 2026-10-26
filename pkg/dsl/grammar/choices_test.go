@@ -46,6 +46,8 @@ var owner = map[string]string{
 	"StepStatements":      "stepStatement",
 	"RequestFields":       "requestField",
 	"RunFields":           "runField",
+	"DBFields":            "dbField",
+	"DBSchemes":           "dbScheme",
 	"RetryFields":         "retryField",
 	"StepFields":          "stepField",
 	"ConfigBlocks":        "configSubject",
@@ -132,6 +134,7 @@ func TestEveryBlockIsAChoicePoint(t *testing.T) {
 	emitted := map[string]string{
 		"request":       "requestField",
 		"run":           "runField",
+		"db":            "dbField",
 		"retry":         "retryField",
 		"step":          "stepField",
 		"configBrowser": "configBrowserField",

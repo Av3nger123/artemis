@@ -471,7 +471,7 @@ func TestTheConformanceCorpusCoversEveryOperator(t *testing.T) {
 	// Both non-browser step types, by their roots: an api step binds status,
 	// body, raw and headers and a terminal step exit_code, stdout and stderr,
 	// so a corpus that asserts on all of them has exercised both.
-	for _, typ := range check.StepTypes() {
+	for _, typ := range exportTypes() {
 		if typ == check.Browser {
 			continue
 		}

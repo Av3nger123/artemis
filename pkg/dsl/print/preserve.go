@@ -220,6 +220,10 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.Keyword)
 		p.node(v.Command, c)
 		p.node(v.Block, c)
+	case *ast.DB:
+		p.tok(v.Keyword)
+		p.node(v.Conn, c)
+		p.node(v.Block, c)
 	case *ast.Browser:
 		p.tok(v.Keyword)
 		p.tok(v.LBrace)
@@ -373,7 +377,7 @@ func (p *pres) descend(n ast.Node, c ctx) {
 func lineOriented(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl, *ast.PhaseDecl, *ast.TagsDecl,
-		*ast.Request, *ast.Run, *ast.Browser, *ast.BrowserAct,
+		*ast.Request, *ast.Run, *ast.DB, *ast.Browser, *ast.BrowserAct,
 		*ast.Field, *ast.Expect, *ast.Capture,
 		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.UseDecl,
 		*ast.BodySet, *ast.Drop:

@@ -2,13 +2,16 @@
   "schemaVersion": 1,
   "choices": {
     "action": {
-      "doc": "The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step.",
+      "doc": "The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step, db is a db step.",
       "values": [
         {
           "value": "run"
         },
         {
           "value": "browser"
+        },
+        {
+          "value": "db"
         }
       ]
     },
@@ -202,6 +205,36 @@
         }
       ]
     },
+    "dbField": {
+      "doc": "The fields of a db block.",
+      "values": [
+        {
+          "value": "sql",
+          "valueKind": "any"
+        },
+        {
+          "value": "args",
+          "valueKind": "array"
+        }
+      ]
+    },
+    "dbScheme": {
+      "doc": "The connection URL schemes a db step has a driver for.",
+      "values": [
+        {
+          "value": "postgres"
+        },
+        {
+          "value": "postgresql"
+        },
+        {
+          "value": "mysql"
+        },
+        {
+          "value": "sqlite"
+        }
+      ]
+    },
     "declaration": {
       "doc": "The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
       "values": [
@@ -291,6 +324,16 @@
         {
           "value": "data-not-json",
           "doc": "json() names a file that is not JSON",
+          "severity": "error"
+        },
+        {
+          "value": "db-args-without-sql",
+          "doc": "a db step binds args with no sql to bind them to",
+          "severity": "error"
+        },
+        {
+          "value": "db-needs-statement",
+          "doc": "a db step has no sql to run",
           "severity": "error"
         },
         {
@@ -521,6 +564,11 @@
         {
           "value": "unknown-config",
           "doc": "a \"config\" names a subject the language does not configure",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-db-scheme",
+          "doc": "a db step's connection URL names a database artemis has no driver for",
           "severity": "error"
         },
         {
@@ -881,6 +929,36 @@
               "title"
             ]
           }
+        },
+        {
+          "value": "db",
+          "roots": [
+            "rows",
+            "affected",
+            "duration_ms"
+          ],
+          "functions": [
+            "env",
+            "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string",
+            "json",
+            "csv",
+            "file"
+          ]
         }
       ]
     },

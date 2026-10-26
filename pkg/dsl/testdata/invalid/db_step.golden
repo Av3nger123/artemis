@@ -1,0 +1,38 @@
+=== terminal
+db_step.art:11:8: artemis has no driver for "postgress://app@localhost/orders"
+   11 |     db "postgress://app@localhost/orders" { sql = "SELECT 1" }
+      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   hint: did you mean "postgres://app@localhost/orders"?
+
+db_step.art:16:5: this db step has no sql to run
+   16 |     db pg
+      |     ^^
+   hint: db pg { sql = "SELECT 1" }
+
+db_step.art:21:13: args are bound to the placeholders of sql, and this db step has no sql
+   21 |     db pg { args = [1] }
+      |             ^^^^
+   hint: sql = "SELECT * FROM orders WHERE id = $1"
+
+db_step.art:26:7: unknown field "query"
+   26 |       query = "SELECT 1"
+      |       ^^^^^
+   hint: a db block holds: sql, args
+
+db_step.art:33:12: "status" is not in scope in a db step
+   33 |     expect status == 200
+      |            ^^^^^^
+   hint: a db step binds rows, affected, duration_ms
+
+db_step.art:38:12: "rows" is not in scope in an api step
+   38 |     expect rows[0].id == 1
+      |            ^^^^
+   hint: an api step binds status, body, raw, headers, cookies, duration_ms
+
+=== codes
+unknown-db-scheme	error	11:8-11:42	suggest: "\"postgres://app@localhost/orders\""
+db-needs-statement	error	16:5-16:7
+db-args-without-sql	error	21:13-21:17
+unknown-field	error	26:7-26:12
+not-in-scope	error	33:12-33:18
+not-in-scope	error	38:12-38:16

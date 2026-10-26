@@ -25,6 +25,7 @@ var registryKeys = map[check.StepType]string{
 	check.API:      "api",
 	check.Terminal: "terminal",
 	check.Browser:  "browser",
+	check.DB:       "db",
 }
 
 // TypeKey is the registry key a step of type t dispatches on, and whether there
@@ -37,7 +38,7 @@ func TypeKey(t check.StepType) (string, bool) {
 
 // Step is one lowered `step`: the node the registry dispatches on.
 //
-// Exactly one of Request, Run and Acts is set, and which one is decided by Type,
+// Exactly one of Request, Run, Acts and DB is set, and which one is decided by Type,
 // so a consumer switches on one thing rather than three. The expects and the
 // captures are expressions evaluated against what the step observed; the action
 // and the policy are expressions evaluated against the scenario's scope, which
@@ -47,7 +48,7 @@ type Step struct {
 	// what the console report prints a line for.
 	Name string
 
-	// Type is the registry key: "api", "terminal" or "browser". See
+	// Type is the registry key: "api", "terminal", "browser" or "db". See
 	// registryKeys.
 	Type string
 
@@ -75,6 +76,9 @@ type Step struct {
 
 	// Run is the action of a terminal step, nil otherwise.
 	Run *Run
+
+	// DB is the action of a db step, nil otherwise.
+	DB *DB
 
 	// Acts are the actions of a browser step, nil otherwise. Model evaluates
 	// them onto models.Step.Browser, which pkg/steps/browserstep performs
@@ -145,6 +149,10 @@ func (s *Step) Model(env *eval.Env) (models.Step, error) {
 		}
 	case s.Run != nil:
 		if out.Exec, out.Secrets, err = s.Run.Model(env); err != nil {
+			return out, fmt.Errorf("step %q: %w", s.Name, err)
+		}
+	case s.DB != nil:
+		if out.DB, out.Secrets, err = s.DB.Model(env); err != nil {
 			return out, fmt.Errorf("step %q: %w", s.Name, err)
 		}
 	case s.Acts != nil:
@@ -270,6 +278,9 @@ func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, er
 		case *ast.Run:
 			out.Run = runAction(it)
 			out.Run.secretNames = secrets
+		case *ast.DB:
+			out.DB = dbAction(it)
+			out.DB.secretNames = secrets
 		case *ast.Browser:
 			out.Acts = acts(it)
 		case *ast.Expect:

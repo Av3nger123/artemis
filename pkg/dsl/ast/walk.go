@@ -70,6 +70,8 @@ func Children(n Node) []Node {
 		return append(nodes(n.URL), nodes(n.Block)...)
 	case *Run:
 		return append(nodes(n.Command), nodes(n.Block)...)
+	case *DB:
+		return append(nodes(n.Conn), nodes(n.Block)...)
 	case *Browser:
 		out := make([]Node, 0, len(n.Acts))
 		for _, a := range n.Acts {

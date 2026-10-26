@@ -53,7 +53,7 @@ var jsEmitted = func() map[string]bool {
 		"TypeError", "Promise", "setTimeout", "globalThis", "undefined",
 		"NaN", "Infinity", "performance",
 	)
-	for _, t := range check.StepTypes() {
+	for _, t := range exportTypes() {
 		for _, r := range check.Roots(t) {
 			m[r] = true
 		}
@@ -88,7 +88,7 @@ var jsRootsOf = rootsOf
 // does not do.
 var jsRootList = func() map[string][]string {
 	m := map[string][]string{}
-	for _, t := range check.StepTypes() {
+	for _, t := range exportTypes() {
 		key, ok := lower.TypeKey(t)
 		if !ok {
 			continue

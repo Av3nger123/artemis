@@ -382,7 +382,7 @@ func (p *parser) parseStepBody(what string, name token.Token) *ast.StepDecl {
 		// type and nothing to run. The span is the step's name, because that
 		// is the line an author will go to.
 		p.errorf(name, diag.MissingAction, "%s %s has no action block", what, name.Text).
-			Hintf("a step does one of: an HTTP verb (get, post, ...), run \"<command>\", or browser { ... }")
+			Hintf("a step does one of: an HTTP verb (get, post, ...), run \"<command>\", browser { ... }, or db <url> { ... }")
 	}
 	return s
 }
@@ -492,6 +492,8 @@ func isNilAction(a ast.Action) bool {
 	case *ast.Request:
 		return v == nil
 	case *ast.Run:
+		return v == nil
+	case *ast.DB:
 		return v == nil
 	case *ast.Browser:
 		return v == nil

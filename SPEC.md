@@ -14,8 +14,7 @@ If this document and anything else disagree, this document is right.
 >
 > The language was designed and approved in `docs/artemis-dsl-design.md`; four
 > places where this spec decides something that design left open are marked
-> **spec decision**. All three step types are specified here; `browser` steps
-> compile and format but do not run yet -- see [`browser` steps](#browser-steps).
+> **spec decision**. All four step types are specified here.
 > YAML is not a runtime format: it is an input to `artemis migrate`, and the
 > [README](README.md) documents the commands.
 
@@ -451,6 +450,7 @@ step "build it" {
 | `get`, `post`, `put`, `patch`, `delete`, `head`, `options` | `api` |
 | `run "<command>" { ... }` | `terminal` |
 | `browser { ... }` | `browser` -- see [`browser` steps](#browser-steps) |
+| `db <url> { ... }` | `db` -- see [`db` steps](#db-steps) |
 
 A step with no action block, and a step with two, are both compile errors. The
 type is known before any name in the step is resolved, which is what makes
@@ -853,6 +853,119 @@ overwrites the file from the run before it, so the path in the report is
 predictable enough for a CI job to name the artifact it is about to upload. Two
 steps that share a name in one run get `-2` and `-3`. The folder is created only
 when a browser step actually fails, so a suite of `api` steps never grows one.
+
+---
+
+## `db` steps
+
+The action is `db`, the database to connect to, and the SQL to run there:
+
+```art
+scenario "an order lands in the database" {
+  var url = env("API_URL")
+  secret var orders_db = env("ORDERS_DB")   # postgres://app:pw@localhost:5432/orders
+
+  setup {
+    step "seed" {
+      db orders_db { sql = file("fixtures/seed.sql") }
+    }
+  }
+
+  step "place an order" {
+    post "${url}/orders" { body = {"sku": "A-1"} }
+    expect status == 201
+    capture order_id = body.id
+  }
+
+  step "the row is there" {
+    db orders_db {
+      sql  = "SELECT status, total FROM orders WHERE id = $1"
+      args = [order_id]
+    }
+    retry { times = 5, delay = "1s" }
+    expect len(rows) == 1
+    expect rows[0].status == "paid"
+    capture total = rows[0].total
+  }
+
+  teardown {
+    step "remove it" {
+      db orders_db {
+        sql  = "DELETE FROM orders WHERE id = $1"
+        args = [order_id]
+      }
+      expect affected == 1
+    }
+  }
+}
+```
+
+| Field | Form | Rules |
+| --- | --- | --- |
+| the connection | `db <expr>` | Required, and the first thing in the block. A URL; its scheme picks the database |
+| `sql` | `sql = <expr>` | Required. The statement as text, or a [`file()`](#data-and-files) whose contents are the SQL |
+| `args` | `args = [<expr>, ...]` | At most one. Values bound to the statement's placeholders, **keeping their types** |
+
+| Scheme | Database |
+| --- | --- |
+| `postgres://`, `postgresql://` | PostgreSQL, and what speaks its protocol: CockroachDB, Supabase, Neon, Timescale |
+| `mysql://` | MySQL, and what speaks its protocol: MariaDB, TiDB, PlanetScale |
+| `sqlite:` | SQLite: `sqlite:app.db`, `sqlite:///abs/app.db`, `sqlite::memory:`. A relative path is relative to where artemis was run, like a `run` step's `cwd` |
+
+A connection is a value, so it lives where a credential does: a `secret var`, a
+[suite](#suites-suiteart)'s var read as `suite.db`, an `env()` call. A URL written
+out is checked when the file compiles -- `postgress://` is `unknown-db-scheme`
+with the fix -- and one from a variable when the step runs.
+
+**SQL is sent as written.** Artemis never rewrites a statement, so its
+placeholders are the database's own: `$1` for PostgreSQL, `?` for MySQL and
+SQLite. An `args` value keeps its type -- a whole number is bound as an
+integer, a string as text, `null` as SQL `NULL` -- because a placeholder is
+compared against a typed column. An object or an array is bound as its JSON
+text, for a `json` column; a `file()` is bound as its bytes.
+
+### What a db step binds
+
+| Name | Type | What it is |
+| --- | --- | --- |
+| `rows` | array of objects | The rows a query returned, each keyed by column name. `[]` for a statement that returns none |
+| `affected` | number or null | How many rows a statement changed, or a query returned; `null` when the database does not say |
+
+A row's values arrive as the scenario would have written them:
+
+| Column | Value |
+| --- | --- |
+| `NULL` | `null` |
+| an integer | a number, or its digits as a string past 2^53, where a number would round |
+| `numeric`, `decimal` | a number when the number reads back as the same decimal -- `12.50` is `12.5` -- and the text when it would not, so money is never rounded |
+| a float, a boolean, text | a number, a boolean, a string |
+| `date` | `"2026-10-26"` |
+| `timestamp`, `datetime` | an RFC 3339 time in UTC |
+| `json`, `jsonb` | the value it holds |
+| `bytea`, `blob` | base64 |
+
+**A query or a statement.** A database cannot be asked which a statement is
+before it runs, and running one twice would repeat its writes, so its first
+keyword decides: `SELECT`, `WITH`, `SHOW`, `EXPLAIN`, `VALUES`, `PRAGMA`,
+`DESCRIBE` and `TABLE`, or a `RETURNING` clause, are queried for `rows`;
+anything else is executed for `affected`. An SQL file with no `args` is a
+**script**: every statement in it runs, in order, which is how a database is
+seeded.
+
+| | |
+| --- | --- |
+| Connections | One per URL for the whole run, opened by the first step that names it and closed when the run ends, shared by every scenario, suite and `--jobs` worker. A step has no connection of its own, so a `SET` or a temporary table may not be there for the next step |
+| Transactions | None: every statement commits on its own. A test cleans up in [teardown](#setup-and-teardown) |
+| More than 10,000 rows | A step error: a cut `rows` would make `len(rows)` a quiet lie. Ask for a `LIMIT`, or `count(*)` |
+| Two columns alike | `SELECT a.id, b.id` is a step error naming the column: a row holds one `id`. Name one with `AS` |
+| `timeout` | The statement's deadline. A query that outlives it is cancelled, and the step is an error naming it |
+| `within` | Evaluated once, as for an api step: a result is complete when it arrives. Waiting for a row to appear is [`retry`](#retry) |
+
+A database that refuses the connection, SQL it rejects and a timeout are
+**step errors**: the step could not run. A row that holds the wrong value is an
+**assertion failure**. A [trace](#tracing-a-step) of a db step records the URL
+with its password replaced by `***` whether or not the URL is secret, the
+statement, and the args.
 
 ---
 
@@ -1262,6 +1375,7 @@ What the observation binds depends on the step's type:
 | `api` | `status`, `body`, `raw`, `headers`, `cookies` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
 | `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
+| `db` | `rows`, `affected` -- [specified with the step type](#what-a-db-step-binds) |
 | every step | `duration_ms` |
 
 | Root | Type | What it is |
@@ -1276,6 +1390,8 @@ What the observation binds depends on the step's type:
 | `stdout`, `stderr` | string | The two streams, as text |
 | `page.url` | string | The page's current address |
 | `page.title` | string | The document's title |
+| `rows` | array | The rows a db step's query returned, each an object keyed by column name |
+| `affected` | number or null | How many rows a db step's statement changed, or its query returned |
 
 Naming a root that the step's type does not bind is a **compile error**, and the
 message lists the roots that are in scope:
@@ -1729,7 +1845,7 @@ condition has to settle.
 | Step type | Default `within` |
 | --- | --- |
 | `browser` | 5s |
-| `api`, `terminal` | none -- the assertion is evaluated once |
+| `api`, `terminal`, `db` | none -- the assertion is evaluated once |
 
 **Spec decision.** An explicit `within` on an `api` or a `terminal` step is
 accepted and the assertion is still evaluated **once**. Those two observations
@@ -1816,7 +1932,7 @@ scenario, so:
 | --- | --- | --- |
 | `retry { times, delay }` | Re-runs the **whole step**, action included | one attempt, no delay |
 | `timeout = "<duration>"` | Bounds **one attempt** of the step | `30s` |
-| `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api` and `terminal`; 5s for `browser` |
+| `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api`, `terminal` and `db`; 5s for `browser` |
 
 ```art
 step "wait for the import" {
@@ -1883,7 +1999,7 @@ determinism, and an assertion that flakes for unreproducible reasons is worse
 than a missing one.
 
 The keywords the language actually uses are positional, not reserved:
-`scenario`, `config`, `var`, `step`, `run`, `browser`, `expect`, `capture`,
+`scenario`, `config`, `var`, `step`, `run`, `browser`, `db`, `sql`, `expect`, `capture`,
 `retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
 `env`, `times`, `delay`, `collection`, `request`, `secret`, `as`,
 `drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
@@ -1921,7 +2037,7 @@ Setting     = Ident "=" Expr ;
 VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl    = "step" String "{" Action { StepStmt } "}" ;
 
-Action      = Request | Run | Browser ;
+Action      = Request | Run | Browser | DB ;
 Request     = Method String [ "{" { ReqField } "}" ] ;
 Method      = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
 ReqField    = "header" String "=" Expr
@@ -1930,6 +2046,8 @@ ReqField    = "header" String "=" Expr
 Run         = "run" Expr [ "{" { RunField } "}" ] ;
 RunField    = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
             | "env" "{" [ Setting { Sep Setting } ] "}" ;
+DB          = "db" Expr [ "{" { DBField } "}" ] ;
+DBField     = "sql" "=" Expr | "args" "=" Array ;
 Browser     = "browser" "{" { BrowserAct } "}" ;
 BrowserAct  = "goto"   Expr
             | "click"  Expr
@@ -1986,7 +2104,7 @@ and in what it decides to retry:
 | --- | --- | --- |
 | **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse, an import that does not resolve, a `use` whose arguments or overrides do not fit |
 | **Environment error** | The run cannot start: a variable an `env()` call needs has no value. Nothing executes | an absent `API_URL`, an `API_URL=` with no value |
-| **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
+| **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, SQL the database rejects, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
 | **Assertion failure** | The step ran and gave the wrong answer | `status == 200` against a 404 |
 
 A compile error is reported before anything executes, and **every** error in the
@@ -2239,7 +2357,7 @@ adding one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **`db` steps** | Designed, specified with the database step type |
+| **`db` steps beyond SQL** | MongoDB and Redis, SQL Server and Oracle are planned; see `ROADMAP.md`. `artemis build` refuses a scenario with a db step, naming it, until both targets can open a database |
 | **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
 | **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |

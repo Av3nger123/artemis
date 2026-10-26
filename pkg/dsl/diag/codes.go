@@ -228,6 +228,11 @@ const (
 	// A scenario's tags, which a run selects by.
 	BadTag        Code = "bad-tag"
 	DuplicateTags Code = "duplicate-tags"
+
+	// A db step's block, and the connection URL it is given.
+	DBNeedsStatement Code = "db-needs-statement"
+	DBArgsWithoutSQL Code = "db-args-without-sql"
+	UnknownDBScheme  Code = "unknown-db-scheme"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -305,6 +310,9 @@ var registry = []CodeInfo{
 	{DuplicateSuiteName, Error, "a suite exports a name a suite above it already exports"},
 	{BadTag, Error, "a tag is not a lower-case word written out as a string, or is listed twice"},
 	{DuplicateTags, Error, "a scenario or a suite has more than one tags list"},
+	{DBNeedsStatement, Error, "a db step has no sql to run"},
+	{DBArgsWithoutSQL, Error, "a db step binds args with no sql to bind them to"},
+	{UnknownDBScheme, Error, "a db step's connection URL names a database artemis has no driver for"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

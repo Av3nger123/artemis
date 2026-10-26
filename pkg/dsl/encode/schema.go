@@ -101,7 +101,7 @@ var groupSchemas = []groupSchema{
 	{"forClause", []string{kindFor}},
 	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags}},
 	{"phaseBody", []string{kindStep, kindUse}},
-	{"action", []string{kindRequest, kindRun, kindBrowser}},
+	{"action", []string{kindRequest, kindRun, kindBrowser, kindDB}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
 	{"blockField", []string{kindField}},
 	{"browserAction", []string{kindBrowserAct}},
@@ -281,6 +281,11 @@ var nodeSchemas = []nodeSchema{
 	}},
 	{Kind: kindRun, Doc: "a terminal step's action: `run \"psql\" { args = [...] }`", Fields: []fieldSchema{
 		child("command", "expression"),
+		optChild("block", "block"),
+		spanField, commentsField,
+	}},
+	{Kind: kindDB, Doc: "a db step's action: `db orders_db { sql = \"SELECT ...\", args = [...] }`", Fields: []fieldSchema{
+		child("conn", "expression"),
 		optChild("block", "block"),
 		spanField, commentsField,
 	}},

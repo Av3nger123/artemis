@@ -217,6 +217,9 @@ func substStep(s *ast.StepDecl, env map[string]ast.Expr) {
 	case *ast.Run:
 		a.Command = subst(a.Command, env)
 		substBlock(a.Block, env)
+	case *ast.DB:
+		a.Conn = subst(a.Conn, env)
+		substBlock(a.Block, env)
 	case *ast.Browser:
 		substLines(a.Acts, env)
 	}

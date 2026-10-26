@@ -9,6 +9,7 @@ import (
 	"artemis/pkg/shared/env"
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/steps/dbstep"
 	"artemis/pkg/trace"
 	"bytes"
 	"context"
@@ -459,18 +460,25 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// agree about which they are.
 	runnable := len(faults) == 0 && !rt.noneSelected
 
+	// The run's databases: one pool per connection URL, opened by the first
+	// db step that names it -- in a suite, a scenario or any --jobs worker --
+	// and closed once the last teardown is done. A run with no db step opens
+	// nothing.
+	pools := dbstep.NewPools()
+	ctx := dbstep.WithPools(context.Background(), pools)
+
 	// More than one job: every runnable file runs into its own result tree and
 	// its own buffer, and the ordered loop below drains them. See runParallel
 	// for why the output is buffered rather than streamed.
 	// Every suite's setup, once and before any scenario: the scenarios under
 	// it read what it left.
 	if runnable {
-		rt.setUpSuites(context.Background(), run, rep)
+		rt.setUpSuites(ctx, run, rep)
 	}
 
 	var parallel []*fileOutcome
 	if runnable && rt.workers() > 1 {
-		parallel = runParallel(context.Background(), rt, attempts)
+		parallel = runParallel(ctx, rt, attempts)
 	}
 
 	for i, a := range attempts {
@@ -487,14 +495,17 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		if parallel == nil {
 			// One job: run it here and now, so the console streams a step at a
 			// time exactly as it always has.
-			runCompiled(context.Background(), rt, a.compiled, run, rep)
+			runCompiled(ctx, rt, a.compiled, run, rep)
 			continue
 		}
 		parallel[i].drainInto(run, rep)
 	}
 	// And every suite's teardown, once every scenario under it is done.
 	if runnable {
-		rt.tearDownSuites(context.Background(), run, rep)
+		rt.tearDownSuites(ctx, run, rep)
+	}
+	if err := pools.Close(); err != nil {
+		logger.Logger.Warn("Could not close a database connection", "error", err.Error())
 	}
 	run.Finish()
 	// Finish derives Status from the scenarios, and a gated run can hold

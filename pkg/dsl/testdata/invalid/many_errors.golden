@@ -15,7 +15,7 @@ many_errors.art:29:33: "==" cannot be chained with another comparison
 many_errors.art:33:8: step "has nothing to run" has no action block
    33 |   step "has nothing to run" {
       |        ^^^^^^^^^^^^^^^^^^^^
-   hint: a step does one of: an HTTP verb (get, post, ...), run "<command>", or browser { ... }
+   hint: a step does one of: an HTTP verb (get, post, ...), run "<command>", browser { ... }, or db <url> { ... }
 
 === codes
 unexpected-token	error	13:3-13:11

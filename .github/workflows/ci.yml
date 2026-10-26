@@ -18,6 +18,31 @@ jobs:
   test:
     name: build, vet, test
     runs-on: ubuntu-latest
+    # pkg/steps/dbstep's server tests run against these, through the two
+    # ARTEMIS_TEST_*_URL variables on `go test` below; without them the tests
+    # skip and SQLite, in-process, is the only database covered.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: "p@ss:w/rd"
+          POSTGRES_DB: shop
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d shop"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_USER: app
+          MYSQL_PASSWORD: "p@ss:w/rd"
+          MYSQL_DATABASE: shop
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -uapp -pp@ss:w/rd --silent"
+          --health-interval 2s --health-timeout 5s --health-retries 60
     steps:
       - uses: actions/checkout@v4
 
@@ -73,7 +98,14 @@ jobs:
       # -race because the runner makes HTTP calls and the tests stand up
       # servers; a data race that only shows up under load is exactly what a
       # single-threaded run misses.
+      #
+      # The password has an @, a : and a / in it on purpose: the URL escapes
+      # them, and turning a mysql:// URL into the driver's own DSN has to read
+      # them back.
       - name: go test
+        env:
+          ARTEMIS_TEST_POSTGRES_URL: postgres://app:p%40ss%3Aw%2Frd@localhost:5432/shop?sslmode=disable
+          ARTEMIS_TEST_MYSQL_URL: mysql://app:p%40ss%3Aw%2Frd@127.0.0.1:3306/shop
         run: go test -race -coverprofile=coverage.out ./...
 
       - name: coverage

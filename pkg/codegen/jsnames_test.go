@@ -36,7 +36,7 @@ func TestJSLocalRenamesOnlyWhatItHasTo(t *testing.T) {
 // every step of its scenario: a var called `status` would be clobbered by the api
 // step that binds the root.
 func TestJSLocalRenamesAroundEveryRootOfEveryStepType(t *testing.T) {
-	for _, typ := range check.StepTypes() {
+	for _, typ := range exportTypes() {
 		for _, root := range check.Roots(typ) {
 			if jsLocal(root) == root {
 				t.Errorf("jsLocal(%q) = %q; %s binds that root", root, root, typ)
@@ -124,7 +124,7 @@ scenario "sign-in" {
 // The roots of a step type are declared in check.Roots' order, which is what
 // makes the `let` line at the top of a test the same every run.
 func TestJSRootListMatchesTheChecker(t *testing.T) {
-	for _, typ := range check.StepTypes() {
+	for _, typ := range exportTypes() {
 		key, ok := lower.TypeKey(typ)
 		if !ok {
 			continue

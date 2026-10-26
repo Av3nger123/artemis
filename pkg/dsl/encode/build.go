@@ -240,7 +240,7 @@ func step(f fields) (*ast.StepDecl, error) {
 }
 
 // action builds the step's action block, which is the whole of the step-type
-// inference: a verb makes it api, `run` terminal, `browser` browser.
+// inference: a verb makes it api, `run` terminal, `browser` browser, `db` db.
 func action(f fields) (ast.Action, error) {
 	a, present, err := f.child("action")
 	if err != nil {
@@ -258,6 +258,8 @@ func action(f fields) (ast.Action, error) {
 		return request(a)
 	case kindRun:
 		return run(a)
+	case kindDB:
+		return db(a)
 	case kindBrowser:
 		return browser(a)
 	}
@@ -289,6 +291,18 @@ func run(f fields) (*ast.Run, error) {
 		return nil, err
 	}
 	return r, plain(f, &r.Keyword)
+}
+
+func db(f fields) (*ast.DB, error) {
+	d := &ast.DB{Keyword: syn(token.Ident, "db")}
+	var err error
+	if d.Conn, err = exprOf(f, "conn", true); err != nil {
+		return nil, err
+	}
+	if d.Block, err = blockOf(f, "block", false); err != nil {
+		return nil, err
+	}
+	return d, plain(f, &d.Keyword)
 }
 
 func browser(f fields) (*ast.Browser, error) {

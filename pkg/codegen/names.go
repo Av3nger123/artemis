@@ -57,7 +57,7 @@ var emitted = func() map[string]bool {
 		// the modules the generated file imports
 		"os", "re", "json", "time", "requests", "subprocess", "pytest",
 	)
-	for _, t := range check.StepTypes() {
+	for _, t := range exportTypes() {
 		for _, r := range check.Roots(t) {
 			m[r] = true
 		}
@@ -91,7 +91,7 @@ func local(name string) string {
 // mapping between the two and it is not reversible without this.
 var rootsOf = func() map[string]map[string]bool {
 	m := map[string]map[string]bool{}
-	for _, t := range check.StepTypes() {
+	for _, t := range exportTypes() {
 		key, ok := lower.TypeKey(t)
 		if !ok {
 			continue

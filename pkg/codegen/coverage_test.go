@@ -46,7 +46,7 @@ func TestCorpusCoversTheLanguage(t *testing.T) {
 
 	// Every root of every step type, so no step type's observation goes
 	// unexported.
-	for _, typ := range check.StepTypes() {
+	for _, typ := range exportTypes() {
 		missing(t, corpusDir, "root of a "+typ.String()+" step", check.Roots(typ), got.idents)
 	}
 	if members, ok := check.Members("page"); ok {
@@ -54,7 +54,14 @@ func TestCorpusCoversTheLanguage(t *testing.T) {
 	}
 
 	missing(t, corpusDir, "HTTP verb", token.Methods, got.methods)
-	missing(t, corpusDir, "action block", token.Actions, got.actions)
+	// db is refused by both targets until they export it; see exportTypes.
+	var actions []string
+	for _, a := range token.Actions {
+		if a != "db" {
+			actions = append(actions, a)
+		}
+	}
+	missing(t, corpusDir, "action block", actions, got.actions)
 	missing(t, corpusDir, "browser action", token.BrowserActions, got.acts)
 	missing(t, corpusDir, "comparison operator", token.Comparisons, got.ops)
 	missing(t, corpusDir, "word operator", token.WordOperators, got.ops)

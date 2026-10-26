@@ -46,6 +46,29 @@ func (r *Run) Tokens(dst []token.Token) []token.Token {
 func (r *Run) Span() token.Span { return spanOf(r) }
 func (r *Run) action()          {}
 
+// DB is a db step's action: `db orders_db { sql = "...", args = [...] }`.
+//
+// Conn is the connection URL, an Expr like a run's command, because it is
+// almost always a secret var or an env() call: the scheme it carries --
+// postgres://, mysql://, sqlite: -- is what picks the driver, at run time.
+// Block holds sql, args or command; it is optional in the grammar so that a
+// `db url` with nothing to run is the checker's db-needs-statement rather
+// than a syntax error.
+type DB struct {
+	Keyword token.Token // db
+	Conn    Expr
+	Block   *Block // nil when the connection took no block
+}
+
+func (d *DB) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, d.Keyword)
+	dst = appendNode(dst, d.Conn)
+	return appendNode(dst, d.Block)
+}
+
+func (d *DB) Span() token.Span { return spanOf(d) }
+func (d *DB) action()          {}
+
 // Browser is a browser step's action: `browser { goto ... click ... }`.
 //
 // Unlike the other two the block is required, because a browser step with no
