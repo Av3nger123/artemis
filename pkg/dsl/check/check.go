@@ -322,8 +322,11 @@ func (c *checker) scenario(s *ast.Scenario) {
 	// is declared above the capture or below: either way the scenario would
 	// hold two values under one name. So the vars are collected before the
 	// walk, while the walk itself still binds them in order for resolution.
+	//
+	// A var inside setup, teardown or a block is one a use hoisted next to
+	// the steps it was expanded into; it is bound with the scenario's own.
 	for i, d := range s.Body {
-		if v, ok := d.(*ast.VarDecl); ok && v != nil && v.Name.Kind == token.Ident {
+		for _, v := range varsIn(d) {
 			sc.bind(v.Name, "var", i)
 		}
 	}
@@ -353,6 +356,35 @@ func (c *checker) scenario(s *ast.Scenario) {
 	}
 	c.phases(s)
 	c.tags(s)
+}
+
+// varsIn is d if it is a var, or every var inside it if it is a phase or a
+// block, at any depth.
+func varsIn(d ast.Decl) []*ast.VarDecl {
+	var out []*ast.VarDecl
+	var walk func(ast.Decl)
+	walk = func(d ast.Decl) {
+		switch d := d.(type) {
+		case *ast.VarDecl:
+			if d != nil && d.Name.Kind == token.Ident {
+				out = append(out, d)
+			}
+		case *ast.PhaseDecl:
+			for _, b := range d.Body {
+				walk(b)
+			}
+		case *ast.FlowDecl:
+			for _, c := range d.Clauses {
+				walk(c)
+			}
+		case *ast.Clause:
+			for _, b := range d.Body {
+				walk(b)
+			}
+		}
+	}
+	walk(d)
+	return out
 }
 
 // tagPattern is what a tag may be: lower case, so `Smoke` and `smoke` are not

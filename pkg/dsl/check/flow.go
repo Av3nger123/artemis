@@ -99,7 +99,18 @@ func (c *checker) parallel(cl *ast.Clause, sc *scope) {
 			}
 		})
 	}
+	// A var among the items is one a use hoisted beside the step it was
+	// expanded into: it is bound before the branches start, for whichever
+	// branch reads it, rather than being a branch of its own.
+	for _, d := range cl.Body {
+		if v, ok := d.(*ast.VarDecl); ok {
+			c.varDecl(v, sc)
+		}
+	}
 	for i, d := range cl.Body {
+		if _, ok := d.(*ast.VarDecl); ok {
+			continue
+		}
 		branch := sc.fork()
 		for j, names := range byBranch {
 			if j == i {
