@@ -4,11 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"context"
 
 	"artemis/pkg/shared/models"
 )
+
+// RootDurationMS is how long the attempt took, in milliseconds, as a number.
+// Every step binds it whatever its type, because it is measured here, around
+// the executor, rather than by one.
+const RootDurationMS = "duration_ms"
 
 // ErrUnknownStepType is what a step whose type nothing is registered for
 // produces. It is wrapped rather than returned bare so the message can name both
@@ -25,13 +31,24 @@ var ErrUnknownStepType = errors.New("unknown step type")
 // Everything else Observe does is hand the context, the step and the scope
 // straight through, so the contract in Executor's doc comment is the contract
 // here too: one attempt, roots on the way back, an error only when the step
-// could not run.
+// could not run. The one thing it adds is duration_ms: the attempt's wall time,
+// from handing the step over to having its roots back -- for an api step,
+// request built, sent, and every byte of the body read.
 func Observe(ctx context.Context, reg *Registry, step models.Step, scope Scope) (map[string]any, error) {
 	e, ok := reg.Lookup(step.Type)
 	if !ok {
 		return nil, unknownStepTypeError(step.Type, reg.Types())
 	}
-	return e.Observe(ctx, step, scope)
+	start := time.Now()
+	roots, err := e.Observe(ctx, step, scope)
+	if err != nil {
+		return nil, err
+	}
+	if roots == nil {
+		roots = map[string]any{}
+	}
+	roots[RootDurationMS] = float64(time.Since(start).Microseconds()) / 1000
+	return roots, nil
 }
 
 // unknownStepTypeError names the type that was asked for and the way out of it.

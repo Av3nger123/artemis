@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/steps/httpstep"
 	"artemis/pkg/trace"
 )
 
@@ -212,6 +214,22 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		logger.Logger.Error("Could not resolve a scenario's browser config", "file", file, "error", err.Error())
 		return
 	}
+
+	// `config http`: a cookie jar for the scenario's api steps unless it said
+	// cookies = false. Made here, per scenario, so one scenario's session
+	// never reaches another's requests.
+	httpCfg, err := sc.HTTP.Resolve(&eval.Env{Vars: scope.Vars(), Gen: gen})
+	if err != nil {
+		scenario.Fail(0, err)
+		rep.ScenarioFailed(scenario)
+		logger.Logger.Error("Could not resolve a scenario's http config", "file", file, "error", err.Error())
+		return
+	}
+	var jar http.CookieJar
+	if httpCfg.Cookies {
+		jar = httpstep.NewJar()
+	}
+	ctx = httpstep.WithJar(ctx, jar)
 
 	scenarioStart := time.Now()
 	// The scenario boundary: one browser for the scenario, opened lazily on

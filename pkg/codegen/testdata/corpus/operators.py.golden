@@ -131,9 +131,10 @@ def art_match(subject, pattern):
 # scenario "every operator", line 3
 def test_every_operator():
     pattern = r"ORD-[0-9]+"
+    http = requests.Session()
 
     # step "the response says everything", line 6
-    resp = requests.get("https://example.test/report")
+    resp = http.get("https://example.test/report")
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
     assert status == 200

@@ -18,9 +18,21 @@ import (
 // resolves and `url` is a member of it. memberRoots below holds what it may
 // hold.
 var roots = map[StepType][]string{
-	API:      {"status", "body", "raw", "headers"},
+	API:      {"status", "body", "raw", "headers", "cookies"},
 	Terminal: {"exit_code", "stdout", "stderr"},
 	Browser:  {"page"},
+}
+
+// everyStep are the roots every step binds whatever its type: what the runner
+// measured about the attempt rather than what the step's executor observed.
+// They are in scope in every step and in no var's value, which has no attempt
+// to measure.
+var everyStep = []string{"duration_ms"}
+
+// EveryStepRoots returns the roots every step type binds, which the runner
+// adds and no executor does. The slice is a copy.
+func EveryStepRoots() []string {
+	return append([]string(nil), everyStep...)
 }
 
 // memberRoots are the roots whose members are a closed set, so a typo in one
@@ -37,10 +49,10 @@ var memberRoots = map[string][]string{
 // hint breaks is the producer's decision -- and this is the break the design
 // document prints.
 var scopeHints = map[StepType]string{
-	API:      "an api step binds status, body, raw, headers",
-	Terminal: "a terminal step binds exit_code, stdout, stderr",
-	Browser: "a browser step binds page.url, page.title, text(), value(),\n" +
-		"attr(), count(), visible()",
+	API:      "an api step binds status, body, raw, headers, cookies, duration_ms",
+	Terminal: "a terminal step binds exit_code, stdout, stderr, duration_ms",
+	Browser: "a browser step binds page.url, page.title, duration_ms, text(),\n" +
+		"value(), attr(), count(), visible()",
 	Unknown: `a var's value may use env("NAME") and the vars above it`,
 }
 
@@ -73,6 +85,9 @@ func (v *view) where() string {
 func Roots(t StepType) []string {
 	out := make([]string, len(roots[t]))
 	copy(out, roots[t])
+	if _, isStep := roots[t]; isStep {
+		out = append(out, everyStep...)
+	}
 	return out
 }
 
@@ -108,6 +123,12 @@ var allRoots = func() map[string]StepType {
 		for _, r := range rs {
 			m[r] = t
 		}
+	}
+	// A root every step binds belongs to no one type. Indexed under API it is
+	// still "in the language", which is all notFound asks: in scope in every
+	// step, so the one place it is reported from is a var's value.
+	for _, r := range everyStep {
+		m[r] = API
 	}
 	return m
 }()
@@ -179,7 +200,7 @@ type view struct {
 // view builds the resolution view for a position of type t. Unknown means a
 // var's value, which binds no roots at all -- only env() and the vars above.
 func (s *scope) view(t StepType) *view {
-	v := &view{typ: t, roots: roots[t]}
+	v := &view{typ: t, roots: Roots(t)}
 	v.vars = append(v.vars, s.vars...)
 	v.captures = append(v.captures, s.captures...)
 	return v

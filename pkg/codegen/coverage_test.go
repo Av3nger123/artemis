@@ -66,7 +66,7 @@ func TestCorpusCoversTheLanguage(t *testing.T) {
 	// step and a config keep their settings.
 	for _, fields := range [][]string{
 		token.RequestFields, token.RunFields, token.RetryFields,
-		token.StepFields, token.BrowserConfigFields,
+		token.StepFields, token.BrowserConfigFields, token.HTTPConfigFields,
 	} {
 		missing(t, corpusDir, "block field", fields, got.fields)
 	}

@@ -220,7 +220,13 @@ func (f *pyFile) scenario(sc *lower.Scenario) error {
 		}
 		f.line(1, "page = "+open)
 	}
-	f.wrote = len(sc.Vars) > 0 || needsPage
+	session := hasAPIStep(sc)
+	if session {
+		if err := f.openSession(sc); err != nil {
+			return fmt.Errorf("scenario %q: %w", sc.Name, err)
+		}
+	}
+	f.wrote = len(sc.Vars) > 0 || needsPage || session
 
 	if len(sc.Vars) == 0 && !needsPage && len(sc.Steps) == 0 {
 		// A scenario with no body at all still has to be a function.
@@ -233,6 +239,36 @@ func (f *pyFile) scenario(sc *lower.Scenario) error {
 			return fmt.Errorf("scenario %q: %w", sc.Name, err)
 		}
 	}
+	return nil
+}
+
+// openSession binds `http`, what the scenario's requests are sent through: a
+// requests.Session, whose cookie jar is the interpreter's per-scenario jar, or
+// the requests module itself for a scenario that wrote `config http { cookies =
+// false }`. Both have the same get, post and the rest, so a step reads
+// `http.get(...)` either way.
+//
+// A Session sends its jar's cookies only when the request wrote no Cookie
+// header, which is the interpreter's rule for a step that sends its own.
+func (f *pyFile) openSession(sc *lower.Scenario) error {
+	cookies := httpCookies(sc)
+	if cookies == nil {
+		f.line(1, "http = requests.Session()")
+		return nil
+	}
+	if lit, ok := cookies.(*ast.Literal); ok && lit.Kind() == token.Bool {
+		if lit.Tok.Value == "true" {
+			f.line(1, "http = requests.Session()")
+		} else {
+			f.line(1, "http = requests")
+		}
+		return nil
+	}
+	src, err := f.expr(cookies, precOr)
+	if err != nil {
+		return fmt.Errorf("config http cookies: %w", err)
+	}
+	f.line(1, "http = requests.Session() if "+src+" else requests")
 	return nil
 }
 
@@ -382,9 +418,20 @@ func (f *pyFile) request(st *lower.Step, indent int) error {
 		args = append(args, "timeout="+secs)
 	}
 
-	f.callLine(indent, "resp = requests."+r.Method, args)
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.need("time")
+		f.line(indent, "started = time.perf_counter()")
+	}
+	f.callLine(indent, "resp = http."+r.Method, args)
 	f.line(indent, "status, body, raw, headers = (")
 	f.line(indent+1, "resp.status_code, "+f.use(helperJSON)+"(resp), resp.text, resp.headers)")
+	if timed {
+		f.line(indent, "duration_ms = (time.perf_counter() - started) * 1000")
+	}
+	if mentions(st, "cookies") {
+		f.line(indent, "cookies = "+f.use(helperCookies)+"(resp)")
+	}
 	return nil
 }
 
@@ -494,8 +541,16 @@ func (f *pyFile) run(st *lower.Step, indent int) error {
 		args = append(args, "timeout="+secs)
 	}
 
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.need("time")
+		f.line(indent, "started = time.perf_counter()")
+	}
 	f.callLine(indent, "proc = subprocess.run", args)
 	f.line(indent, "exit_code, stdout, stderr = proc.returncode, proc.stdout, proc.stderr")
+	if timed {
+		f.line(indent, "duration_ms = (time.perf_counter() - started) * 1000")
+	}
 	return nil
 }
 
@@ -549,12 +604,20 @@ func (f *pyFile) acts(st *lower.Step, indent int) error {
 		}
 		f.line(indent, "page.set_default_timeout("+ms+")")
 	}
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.need("time")
+		f.line(indent, "started = time.perf_counter()")
+	}
 	for _, a := range st.Acts {
 		line, err := f.act(a)
 		if err != nil {
 			return err
 		}
 		f.line(indent, line)
+	}
+	if timed {
+		f.line(indent, "duration_ms = (time.perf_counter() - started) * 1000")
 	}
 	return nil
 }

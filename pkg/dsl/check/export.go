@@ -51,12 +51,13 @@ var blockSpecs = map[string]blockSpec{
 	"retry":         retryBlock,
 	"step":          stepBlock,
 	"configBrowser": browserConfigBlock,
+	"configHttp":    httpConfigBlock,
 }
 
 // BlockNames returns the blocks BlockFields knows, in grammar order: the three
 // action-and-statement blocks, the step's own fields, then config's.
 func BlockNames() []string {
-	return []string{"request", "run", "retry", "step", "configBrowser"}
+	return []string{"request", "run", "retry", "step", "configBrowser", "configHttp"}
 }
 
 // BlockFields returns block's fields in the order its token table lists them,

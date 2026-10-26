@@ -123,11 +123,12 @@ def art_retry(times=1, delay=0.0):
 # scenario "the orders api", line 2
 def test_the_orders_api():
     base = art_env("ARTEMIS_BASE_URL")
+    http = requests.Session()
 
     # step "create one", line 5
     for attempt in art_retry(times=3, delay=1.0):
         with attempt:
-            resp = requests.post(
+            resp = http.post(
                 f"{art_render(base)}/orders",
                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + art_render(art_env("TOKEN"))},
                 data=art_render({"sku": "ART-1", "qty": 2, "gift": True, "note": None}),
@@ -139,7 +140,7 @@ def test_the_orders_api():
             id = body["id"]
 
     # step "read it back", line 18
-    resp = requests.get(
+    resp = http.get(
         f"{art_render(base)}/orders/{art_render(id)}",
         params=[("fields", "id,total"), ("fields", "sku"), ("page", art_render(2))],
     )
@@ -150,7 +151,7 @@ def test_the_orders_api():
     assert art_contains(headers["content-type"], "json")
 
     # step "replace it", line 30
-    resp = requests.put(
+    resp = http.put(
         f"{art_render(base)}/orders/{art_render(id)}",
         data=art_render({"sku": "ART-2", "qty": 1}),
     )
@@ -159,7 +160,7 @@ def test_the_orders_api():
     assert status == 200
 
     # step "amend it", line 37
-    resp = requests.patch(
+    resp = http.patch(
         f"{art_render(base)}/orders/{art_render(id)}",
         data=art_render({"qty": 4}),
     )
@@ -168,19 +169,19 @@ def test_the_orders_api():
     assert status == 200
 
     # step "ask what it allows", line 44
-    resp = requests.options(f"{art_render(base)}/orders/{art_render(id)}")
+    resp = http.options(f"{art_render(base)}/orders/{art_render(id)}")
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
     assert status < 400
 
     # step "just the headers", line 49
-    resp = requests.head(f"{art_render(base)}/orders/{art_render(id)}")
+    resp = http.head(f"{art_render(base)}/orders/{art_render(id)}")
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
     assert status == 200
 
     # step "remove it", line 54
-    resp = requests.delete(f"{art_render(base)}/orders/{art_render(id)}")
+    resp = http.delete(f"{art_render(base)}/orders/{art_render(id)}")
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
     assert status == 204

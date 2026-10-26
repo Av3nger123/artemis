@@ -110,7 +110,21 @@ var (
 		},
 		names: token.BrowserConfigFields,
 	}
+
+	httpConfigBlock = blockSpec{
+		what: "a config http block",
+		fields: map[string]fieldSpec{
+			"cookies": {kind: kindBool},
+		},
+		names: token.HTTPConfigFields,
+	}
 )
+
+// configBlocks is the field table for each config subject.
+var configBlocks = map[string]blockSpec{
+	"browser": browserConfigBlock,
+	"http":    httpConfigBlock,
+}
 
 // request checks an api step's action: the URL and the request block's fields.
 func (c *checker) request(r *ast.Request, v *view) {
@@ -219,7 +233,7 @@ func (c *checker) config(d *ast.ConfigDecl, sc *scope) {
 		c.values(d.Block, v)
 		return
 	}
-	c.block(d.Block, browserConfigBlock, v)
+	c.block(d.Block, configBlocks[d.Subject.Value], v)
 }
 
 // stepField checks `timeout = "5s"` or `retry { ... }`, the two fields of a

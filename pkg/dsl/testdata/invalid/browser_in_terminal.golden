@@ -2,12 +2,12 @@
 browser_in_terminal.art:13:12: "page" is not in scope in a terminal step
    13 |     expect page.title contains "Deployed"
       |            ^^^^
-   hint: a terminal step binds exit_code, stdout, stderr
+   hint: a terminal step binds exit_code, stdout, stderr, duration_ms
 
 browser_in_terminal.art:14:12: "value()" is not in scope in a terminal step
    14 |     expect value("#build") == "ok"
       |            ^^^^^
-   hint: a terminal step binds exit_code, stdout, stderr
+   hint: a terminal step binds exit_code, stdout, stderr, duration_ms
 
 === codes
 not-in-scope	error	13:12-13:16

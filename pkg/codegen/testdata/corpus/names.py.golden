@@ -69,9 +69,10 @@ def test_names_that_collide():
     status_ = "pending"
     resp_ = "ignored"
     class_ = "economy"
+    http = requests.Session()
 
     # step "the api step sees the root", line 10
-    resp = requests.get("https://example.test/orders")
+    resp = http.get("https://example.test/orders")
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
     assert status == 200

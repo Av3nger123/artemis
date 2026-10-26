@@ -18,7 +18,10 @@
 //     such moment;
 //   - vite owns two environment variables, so `env("BASE_URL")` reads vite's
 //     own base path here and `env("NODE_ENV")` reads the mode vitest ran in.
-//     Name yours something else.
+//     Name yours something else;
+//   - a scenario's cookies are kept by name: two cookies of one name for two
+//     paths keep the later one, where artemis keeps both, and a redirect
+//     fetch follows does not send or keep them.
 
 import { onTestFinished, test } from "vitest";
 import { chromium, expect } from "@playwright/test";

@@ -236,7 +236,10 @@ func jsHeader(source string) string {
 		"//     such moment;\n" +
 		"//   - vite owns two environment variables, so `env(\"BASE_URL\")` reads vite's\n" +
 		"//     own base path here and `env(\"NODE_ENV\")` reads the mode vitest ran in.\n" +
-		"//     Name yours something else.\n"
+		"//     Name yours something else;\n" +
+		"//   - a scenario's cookies are kept by name: two cookies of one name for two\n" +
+		"//     paths keep the later one, where artemis keeps both, and a redirect\n" +
+		"//     fetch follows does not send or keep them.\n"
 }
 
 // hasBrowserStep reports whether the scenario holds a step that needs a page.
@@ -296,7 +299,15 @@ func (f *jsFile) scenario(sc *lower.Scenario) error {
 		}
 		f.line(1, "const page = "+open+";")
 	}
-	f.wrote = len(declared) > 0 || needsPage
+	session := hasAPIStep(sc)
+	if session {
+		jar, err := f.jar(sc)
+		if err != nil {
+			return fmt.Errorf("scenario %q: %w", sc.Name, err)
+		}
+		f.line(1, "const jar = "+jar+";")
+	}
+	f.wrote = len(declared) > 0 || needsPage || session
 
 	for _, st := range sc.Steps {
 		if err := f.emitStep(st); err != nil {
@@ -335,6 +346,26 @@ func (f *jsFile) trimLast() {
 // The order is fixed -- vars and captures in source order, then the step types
 // in check.StepTypes()' order -- so the declaration line is a function of the
 // scenario and not of a map walk.
+// jar is what a scenario's requests keep their cookies in: a jar, or null for a
+// scenario that wrote `config http { cookies = false }`.
+func (f *jsFile) jar(sc *lower.Scenario) (string, error) {
+	cookies := httpCookies(sc)
+	if cookies == nil {
+		return f.use(jsHelperJar) + "()", nil
+	}
+	if lit, ok := cookies.(*ast.Literal); ok && lit.Kind() == token.Bool {
+		if lit.Tok.Value == "true" {
+			return f.use(jsHelperJar) + "()", nil
+		}
+		return "null", nil
+	}
+	src, err := f.expr(cookies, jsPrecOr)
+	if err != nil {
+		return "", fmt.Errorf("config http cookies: %w", err)
+	}
+	return "(" + src.src + ") ? " + f.use(jsHelperJar) + "() : null", nil
+}
+
 func declarations(sc *lower.Scenario) []string {
 	var names []string
 	seen := map[string]bool{}
@@ -356,8 +387,12 @@ func declarations(sc *lower.Scenario) []string {
 	}
 
 	used := map[string]bool{}
+	read := map[string]bool{}
 	for _, st := range sc.Steps {
 		used[st.Type] = true
+		for _, root := range []string{"cookies", "duration_ms"} {
+			read[root] = read[root] || mentions(st, root)
+		}
 	}
 	for _, t := range check.StepTypes() {
 		key, ok := lower.TypeKey(t)
@@ -367,9 +402,18 @@ func declarations(sc *lower.Scenario) []string {
 			continue
 		}
 		for _, root := range jsRootList[key] {
+			// cookies and duration_ms are bound only by a step that reads
+			// one, so they are declared only for a scenario that does.
+			if (root == "cookies" || root == "duration_ms") && !read[root] {
+				continue
+			}
 			add(root)
 		}
 		add(jsStepLocal(key))
+	}
+	if read["duration_ms"] {
+		add("duration_ms")
+		add("started")
 	}
 	return names
 }
@@ -560,11 +604,21 @@ func (f *jsFile) request(st *lower.Step, indent int) error {
 		options = append(options, "signal: AbortSignal.timeout("+ms+")")
 	}
 
-	f.optionsCall(indent, "resp = await fetch", []string{target}, options)
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.line(indent, "started = performance.now();")
+	}
+	f.optionsCall(indent, "resp = await "+f.use(jsHelperFetch), []string{"jar", target}, options)
 	f.line(indent, "raw = await resp.text();")
+	if timed {
+		f.line(indent, "duration_ms = performance.now() - started;")
+	}
 	f.line(indent, "status = resp.status;")
 	f.line(indent, "body = "+f.use(jsHelperJSON)+"(raw);")
 	f.line(indent, "headers = resp.headers;")
+	if mentions(st, "cookies") {
+		f.line(indent, "cookies = "+f.use(jsHelperCookies)+"(resp);")
+	}
 	return nil
 }
 
@@ -698,7 +752,14 @@ func (f *jsFile) run(st *lower.Step, indent int) error {
 		options = append(options, "timeout: "+ms)
 	}
 
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.line(indent, "started = performance.now();")
+	}
 	f.optionsCall(indent, "proc = spawnSync", []string{command.src, argv}, options)
+	if timed {
+		f.line(indent, "duration_ms = performance.now() - started;")
+	}
 	f.line(indent, "exit_code = "+f.use(jsHelperExit)+"(proc);")
 	f.line(indent, "stdout = proc.stdout ?? \"\";")
 	f.line(indent, "stderr = proc.stderr ?? \"\";")
@@ -750,12 +811,19 @@ func (f *jsFile) acts(st *lower.Step, indent int) error {
 		}
 		f.line(indent, "page.setDefaultTimeout("+ms+");")
 	}
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.line(indent, "started = performance.now();")
+	}
 	for _, a := range st.Acts {
 		line, err := f.act(a)
 		if err != nil {
 			return err
 		}
 		f.line(indent, line+";")
+	}
+	if timed {
+		f.line(indent, "duration_ms = performance.now() - started;")
 	}
 	return nil
 }

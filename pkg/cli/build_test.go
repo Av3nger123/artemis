@@ -48,7 +48,7 @@ func TestBuildPrintsToStdout(t *testing.T) {
 	for _, want := range []string{
 		"ONE-WAY EXPORT",
 		"def test_checkout():",
-		"requests.post(",
+		"http.post(",
 		"assert status == 201",
 		"id = body[\"id\"]",
 		"subprocess.run(",

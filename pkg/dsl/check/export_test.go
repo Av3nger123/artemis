@@ -81,6 +81,7 @@ func TestBlockFieldOrderIsTheTokenTable(t *testing.T) {
 		"retry":         token.RetryFields,
 		"step":          token.StepFields,
 		"configBrowser": token.BrowserConfigFields,
+		"configHttp":    token.HTTPConfigFields,
 	}
 	for block, want := range cases {
 		fields, ok := BlockFields(block)

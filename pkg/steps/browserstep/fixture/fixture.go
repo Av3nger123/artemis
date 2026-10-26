@@ -55,6 +55,21 @@ const (
 	// test of an expiring budget would have to wait out a selector that might
 	// appear, and could not tell a slow machine from a working one.
 	PathNever = "/never"
+
+	// PathLogin sets a session cookie, HttpOnly and SameSite=Lax, and answers
+	// 200 with no body: the login an API that keeps its session in a cookie
+	// has. A cookie jar test logs in here and reads PathSession after.
+	PathLogin = "/login"
+
+	// PathSession answers with the Cookie header it was sent, as plain text,
+	// or "none": what a jar sent is then a `raw` an expect can compare.
+	PathSession = "/session"
+)
+
+// SessionCookie is the cookie PathLogin sets, as a scenario names it.
+const (
+	SessionCookie = "sid"
+	SessionValue  = "fixture-session"
 )
 
 // Elements of the fixture, as the selectors a scenario writes. They are here so
@@ -93,6 +108,8 @@ func Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(PathDone, done)
 	mux.HandleFunc(PathNever, never)
+	mux.HandleFunc(PathLogin, login)
+	mux.HandleFunc(PathSession, session)
 	// Last, and on "/": ServeMux treats "/" as a catch-all, so a typo in a
 	// test's path serves the form rather than a 404 the browser reports as a
 	// blank page. The form is the page a scenario starts on anyway.
@@ -198,4 +215,24 @@ func writeHTML(w http.ResponseWriter, body string) {
 	// have already settled.
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(body))
+}
+
+// login sets the session cookie. Path=/ so it is sent to every page of the
+// fixture, which is what lets PathSession see it.
+func login(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name: SessionCookie, Value: SessionValue, Path: "/",
+		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+	})
+	w.WriteHeader(http.StatusOK)
+}
+
+// session echoes the Cookie header the request carried, or "none".
+func session(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	got := r.Header.Get("Cookie")
+	if got == "" {
+		got = "none"
+	}
+	fmt.Fprint(w, got)
 }

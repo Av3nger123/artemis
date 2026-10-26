@@ -2,6 +2,7 @@ package trace
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -140,6 +141,73 @@ func withheldRoots(roots map[string]any, s models.Secrets) map[string]any {
 		}
 	}
 	return out
+}
+
+// withheldCookies is roots with every cookie value a response set withheld:
+// `headers["Set-Cookie"]` and each `cookies.<name>.value`. A session cookie is
+// a credential the server handed over without the scenario declaring it
+// `secret`, and a trace is a file that gets attached to a ticket. The cookie's
+// name and attributes stay, because "was it HttpOnly" is the question a trace
+// of a login is usually opened to answer.
+//
+// It copies what it changes: the roots are the ones the step's assertions
+// read, and a trace must not reach back into them.
+func withheldCookies(roots map[string]any) map[string]any {
+	headers, hasHeaders := object(roots["headers"])
+	cookies, hasCookies := object(roots["cookies"])
+	if !hasCookies && !hasHeaders {
+		return roots
+	}
+	out := make(map[string]any, len(roots))
+	for k, v := range roots {
+		out[k] = v
+	}
+	if hasHeaders {
+		copied := make(map[string]any, len(headers))
+		for name, value := range headers {
+			if strings.EqualFold(name, "Set-Cookie") {
+				value = Redacted
+			}
+			copied[name] = value
+		}
+		out["headers"] = copied
+	}
+	if hasCookies {
+		copied := make(map[string]any, len(cookies))
+		for name, value := range cookies {
+			attrs, ok := value.(map[string]any)
+			if !ok {
+				copied[name] = value
+				continue
+			}
+			c := make(map[string]any, len(attrs))
+			for k, v := range attrs {
+				c[k] = v
+			}
+			c["value"] = Redacted
+			copied[name] = c
+		}
+		out["cookies"] = copied
+	}
+	return out
+}
+
+// object reads v as a string-keyed object. `headers` arrives as eval.Headers, a
+// named map type this package does not import -- it depends on models alone --
+// so a named map is read through reflect rather than by name.
+func object(v any) (map[string]any, bool) {
+	if m, ok := v.(map[string]any); ok {
+		return m, true
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Map || rv.Type().Key().Kind() != reflect.String {
+		return nil, false
+	}
+	out := make(map[string]any, rv.Len())
+	for it := rv.MapRange(); it.Next(); {
+		out[it.Key().String()] = it.Value().Interface()
+	}
+	return out, true
 }
 
 // replaceAt puts Redacted at an RFC 6901 pointer inside v, and returns v

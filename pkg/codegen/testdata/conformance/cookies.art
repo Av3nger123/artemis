@@ -1,0 +1,84 @@
+# A scenario's cookie jar, run by all three backends: what a login sets is sent
+# on the scenario's next request, a step that writes its own Cookie header sends
+# only that, the next scenario starts empty, and `config http { cookies = false }`
+# keeps no jar at all. `duration_ms` is asserted by range, since nobody chose it.
+
+# conformance: pass
+scenario "a login cookie reaches the next request" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "log in" {
+    post "${base}/login"
+    timeout = "10s"
+
+    expect status == 200
+    expect cookies.sid.value == "fixture-session"
+    expect cookies.sid.http_only == true
+    expect cookies.sid.secure == false
+    expect cookies.sid.same_site == "lax"
+    expect cookies.sid.path == "/"
+    expect cookies.sid.domain is null
+    expect duration_ms >= 0
+    expect duration_ms < 10000
+  }
+
+  step "the jar sends it" {
+    get "${base}/session"
+    timeout = "10s"
+
+    expect raw == "sid=fixture-session"
+  }
+
+  step "a step's own Cookie header wins" {
+    get "${base}/session" {
+      header "Cookie" = "sid=forged"
+    }
+    timeout = "10s"
+
+    expect raw == "sid=forged"
+  }
+}
+
+# conformance: pass
+scenario "a new scenario starts with an empty jar" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "nothing to send" {
+    get "${base}/session"
+    timeout = "10s"
+
+    expect raw == "none"
+  }
+}
+
+# conformance: pass
+scenario "no jar keeps nothing" {
+  config http { cookies = false }
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "log in" {
+    post "${base}/login"
+    timeout = "10s"
+
+    expect status == 200
+  }
+
+  step "nothing was kept" {
+    get "${base}/session"
+    timeout = "10s"
+
+    expect raw == "none"
+  }
+}
+
+# conformance: fail
+scenario "a cookie the server never set is not there" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "log in" {
+    post "${base}/login"
+    timeout = "10s"
+
+    expect cookies.missing.value == "x"
+  }
+}

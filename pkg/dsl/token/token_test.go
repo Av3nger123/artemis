@@ -153,7 +153,7 @@ func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 	live := [][]string{
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
-		StepFields, ConfigBlocks, BrowserConfigFields,
+		StepFields, ConfigBlocks, BrowserConfigFields, HTTPConfigFields,
 		CollectionItems, UseLines, DropTargets,
 	}
 	// keywordNotName are the reserved words the language now uses as keywords

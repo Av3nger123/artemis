@@ -44,6 +44,7 @@ const (
 	helperLen          = "art_len"
 	helperNumber       = "art_number"
 	helperString       = "art_string"
+	helperCookies      = "art_cookies"
 	helperText         = "art_text"
 	helperValue        = "art_value"
 	helperAttr         = "art_attr"
@@ -430,6 +431,48 @@ def art_is(value, want):
     return art_render(value)
 `,
 }, {
+	name:    helperCookies,
+	imports: []string{"datetime", "email.utils"},
+	src: `def art_cookies(response):
+    """` + "`cookies`" + `: what this response's Set-Cookie headers set, each name to its
+    value and attributes, an attribute the server did not send as None. Read off
+    the headers as the interpreter reads them rather than off requests' jar,
+    which fills in a domain and a path the server never sent."""
+    out = {}
+    for line in response.raw.headers.getlist("Set-Cookie"):
+        parts = [part.strip() for part in line.split(";")]
+        name, sep, value = parts[0].partition("=")
+        if not sep or not name.strip():
+            continue
+        value = value.strip()
+        if len(value) > 1 and value[0] == value[-1] == '"':
+            value = value[1:-1]
+        cookie = {"value": value, "domain": None, "path": None, "expires": None,
+                  "secure": False, "http_only": False, "same_site": None}
+        for attribute in parts[1:]:
+            key, _, setting = attribute.partition("=")
+            key, setting = key.strip().lower(), setting.strip()
+            if key == "domain" and setting:
+                cookie["domain"] = setting
+            elif key == "path" and setting:
+                cookie["path"] = setting
+            elif key == "expires" and setting:
+                try:
+                    moment = email.utils.parsedate_to_datetime(setting)
+                    cookie["expires"] = moment.astimezone(
+                        datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                except (TypeError, ValueError):
+                    pass
+            elif key == "secure":
+                cookie["secure"] = True
+            elif key == "httponly":
+                cookie["http_only"] = True
+            elif key == "samesite" and setting.lower() in ("lax", "strict", "none"):
+                cookie["same_site"] = setting.lower()
+        out[name.strip()] = cookie
+    return out
+`,
+}, {
 	name: helperText,
 	src: `def art_text(page, selector):
     """` + "`text(sel)`" + `: the first match's text content, or None for no match.
@@ -597,6 +640,7 @@ var byName = func() map[string]helper {
 var importLines = map[string]string{
 	"base64":       "import base64",
 	"datetime":     "import datetime",
+	"email.utils":  "import email.utils",
 	"hashlib":      "import hashlib",
 	"hmac":         "import hmac",
 	"json":         "import json",
@@ -619,6 +663,6 @@ var importLines = map[string]string{
 // between -- isort's grouping, which is what a linter in a Python repo would do
 // to the file anyway.
 var importGroups = [][]string{
-	{"base64", "datetime", "hashlib", "hmac", "json", "math", "os", "random", "re", "subprocess", "time", "urllib", "urllib.parse", "uuid"},
+	{"base64", "datetime", "email.utils", "hashlib", "hmac", "json", "math", "os", "random", "re", "subprocess", "time", "urllib", "urllib.parse", "uuid"},
 	{"pytest", "requests", "playwright"},
 }

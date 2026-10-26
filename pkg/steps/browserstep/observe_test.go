@@ -46,7 +46,14 @@ func browserStep(as ...models.Act) models.Step {
 // holds. A root the checker admits and this file never binds is an `expect`
 // that errors at run time for no reason a reader could find.
 func TestTheRootsAreTheCheckersRoots(t *testing.T) {
-	want := check.Roots(check.Browser)
+	// duration_ms is the runner's, measured around this package rather than
+	// bound by it.
+	var want []string
+	for _, r := range check.Roots(check.Browser) {
+		if r != "duration_ms" {
+			want = append(want, r)
+		}
+	}
 	sort.Strings(want)
 	got := []string{RootPage}
 	if strings.Join(got, ",") != strings.Join(want, ",") {

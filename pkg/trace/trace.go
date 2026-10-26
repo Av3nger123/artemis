@@ -214,7 +214,7 @@ func Of(scenario string, step models.Step, attempt int, roots map[string]any, er
 	rec.Sent, cut = clamp(rec.Sent, "sent")
 	rec.Truncated = append(rec.Truncated, cut...)
 	if roots != nil {
-		observed, cutObserved := clamp(withheldRoots(roots, step.Secrets), "observed")
+		observed, cutObserved := clamp(withheldRoots(withheldCookies(roots), step.Secrets), "observed")
 		rec.Observed = observed
 		rec.Truncated = append(rec.Truncated, cutObserved...)
 	}

@@ -173,11 +173,23 @@
         }
       ]
     },
+    "configHttpField": {
+      "doc": "The settings of a config http block.",
+      "values": [
+        {
+          "value": "cookies",
+          "valueKind": "boolean"
+        }
+      ]
+    },
     "configSubject": {
       "doc": "The subjects of a config declaration.",
       "values": [
         {
           "value": "browser"
+        },
+        {
+          "value": "http"
         }
       ]
     },
@@ -651,7 +663,9 @@
             "status",
             "body",
             "raw",
-            "headers"
+            "headers",
+            "cookies",
+            "duration_ms"
           ],
           "functions": [
             "env",
@@ -678,7 +692,8 @@
           "roots": [
             "exit_code",
             "stdout",
-            "stderr"
+            "stderr",
+            "duration_ms"
           ],
           "functions": [
             "env",
@@ -703,7 +718,8 @@
         {
           "value": "browser",
           "roots": [
-            "page"
+            "page",
+            "duration_ms"
           ],
           "functions": [
             "env",

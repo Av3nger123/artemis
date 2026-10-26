@@ -160,6 +160,7 @@ parameters and its response. The rules are in
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
+- A cookie jar per scenario, so an API that keeps its session in a cookie is tested by logging in once; `cookies` to assert what a response set, and `duration_ms` on every step to assert how long it took
 - Test data made up where it is needed -- `uuid()`, `now()`, `random_string()` -- reproducible with `--seed`, and builtins for base64, hashes, HMAC signatures, JWT claims and JSON
 - Collections: write a request once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on

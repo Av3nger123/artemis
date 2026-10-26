@@ -108,6 +108,7 @@ func Choices() ChoicePoints {
 			"retryField":         fields("The fields of a retry block.", "retry"),
 			"stepField":          fields("The fields of a step itself, as against of its action block.", "step"),
 			"configBrowserField": fields("The settings of a config browser block.", "configBrowser"),
+			"configHttpField":    fields("The settings of a config http block.", "configHttp"),
 			"expectClass":        expectClasses(),
 			"reservedWord":       reservedWords(),
 			"diagnosticCode":     diagnosticCodes(),

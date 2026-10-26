@@ -222,11 +222,62 @@ credential of its own.
 
 ### `config`
 
-**Spec decision.** `config` takes the name of a step type and settings for it.
-No setting is defined for `api` or `terminal` scenarios; the only block with keys
-today is `config browser`, which belongs to the browser step type and is
-specified with it -- see [`config browser`](#config-browser). A `config` block naming a step type that does not exist, or
-setting a key that type does not define, is a compile error.
+**Spec decision.** `config` takes a subject and settings for it. There are two:
+`config browser`, which belongs to the browser step type and is specified with
+it -- see [`config browser`](#config-browser) -- and `config http`, how the
+scenario's api steps talk:
+
+```art
+scenario "anonymous" {
+  config http { cookies = false }
+
+  step "no session" {
+    get "https://example.com/me"
+    expect status == 401
+  }
+}
+```
+
+| Setting | Value | Default |
+| --- | --- | --- |
+| `cookies` | `true` or `false` | `true`: the scenario's api steps share a [cookie jar](#cookies) |
+
+A `config` block naming a subject that does not exist, or setting a key that
+subject does not define, is a compile error.
+
+### Cookies
+
+A scenario's api steps share one cookie jar, as a browser's pages do: a cookie a
+response sets is sent on the scenario's later requests to the site that set it,
+so an API that keeps its session in a cookie is tested by logging in once.
+
+```art
+scenario "a cookie session" {
+  var url = env("API_URL")
+
+  step "log in" {
+    post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
+    expect status == 200
+    expect cookies.sid.http_only == true
+  }
+
+  step "read the profile" {
+    get "${url}/me"
+    expect status == 200
+  }
+}
+```
+
+Each scenario starts with an empty jar, and its cookies never reach another
+scenario. A step that writes its own `header "Cookie" = ...` sends exactly that
+and nothing from the jar -- a test of a forged or expired session must not be
+handed the real one -- and what its response sets is still kept for the steps
+after it. `config http { cookies = false }` keeps no jar: every request sends
+only the headers it wrote.
+
+`cookies` reads what *this* response set; what the jar holds is not a value a
+scenario can read. A [trace](#tracing-a-step) withholds every cookie's value,
+in `cookies` and in `headers["Set-Cookie"]`, as it withholds a `secret`.
 
 ---
 
@@ -1033,9 +1084,10 @@ What the observation binds depends on the step's type:
 
 | Step type | Bound roots |
 | --- | --- |
-| `api` | `status`, `body`, `raw`, `headers` |
+| `api` | `status`, `body`, `raw`, `headers`, `cookies` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
 | `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
+| every step | `duration_ms` |
 
 | Root | Type | What it is |
 | --- | --- | --- |
@@ -1043,6 +1095,8 @@ What the observation binds depends on the step's type:
 | `body` | object, array or null | The response body parsed as JSON, and `null` when it was not JSON |
 | `raw` | string | The response body as unparsed text. This is what a regex reads when the body is not JSON |
 | `headers` | object | The response headers, keyed by name. Lookup is case-insensitive |
+| `cookies` | object | The cookies this response set, keyed by name. Each is `{value, domain, path, expires, secure, http_only, same_site}`; an attribute the response did not send is `null`, and `expires` is an RFC 3339 time in UTC. See [cookies](#cookies) |
+| `duration_ms` | number | How long the attempt took, in milliseconds: for an api step, from sending the request to having read the whole body; for a terminal step, the command's run; for a browser step, its actions. Bound in every step, and in no `var`'s value |
 | `exit_code` | number | The command's exit code |
 | `stdout`, `stderr` | string | The two streams, as text |
 | `page.url` | string | The page's current address |
@@ -1055,7 +1109,7 @@ message lists the roots that are in scope:
 checkout.art:31:10: "status" is not in scope in a terminal step
    31 |   expect status == 200
       |          ^^^^^^
-   hint: a terminal step binds exit_code, stdout, stderr
+   hint: a terminal step binds exit_code, stdout, stderr, duration_ms
 ```
 
 Every `var` of the scenario and every `capture` of an **earlier** step is in

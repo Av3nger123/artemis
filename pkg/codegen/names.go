@@ -46,8 +46,9 @@ var pyKeywords = words(
 // root.
 var emitted = func() map[string]bool {
 	m := words(
-		// locals a step binds beside its roots
-		"resp", "proc", "attempt",
+		// locals a step binds beside its roots, and the session a scenario's
+		// requests go through
+		"resp", "proc", "attempt", "started", "http",
 		// the one python builtin a generated test body calls, for an
 		// expression-valued `retry { times }` or `within`
 		"int",

@@ -2,7 +2,7 @@
 capture_same_step.art:15:12: unknown name "token"
    15 |     expect token exists
       |            ^^^^^
-   hint: an api step binds status, body, raw, headers
+   hint: an api step binds status, body, raw, headers, cookies, duration_ms
          also in scope: base
 
 === codes

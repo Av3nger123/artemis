@@ -68,9 +68,15 @@ func (e Executor) Observe(ctx context.Context, step models.Step, _ executor.Scop
 		return nil, err
 	}
 
-	resp, err := e.exchange(ctx, step, req, timeout)
+	client, store := e.clientFor(ctx, req)
+	resp, err := e.exchange(ctx, step, client, req, timeout)
 	if err != nil {
 		return nil, err
+	}
+	// A step that sent its own Cookie header went without the jar, so what the
+	// response set is stored here instead -- the steps after it still see it.
+	if store != nil {
+		store.SetCookies(req.URL, (&http.Response{Header: resp.headers}).Cookies())
 	}
 	return roots(step, resp), nil
 }
@@ -106,7 +112,10 @@ func rendered(ctx context.Context, step models.Step) (*http.Request, error) {
 //   - raw is the body as text whether or not it was JSON. A capture off a
 //     plain-text response reads it through match();
 //   - headers is an eval.Headers, whose lookup ignores case, so
-//     headers["Content-Type"] is what an author writes and it works.
+//     headers["Content-Type"] is what an author writes and it works;
+//   - cookies is what the response's Set-Cookie headers set, name to value
+//     and attributes, so `cookies.sid.http_only` is a question and not a
+//     regex over a header.
 //
 // A body that is not JSON is not an error. Whether the step needed one is
 // decided by the expects and captures it wrote, and each of those says so
@@ -117,6 +126,7 @@ func roots(step models.Step, resp response) map[string]any {
 		RootBody:    decode(step, resp.body),
 		RootRaw:     string(resp.body),
 		RootHeaders: headerValues(resp.headers),
+		RootCookies: cookieValues(resp.headers),
 	}
 }
 

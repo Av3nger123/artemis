@@ -73,12 +73,16 @@ var (
 	// `drop expects` its expects, `drop captures` its captures.
 	DropTargets = []string{"expects", "captures"}
 
-	// ConfigBlocks are the subjects of a `config` declaration. Only `browser`
-	// has settings today.
-	ConfigBlocks = []string{"browser"}
+	// ConfigBlocks are the subjects of a `config` declaration: the browser a
+	// scenario opens, and how its api steps talk HTTP.
+	ConfigBlocks = []string{"browser", "http"}
 
 	// BrowserConfigFields are what `config browser` accepts. Deliberately tiny.
 	BrowserConfigFields = []string{"headless", "viewport"}
+
+	// HTTPConfigFields are what `config http` accepts: whether the scenario's
+	// api steps keep a cookie jar.
+	HTTPConfigFields = []string{"cookies"}
 
 	// Reserved words are a parse error wherever a name is expected, so that a
 	// later tier can add control flow, functions or agentic assertions without

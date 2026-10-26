@@ -26,7 +26,7 @@ func TestObservedRootsMatchTheChecker(t *testing.T) {
 	}
 
 	got := keys(roots)
-	want := append([]string{}, check.Roots(check.Terminal)...)
+	want := without(check.Roots(check.Terminal), check.EveryStepRoots())
 	sort.Strings(want)
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("observed roots = %v, want check.Roots(check.Terminal) = %v", got, want)
@@ -172,5 +172,21 @@ func keys(m map[string]any) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// without is roots less the ones the runner binds: an executor observes its own
+// roots, and duration_ms is measured around it.
+func without(roots, drop []string) []string {
+	var out []string
+	for _, r := range roots {
+		keep := true
+		for _, d := range drop {
+			keep = keep && r != d
+		}
+		if keep {
+			out = append(out, r)
+		}
+	}
 	return out
 }

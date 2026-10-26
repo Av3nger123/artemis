@@ -47,6 +47,7 @@ func wordTables() map[string][]string {
 		"StepFields":          token.StepFields,
 		"ConfigBlocks":        token.ConfigBlocks,
 		"BrowserConfigFields": token.BrowserConfigFields,
+		"HTTPConfigFields":    token.HTTPConfigFields,
 		"builtin.Names":       builtin.Names(),
 		"Reserved":            token.Reserved,
 		"CollectionItems":     token.CollectionItems,

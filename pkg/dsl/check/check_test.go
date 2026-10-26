@@ -193,6 +193,9 @@ func TestEveryStepTypeHasRootsAndAHint(t *testing.T) {
 			t.Errorf("%s's hint does not name the step type: %q", ty, scopeHints[ty])
 		}
 		for _, r := range Roots(ty) {
+			if contains(everyStep, r) {
+				continue
+			}
 			if got, ok := allRoots[r]; !ok || got != ty {
 				t.Errorf("root %q of %s is not indexed back to it", r, ty)
 			}
@@ -228,7 +231,7 @@ func TestScopeIsACopy(t *testing.T) {
 		}
 	})
 	got := info.Scope(step)
-	want := []string{"status", "body", "raw", "headers", "base"}
+	want := []string{"status", "body", "raw", "headers", "cookies", "duration_ms", "base"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("scope = %v, want %v (roots first, then vars: the candidate order)", got, want)
 	}

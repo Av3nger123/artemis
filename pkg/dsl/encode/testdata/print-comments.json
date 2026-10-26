@@ -469,6 +469,8 @@
             "body",
             "raw",
             "headers",
+            "cookies",
+            "duration_ms",
             "url"
           ],
           "comments": {

@@ -238,9 +238,10 @@ def test_values():
     pick = art_random_int(1, 10)
     word = art_random_string(8)
     basic = art_base64("user:password")
+    http = requests.Session()
 
     # step "send them", line 11
-    resp = requests.post(
+    resp = http.post(
         "https://example.test/orders",
         headers={"Authorization": f"Basic {art_render(basic)}", "X-Signature": art_render(art_hmac_sha256("key", art_to_json({"id": id})))},
         params=[("q", art_render(art_url_encode("a b")))],

@@ -75,6 +75,9 @@ type Scenario struct {
 	// Browser is the scenario's `config browser`, or nil when it wrote none.
 	Browser *BrowserConfig
 
+	// HTTP is the scenario's `config http`, or nil when it wrote none.
+	HTTP *HTTPConfig
+
 	// Vars are the scenario's `var` declarations in source order. The order is
 	// load-bearing: a var sees the vars above it and no others, which is only
 	// meaningful if they are bound in reading order.
@@ -114,6 +117,39 @@ type Browser struct {
 	// when it wrote none. It is not parsed here -- what a viewport string means
 	// belongs to whatever opens the window.
 	Viewport string
+}
+
+// HTTPConfig is `config http { cookies = false }`. Cookies is nil when the block
+// did not write it.
+type HTTPConfig struct {
+	Cookies ast.Expr
+	Line    int
+}
+
+// HTTP is the resolved form of an HTTPConfig: how a scenario's api steps talk.
+type HTTP struct {
+	// Cookies is whether the scenario's api steps share a cookie jar. The
+	// default is true, as in a browser: a cookie a login response sets is sent
+	// on the scenario's later requests.
+	Cookies bool
+}
+
+// Resolve evaluates the config against env. A nil config is the defaults.
+func (c *HTTPConfig) Resolve(env *eval.Env) (HTTP, error) {
+	out := HTTP{Cookies: true}
+	if c == nil || c.Cookies == nil {
+		return out, nil
+	}
+	v, err := eval.Eval(c.Cookies, env)
+	if err != nil {
+		return out, fmt.Errorf("config http cookies: %w", err)
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return out, fmt.Errorf("config http cookies is %s, want true or false", eval.Render(v))
+	}
+	out.Cookies = b
+	return out, nil
 }
 
 // Resolve evaluates the config against env.
@@ -218,6 +254,11 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 	for _, d := range sc.Body {
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
+			if http := httpConfig(d); http != nil {
+				// As with `config browser`, a second one replaces the first.
+				out.HTTP = http
+				continue
+			}
 			cfg, err := config(d)
 			if err != nil {
 				return nil, err
@@ -305,6 +346,20 @@ func config(d *ast.ConfigDecl) (*BrowserConfig, error) {
 		// Any other name is an unknown field the checker reported.
 	}
 	return out, nil
+}
+
+// httpConfig lowers `config http { ... }`, and is nil for any other subject.
+func httpConfig(d *ast.ConfigDecl) *HTTPConfig {
+	if d.Subject.Kind != token.Ident || d.Subject.Value != "http" {
+		return nil
+	}
+	out := &HTTPConfig{Line: d.Keyword.Span.Line}
+	for _, f := range fields(d.Block) {
+		if f.Name.Kind == token.Ident && f.Name.Value == "cookies" {
+			out.Cookies = f.Value
+		}
+	}
+	return out
 }
 
 // fields is the *ast.Field items of a block, skipping the ast.Bad a line that

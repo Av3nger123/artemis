@@ -50,6 +50,7 @@ var owner = map[string]string{
 	"StepFields":          "stepField",
 	"ConfigBlocks":        "configSubject",
 	"BrowserConfigFields": "configBrowserField",
+	"HTTPConfigFields":    "configHttpField",
 	"Reserved":            "reservedWord",
 	"CollectionItems":     "collectionItem",
 	"UseLines":            "useLine",
@@ -134,6 +135,7 @@ func TestEveryBlockIsAChoicePoint(t *testing.T) {
 		"retry":         "retryField",
 		"step":          "stepField",
 		"configBrowser": "configBrowserField",
+		"configHttp":    "configHttpField",
 	}
 	doc := Choices()
 	for _, block := range check.BlockNames() {

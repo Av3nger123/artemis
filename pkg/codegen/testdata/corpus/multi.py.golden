@@ -49,8 +49,10 @@ def art_json(response):
 
 # scenario "sign in", line 4
 def test_sign_in():
+    http = requests.Session()
+
     # step "post the form", line 5
-    resp = requests.post(
+    resp = http.post(
         "https://example.test/session",
         data=art_render({"email": "alice@example.test"}),
     )
@@ -61,8 +63,10 @@ def test_sign_in():
 
 # scenario "sign-in", line 13
 def test_sign_in_2():
+    http = requests.Session()
+
     # step "post the form again", line 14
-    resp = requests.post(
+    resp = http.post(
         "https://example.test/session",
         data=art_render({"email": "bob@example.test"}),
     )

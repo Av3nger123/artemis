@@ -18,9 +18,10 @@ UseLine       = Ident "=" Expr
               | "drop" ( "expects" | "captures" )
               | Expect ;
 
-ConfigDecl    = "config" ConfigSubject "{" [ ConfigSetting { Sep ConfigSetting } ] "}" ;
-ConfigSubject = "browser" ;
-ConfigSetting = "headless" "=" Bool | "viewport" "=" Expr ;
+ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting } ] "}"
+                         | "http" "{" [ HTTPSetting { Sep HTTPSetting } ] "}" ) ;
+BrowserSetting = "headless" "=" Bool | "viewport" "=" Expr ;
+HTTPSetting   = "cookies" "=" Bool ;
 
 VarDecl       = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;

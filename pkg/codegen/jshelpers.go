@@ -50,15 +50,21 @@ const (
 	jsHelperLen          = "art_len"
 	jsHelperNumber       = "art_number"
 	jsHelperString       = "art_string"
-	jsHelperText         = "art_text"
-	jsHelperValue        = "art_value"
-	jsHelperAttr         = "art_attr"
-	jsHelperExit         = "art_exit"
-	jsHelperArgv         = "art_argv"
-	jsHelperGoto         = "art_goto"
-	jsHelperRetry        = "art_retry"
-	jsHelperWithin       = "art_within"
-	jsHelperBrowser      = "art_browser"
+
+	// The cookie jar fetch does not have.
+	jsHelperJar        = "art_jar"
+	jsHelperFetch      = "art_fetch"
+	jsHelperSetCookies = "art_set_cookies"
+	jsHelperCookies    = "art_cookies"
+	jsHelperText       = "art_text"
+	jsHelperValue      = "art_value"
+	jsHelperAttr       = "art_attr"
+	jsHelperExit       = "art_exit"
+	jsHelperArgv       = "art_argv"
+	jsHelperGoto       = "art_goto"
+	jsHelperRetry      = "art_retry"
+	jsHelperWithin     = "art_within"
+	jsHelperBrowser    = "art_browser"
 )
 
 // jsHelper is one emitted definition: its JavaScript source, the imported
@@ -549,6 +555,110 @@ function art_is(value, want) {
 	src: `function art_string(value) {
   // ` + "`string(value)`" + `: the text the value has in an interpolation.
   return art_render(value);
+}
+`,
+}, {
+	name: jsHelperSetCookies,
+	src: `function art_set_cookies(resp) {
+  // Every Set-Cookie header of a response, parsed: name, value and attributes,
+  // an attribute the server did not send as null. Read off the headers as the
+  // interpreter reads them.
+  const out = [];
+  for (const line of resp.headers.getSetCookie()) {
+    const parts = line.split(";").map((part) => part.trim());
+    const eq = parts[0].indexOf("=");
+    if (eq <= 0) continue;
+    const raw = parts[0].slice(eq + 1).trim();
+    const quoted = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"');
+    const value = quoted ? raw.slice(1, -1) : raw;
+    const cookie = {
+      name: parts[0].slice(0, eq).trim(), value, domain: null, path: null, expires: null,
+      maxAge: null, secure: false, http_only: false, same_site: null,
+    };
+    for (const attribute of parts.slice(1)) {
+      const at = attribute.indexOf("=");
+      const key = (at < 0 ? attribute : attribute.slice(0, at)).trim().toLowerCase();
+      const setting = at < 0 ? "" : attribute.slice(at + 1).trim();
+      if (key === "domain" && setting) cookie.domain = setting;
+      else if (key === "path" && setting) cookie.path = setting;
+      else if (key === "expires" && setting && !Number.isNaN(Date.parse(setting))) {
+        cookie.expires = new Date(setting).toISOString().replace(/\.\d+Z$/, "Z");
+      } else if (key === "max-age" && /^-?\d+$/.test(setting)) cookie.maxAge = Number(setting);
+      else if (key === "secure") cookie.secure = true;
+      else if (key === "httponly") cookie.http_only = true;
+      else if (key === "samesite" && ["lax", "strict", "none"].includes(setting.toLowerCase())) {
+        cookie.same_site = setting.toLowerCase();
+      }
+    }
+    out.push(cookie);
+  }
+  return out;
+}
+`,
+}, {
+	name:  jsHelperCookies,
+	needs: []string{jsHelperSetCookies},
+	src: `function art_cookies(resp) {
+  // ` + "`cookies`" + `: what this response set, each name to its value and attributes.
+  const out = {};
+  for (const { name, maxAge, ...cookie } of art_set_cookies(resp)) out[name] = cookie;
+  return out;
+}
+`,
+}, {
+	name: jsHelperJar,
+	src: `function art_jar() {
+  // A scenario's cookie jar, which fetch does not keep: what a response sets is
+  // sent on the scenario's later requests to the same host, as the interpreter
+  // and a browser do. Keyed by name, so two cookies of one name on two paths
+  // keep the later one -- a suite talks to the services it names, and this
+  // is the jar those tests need, not a browser's.
+  return new Map();
+}
+`,
+}, {
+	name:  jsHelperFetch,
+	needs: []string{jsHelperSetCookies},
+	src: `async function art_fetch(jar, url, options) {
+  // fetch, with the scenario's jar: its cookies are sent unless the step wrote
+  // its own Cookie header -- a test of a forged session must not be handed the
+  // real one -- and what the response sets is stored either way. A null jar is
+  // a scenario that wrote ` + "`config http { cookies = false }`" + `.
+  if (jar === null) return fetch(url, options);
+  const target = new URL(url);
+  const headers = { ...(options.headers ?? {}) };
+  if (!Object.keys(headers).some((name) => name.toLowerCase() === "cookie")) {
+    const now = Date.now();
+    const sent = [];
+    for (const [name, c] of jar) {
+      const host = target.hostname;
+      const domainOk = c.hostOnly ? host === c.domain : host === c.domain || host.endsWith("." + c.domain);
+      if (!domainOk || !target.pathname.startsWith(c.path)) continue;
+      if (c.secure && target.protocol !== "https:") continue;
+      if (c.expires !== null && c.expires <= now) continue;
+      sent.push(name + "=" + c.value);
+    }
+    if (sent.length > 0) headers.Cookie = sent.join("; ");
+  }
+  const resp = await fetch(url, { ...options, headers });
+  for (const c of art_set_cookies(resp)) {
+    // Max-Age wins over Expires, as it does in every jar.
+    const expires =
+      c.maxAge !== null ? Date.now() + c.maxAge * 1000 : c.expires === null ? null : Date.parse(c.expires);
+    if (expires !== null && expires <= Date.now()) {
+      jar.delete(c.name);
+      continue;
+    }
+    jar.set(c.name, {
+      value: c.value,
+      domain: (c.domain ?? target.hostname).replace(/^\./, ""),
+      hostOnly: c.domain === null,
+      path: c.path ?? "/",
+      secure: c.secure,
+      expires,
+    });
+  }
+  return resp;
 }
 `,
 }, {
