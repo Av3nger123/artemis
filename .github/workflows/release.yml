@@ -1,0 +1,55 @@
+name: Release
+
+# Pushing a tag like v0.1.0 publishes it: the macOS binaries `make release`
+# builds, attached to a GitHub release of that tag, where install.sh finds them.
+#
+# Every action is pinned to a commit, with its version beside it: this job can
+# write to the repository, and a tag can be moved to other code, a commit cannot.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write     # create the release
+  id-token: write     # sign the provenance
+  attestations: write # store it
+
+jobs:
+  release:
+    name: build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # git describe in the Makefile, and the release notes, read the history.
+          fetch-depth: 0
+
+      # The patched Go of go.mod's toolchain line, which ships in the binary.
+      - id: toolchain
+        run: echo "go=$(sed -n 's/^toolchain go//p' go.mod)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ steps.toolchain.outputs.go }}
+
+      # The tag's commit passed CI on its branch; this is the last look before
+      # it ships, without the database containers CI has.
+      - run: go vet -tags db_all ./... && go test -tags db_all ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -tags db_all ./...
+
+      - run: make release VERSION=${{ github.ref_name }}
+
+      # A signed statement that these tarballs were built here, from this
+      # commit, by this workflow -- which checksums.txt, published beside them,
+      # cannot say. `gh attestation verify <tarball> --repo Av3nger123/artemis`
+      # checks it.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/*.tar.gz dist/checksums.txt \
+            --verify-tag --generate-notes --title "${{ github.ref_name }}"

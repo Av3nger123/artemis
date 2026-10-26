@@ -13,14 +13,11 @@ package mcpserver
 import (
 	"os"
 
+	"artemis/pkg/version"
+
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-// Version is what the server reports as its implementation version. It is the
-// protocol's idea of a version and not artemis's: a host shows it when it lists
-// the servers it knows about.
-const Version = "v1"
 
 // Options is what the server needs to exist. Workspace is the directory every
 // relative path a tool is given resolves against, and the boundary no tool may
@@ -56,7 +53,9 @@ type server struct {
 // and artemis_grammar still answers, which is a server a host can show an error
 // from, instead of a process that exited before it could say why.
 func New(opts Options) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "artemis", Version: Version}, nil)
+	// The version is artemis's own, which a host shows when it lists the
+	// servers it knows about.
+	s := mcp.NewServer(&mcp.Implementation{Name: "artemis", Version: version.String()}, nil)
 
 	ws, _ := newWorkspace(opts.Workspace)
 	bin := opts.Binary

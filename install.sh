@@ -1,21 +1,67 @@
-#!/bin/bash
+#!/bin/sh
+# Installs the artemis release binary on macOS:
+#
+#   curl -fsSL https://raw.githubusercontent.com/Av3nger123/artemis/master/install.sh | sh
+#
+# It downloads the tarball for this Mac's processor from the latest GitHub
+# release, checks it against the release's checksums.txt, and puts artemis in
+# /usr/local/bin -- asking for sudo only when that directory is not writable.
+#
+#   ARTEMIS_VERSION=v0.1.0   a release other than the latest
+#   ARTEMIS_INSTALL_DIR=...  somewhere other than /usr/local/bin
+#
+# To build from a clone instead, with Go installed: make build-full.
+set -eu
 
-# Compile the Go code: every database driver, so a db step against SQL Server,
-# Oracle, MongoDB or Redis works out of the box. `make build` is the smaller
-# binary with PostgreSQL, MySQL and SQLite only.
-make build-full
+repo="Av3nger123/artemis"
+version="${ARTEMIS_VERSION:-latest}"
+dir="${ARTEMIS_INSTALL_DIR:-/usr/local/bin}"
 
-# Move the binary to a directory in PATH
-install_dir="/usr/local/bin"
-install_path="$install_dir/artemis"
+fail() {
+	echo "artemis install: $*" >&2
+	exit 1
+}
 
-if [ -e "$install_path" ]; then
-    echo "Error: File already exists at $install_path"
+[ "$(uname -s)" = "Darwin" ] || fail "only macOS has a release yet; build from source with: make build-full"
+
+case "$(uname -m)" in
+arm64) arch=arm64 ;;
+x86_64) arch=amd64 ;;
+*) fail "no release for a $(uname -m) Mac" ;;
+esac
+
+if [ "$version" = "latest" ]; then
+	base="https://github.com/$repo/releases/latest/download"
+else
+	base="https://github.com/$repo/releases/download/$version"
 fi
+# A mirror, or a local directory served over http when testing this script.
+base="${ARTEMIS_DOWNLOAD_URL:-$base}"
 
-sudo mv artemis "$install_dir"
+tarball="artemis_darwin_$arch.tar.gz"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 
-# Set appropriate permissions
-sudo chmod +x "$install_path"
+echo "Downloading $tarball ($version)..."
+curl -fsSL "$base/$tarball" -o "$tmp/$tarball" || fail "could not download $base/$tarball"
+curl -fsSL "$base/checksums.txt" -o "$tmp/checksums.txt" || fail "could not download $base/checksums.txt"
 
-echo "Artemis has been installed successfully to $install_path"
+(cd "$tmp" && grep " $tarball\$" checksums.txt | shasum -a 256 -c - >/dev/null) ||
+	fail "$tarball does not match checksums.txt; not installing it"
+
+tar -xzf "$tmp/$tarball" -C "$tmp"
+
+if [ -d "$dir" ] && [ -w "$dir" ]; then
+	sudo=""
+else
+	echo "$dir needs sudo to write to."
+	sudo="sudo"
+fi
+$sudo mkdir -p "$dir"
+$sudo install -m 755 "$tmp/artemis" "$dir/artemis"
+
+echo "Installed $("$dir/artemis" --version) to $dir/artemis"
+case ":$PATH:" in
+*":$dir:"*) ;;
+*) echo "$dir is not on your PATH; add it to run artemis by name." ;;
+esac

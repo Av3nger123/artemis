@@ -1,6 +1,7 @@
 [
   {
     "annotations": {
+      "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": true
     },
@@ -29,6 +30,7 @@
   },
   {
     "annotations": {
+      "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": true
     },
@@ -44,6 +46,7 @@
   },
   {
     "annotations": {
+      "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": true
     },
@@ -66,7 +69,9 @@
   {
     "annotations": {
       "destructiveHint": true,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     },
     "description": "Run the scenarios in a workspace-relative .art file, or in a folder of them, and return the full JSON report: counts, every scenario and step, every assertion, and a failure block naming what was expected and what happened. Read `passed` -- a run whose assertions failed is a successful call reporting a failed test, not an error. WARNING: this executes the scenario. A terminal step runs a shell command, a browser step drives a browser, and an api step sends real requests to whatever URL it names.",
     "inputSchema": {
@@ -93,6 +98,7 @@
   },
   {
     "annotations": {
+      "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": true
     },
@@ -122,7 +128,9 @@
   {
     "annotations": {
       "destructiveHint": true,
-      "openWorldHint": false
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "description": "Write .art source to a workspace-relative path, after checking it and putting it in canonical layout. Source that does not compile is refused with its diagnostics and nothing is written, so this tool cannot leave a broken scenario on disk. The file written is always fmt-clean. An existing file is overwritten; `created` says which happened.",
     "inputSchema": {
