@@ -51,6 +51,10 @@ curl -fsSL "$base/checksums.txt" -o "$tmp/checksums.txt" || fail "could not down
 
 tar -xzf "$tmp/$tarball" -C "$tmp"
 
+# A directory that does not exist yet is made without sudo where its parent
+# allows it -- ~/.local/bin on a fresh account -- and sudo is asked for only
+# when the directory still cannot be written.
+mkdir -p "$dir" 2>/dev/null || true
 if [ -d "$dir" ] && [ -w "$dir" ]; then
 	sudo=""
 else
