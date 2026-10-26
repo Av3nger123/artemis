@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/version"
 
 	"github.com/spf13/cobra"
 )
@@ -15,6 +16,11 @@ func Init() {
 	// it with usage text, and main prints the message itself.
 	RootCmd.SilenceUsage = true
 	RootCmd.SilenceErrors = true
+
+	// --version, and the version command for whoever types that instead.
+	RootCmd.Version = version.String()
+	RootCmd.SetVersionTemplate(versionLine() + "\n")
+	RootCmd.AddCommand(versionCmd)
 
 	// Parse command: check a scenario file without running any of it.
 	RootCmd.AddCommand(parseCmd)

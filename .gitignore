@@ -1,6 +1,9 @@
 # The built binary, at the repo root only -- not every file named "artemis".
 /artemis
 
+# make release's output.
+/dist
+
 # Scenario files, env files and logs a user keeps beside the binary while
 # working. Root-anchored on purpose: a recursive *.yaml would swallow every
 # testdata/ fixture the tests compare against.

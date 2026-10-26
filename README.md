@@ -180,11 +180,20 @@ parameters and its response. The rules are in
 
 ## Installation
 
-Make sure you have Go installed, then:
+On macOS, Apple Silicon or Intel:
 
 ```bash
-source ./install.sh
+curl -fsSL https://raw.githubusercontent.com/Av3nger123/artemis/master/install.sh | sh
+artemis --version
 ```
+
+It installs the latest release to `/usr/local/bin`, after checking it against
+the release's checksums; `ARTEMIS_VERSION=v0.1.0` picks another release and
+`ARTEMIS_INSTALL_DIR` another directory. Run it again to upgrade.
+
+On anything else, or from a clone, build it with Go: `make build-full`.
+
+The first `browser` step downloads Chromium, about 683 MB, once.
 
 ## Coming from Postman or YAML
 
@@ -1418,7 +1427,7 @@ password in it. [SPEC.md's *`db` steps*](SPEC.md#db-steps) specifies how each
 column type reads.
 
 `make build` includes PostgreSQL, MySQL and SQLite; `make build-full`, which
-`install.sh` uses, adds SQL Server, Oracle, MongoDB and Redis.
+the release is built as, adds SQL Server, Oracle, MongoDB and Redis.
 
 MongoDB and Redis take their own commands instead of SQL -- a command document
 as `db.runCommand()` takes it, the words `redis-cli` takes -- and the reply is
@@ -1451,6 +1460,7 @@ make vet         # go vet ./...
 make lint        # golangci-lint, skipped with a note if it is not installed
 make cover       # coverage profile plus the total
 make build       # the artemis binary
+make release     # the macOS release tarballs in dist/, as a v* tag publishes them
 make all         # vet, lint, test, build
 ```
 
@@ -1520,3 +1530,9 @@ command makes -- so it stays an input the command can read.
 - **Request and response detail in a report.** Still not in the report itself,
   which stays a verdict. `--trace` writes it to a file per step instead -- see
   [Tracing a run](#tracing-a-run).
+
+## License
+
+MIT -- see [LICENSE](LICENSE). Each release tarball also carries the licenses of
+the modules compiled into it, in `THIRD_PARTY_LICENSES/`. To report a
+vulnerability, see [SECURITY.md](SECURITY.md).

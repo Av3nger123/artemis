@@ -14,6 +14,9 @@ concurrency:
 permissions:
   contents: read
 
+# Every action is pinned to a commit, with its version beside it: a tag can be
+# moved to other code, a commit cannot.
+
 jobs:
   test:
     name: build, vet, test
@@ -78,12 +81,17 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 2s --health-timeout 5s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@v5
+      # The toolchain line of go.mod, not its go line: the go line is the oldest
+      # Go the module builds with, the toolchain line the patched one it is
+      # built and shipped with.
+      - id: toolchain
+        run: echo "go=$(sed -n 's/^toolchain go//p' go.mod)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          # From go.mod, so CI and the module never disagree about the version.
-          go-version-file: go.mod
+          go-version: ${{ steps.toolchain.outputs.go }}
           cache: true
 
       # Both builds: the default, with PostgreSQL, MySQL and SQLite, and the
@@ -124,7 +132,7 @@ jobs:
       - name: coverage
         run: go tool cover -func=coverage.out | tail -1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: coverage
@@ -135,16 +143,37 @@ jobs:
     name: golangci-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@v5
+      - id: toolchain
+        run: echo "go=$(sed -n 's/^toolchain go//p' go.mod)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.toolchain.outputs.go }}
           cache: false
 
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
           # Pinned to the version .golangci.yml is written for. An unpinned
           # linter turns someone else's release into a red build here.
           version: v2.14.0
           args: --timeout=5m --build-tags=db_all
+
+  # A known vulnerability in the Go release or a module that the code actually
+  # calls fails the build, rather than shipping in the next release.
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - id: toolchain
+        run: echo "go=$(sed -n 's/^toolchain go//p' go.mod)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ steps.toolchain.outputs.go }}
+          cache: true
+
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -tags db_all ./...

@@ -31,6 +31,37 @@ build:
 build-full:
 	$(GOBUILD) -tags db_all -o $(BINARY_NAME) $(MAIN_PATH)
 
+# The macOS release: the full binary for Apple Silicon and for Intel, each in a
+# tarball named without the version -- so install.sh can always fetch
+# .../releases/latest/download/artemis_darwin_arm64.tar.gz -- and a
+# checksums.txt it verifies them against. VERSION is stamped into the binary
+# for `artemis --version`; the release workflow passes the tag. No cgo anywhere,
+# so both cross-compile from any machine, and Go's linker gives the arm64 binary
+# the ad-hoc signature Apple Silicon will not run one without.
+#
+# Each tarball carries LICENSE and THIRD_PARTY_LICENSES/, the license of every
+# module compiled in, which their MIT, BSD and Apache licenses ask of a binary.
+# go-licenses also copies the source of the one MPL-2.0 module, the MySQL
+# driver, which is how MPL is met, and it fails the release outright on a
+# license that forbids shipping it this way -- a GPL dependency, say.
+VERSION ?= $(shell git describe --tags --always --dirty)
+DIST=dist
+RELEASE_LDFLAGS=-s -w -X artemis/pkg/version.Version=$(VERSION)
+GO_LICENSES=github.com/google/go-licenses/v2@v2.0.1
+
+release:
+	rm -rf $(DIST) && mkdir -p $(DIST)
+	GOOS=darwin GOFLAGS=-tags=db_all $(GOCMD) run $(GO_LICENSES) save $(MAIN_PATH) \
+		--save_path $(DIST)/THIRD_PARTY_LICENSES --ignore artemis
+	for arch in arm64 amd64; do \
+		GOOS=darwin GOARCH=$$arch CGO_ENABLED=0 $(GOBUILD) -trimpath -tags db_all \
+			-ldflags "$(RELEASE_LDFLAGS)" -o $(DIST)/$$arch/$(BINARY_NAME) $(MAIN_PATH) || exit 1; \
+		cp LICENSE $(DIST)/$$arch/ && cp -R $(DIST)/THIRD_PARTY_LICENSES $(DIST)/$$arch/ || exit 1; \
+		tar -czf $(DIST)/$(BINARY_NAME)_darwin_$$arch.tar.gz -C $(DIST)/$$arch \
+			$(BINARY_NAME) LICENSE THIRD_PARTY_LICENSES || exit 1; \
+	done
+	cd $(DIST) && shasum -a 256 *.tar.gz > checksums.txt
+
 test:
 	$(GOTEST) ./...
 
@@ -110,5 +141,6 @@ lint-strict:
 clean:
 	$(GOCLEAN)
 	rm -f $(BINARY_NAME) $(COVERPROFILE)
+	rm -rf $(DIST)
 
-.PHONY: all build build-full test test-race test-browser test-browser-repeat cover golden vet fmt fmt-check lint lint-strict clean
+.PHONY: all build build-full release test test-race test-browser test-browser-repeat cover golden vet fmt fmt-check lint lint-strict clean
