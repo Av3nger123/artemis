@@ -13,7 +13,7 @@ type standing uint8
 
 const (
 	unchecked standing = iota
-	checking           // its check is running: a sibling use inside it is expanded as is
+	checking           // its check is running
 	sound              // checked without error
 	broken             // checked with an error, which has been reported; never expanded
 )
@@ -24,8 +24,7 @@ const (
 // is sound; a broken collection is never expanded, so its errors are not
 // reported again per use.
 //
-// A collection is checked when its file is indexed, or earlier, when a flow
-// being checked uses it first.
+// A collection is checked when its file is indexed.
 func (e *expander) checkCollection(u *unit, c *ast.Collection) bool {
 	switch e.standing[c] {
 	case sound, checking:
@@ -51,49 +50,24 @@ func (e *expander) checkCollection(u *unit, c *ast.Collection) bool {
 	return e.standing[c] == sound
 }
 
-// checkItem checks one request or flow of c and reports whether it is sound.
-//
-// Expanding a flow's nested uses writes to the use table, the bag and the
-// hoisted vars; here all three are scratch. The steps built are thrown away,
-// so their Via must index nothing in the real table, and the checker's
-// diagnostics are reported with no Via: they point at the collection as
-// written, not at a use.
+// checkItem checks one request of c and reports whether it is sound. The
+// use table and the bag are scratch here: the step built is thrown away, and
+// the checker's diagnostics are reported with no Via, pointing at the
+// collection as written, not at a use.
 func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
-	var name *token.Token
-	var params *ast.Params
-	switch it := item.(type) {
-	case *ast.RequestDecl:
-		name, params = &it.Name, it.Params
-	case *ast.FlowDecl:
-		name, params = &it.Name, it.Params
-	default:
+	it, isRequest := item.(*ast.RequestDecl)
+	if !isRequest {
 		return true
 	}
+	name, params := &it.Name, it.Params
 
 	uses, bag, silent := e.res.Uses, e.bag, e.silent
 	e.res.Uses, e.bag = nil, diag.New()
 	defer func() { e.res.Uses = uses }()
 
 	vars := paramVars(params)
-	var steps []ast.Decl
 	sc := newScope(vars)
-	switch it := item.(type) {
-	case *ast.RequestDecl:
-		steps = []ast.Decl{requestStep(it, it.Name.Value, nil, identity)}
-	case *ast.FlowDecl:
-		stack := []string{c.Name.Value + "." + it.Name.Value}
-		for _, d := range it.Body {
-			switch v := d.(type) {
-			case *ast.StepDecl:
-				steps = append(steps, ast.Clone(v, identity))
-			case *ast.UseDecl:
-				// The flow's parameters are vars of the synthetic scenario, so
-				// an argument naming one needs no substitution.
-				use := ast.Clone(v, identity)
-				steps = append(steps, e.expandUse(u, c, use, use.Span(), 0, stack, sc.at(nil, steps))...)
-			}
-		}
-	}
+	steps := []ast.Decl{requestStep(it, it.Name.Value, nil, identity)}
 
 	e.rootCaptures(item)
 	ok := !e.bag.HasErrors() && e.silent == silent
@@ -163,23 +137,16 @@ var observationRoots = func() map[string]bool {
 	return m
 }()
 
-// rootCaptures reports every capture item writes itself -- not a nested
-// use's, which its own collection's check covers -- that is named after an
+// rootCaptures reports every capture item writes that is named after an
 // observation root. `as` renames a use's captures and every template read of
 // them, and a later step's read of the root itself is one: under `as z`,
 // `capture body = ...` then `expect body.y == 1` would read z_body.y.
 func (e *expander) rootCaptures(item ast.Decl) {
-	var bodies [][]ast.Stmt
-	switch it := item.(type) {
-	case *ast.RequestDecl:
-		bodies = append(bodies, it.Body)
-	case *ast.FlowDecl:
-		for _, d := range it.Body {
-			if s, ok := d.(*ast.StepDecl); ok {
-				bodies = append(bodies, s.Body)
-			}
-		}
+	r, ok := item.(*ast.RequestDecl)
+	if !ok {
+		return
 	}
+	bodies := [][]ast.Stmt{r.Body}
 	for _, body := range bodies {
 		for _, st := range body {
 			c, ok := st.(*ast.Capture)

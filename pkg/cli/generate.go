@@ -37,9 +37,10 @@ var generateCmd = &cobra.Command{
 There are two modes:
 
   collection (the default)  Writes two files. orders.collection.art holds one
-                            'collection' with one 'request' for each Postman
-                            request. orders.art imports it and holds one 'use'
-                            line for each request. This mode needs -o.
+                            'collection', titled as the Postman collection is,
+                            with one 'request' for each Postman request.
+                            orders.art imports it and holds one 'use' line for
+                            each request. This mode needs -o.
   --flat                    Writes one scenario with one 'step' for each
                             request. This is the output before collections.
 

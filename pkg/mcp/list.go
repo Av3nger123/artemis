@@ -25,7 +25,9 @@ func addList(s *mcp.Server, srv *server) {
 		Name: "artemis_list",
 		Description: "List the .art scenario files in the workspace, in path order, " +
 			"as workspace-relative paths, and under `collections` the " +
-			"`collection.item` names each file declares (for a `use`). Call this first to find out what " +
+			"`name.item` refs each collection file's requests are used by: name is the file's name, which " +
+			"`import \"<file>\"` gives it, or, for a file whose name cannot be one, the name to give it " +
+			"with `import \"<file>\" as name`. Call this first to find out what " +
 			"scenarios exist before reading or changing one.",
 		Annotations:  readOnly(),
 		OutputSchema: objectSchema(),
@@ -90,8 +92,9 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 	return document(doc), doc, nil
 }
 
-// collectionItems is every `collection.item` the file at abs declares, in
-// source order. The file is parsed and not expanded: what a file declares is
+// collectionItems is every `name.item` the file at abs declares, in source
+// order: name is what importing the file gives its collection, or what an
+// `as` should when the file's name cannot be one. The file is parsed and not expanded: what a file declares is
 // read off what it says, and a file that does not compile still lists what
 // did parse. A file that cannot be read lists nothing; artemis_validate is
 // where its problems are reported.
@@ -107,6 +110,10 @@ func (srv *server) collectionItems(rel string) []string {
 		return nil
 	}
 	tree, _ := parser.Parse(rel, string(b))
+	name, ok := parser.ImportName(rel)
+	if !ok {
+		name = parser.IdentLike(name)
+	}
 	var out []string
 	for _, d := range tree.Scenarios {
 		c, ok := d.(*ast.Collection)
@@ -114,11 +121,8 @@ func (srv *server) collectionItems(rel string) []string {
 			continue
 		}
 		for _, it := range c.Items {
-			switch it := it.(type) {
-			case *ast.RequestDecl:
-				out = append(out, c.Name.Value+"."+it.Name.Text)
-			case *ast.FlowDecl:
-				out = append(out, c.Name.Value+"."+it.Name.Text)
+			if r, ok := it.(*ast.RequestDecl); ok {
+				out = append(out, name+"."+r.Name.Text)
 			}
 		}
 	}

@@ -1,12 +1,12 @@
 // Package expand turns a file that imports collections and uses their
-// requests and flows into a plain file: no import, no collection and no use,
+// requests into a plain file: no import, no collection and no use,
 // only scenarios whose steps are written out. Everything after it -- the
 // checker, lowering, the runner -- sees a file it already understands.
 //
 // A copied token keeps the span it had where it was written, in the
 // collection file, and is stamped with Via: one plus the index of the use
-// that copied it in Result.Uses. Result.Chain walks that table to say which
-// use lines brought a span in.
+// that copied it in Result.Uses. Result.Chain says which use line brought a
+// span in.
 package expand
 
 import (
@@ -22,10 +22,9 @@ import (
 
 // Use is one expanded use line.
 type Use struct {
-	Span   token.Span // the use line, in the file it was written in
-	Parent int        // 1 + index of the enclosing use, 0 at the top
-	Ref    string     // "orders.create": qualified, even for a bare sibling ref, once resolved
-	Item   token.Span // the name of the request or flow it expanded; zero when it resolved to nothing
+	Span token.Span // the use line, in the scenario file
+	Ref  string     // "orders.create"
+	Item token.Span // the name of the request it expanded; zero when it resolved to nothing
 }
 
 // Result is an expansion.
@@ -35,14 +34,13 @@ type Result struct {
 	Sources map[string]string // every file read, by name, for rendering diagnostics
 }
 
-// Chain is the use lines that brought a span in, innermost first. A span
-// written in place has none.
+// Chain is the use line that brought a span in. A span written in place has
+// none. A use is only ever written in a scenario, so there is at most one.
 func (r *Result) Chain(s token.Span) []token.Span {
-	var out []token.Span
-	for i := s.Via; i > 0 && i <= len(r.Uses); i = r.Uses[i-1].Parent {
-		out = append(out, r.Uses[i-1].Span)
+	if s.Via <= 0 || s.Via > len(r.Uses) {
+		return nil
 	}
-	return out
+	return []token.Span{r.Uses[s.Via-1].Span}
 }
 
 // expander holds one expansion: the files read, the collections they
@@ -58,18 +56,23 @@ type expander struct {
 
 	standing map[*ast.Collection]standing // each collection's standalone check
 	silent   int                          // uses refused without a diagnostic of their own
-	dropped  []drop                       // captures drop captures removed, until their top-level use is checked
 }
 
 // unit is one parsed file and the collections it can see by name.
 type unit struct {
 	name  string
 	tree  *ast.File
-	deps  []*unit                    // the units this file imports directly
-	own   map[string]*ast.Collection // collections declared in this file
-	scope map[string]*ast.Collection // own plus every imported one
+	deps  []dep                      // the files this file imports directly
+	own   []*ast.Collection          // collections declared in this file, in source order
+	scope map[string]*ast.Collection // the collection each import names, by that name
 	ok    bool                       // parsed without error
 	lost  bool                       // an import failed, so a collection may be missing from scope
+}
+
+// dep is one import and the file it loaded.
+type dep struct {
+	imp  *ast.Import
+	unit *unit
 }
 
 // Expand resolves tree's imports through l and replaces every use in its
@@ -115,7 +118,7 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 	res.File = out
 
 	// A diagnostic on a token a use copied in -- an override error on a
-	// synthesised token, a bind error inside a nested use -- names the use
+	// synthesised token -- names the use
 	// lines that brought it in, like the checker's do in pkg/dsl/front.
 	chained := diag.New()
 	for _, d := range bag.All() {
@@ -156,7 +159,7 @@ func fileName(tree *ast.File) string {
 }
 
 // body is a scenario body with each use replaced by its steps. The secret
-// vars a use hoisted -- its nested uses' included -- sit directly above its
+// vars a use hoisted sit directly above its
 // steps, in use order: there they see the vars the use's arguments see, and
 // the checker binds them for the steps that read them.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
@@ -164,7 +167,7 @@ func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 	sc := newScope(decls)
 	for _, d := range decls {
 		if use, ok := d.(*ast.UseDecl); ok {
-			steps := e.expandUse(u, nil, use, use.Span(), 0, nil, sc.at(nil, out))
+			steps := e.expandUse(u, use, sc.at(nil, out))
 			out = append(out, *sc.hoisted...)
 			*sc.hoisted = (*sc.hoisted)[:0]
 			out = append(out, steps...)
@@ -188,8 +191,8 @@ func (e *expander) imports(u *unit) {
 				Hintf("run the file with artemis run, which reads imports from disk")
 			continue
 		}
-		if dep := e.load(u.name, imp); dep != nil {
-			u.deps = append(u.deps, dep)
+		if loaded := e.load(u.name, imp); loaded != nil {
+			u.deps = append(u.deps, dep{imp: imp, unit: loaded})
 		} else {
 			u.lost = true
 		}
@@ -225,58 +228,59 @@ func (e *expander) load(from string, imp *ast.Import) *unit {
 	return u
 }
 
-// index fills u's own collections and its scope: its own plus those of every
-// file it imports directly. Imports are not transitive. Then it checks each of
-// u's own collections on its own; an imported one was checked when its file
-// was indexed.
+// index checks u's shape (shape.go), then fills u's own collections and its
+// scope: the collection of each file it imports directly, by the import's
+// `as` or else by the file's name (parser.ImportName). A collection's own
+// name is a title, and no use reads it. Imports are not transitive. Then it
+// checks each of u's own collections on its own; an imported one was checked
+// when its file was indexed.
 func (e *expander) index(u *unit) {
-	u.own = map[string]*ast.Collection{}
-	u.scope = map[string]*ast.Collection{}
-	add := func(c *ast.Collection) bool {
-		name := c.Name.Value
-		prev, dup := u.scope[name]
-		if prev == c {
-			return false
-		}
-		if dup {
-			e.bag.Error(c.Name.Span, diag.DuplicateCollection, "collection %q is declared twice", name).
-				Hintf("the first is at %s:%d", prev.Name.Span.File, prev.Name.Span.Line)
-			return false
-		}
-		u.scope[name] = c
-		return true
-	}
+	e.checkShape(u)
 	for _, d := range u.tree.Scenarios {
-		if c, ok := d.(*ast.Collection); ok && add(c) {
-			u.own[c.Name.Value] = c
+		if c, ok := d.(*ast.Collection); ok {
+			u.own = append(u.own, c)
 			e.owner[c] = u
 		}
 	}
-	for _, dep := range u.deps {
-		for _, c := range sortedColls(dep) {
-			add(c)
+	u.scope = map[string]*ast.Collection{}
+	named := map[string]*ast.Import{}
+	for _, d := range u.deps {
+		name, at := d.imp.Name.Value, d.imp.Name.Span
+		if d.imp.Name.Text == "" {
+			var ok bool
+			name, ok = parser.ImportName(d.imp.Path.Value)
+			at = d.imp.Path.Span
+			if !ok {
+				u.lost = true
+				e.bag.Error(at, diag.ImportNeedsName, "a use reads an import by its file's name, and %q cannot be one", name).
+					Hintf("name it: import %s as %s", d.imp.Path.Text, parser.IdentLike(name))
+				continue
+			}
 		}
+		if len(d.unit.own) == 0 {
+			u.lost = true
+			// A file that did not parse has said why already.
+			if d.unit.ok {
+				e.bag.Error(d.imp.Path.Span, diag.ImportNoCollection, "%s holds no collection to use", d.imp.Path.Value).
+					Hintf("import a collection file: a scenario file is run, never imported")
+			}
+			continue
+		}
+		if prev, dup := named[name]; dup {
+			e.bag.Error(at, diag.DuplicateImportName, "two imports are named %s", name).
+				Hintf("the first is on line %d; name one of them another way with as", prev.Span().Line)
+			continue
+		}
+		named[name] = d.imp
+		u.scope[name] = d.unit.own[0]
 	}
-	for _, c := range sortedColls(u) {
+	for _, c := range u.own {
 		e.checkCollection(u, c)
 	}
 }
 
-// sortedColls is u's own collections in source order, so diagnostics come
-// out the same on every run.
-func sortedColls(u *unit) []*ast.Collection {
-	out := make([]*ast.Collection, 0, len(u.own))
-	for _, c := range u.own {
-		out = append(out, c)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name.Span.Offset < out[j].Name.Span.Offset })
-	return out
-}
-
-// resolve finds the collection and item a use names. c is the collection the
-// use is written in, nil in a scenario; a bare ref is legal only there.
-func (e *expander) resolve(u *unit, c *ast.Collection, use *ast.UseDecl) (owner *unit, coll *ast.Collection, item ast.Decl, ok bool) {
-	coll = c
+// resolve finds the collection and request a use names.
+func (e *expander) resolve(u *unit, use *ast.UseDecl) (coll *ast.Collection, item ast.Decl, ok bool) {
 	if use.Collection.Text != "" {
 		name := use.Collection.Value
 		coll = u.scope[name]
@@ -285,24 +289,24 @@ func (e *expander) resolve(u *unit, c *ast.Collection, use *ast.UseDecl) (owner 
 				// The failed import has been reported, and is most likely
 				// where the collection was.
 				e.silent++
-				return nil, nil, nil, false
+				return nil, nil, false
 			}
 			r := e.bag.Error(use.Collection.Span, diag.UnknownCollection, "no collection %q is in scope here", name)
 			if !r.DidYouMean(name, keys(u.scope)) {
 				r.Hintf("import the file that declares it")
 			}
-			return nil, nil, nil, false
+			return nil, nil, false
 		}
-	} else if c == nil {
+	} else {
 		e.bag.Error(use.Item.Span, diag.UnknownItem,
-			"a bare name is only legal inside a collection; write <collection>.%s", use.Item.Value)
-		return nil, nil, nil, false
+			"a use names a collection's request: write <collection>.%s", use.Item.Value)
+		return nil, nil, false
 	}
-	owner = e.owner[coll]
+	owner := e.owner[coll]
 	if owner == nil || !owner.ok || !e.checkCollection(owner, coll) {
 		// Its own errors have been reported once, where it is written.
 		e.silent++
-		return nil, nil, nil, false
+		return nil, nil, false
 	}
 	var names []string
 	for _, d := range coll.Items {
@@ -311,35 +315,29 @@ func (e *expander) resolve(u *unit, c *ast.Collection, use *ast.UseDecl) (owner 
 			continue
 		}
 		if n == use.Item.Value {
-			return owner, coll, d, true
+			return coll, d, true
 		}
 		names = append(names, n)
 	}
-	r := e.bag.Error(use.Item.Span, diag.UnknownItem, "collection %q has no request or flow %q", coll.Name.Value, use.Item.Value)
+	r := e.bag.Error(use.Item.Span, diag.UnknownItem, "%s has no request %q", use.Collection.Value, use.Item.Value)
 	if !r.DidYouMean(use.Item.Value, names) && len(names) > 0 {
-		r.Hintf("%s has %s", coll.Name.Value, strings.Join(names, ", "))
+		r.Hintf("%s has %s", use.Collection.Value, strings.Join(names, ", "))
 	}
-	return nil, nil, nil, false
+	return nil, nil, false
 }
 
-// itemName is a request's or a flow's name, "" for anything else.
+// itemName is a request's name, "" for anything else.
 func itemName(d ast.Decl) string {
-	switch v := d.(type) {
-	case *ast.RequestDecl:
-		return v.Name.Value
-	case *ast.FlowDecl:
-		return v.Name.Value
+	if r, ok := d.(*ast.RequestDecl); ok {
+		return r.Name.Value
 	}
 	return ""
 }
 
 // itemSpan is the span of d's name, where a reader goes to find it.
 func itemSpan(d ast.Decl) token.Span {
-	switch v := d.(type) {
-	case *ast.RequestDecl:
-		return v.Name.Span
-	case *ast.FlowDecl:
-		return v.Name.Span
+	if r, ok := d.(*ast.RequestDecl); ok {
+		return r.Name.Span
 	}
 	return token.Span{}
 }
@@ -353,103 +351,37 @@ func keys(m map[string]*ast.Collection) []string {
 	return out
 }
 
-// expandUse returns the steps one use stands for. u is the file the use is
-// written in, coll the collection around it (nil in a scenario), line the use
-// line's span as written -- taken before any parameter was substituted into
-// a nested use, whose default would otherwise stretch it -- parent the
-// Via of the use that copied this one in (0 at the top), and stack the items
-// being expanded around it, for cycle detection. sc is what the use's
-// arguments can read, for its secret parameters.
-//
-// Overrides apply before `as`, so an in block names a step as the flow wrote
-// it; `as` then renames the steps and captures.
-func (e *expander) expandUse(u *unit, coll *ast.Collection, use *ast.UseDecl, line token.Span, parent int, stack []string, sc *scope) []ast.Decl {
-	out := e.expandOne(u, coll, use, line, parent, stack, sc)
-	if parent == 0 {
-		e.checkDropped(out)
-	}
-	return out
-}
-
-// expandOne is expandUse less the dropped-capture check, which waits for the
-// whole top-level expansion: a capture dropped in a nested use is read, if at
-// all, by a step of the flow around it.
-func (e *expander) expandOne(u *unit, coll *ast.Collection, use *ast.UseDecl, line token.Span, parent int, stack []string, sc *scope) []ast.Decl {
-	e.res.Uses = append(e.res.Uses, Use{Span: line, Parent: parent, Ref: use.Ref()})
+// expandUse returns the step one use stands for: its request written out,
+// its parameters bound to the use's arguments, then its override lines
+// applied, then `as` renaming the step's captures. u is the scenario's file,
+// and sc what the use's arguments can read, for secret parameters.
+func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
+	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Ref: use.Ref()})
 	via := len(e.res.Uses)
 
-	owner, c, item, ok := e.resolve(u, coll, use)
+	_, item, ok := e.resolve(u, use)
 	if !ok {
 		return nil
 	}
 	e.res.Uses[via-1].Item = itemSpan(item)
-	key := c.Name.Value + "." + itemName(item)
-	// Qualified even for a bare sibling ref, as the step it names is.
+	// By the name the use reads the collection by, never its title.
+	key := use.Collection.Value + "." + itemName(item)
 	e.res.Uses[via-1].Ref = key
-	if i := slices.Index(stack, key); i >= 0 {
-		chain := append(slices.Clone(stack[i:]), key)
-		e.bag.Error(line, diag.UseCycle, "use cycle: %s", strings.Join(chain, " -> "))
-		return nil
-	}
-	stack = append(slices.Clone(stack), key)
 	stamp := stampVia(via)
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(sc, use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}
-		s := requestStep(it, prefix(use, c, it.Name.Value), env, stamp)
+		s := requestStep(it, prefix(use, it.Name.Value), env, stamp)
 		e.writtenLiteral(s, it.Action)
-		e.override(use, via, []*ast.StepDecl{s}, use.Lines, false, nil)
+		e.override(via, s, use.Lines)
 		if use.Alias.Text != "" {
 			e.renameCaptures([]*ast.StepDecl{s}, use.Alias.Value, via)
 		}
 		return []ast.Decl{s}
-	case *ast.FlowDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(sc, use, it.Name.Value), key, stamp)
-		if !ok {
-			return nil
-		}
-		pre := prefix(use, c, it.Name.Value)
-		var out []ast.Decl
-		var steps []*ast.StepDecl
-		named := map[*ast.StepDecl]string{} // each step's name before the prefix
-		own := map[string]*ast.StepDecl{}
-		for _, d := range it.Body {
-			switch v := d.(type) {
-			case *ast.StepDecl:
-				s := ast.Clone(v, stamp)
-				e.writtenLiteral(s, v.Action)
-				substStep(s, env)
-				if _, dup := own[v.Name.Value]; !dup {
-					own[v.Name.Value] = s
-				}
-				named[s] = v.Name.Value
-				out = append(out, s)
-				steps = append(steps, s)
-			case *ast.UseDecl:
-				inner := ast.Clone(v, stamp)
-				line := inner.Span()
-				substLines(inner.Lines, env)
-				for _, x := range e.expandUse(owner, c, inner, line, via, stack, sc.inside(use).at(sc.secrets, out)) {
-					if s, ok := x.(*ast.StepDecl); ok {
-						named[s] = s.Name.Value
-						steps = append(steps, s)
-					}
-					out = append(out, x)
-				}
-			}
-		}
-		e.override(use, via, nil, use.Lines, true, own)
-		for _, s := range steps {
-			rename(s, stepName(pre, named[s]))
-		}
-		if use.Alias.Text != "" {
-			e.renameCaptures(steps, use.Alias.Value, via)
-		}
-		return out
 	}
 	return nil
 }
@@ -482,9 +414,7 @@ func quote(name string) string {
 	return `"` + r.Replace(name) + `"`
 }
 
-// stampVia marks a copied token as brought in by use number via. A token
-// that already carries a Via -- copied in by a nested use expanded first --
-// keeps it: it is more specific, and Use.Parent links it to this use.
+// stampVia marks a copied token as brought in by use number via.
 func stampVia(via int) func(token.Token) token.Token {
 	return func(t token.Token) token.Token {
 		if !t.Span.IsZero() && t.Span.Via == 0 {

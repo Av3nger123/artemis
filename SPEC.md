@@ -632,9 +632,11 @@ when a browser step actually fails, so a suite of `api` steps never grows one.
 
 ## Collections
 
-A **collection** is a named set of requests and flows, written once and used
-from many scenarios. A `use` names one of them, passes it arguments, and may
-change what it sends and what it expects:
+A **collection** is a named set of single requests -- each one action, with
+its expects and captures -- written once and used from many scenarios. A `use`
+names one of them, passes it arguments, and may change what it sends and what
+it expects. Steps in order are a scenario's job: a collection holds no
+multi-step item, and a scenario is never used from another.
 
 ```art
 # collections/auth.art
@@ -652,8 +654,6 @@ collection "auth" {
 
 ```art
 # collections/orders.art
-import "auth.art"
-
 collection "orders" {
 
   request create(sku, qty = 1, base = env("API_URL")) {
@@ -665,15 +665,11 @@ collection "orders" {
     capture order_id = body.data.id
   }
 
-  flow checkout(user, secret password, base = env("API_URL")) {
-    use auth.login { user = user, password = password, base = base }
-    use create { sku = "A-1", qty = 2, base = base }
-    step "pay" {
-      post "${base}/orders/${order_id}/pay" {
-        header "Authorization" = "Bearer ${token}"
-      }
-      expect status == 200
+  request pay(id, token, base = env("API_URL")) {
+    post "${base}/orders/${id}/pay" {
+      header "Authorization" = "Bearer ${token}"
     }
+    expect status == 200
   }
 }
 ```
@@ -713,7 +709,9 @@ scenario "rush order" {
 }
 
 scenario "checkout" {
-  use orders.checkout as co { user = "alice", password = env("PW") }
+  use auth.login { user = "alice", password = env("PW") }
+  use orders.create { sku = "A-1", qty = 2 }
+  use orders.pay { id = order_id, token = token }
 }
 ```
 
@@ -731,27 +729,31 @@ collection file, so an error in it points there.
 
 | Form | What it is |
 | --- | --- |
-| `collection "<name>" { ... }` | A set of `request` and `flow` items. The name is how a `use` reaches it |
+| `collection "<title>" { ... }` | A set of `request` items. The title is any text, for people: a `use` reaches the collection by the name its file is [imported](#importing) as |
 | `request <name>(<params>) { ... }` | Exactly the body of a `step`: one action, then `expect`, `capture`, `retry` and `timeout` |
-| `flow <name>(<params>) { ... }` | `step`s and `use`s, run in the order they are written |
 | `<ident>` | A required parameter |
 | `<ident> = <expr>` | A parameter with a default. The default may name an earlier parameter, as a `var` may name an earlier `var` |
 | `secret <ident>` | A [secret parameter](#secret-parameters). Either form above may follow `secret` |
 
-A collection's name must be an identifier, because a `use` names it as one:
-`collection "my-orders"` is a compile error at the name, with the hint
-`my_orders`. Required parameters may follow defaulted ones, because arguments
-are always passed by name.
+Required parameters may follow defaulted ones, because arguments are always
+passed by name.
+
+A collection file holds **one** collection and nothing else, so an import
+names exactly one collection, the file's own. Each of these is a compile
+error, wherever the file is read from:
+
+| Error | Code | Hint |
+| --- | --- | --- |
+| a second `collection` in the file | `second-collection` | move it to a file of its own |
+| a `scenario` in the file | `scenario-in-collection-file` | move the scenario to a scenario file, which imports this one |
 
 A collection has no `var` of its own. Anything its items share is a parameter
 with a default, so every name a request reads is in its own signature.
 
-Inside a collection, a sibling item is named bare -- `use create` -- and an item
-of an imported collection is named qualified -- `use auth.login`. A bare name is
-legal only inside a collection.
+A `use` names an item with the name its collection is imported as -- `use
+auth.login`. A bare `use login` is a compile error.
 
-A parameter may not be named `header`, `query`, `body`, `drop`, `expect` or
-`in`. A [use line](#use-lines) is read by its first word, so such a parameter
+A parameter may not be named `header`, `query`, `body`, `drop` or `expect`. A [use line](#use-lines) is read by its first word, so such a parameter
 could never be passed. Declaring one is a compile error at the parameter:
 
 ```
@@ -765,18 +767,39 @@ orders.art:2:13: a parameter cannot be named body: a use block reads body as an 
 
 | | |
 | --- | --- |
-| Form | `import "<path>"` |
+| Form | `import "<path>" [as <ident>]` |
 | Where | At the top of the file, before any `collection` or `scenario` |
 | Path | Relative to the importing file. Local files only: no URL, no package, no version |
-| Effect | Each collection in that file is in scope by its own name |
+| Effect | The file's collection is in scope by the name after `as`, or else by the file's name less `.art` -- and less a `.collection` before it, so `orders.art` and `orders.collection.art` are both `orders` |
 | Not transitive | `orders.art` importing `auth.art` puts `auth` in scope in `orders.art`, not in a file that imports `orders.art` |
 
-Two collections in scope under one name are a compile error, and so is an
-import cycle, named as its chain: `a.art -> b.art -> a.art`.
+```art
+import "collections/orders.art" as shop
+import "collections/auth.art"
 
-A file may hold `collection` blocks, `scenario` blocks, or both. Only scenarios
-run: `artemis run` on a file of only collections runs nothing and passes, so a
-folder run is not upset by a `collections/` folder inside it.
+scenario "buy" {
+  use auth.login { user = "alice", password = env("PW") }
+  use shop.create { sku = "A-1", qty = 2 }
+}
+```
+
+A file named `Backend APIs.art` is imported the same way, `as` a name a use
+can read.
+
+The collection's title plays no part: the import line alone says what a use
+reads. Each of these is a compile error at the import:
+
+| Error | Code | Hint |
+| --- | --- | --- |
+| no `as`, and a file name that cannot be one, like `Backend APIs.art` | `import-needs-name` | name it: import "collections/Backend APIs.art" as Backend_APIs |
+| a file with no collection | `import-no-collection` | import a collection file: a scenario file is run, never imported |
+| two imports under one name | `duplicate-import-name` | name one of them another way with as |
+
+So is an import cycle, named as its chain: `a.art -> b.art -> a.art`.
+
+A file holds a collection or scenarios, never both. Only scenarios run:
+`artemis run` on a collection file runs nothing and passes, so a folder run is
+not upset by a `collections/` folder inside it.
 
 ### `use`
 
@@ -790,16 +813,13 @@ use orders.create as rush {
 | | |
 | --- | --- |
 | Form | `use <collection>.<item> [as <ident>] [{ <use line> ... }]` |
-| Where | In a scenario body, wherever a `step` may be, and in a flow body |
-| Effect | Replaced, in place, by the item's steps: a request is one step, a flow is its steps in order. They run where the `use` is written |
-
-A `use` inside a flow is expanded too, to any depth. A `use` that reaches itself
-is a compile error naming the chain.
+| Where | In a scenario body, wherever a `step` may be |
+| Effect | Replaced, in place, by the request's step. It runs where the `use` is written |
 
 ### Use lines
 
 A use line is read by its first word. A line that opens with `header`, `query`,
-`body`, `drop`, `expect` or `in` is an override; any other line is an argument.
+`body`, `drop` or `expect` is an override; any other line is an argument.
 Lines apply in the order they are written, and a block may put several on one
 line, separated by commas.
 
@@ -813,11 +833,9 @@ line, separated by commas.
 | `drop expects` | any step | Removes every `expect` the template wrote. It must come before the `use`'s own `expect` lines |
 | `drop captures` | any step | Removes every `capture` the template wrote. It may come anywhere in the block |
 | `expect <expr> [within <dur>]` | any step | Added after the template's remaining expects |
-| `in "<step>" { <use line> ... }` | flow | Applies the override lines inside it -- not arguments, not `in` -- to that step of the flow. An unknown step name is a compile error |
 
 An override that does not fit its target is a compile error: `header` on a
-terminal step, any override on a flow without `in` -- a flow has several steps
-and the line has to say which -- and `in` on a request.
+terminal step, for one.
 
 An override applies to an `api` step only. To vary a `terminal` or `browser`
 request, make the value a parameter and pass it as an argument. The error for an
@@ -825,20 +843,14 @@ override on such a step gives the same hint.
 
 A negative test drops both. `auth.login` captures a token, and a 401 has none:
 a capture the response cannot supply is an [errored assertion](#capture), so
-the bad-password test above writes `drop captures` beside `drop expects`. A
-capture dropped from one step of a flow is gone for the steps after it too. A
-later step of the flow that reads it is the compile error `dropped-capture`, at
-the read: the read never binds to a scenario `var` or capture that happens to
-share the name.
+the bad-password test above writes `drop captures` beside `drop expects`.
 
 ### `as`
 
 `as <ident>` names one use of an item:
 
-- A request's step is named `<ident>`. A flow's steps are named
-  `<ident> / <step>`.
-- Every capture the expansion makes, nested flows included, is prefixed with
-  `<ident>_`, and every read of it inside the expansion is rewritten to match.
+- The request's step is named `<ident>`.
+- Every capture the step makes is prefixed with `<ident>_`.
   `use orders.create as rush` captures `rush_order_id`, and the steps after it
   read that name.
 
@@ -855,10 +867,6 @@ The expanded step's name is what every report shows:
 | --- | --- |
 | `use orders.create` | `orders.create` |
 | `use orders.create as rush` | `rush` |
-| `use orders.checkout`, its step `pay` | `orders.checkout / pay` |
-| `use orders.checkout`, its nested `use auth.login` | `orders.checkout / auth.login` |
-| `use orders.checkout`, its sibling `use create` | `orders.checkout / orders.create`: a sibling is named with its collection, as it would be from outside |
-| `use orders.checkout as co` | `co / pay`, `co / auth.login` |
 
 Two steps may share a name, as they may anywhere else.
 
@@ -868,8 +876,7 @@ Every collection is checked on its own, once, before any `use` of it expands.
 An error in it is reported once, against the collection file, and not again per
 use. A collection with an error is never expanded: its uses report nothing more.
 
-A template may read **only** its parameters, its own step's observation, and the
-captures of earlier steps and earlier `use`s in the same flow. Any other name --
+A template may read **only** its parameters and its own step's observation. Any other name --
 one a scenario would have to supply -- is a compile error, in the collection.
 That is the price of a collection that checks on its own and means the same
 thing from every scenario that uses it: everything it needs from outside is a
@@ -882,7 +889,7 @@ be ambiguous. It is the compile error `root-capture`, at the capture's name.
 
 Errors that depend on the use site -- arguments, overrides, a capture clash --
 are reported at the line in the collection they concern, followed by the use
-lines that brought it in, innermost first. Two uses of `auth.login` without
+line that brought it in. Two uses of `auth.login` without
 `as`, on lines 4 and 5 of `twice.art`, bind its hoisted secret var and its
 capture twice:
 
@@ -905,8 +912,8 @@ collections/auth.art:9:20: "token" is already bound
 When a use brought the first binding in, the hint names that use's line in the
 scenario; a `var` declared below the second binding "also binds it".
 
-`artemis parse --json` carries the same chain as `usedFrom`: a list of spans,
-innermost first, absent when the diagnostic was written where it is reported.
+`artemis parse --json` carries the use line as `usedFrom`: a list holding its
+span, absent when the diagnostic was written where it is reported.
 
 ### Secret parameters
 
@@ -951,17 +958,19 @@ artemis run collections/orders.art --item orders      # every item, in the order
 
 | Flag | |
 | --- | --- |
-| `--item <collection>.<item>` | Run that request or flow instead of the file's scenarios |
-| `--item <collection>` | Run every item of the collection in order, captures flowing down as in a scenario. Each item is passed the arguments it has a parameter for |
+| `--item <name>.<item>` | Run that request |
+| `--item <name>` | Run every request of the collection in order, captures passing down as in a scenario. Each request is passed the arguments it has a parameter for |
 | `--arg name=value` | A parameter. The value is a string and is sent as written: `${` in it is not an interpolation. Repeatable |
 | `--args <file>` | Parameters from a JSON object, so a secret stays off the command line. Values keep their JSON type. `--arg` wins over it |
 | `--captures <file>` | Every value the item's captures got, `secret` ones included, as `{"values": {...}, "secret": [...]}`, mode 0600 |
 
-The scenario is appended to the collection file in memory, so every line keeps
-its number and nothing is written beside the file. It is named for the item
-(`auth.login`), and its steps are named as any use's are. A missing or unknown
-argument is the checker's error and stops the run before anything is sent. The
-file's own scenarios, if it has any, do not run.
+`<name>` is any name a use can read: the scenario imports the collection file
+`as` it, whatever the collection is titled. The scenario is a file of its own,
+in memory, beside the collection file and importing it, so every line of the collection keeps its number and nothing is
+written to disk; the run is reported under the collection file's path. It is
+named for the item (`auth.login`), and its steps are named as any use's are. A
+missing or unknown argument is the checker's error and stops the run before
+anything is sent.
 
 `--captures` is the one place a secret value leaves a run. A report and a trace
 still withhold it.
@@ -1464,7 +1473,7 @@ duration that will not parse is a compile error.
 ## Reserved keywords
 
 These are reserved and cannot be used as a name. Using one is a parse error
-saying what it is reserved for, or, for the three the language now uses, what it
+saying what it is reserved for, or, for the two the language now uses, what it
 does:
 
 ```
@@ -1474,9 +1483,8 @@ setup  teardown  ai
 
 | Word | Purpose |
 | --- | --- |
-| `import` | Imports a collection file: `import "collections/auth.art"` |
-| `use` | Expands a collection's request or flow in place: `use auth.login { ... }` |
-| `in` | Targets one step of a flow in a use block, and is held for a future loop form |
+| `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
+| `use` | Expands a collection's request in place: `use auth.login { ... }` |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
 implemented** and will not parse. A CI gate's most valuable property is
@@ -1486,10 +1494,10 @@ than a missing one.
 The keywords the language actually uses are positional, not reserved:
 `scenario`, `config`, `var`, `step`, `run`, `browser`, `expect`, `capture`,
 `retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
-`env`, `times`, `delay`, `collection`, `request`, `flow`, `secret`, `as`,
+`env`, `times`, `delay`, `collection`, `request`, `secret`, `as`,
 `drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
 the operators `and`, `or`, `not`, `contains`, `matches`, `exists`, `is`. Each
-means the keyword only where the grammar expects it, so `var flow = 1` and
+means the keyword only where the grammar expects it, so `var request = 1` and
 `capture body = ...` are legal. The literals `true`, `false` and `null` are the
 exception: they are never a name.
 
@@ -1503,22 +1511,20 @@ grammar is how two grammars come to disagree.
 
 ```ebnf
 File        = { Import } { Collection | Scenario } ;
-Import      = "import" String ;
-Collection  = "collection" String "{" { RequestDecl | FlowDecl } "}" ;
+Import      = "import" String [ "as" Ident ] ;
+Collection  = "collection" String "{" { RequestDecl } "}" ;
 RequestDecl = "request" Ident Params "{" Action { StepStmt } "}" ;
-FlowDecl    = "flow" Ident Params "{" { StepDecl | UseDecl } "}" ;
 Params      = "(" [ Param { "," Param } ] ")" ;
 Param       = [ "secret" ] Ident [ "=" Expr ] ;
 
 Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
 UseDecl     = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
-ItemRef     = Ident [ "." Ident ] ;
+ItemRef     = Ident "." Ident ;
 UseLine     = Ident "=" Expr
             | ReqField
             | "body" "." Ident { "." Ident } "=" Expr
             | "drop" ( "expects" | "captures" )
-            | Expect
-            | "in" String "{" { UseLine } "}" ;
+            | Expect ;
 ConfigDecl  = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
 Setting     = Ident "=" Expr ;
 VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
@@ -1571,8 +1577,8 @@ Array       = "[" [ Expr { "," Expr } ] "]" ;
 Comments are `#` to end of line. Trailing commas are permitted in objects and
 arrays. Statements separate by newline; no semicolons.
 
-A bare `ItemRef`, with no dot, is legal only inside a collection, where it names
-a sibling item. Use lines separate like statements: by a newline or a comma.
+Use lines separate like statements: by a newline or a comma. A collection file
+holds one collection and no scenario ([A collection file](#a-collection-file)).
 
 `BrowserAct`'s semantics -- which actions take a value, what `wait` waits for,
 what a selector means -- are specified with [`browser` steps](#browser-steps)

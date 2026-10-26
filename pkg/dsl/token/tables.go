@@ -62,12 +62,12 @@ var (
 	StepFields = []string{"timeout", "retry"}
 
 	// CollectionItems are what a collection body holds.
-	CollectionItems = []string{"request", "flow"}
+	CollectionItems = []string{"request"}
 
 	// UseLines are the words that open an override line in a use block. Any
 	// other identifier opening a line there is an argument, which is why a
 	// parameter may not be named one of these.
-	UseLines = []string{"header", "query", "body", "drop", "expect", "in"}
+	UseLines = []string{"header", "query", "body", "drop", "expect"}
 
 	// DropTargets are what a use's `drop` line can remove from the template:
 	// `drop expects` its expects, `drop captures` its captures.

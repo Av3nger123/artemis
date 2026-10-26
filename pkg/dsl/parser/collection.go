@@ -8,7 +8,7 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// parseImport is `import String`.
+// parseImport is `import String [ "as" Ident ]`.
 func (p *parser) parseImport() ast.Decl {
 	imp := &ast.Import{Keyword: p.next()}
 	path, ok := p.expect(token.String, "a file path in quotes")
@@ -16,11 +16,19 @@ func (p *parser) parseImport() ast.Decl {
 		return p.badFrom(imp.Keyword)
 	}
 	imp.Path = path
+	if p.atWord("as") {
+		imp.As = p.next()
+		name, ok := p.expectIdent("the name a use reads it by, after \"as\"")
+		if !ok {
+			return p.badFrom(imp.Tokens(nil)...)
+		}
+		imp.Name = name
+	}
 	p.endDecl("an import")
 	return imp
 }
 
-// parseCollection is `collection String "{" { RequestDecl | FlowDecl } "}"`.
+// parseCollection is `collection String "{" { RequestDecl } "}"`.
 func (p *parser) parseCollection() ast.Decl {
 	c := &ast.Collection{Keyword: p.next()}
 	name, ok := p.expectIdentOrString("a collection name in quotes")
@@ -28,11 +36,6 @@ func (p *parser) parseCollection() ast.Decl {
 		return p.badFrom(c.Keyword)
 	}
 	c.Name = name
-	if !isIdentName(name.Value) {
-		p.errorf(name, diag.BadCollectionName,
-			"a collection name must be an identifier: a use names it as one, so %q could never be used", name.Value).
-			Hintf("name it %s", identLike(name.Value))
-	}
 	open, ok := p.expect(token.LBrace, "\"{\" to open the collection")
 	if !ok {
 		return p.badFrom(c.Keyword, c.Name)
@@ -45,10 +48,13 @@ func (p *parser) parseCollection() ast.Decl {
 		case p.atWord("request"):
 			c.Items = append(c.Items, p.parseRequestDecl())
 		case p.atWord("flow"):
-			c.Items = append(c.Items, p.parseFlowDecl())
+			// A collection is single requests; steps in order are a scenario's.
+			p.errorf(p.peek(), diag.UnexpectedToken, "a collection holds requests, one action each: steps in order are a scenario").
+				Hintf("write these steps in a scenario, using the requests one by one")
+			c.Items = append(c.Items, p.recoverTo())
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
-				"expected \"request\" or \"flow\", found %s", describe(p.peek())).
+				"expected \"request\", found %s", describe(p.peek())).
 				DidYouMean(p.peek().Value, token.CollectionItems)
 			c.Items = append(c.Items, p.recoverTo())
 		}
@@ -141,50 +147,6 @@ func (p *parser) parseRequestDecl() ast.Decl {
 	return r
 }
 
-// parseFlowDecl is `flow Ident Params "{" { StepDecl | UseDecl } "}"`.
-func (p *parser) parseFlowDecl() ast.Decl {
-	f := &ast.FlowDecl{Keyword: p.next()}
-	name, ok := p.expectIdent("a flow name")
-	if !ok {
-		return p.badFrom(f.Keyword)
-	}
-	f.Name = name
-	params, ok := p.parseParams()
-	f.Params = params
-	if !ok {
-		return p.badFrom(f.Tokens(nil)...)
-	}
-	open, ok := p.expect(token.LBrace, "\"{\" to open the flow")
-	if !ok {
-		return p.badFrom(f.Tokens(nil)...)
-	}
-	f.LBrace = open
-	for !p.at(token.RBrace) && !p.at(token.EOF) {
-		before := p.i
-		switch {
-		case p.atWord("step"):
-			f.Body = append(f.Body, p.parseStep())
-		case p.atWord("use"):
-			f.Body = append(f.Body, p.parseUse())
-		default:
-			p.errorf(p.peek(), diag.UnexpectedToken,
-				"expected \"step\" or \"use\", found %s", describe(p.peek())).
-				DidYouMean(p.peek().Value, []string{"step", "use"})
-			f.Body = append(f.Body, p.recoverTo())
-		}
-		if p.i == before {
-			f.Body = append(f.Body, &ast.Bad{Toks: []token.Token{p.consumeRaw()}})
-		}
-	}
-	if p.at(token.EOF) {
-		p.unclosed(open, "flow")
-	} else {
-		f.RBrace = p.next()
-	}
-	p.endDecl("a flow")
-	return f
-}
-
 // parseUse is `use ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ]`.
 func (p *parser) parseUse() ast.Decl {
 	u := &ast.UseDecl{Keyword: p.next()}
@@ -194,7 +156,7 @@ func (p *parser) parseUse() ast.Decl {
 	}
 	if p.at(token.Dot) {
 		u.Collection, u.Dot = first, p.next()
-		item, ok := p.expectIdent("the request or flow after the dot")
+		item, ok := p.expectIdent("the request after the dot")
 		if !ok {
 			return p.badFrom(u.Tokens(nil)...)
 		}
@@ -237,8 +199,6 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 			lines = append(lines, p.parseExpect())
 		case p.atWord("drop"):
 			lines = append(lines, p.parseDrop())
-		case p.atWord("in") && p.peekKindAt(1, token.String):
-			lines = append(lines, p.parseIn())
 		case p.atWord("body") && p.peekKindAt(1, token.Dot):
 			lines = append(lines, p.parseBodySet())
 		case p.at(token.Ident):
@@ -246,7 +206,7 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected an argument or an override, found %s", describe(p.peek())).
-				Hintf("a use block holds: name = value, header, query, body, drop expects, drop captures, expect, in \"step\" { ... }")
+				Hintf("a use block holds: name = value, header, query, body, drop expects, drop captures, expect")
 			lines = append(lines, p.recoverTo())
 		}
 		if p.i == before {
@@ -273,19 +233,6 @@ func (p *parser) parseDrop() ast.Stmt {
 	d.What = what
 	d.Comma = p.endStatement("a drop")
 	return d
-}
-
-func (p *parser) parseIn() ast.Stmt {
-	n := &ast.In{Keyword: p.next(), Step: p.next()}
-	if !p.at(token.LBrace) {
-		p.errorf(p.peek(), diag.UnexpectedToken, "expected \"{\" after the step name, found %s", describe(p.peek()))
-		return p.badFrom(n.Keyword, n.Step)
-	}
-	n.LBrace, n.Lines, n.RBrace = p.parseUseLines("in")
-	// endDecl, not endStatement: In has no Comma field, so a comma after it is
-	// reported and left for the enclosing loop's recovery to keep.
-	p.endDecl("an in block")
-	return n
 }
 
 func (p *parser) parseBodySet() ast.Stmt {
@@ -342,3 +289,19 @@ func identLike(s string) string {
 	}
 	return b.String()
 }
+
+// IsIdentName reports whether s can be what a use names a collection by.
+func IsIdentName(s string) bool { return isIdentName(s) }
+
+// ImportName is the name `import "<path>"` with no `as` gives the file's
+// collection: the file's name less .art, and less a .collection before it
+// (orders.art and orders.collection.art are both orders). ok is false when
+// that cannot be a use's, and the import needs an `as`.
+func ImportName(path string) (name string, ok bool) {
+	base := path[strings.LastIndexAny(path, "/\\")+1:]
+	name = strings.TrimSuffix(strings.TrimSuffix(base, ".art"), ".collection")
+	return name, isIdentName(name)
+}
+
+// IdentLike is s made into an identifier, for a hint.
+func IdentLike(s string) string { return identLike(s) }

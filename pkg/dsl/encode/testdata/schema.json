@@ -35,22 +35,16 @@
       "block"
     ],
     "collectionItem": [
-      "requestDecl",
-      "flow"
+      "requestDecl"
     ],
     "param": [
       "param"
-    ],
-    "flowBody": [
-      "step",
-      "use"
     ],
     "useLine": [
       "field",
       "bodySet",
       "drop",
-      "expect",
-      "in"
+      "expect"
     ],
     "expression": [
       "ident",
@@ -645,12 +639,18 @@
     },
     {
       "kind": "import",
-      "doc": "`import \"auth.art\"`; imports come before every collection and scenario",
+      "doc": "`import \"auth.art\"` or `import \"Backend APIs.art\" as api`; imports come before every collection and scenario",
       "fields": [
         {
           "name": "path",
           "type": "string",
           "doc": "the file imported, decoded: escapes resolved, no quotes"
+        },
+        {
+          "name": "as",
+          "type": "string",
+          "optional": true,
+          "doc": "the name after `as`, which a use reads the collection by; absent, it is the file's name"
         },
         {
           "name": "span",
@@ -665,7 +665,7 @@
     },
     {
       "kind": "collection",
-      "doc": "`collection \"orders\" { request ... flow ... }`",
+      "doc": "`collection \"Orders API\" { request ... }`: one per file; its name is a title",
       "fields": [
         {
           "name": "name",
@@ -758,38 +758,6 @@
       ]
     },
     {
-      "kind": "flow",
-      "doc": "`flow checkout(user) { step ... use ... }`",
-      "fields": [
-        {
-          "name": "name",
-          "type": "string",
-          "doc": "the identifier a use names it by"
-        },
-        {
-          "name": "params",
-          "type": "node[]",
-          "accepts": "param",
-          "optional": true
-        },
-        {
-          "name": "body",
-          "type": "node[]",
-          "accepts": "flowBody",
-          "optional": true
-        },
-        {
-          "name": "span",
-          "type": "span"
-        },
-        {
-          "name": "comments",
-          "type": "comments",
-          "optional": true
-        }
-      ]
-    },
-    {
       "kind": "use",
       "doc": "`use auth.login as admin { user = \"alice\" ... }`",
       "fields": [
@@ -797,12 +765,12 @@
           "name": "collection",
           "type": "string",
           "optional": true,
-          "doc": "the collection before the dot; absent for a sibling in the same collection"
+          "doc": "the collection before the dot"
         },
         {
           "name": "item",
           "type": "string",
-          "doc": "the request or flow used"
+          "doc": "the request used"
         },
         {
           "name": "alias",
@@ -864,34 +832,6 @@
           "type": "string",
           "inputRequired": true,
           "doc": "expects or captures: what the line removes"
-        },
-        {
-          "name": "span",
-          "type": "span"
-        },
-        {
-          "name": "comments",
-          "type": "comments",
-          "optional": true
-        }
-      ]
-    },
-    {
-      "kind": "in",
-      "doc": "`in \"pay\" { ... }` in a use block: overrides aimed at one step of a flow",
-      "fields": [
-        {
-          "name": "step",
-          "type": "name",
-          "optional": true,
-          "inputRequired": true,
-          "doc": "the step's name, as the flow writes it"
-        },
-        {
-          "name": "lines",
-          "type": "node[]",
-          "accepts": "useLine",
-          "optional": true
         },
         {
           "name": "span",

@@ -22,7 +22,7 @@ that will actually run: no import, no collection and no use, only steps.
 	artemis expand checkout.art -o checkout.flat.art
 
 Each step a use brought in carries a comment saying where it came from: the
-request or flow, the line it is declared on, and the use line that brought it
+request, the line it is declared on, and the use line that brought it
 in. A secret parameter's argument is a 'secret var' just above the steps that
 read it.
 
@@ -131,14 +131,8 @@ func origin(u *front.Unit, via int) (string, bool) {
 		return "", false
 	}
 	use := u.Uses[via-1]
-	// The use the scenario wrote: walk out through every use that copied this
-	// one in, so `via` is a line of the scenario file a reader can go to.
-	top := use
-	for top.Parent > 0 && top.Parent <= len(u.Uses) {
-		top = u.Uses[top.Parent-1]
-	}
 	return fmt.Sprintf("# from %s (%s:%d) via %s:%d",
-		use.Ref, use.Item.File, use.Item.Line, top.Span.File, top.Span.Line), true
+		use.Ref, use.Item.File, use.Item.Line, use.Span.File, use.Span.Line), true
 }
 
 // withComment is leading with an own-line comment after it, in a new slice.

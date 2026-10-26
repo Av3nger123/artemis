@@ -58,19 +58,18 @@ func loadArtFile(file string, diagOut io.Writer) (compiled, error) {
 	return compiled{file: file, scenarios: scenarios, needs: needs}, nil
 }
 
-// load compiles one file of the run. The file an --item run is about is
-// compiled from the source with its item's scenario appended, and only that
-// scenario runs: a collection file may hold scenarios of its own, and they were
-// not asked for.
+// load compiles one file of the run. The file an --item run is about is its
+// item's scenario, in a file of its own that imports the collection (item.go),
+// reported under the collection file's path.
 func (rt *runtimeEnv) load(file string, diagOut io.Writer) (compiled, error) {
 	if rt.item == nil || rt.item.file != file {
 		return loadArtFile(file, diagOut)
 	}
-	scenarios, needs, err := compileArtSource(file, rt.item.src, diagOut)
+	scenarios, needs, err := compileArtSource(rt.item.name, rt.item.src, diagOut)
 	if err != nil {
 		return compiled{}, err
 	}
-	return compiled{file: file, scenarios: scenarios[len(scenarios)-1:], needs: needs}, nil
+	return compiled{file: file, scenarios: scenarios, needs: needs}, nil
 }
 
 // runCompiled runs every scenario of one compiled file.

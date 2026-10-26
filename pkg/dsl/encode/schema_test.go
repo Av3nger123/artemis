@@ -91,7 +91,6 @@ func TestEveryGroupKindIsAcceptedThere(t *testing.T) {
 		"expression":     func(f fields) error { _, err := exprIn(f); return err },
 		"collectionItem": func(f fields) error { _, err := collectionItem(f); return err },
 		"param":          func(f fields) error { _, err := param(f); return err },
-		"flowBody":       func(f fields) error { _, err := flowItem(f); return err },
 		"useLine":        func(f fields) error { _, err := useLine(f); return err },
 	}
 	for _, g := range groupSchemas {

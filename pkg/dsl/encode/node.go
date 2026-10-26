@@ -44,11 +44,9 @@ const (
 	kindCollection  = "collection"
 	kindParam       = "param"
 	kindRequestDecl = "requestDecl"
-	kindFlow        = "flow"
 	kindUse         = "use"
 	kindBodySet     = "bodySet"
 	kindDrop        = "drop"
-	kindIn          = "in"
 )
 
 // node encodes one node, or returns nil for one that is not there -- which a
@@ -94,16 +92,12 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.param(v)
 	case *ast.RequestDecl:
 		return e.requestDecl(v)
-	case *ast.FlowDecl:
-		return e.flowDecl(v)
 	case *ast.UseDecl:
 		return e.useDecl(v)
 	case *ast.BodySet:
 		return e.bodySet(v)
 	case *ast.Drop:
 		return e.drop(v)
-	case *ast.In:
-		return e.in(v)
 	case *ast.Bad:
 		return e.bad(v)
 	}

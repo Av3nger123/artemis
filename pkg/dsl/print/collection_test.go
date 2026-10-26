@@ -10,8 +10,8 @@ import (
 )
 
 // TestAnEditInsideACollectionTouchesOnlyItsOwnLines holds preserving mode to
-// R6 for the nodes collections added: a new line in a use block, a new step in
-// a flow, and a changed argument each move only their own lines.
+// R6 for the nodes collections added: a new line in a use block and a changed
+// argument each move only their own lines.
 func TestAnEditInsideACollectionTouchesOnlyItsOwnLines(t *testing.T) {
 	src := read(t, filepath.Join("..", "parser", "testdata", "collections.art"))
 
@@ -20,39 +20,18 @@ func TestAnEditInsideACollectionTouchesOnlyItsOwnLines(t *testing.T) {
 		mutate: func(t *testing.T, f *ast.File) {
 			field(t, f, "sku").Value = &ast.Literal{Tok: Synthetic(token.String, `"B-2"`)}
 		},
-		removed: []string{`    use create { sku = "A-1", qty = 2, base = base }`},
-		added:   []string{`    use create { sku = "B-2", qty = 2, base = base }`},
+		removed: []string{`    sku = "A-1"`},
+		added:   []string{`    sku = "B-2"`},
 	}, {
 		name: "a new line in a use block",
 		mutate: func(t *testing.T, f *ast.File) {
-			u := use(t, f, "orders.checkout")
+			u := use(t, f, "orders.pay")
 			u.Lines = append(u.Lines, &ast.Drop{
 				Keyword: Synthetic(token.Ident, "drop"),
 				What:    Synthetic(token.Ident, "expects"),
 			})
 		},
 		added: []string{`    drop expects`},
-	}, {
-		name: "a new step in a flow",
-		mutate: func(t *testing.T, f *ast.File) {
-			var flow *ast.FlowDecl
-			ast.Inspect(f, func(n ast.Node) {
-				if v, ok := n.(*ast.FlowDecl); ok {
-					flow = v
-				}
-			})
-			flow.Body = append(flow.Body, &ast.StepDecl{
-				Keyword: Synthetic(token.Ident, "step"),
-				Name:    Synthetic(token.String, `"done"`),
-				LBrace:  Synthetic(token.LBrace, "{"),
-				Action: &ast.Request{
-					Method: Synthetic(token.Ident, "get"),
-					URL:    &ast.Literal{Tok: Synthetic(token.String, `"/done"`)},
-				},
-				RBrace: Synthetic(token.RBrace, "}"),
-			})
-		},
-		added: []string{`    step "done" {`, `      get "/done"`, `    }`},
 	}}
 
 	for _, tc := range cases {
@@ -85,4 +64,19 @@ func use(t *testing.T, f *ast.File, ref string) *ast.UseDecl {
 		t.Fatalf("no use of %s in the fixture", ref)
 	}
 	return found
+}
+
+// An import's `as` survives both printers.
+func TestAnImportKeepsItsName(t *testing.T) {
+	src := "import \"Backend APIs.art\" as api\nimport \"auth.art\"\n\nscenario \"s\" {\n  use api.login\n}\n"
+	tree, bag := parser.Parse("t.art", src)
+	if bag.Len() > 0 {
+		t.Fatalf("parse: %v", bag.All())
+	}
+	if got := Canonical(tree); got != src {
+		t.Errorf("canonical:\n%s", got)
+	}
+	if got := Preserving(tree); got != src {
+		t.Errorf("preserve:\n%s", got)
+	}
 }

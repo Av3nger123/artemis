@@ -1,9 +1,9 @@
 import "broken_coll.art"
 
 scenario "one" {
-  use bc.r
+  use broken_coll.r
 }
 
 scenario "two" {
-  use bc.r
+  use broken_coll.r
 }

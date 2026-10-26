@@ -136,16 +136,12 @@ func Children(n Node) []Node {
 		return nodes(n.Default)
 	case *RequestDecl:
 		return append(nodes(n.Params), n.items()...)
-	case *FlowDecl:
-		return append(nodes(n.Params), decls(n.Body)...)
 	case *UseDecl:
 		return stmts(n.Lines)
 	case *BodySet:
 		return nodes(n.Value)
 	case *Drop:
 		return nil
-	case *In:
-		return stmts(n.Lines)
 	case *Ident, *Literal, *Bad:
 		return nil
 	}

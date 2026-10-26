@@ -241,8 +241,6 @@ func substLines(lines []ast.Stmt, env map[string]ast.Expr) {
 			v.Value = subst(v.Value, env)
 		case *ast.BodySet:
 			v.Value = subst(v.Value, env)
-		case *ast.In:
-			substLines(v.Lines, env)
 		}
 	}
 }

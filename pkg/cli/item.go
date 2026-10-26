@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/encode"
 	"artemis/pkg/dsl/lower"
+	"artemis/pkg/dsl/parser"
 	"artemis/pkg/executor"
 
 	"github.com/spf13/cobra"
@@ -29,14 +31,16 @@ const (
 
 // itemRun is a run of one collection item, or of every item of one collection.
 //
-// The scenario is appended to the collection file's own source, in memory, and
-// the file is compiled as that: a file may hold collections and scenarios both
-// (SPEC.md, Importing), so the scenario reaches the collection without an
-// import, the collection's own imports resolve from where they always did, and
-// every line of the collection keeps its number -- a diagnostic or a failed
-// expect points at the file the person has open. Nothing is written to disk.
+// The scenario is written in a file of its own, in memory, beside the
+// collection file and importing it, as any scenario would: a collection file
+// holds only its collection (SPEC.md, A collection file). The collection's own
+// imports resolve from where they always did, and every line of it keeps its
+// number -- a diagnostic or a failed expect points at the file the person has
+// open. The run is reported under the collection file's path. Nothing is
+// written to disk.
 type itemRun struct {
-	file string
+	file string // the collection file, as the run reports it
+	name string // the in-memory scenario file's name, beside it
 	src  string
 }
 
@@ -102,7 +106,13 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 	if err != nil {
 		return nil, nil, err
 	}
-	run := &itemRun{file: path, src: string(src) + "\n" + scenario}
+	base := filepath.Base(path)
+	collName, _, _ := strings.Cut(ref, ".")
+	run := &itemRun{
+		file: path,
+		name: filepath.Join(filepath.Dir(path), strings.TrimSuffix(base, filepath.Ext(base))+".item.art"),
+		src:  "import " + encode.QuoteString(base) + " as " + collName + "\n\n" + scenario,
+	}
 	var sink *captureSink
 	if capturesPath != "" {
 		sink = &captureSink{path: capturesPath, values: map[string]any{}, secret: map[string]bool{}}
@@ -110,9 +120,11 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 	return run, sink, nil
 }
 
-// itemScenario is the scenario that runs ref: `orders.create` is one use of it,
-// `orders` a use of each of its items in the order they are written, captures
-// flowing down as they do in any scenario.
+// itemScenario is the scenario that runs ref: `orders.create` is one use of
+// the file's request create, `orders` a use of each of its requests in the
+// order they are written, captures passing down as they do in any scenario.
+// orders is only the name the scenario imports the file as -- any name a use
+// can read -- and the run, its captures and the report are named by it.
 //
 // Each use is passed the arguments its item has a parameter for. For a single
 // item that is all of them, so a name it does not take is the checker's
@@ -120,18 +132,18 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 // is the checker's error too. Both stop the run before anything is sent.
 func itemScenario(tree *ast.File, ref string, args map[string]any) (string, error) {
 	collName, itemName, _ := strings.Cut(ref, ".")
+	if !parser.IsIdentName(collName) {
+		return "", fmt.Errorf("--item %s: before the dot is the name the run imports the file as, a name a use can read, like %s", ref, parser.IdentLike(collName))
+	}
 	var coll *ast.Collection
-	var names []string
 	for _, d := range tree.Scenarios {
 		if c, ok := d.(*ast.Collection); ok {
-			names = append(names, c.Name.Value)
-			if c.Name.Value == collName {
-				coll = c
-			}
+			coll = c
+			break
 		}
 	}
 	if coll == nil {
-		return "", fmt.Errorf("the file has no collection %s (it has: %s)", collName, listOrNone(names))
+		return "", fmt.Errorf("the file holds no collection")
 	}
 
 	type item struct {
@@ -141,16 +153,11 @@ func itemScenario(tree *ast.File, ref string, args map[string]any) (string, erro
 	var items []item
 	var itemNames []string
 	for _, d := range coll.Items {
-		var name string
-		var params *ast.Params
-		switch x := d.(type) {
-		case *ast.RequestDecl:
-			name, params = x.Name.Text, x.Params
-		case *ast.FlowDecl:
-			name, params = x.Name.Text, x.Params
-		default:
+		x, ok := d.(*ast.RequestDecl)
+		if !ok {
 			continue
 		}
+		name, params := x.Name.Text, x.Params
 		itemNames = append(itemNames, name)
 		if itemName != "" && name != itemName {
 			continue

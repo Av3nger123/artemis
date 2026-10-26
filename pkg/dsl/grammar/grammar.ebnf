@@ -3,22 +3,20 @@
    under LEXICAL TOKENS below. Nothing in a .art file is outside this. *)
 
 File          = { Import } { Collection | Scenario } ;
-Import        = "import" String ;
-Collection    = "collection" String "{" { RequestDecl | FlowDecl } "}" ;
+Import        = "import" String [ "as" Ident ] ;
+Collection    = "collection" String "{" { RequestDecl } "}" ;
 RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
-FlowDecl      = "flow" Ident Params "{" { StepDecl | UseDecl } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
 Scenario      = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
 UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
-ItemRef       = Ident [ "." Ident ] ;
+ItemRef       = Ident "." Ident ;
 UseLine       = Ident "=" Expr
               | ReqField
               | "body" "." Ident { "." Ident } "=" Expr
               | "drop" ( "expects" | "captures" )
-              | Expect
-              | "in" String "{" { UseLine } "}" ;
+              | Expect ;
 
 ConfigDecl    = "config" ConfigSubject "{" [ ConfigSetting { Sep ConfigSetting } ] "}" ;
 ConfigSubject = "browser" ;

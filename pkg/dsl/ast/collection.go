@@ -2,26 +2,32 @@ package ast
 
 import "artemis/pkg/dsl/token"
 
-// Import is `import "collections/auth.art"`. It sits in File.Scenarios with
-// the scenarios and collections, because that slice is the file's top level
-// and is what keeps Source exact.
+// Import is `import "collections/auth.art"` or `import "Backend APIs.art" as
+// api`: the name a use reads the file's collection by, which is the file's
+// own name when it has no `as`. It sits in File.Scenarios with the scenarios
+// and collections, because that slice is the file's top level and is what
+// keeps Source exact.
 type Import struct {
 	Keyword token.Token // import
 	Path    token.Token // the String
+	As      token.Token // zero when absent
+	Name    token.Token // the Ident after as; zero when absent
 }
 
 func (i *Import) Tokens(dst []token.Token) []token.Token {
-	return appendTok(appendTok(dst, i.Keyword), i.Path)
+	return appendTok(appendTok(appendTok(appendTok(dst, i.Keyword), i.Path), i.As), i.Name)
 }
 func (i *Import) Span() token.Span { return spanOf(i) }
 func (i *Import) decl()            {}
 
-// Collection is `collection "orders" { request ... flow ... }`.
+// Collection is `collection "Orders API" { request ... }`: single requests,
+// each one action. Its name is a title, any text: a use reads the collection
+// by the name its file is imported as.
 type Collection struct {
 	Keyword token.Token
 	Name    token.Token
 	LBrace  token.Token
-	Items   []Decl // *RequestDecl, *FlowDecl, or *Bad
+	Items   []Decl // *RequestDecl or *Bad
 	RBrace  token.Token
 }
 
@@ -55,7 +61,7 @@ func (p *Param) Tokens(dst []token.Token) []token.Token {
 }
 func (p *Param) Span() token.Span { return spanOf(p) }
 
-// Params is the parenthesised parameter list of a request or a flow.
+// Params is the parenthesised parameter list of a request.
 type Params struct {
 	LParen token.Token
 	List   []*Param
@@ -101,32 +107,9 @@ func (r *RequestDecl) items() []Node {
 func (r *RequestDecl) Span() token.Span { return spanOf(r) }
 func (r *RequestDecl) decl()            {}
 
-// FlowDecl is `flow checkout(user) { step ... use ... }`.
-type FlowDecl struct {
-	Keyword token.Token
-	Name    token.Token
-	Params  *Params
-	LBrace  token.Token
-	Body    []Decl // *StepDecl, *UseDecl, or *Bad
-	RBrace  token.Token
-}
-
-func (f *FlowDecl) Tokens(dst []token.Token) []token.Token {
-	dst = appendTok(dst, f.Keyword)
-	dst = appendTok(dst, f.Name)
-	dst = appendNode(dst, f.Params)
-	dst = appendTok(dst, f.LBrace)
-	for _, d := range f.Body {
-		dst = appendNode(dst, d)
-	}
-	return appendTok(dst, f.RBrace)
-}
-func (f *FlowDecl) Span() token.Span { return spanOf(f) }
-func (f *FlowDecl) decl()            {}
-
 // UseDecl is `use auth.login as admin { user = "alice" ... }`. It is legal in
-// a scenario body and in a flow body, and pkg/dsl/expand replaces it with the
-// steps it names before the checker sees the file.
+// a scenario body, and pkg/dsl/expand replaces it with the step it names
+// before the checker sees the file.
 type UseDecl struct {
 	Keyword    token.Token // use
 	Collection token.Token // zero for a bare sibling ref
@@ -135,7 +118,7 @@ type UseDecl struct {
 	As         token.Token // zero when absent
 	Alias      token.Token // zero when absent
 	LBrace     token.Token // zero when there is no block
-	Lines      []Stmt      // *Field, *BodySet, *Drop, *Expect, *In, *Bad
+	Lines      []Stmt      // *Field, *BodySet, *Drop, *Expect, *Bad
 	RBrace     token.Token
 }
 
@@ -204,22 +187,3 @@ func (d *Drop) Tokens(dst []token.Token) []token.Token {
 }
 func (d *Drop) Span() token.Span { return spanOf(d) }
 func (d *Drop) stmt()            {}
-
-// In is `in "pay" { header "X" = "1" }`: overrides aimed at one step of a flow.
-type In struct {
-	Keyword token.Token
-	Step    token.Token
-	LBrace  token.Token
-	Lines   []Stmt
-	RBrace  token.Token
-}
-
-func (n *In) Tokens(dst []token.Token) []token.Token {
-	dst = appendTok(appendTok(appendTok(dst, n.Keyword), n.Step), n.LBrace)
-	for _, l := range n.Lines {
-		dst = appendNode(dst, l)
-	}
-	return appendTok(dst, n.RBrace)
-}
-func (n *In) Span() token.Span { return spanOf(n) }
-func (n *In) stmt()            {}

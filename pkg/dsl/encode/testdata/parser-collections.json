@@ -349,32 +349,32 @@
           }
         },
         {
-          "kind": "flow",
-          "name": "checkout",
+          "kind": "requestDecl",
+          "name": "pay",
           "params": [
             {
               "kind": "param",
-              "name": "user",
+              "name": "order_id",
               "span": {
                 "file": "../parser/testdata/collections.art",
                 "line": 12,
-                "col": 17,
+                "col": 15,
                 "endLine": 12,
-                "endCol": 22,
-                "offset": 251
+                "endCol": 24,
+                "offset": 249
               }
             },
             {
               "kind": "param",
-              "name": "password",
+              "name": "card",
               "secret": true,
               "span": {
                 "file": "../parser/testdata/collections.art",
                 "line": 12,
-                "col": 23,
+                "col": 25,
                 "endLine": 12,
-                "endCol": 39,
-                "offset": 257
+                "endCol": 37,
+                "offset": 259
               }
             },
             {
@@ -392,340 +392,211 @@
                     "span": {
                       "file": "../parser/testdata/collections.art",
                       "line": 12,
-                      "col": 51,
+                      "col": 49,
                       "endLine": 12,
-                      "endCol": 60,
-                      "offset": 285
+                      "endCol": 58,
+                      "offset": 283
                     }
                   }
                 ],
                 "span": {
                   "file": "../parser/testdata/collections.art",
                   "line": 12,
-                  "col": 47,
+                  "col": 45,
                   "endLine": 12,
-                  "endCol": 61,
-                  "offset": 281
+                  "endCol": 59,
+                  "offset": 279
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
                 "line": 12,
-                "col": 40,
+                "col": 38,
                 "endLine": 12,
-                "endCol": 61,
-                "offset": 274
+                "endCol": 59,
+                "offset": 272
               }
             }
           ],
-          "body": [
-            {
-              "kind": "use",
-              "collection": "auth",
-              "item": "login",
-              "lines": [
+          "action": {
+            "kind": "request",
+            "method": "post",
+            "url": {
+              "kind": "interp",
+              "segments": [
                 {
-                  "kind": "field",
-                  "name": "user",
-                  "value": {
-                    "kind": "ident",
-                    "name": "user",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 13,
-                      "col": 29,
-                      "endLine": 13,
-                      "endCol": 33,
-                      "offset": 327
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 13,
-                    "col": 22,
-                    "endLine": 13,
-                    "endCol": 34,
-                    "offset": 320
-                  }
-                },
-                {
-                  "kind": "field",
-                  "name": "password",
-                  "value": {
-                    "kind": "ident",
-                    "name": "password",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 13,
-                      "col": 46,
-                      "endLine": 13,
-                      "endCol": 54,
-                      "offset": 344
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 13,
-                    "col": 35,
-                    "endLine": 13,
-                    "endCol": 55,
-                    "offset": 333
-                  }
-                },
-                {
-                  "kind": "field",
-                  "name": "base",
-                  "value": {
+                  "delim": "\"${",
+                  "expr": {
                     "kind": "ident",
                     "name": "base",
                     "span": {
                       "file": "../parser/testdata/collections.art",
                       "line": 13,
-                      "col": 63,
+                      "col": 13,
                       "endLine": 13,
-                      "endCol": 67,
-                      "offset": 361
+                      "endCol": 17,
+                      "offset": 309
+                    }
+                  }
+                },
+                {
+                  "delim": "}/orders/${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "order_id",
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 13,
+                      "col": 28,
+                      "endLine": 13,
+                      "endCol": 36,
+                      "offset": 324
+                    }
+                  }
+                }
+              ],
+              "end": "}/pay\"",
+              "span": {
+                "file": "../parser/testdata/collections.art",
+                "line": 13,
+                "col": 10,
+                "endLine": 13,
+                "endCol": 42,
+                "offset": 306
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "body",
+                  "value": {
+                    "kind": "object",
+                    "entries": [
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"card\"",
+                          "value": "card",
+                          "span": {
+                            "file": "../parser/testdata/collections.art",
+                            "line": 14,
+                            "col": 15,
+                            "endLine": 14,
+                            "endCol": 21,
+                            "offset": 355
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "card",
+                          "span": {
+                            "file": "../parser/testdata/collections.art",
+                            "line": 14,
+                            "col": 23,
+                            "endLine": 14,
+                            "endCol": 27,
+                            "offset": 363
+                          }
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "../parser/testdata/collections.art",
+                      "line": 14,
+                      "col": 14,
+                      "endLine": 14,
+                      "endCol": 28,
+                      "offset": 354
                     }
                   },
                   "span": {
                     "file": "../parser/testdata/collections.art",
-                    "line": 13,
-                    "col": 56,
-                    "endLine": 13,
-                    "endCol": 67,
-                    "offset": 354
+                    "line": 14,
+                    "col": 7,
+                    "endLine": 14,
+                    "endCol": 28,
+                    "offset": 347
                   }
                 }
               ],
               "span": {
                 "file": "../parser/testdata/collections.art",
                 "line": 13,
-                "col": 5,
-                "endLine": 13,
-                "endCol": 69,
-                "offset": 303
+                "col": 43,
+                "endLine": 15,
+                "endCol": 6,
+                "offset": 339
               }
             },
+            "span": {
+              "file": "../parser/testdata/collections.art",
+              "line": 13,
+              "col": 5,
+              "endLine": 15,
+              "endCol": 6,
+              "offset": 301
+            }
+          },
+          "body": [
             {
-              "kind": "use",
-              "item": "create",
-              "lines": [
-                {
-                  "kind": "field",
-                  "name": "sku",
-                  "value": {
-                    "kind": "literal",
-                    "literal": "string",
-                    "text": "\"A-1\"",
-                    "value": "A-1",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 14,
-                      "col": 24,
-                      "endLine": 14,
-                      "endCol": 29,
-                      "offset": 391
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 14,
-                    "col": 18,
-                    "endLine": 14,
-                    "endCol": 30,
-                    "offset": 385
-                  }
-                },
-                {
-                  "kind": "field",
-                  "name": "qty",
-                  "value": {
-                    "kind": "literal",
-                    "literal": "number",
-                    "text": "2",
-                    "value": "2",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 14,
-                      "col": 37,
-                      "endLine": 14,
-                      "endCol": 38,
-                      "offset": 404
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 14,
-                    "col": 31,
-                    "endLine": 14,
-                    "endCol": 39,
-                    "offset": 398
-                  }
-                },
-                {
-                  "kind": "field",
-                  "name": "base",
-                  "value": {
-                    "kind": "ident",
-                    "name": "base",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 14,
-                      "col": 47,
-                      "endLine": 14,
-                      "endCol": 51,
-                      "offset": 414
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 14,
-                    "col": 40,
-                    "endLine": 14,
-                    "endCol": 51,
-                    "offset": 407
-                  }
-                }
-              ],
-              "span": {
-                "file": "../parser/testdata/collections.art",
-                "line": 14,
-                "col": 5,
-                "endLine": 14,
-                "endCol": 53,
-                "offset": 372
-              }
-            },
-            {
-              "kind": "step",
-              "name": {
-                "text": "\"pay\"",
-                "value": "pay"
-              },
-              "action": {
-                "kind": "request",
-                "method": "post",
-                "url": {
-                  "kind": "interp",
-                  "segments": [
-                    {
-                      "delim": "\"${",
-                      "expr": {
-                        "kind": "ident",
-                        "name": "base",
-                        "span": {
-                          "file": "../parser/testdata/collections.art",
-                          "line": 16,
-                          "col": 15,
-                          "endLine": 16,
-                          "endCol": 19,
-                          "offset": 452
-                        }
-                      }
-                    },
-                    {
-                      "delim": "}/orders/${",
-                      "expr": {
-                        "kind": "ident",
-                        "name": "order_id",
-                        "span": {
-                          "file": "../parser/testdata/collections.art",
-                          "line": 16,
-                          "col": 30,
-                          "endLine": 16,
-                          "endCol": 38,
-                          "offset": 467
-                        }
-                      }
-                    }
-                  ],
-                  "end": "}/pay\"",
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
                   "span": {
                     "file": "../parser/testdata/collections.art",
                     "line": 16,
                     "col": 12,
                     "endLine": 16,
-                    "endCol": 44,
-                    "offset": 449
+                    "endCol": 18,
+                    "offset": 386
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "200",
+                  "value": "200",
+                  "span": {
+                    "file": "../parser/testdata/collections.art",
+                    "line": 16,
+                    "col": 22,
+                    "endLine": 16,
+                    "endCol": 25,
+                    "offset": 396
                   }
                 },
                 "span": {
                   "file": "../parser/testdata/collections.art",
                   "line": 16,
-                  "col": 7,
+                  "col": 12,
                   "endLine": 16,
-                  "endCol": 44,
-                  "offset": 444
+                  "endCol": 25,
+                  "offset": 386
                 }
               },
-              "body": [
-                {
-                  "kind": "expect",
-                  "value": {
-                    "kind": "binary",
-                    "op": "==",
-                    "x": {
-                      "kind": "ident",
-                      "name": "status",
-                      "span": {
-                        "file": "../parser/testdata/collections.art",
-                        "line": 17,
-                        "col": 14,
-                        "endLine": 17,
-                        "endCol": 20,
-                        "offset": 495
-                      }
-                    },
-                    "y": {
-                      "kind": "literal",
-                      "literal": "number",
-                      "text": "200",
-                      "value": "200",
-                      "span": {
-                        "file": "../parser/testdata/collections.art",
-                        "line": 17,
-                        "col": 24,
-                        "endLine": 17,
-                        "endCol": 27,
-                        "offset": 505
-                      }
-                    },
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 17,
-                      "col": 14,
-                      "endLine": 17,
-                      "endCol": 27,
-                      "offset": 495
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 17,
-                    "col": 7,
-                    "endLine": 17,
-                    "endCol": 27,
-                    "offset": 488
-                  },
-                  "class": "complex"
-                }
-              ],
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 15,
+                "line": 16,
                 "col": 5,
-                "endLine": 18,
-                "endCol": 6,
-                "offset": 425
+                "endLine": 16,
+                "endCol": 25,
+                "offset": 379
               },
-              "stepType": "unknown"
+              "class": "complex"
             }
           ],
           "span": {
             "file": "../parser/testdata/collections.art",
             "line": 12,
             "col": 3,
-            "endLine": 19,
+            "endLine": 17,
             "endCol": 4,
             "offset": 237
           },
@@ -738,7 +609,7 @@
         "file": "../parser/testdata/collections.art",
         "line": 3,
         "col": 1,
-        "endLine": 20,
+        "endLine": 18,
         "endCol": 2,
         "offset": 19
       },
@@ -769,20 +640,20 @@
                 "value": "A-1",
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 24,
+                  "line": 22,
                   "col": 11,
-                  "endLine": 24,
+                  "endLine": 22,
                   "endCol": 16,
-                  "offset": 580
+                  "offset": 465
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 24,
+                "line": 22,
                 "col": 5,
-                "endLine": 24,
+                "endLine": 22,
                 "endCol": 16,
-                "offset": 574
+                "offset": 459
               }
             },
             {
@@ -795,11 +666,11 @@
                 "value": "X-Priority",
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 25,
+                  "line": 23,
                   "col": 12,
-                  "endLine": 25,
+                  "endLine": 23,
                   "endCol": 24,
-                  "offset": 597
+                  "offset": 482
                 }
               },
               "value": {
@@ -809,20 +680,20 @@
                 "value": "high",
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 25,
+                  "line": 23,
                   "col": 27,
-                  "endLine": 25,
+                  "endLine": 23,
                   "endCol": 33,
-                  "offset": 612
+                  "offset": 497
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 25,
+                "line": 23,
                 "col": 5,
-                "endLine": 25,
+                "endLine": 23,
                 "endCol": 33,
-                "offset": 590
+                "offset": 475
               }
             },
             {
@@ -837,20 +708,20 @@
                 "value": "5",
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 26,
+                  "line": 24,
                   "col": 16,
-                  "endLine": 26,
+                  "endLine": 24,
                   "endCol": 17,
-                  "offset": 634
+                  "offset": 519
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 26,
+                "line": 24,
                 "col": 5,
-                "endLine": 26,
+                "endLine": 24,
                 "endCol": 17,
-                "offset": 623
+                "offset": 508
               }
             },
             {
@@ -858,11 +729,11 @@
               "what": "expects",
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 27,
+                "line": 25,
                 "col": 5,
-                "endLine": 27,
+                "endLine": 25,
                 "endCol": 17,
-                "offset": 640
+                "offset": 525
               }
             },
             {
@@ -870,11 +741,11 @@
               "what": "captures",
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 28,
+                "line": 26,
                 "col": 5,
-                "endLine": 28,
+                "endLine": 26,
                 "endCol": 18,
-                "offset": 657
+                "offset": 542
               }
             },
             {
@@ -887,11 +758,11 @@
                   "name": "status",
                   "span": {
                     "file": "../parser/testdata/collections.art",
-                    "line": 29,
+                    "line": 27,
                     "col": 12,
-                    "endLine": 29,
+                    "endLine": 27,
                     "endCol": 18,
-                    "offset": 682
+                    "offset": 567
                   }
                 },
                 "y": {
@@ -901,76 +772,74 @@
                   "value": "202",
                   "span": {
                     "file": "../parser/testdata/collections.art",
-                    "line": 29,
+                    "line": 27,
                     "col": 22,
-                    "endLine": 29,
+                    "endLine": 27,
                     "endCol": 25,
-                    "offset": 692
+                    "offset": 577
                   }
                 },
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 29,
+                  "line": 27,
                   "col": 12,
-                  "endLine": 29,
+                  "endLine": 27,
                   "endCol": 25,
-                  "offset": 682
+                  "offset": 567
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 29,
+                "line": 27,
                 "col": 5,
-                "endLine": 29,
+                "endLine": 27,
                 "endCol": 25,
-                "offset": 675
+                "offset": 560
               },
               "class": "complex"
             }
           ],
           "span": {
             "file": "../parser/testdata/collections.art",
-            "line": 23,
+            "line": 21,
             "col": 3,
-            "endLine": 30,
+            "endLine": 28,
             "endCol": 4,
-            "offset": 542
+            "offset": 427
           }
         },
         {
           "kind": "use",
           "collection": "orders",
-          "item": "checkout",
+          "item": "pay",
           "lines": [
             {
               "kind": "field",
-              "name": "user",
+              "name": "order_id",
               "value": {
-                "kind": "literal",
-                "literal": "string",
-                "text": "\"alice\"",
-                "value": "alice",
+                "kind": "ident",
+                "name": "rush_order_id",
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 32,
-                  "col": 12,
-                  "endLine": 32,
-                  "endCol": 19,
-                  "offset": 735
+                  "line": 30,
+                  "col": 16,
+                  "endLine": 30,
+                  "endCol": 29,
+                  "offset": 619
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 32,
+                "line": 30,
                 "col": 5,
-                "endLine": 32,
-                "endCol": 19,
-                "offset": 728
+                "endLine": 30,
+                "endCol": 29,
+                "offset": 608
               }
             },
             {
               "kind": "field",
-              "name": "password",
+              "name": "card",
               "value": {
                 "kind": "call",
                 "callee": "env",
@@ -978,111 +847,94 @@
                   {
                     "kind": "literal",
                     "literal": "string",
-                    "text": "\"PW\"",
-                    "value": "PW",
+                    "text": "\"CARD\"",
+                    "value": "CARD",
                     "span": {
                       "file": "../parser/testdata/collections.art",
-                      "line": 33,
-                      "col": 20,
-                      "endLine": 33,
-                      "endCol": 24,
-                      "offset": 762
+                      "line": 31,
+                      "col": 16,
+                      "endLine": 31,
+                      "endCol": 22,
+                      "offset": 648
                     }
                   }
                 ],
                 "span": {
                   "file": "../parser/testdata/collections.art",
-                  "line": 33,
-                  "col": 16,
-                  "endLine": 33,
-                  "endCol": 25,
-                  "offset": 758
+                  "line": 31,
+                  "col": 12,
+                  "endLine": 31,
+                  "endCol": 23,
+                  "offset": 644
                 }
               },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 33,
+                "line": 31,
                 "col": 5,
-                "endLine": 33,
-                "endCol": 25,
-                "offset": 747
+                "endLine": 31,
+                "endCol": 23,
+                "offset": 637
               }
             },
             {
-              "kind": "in",
-              "step": {
-                "text": "\"pay\"",
-                "value": "pay"
-              },
-              "lines": [
-                {
-                  "kind": "field",
-                  "name": "header",
-                  "key": {
-                    "kind": "literal",
-                    "literal": "string",
-                    "text": "\"X-Trace\"",
-                    "value": "X-Trace",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 34,
-                      "col": 23,
-                      "endLine": 34,
-                      "endCol": 32,
-                      "offset": 790
-                    }
-                  },
-                  "value": {
-                    "kind": "literal",
-                    "literal": "string",
-                    "text": "\"1\"",
-                    "value": "1",
-                    "span": {
-                      "file": "../parser/testdata/collections.art",
-                      "line": 34,
-                      "col": 35,
-                      "endLine": 34,
-                      "endCol": 38,
-                      "offset": 802
-                    }
-                  },
-                  "span": {
-                    "file": "../parser/testdata/collections.art",
-                    "line": 34,
-                    "col": 16,
-                    "endLine": 34,
-                    "endCol": 38,
-                    "offset": 783
-                  }
+              "kind": "field",
+              "name": "header",
+              "key": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"X-Trace\"",
+                "value": "X-Trace",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 32,
+                  "col": 12,
+                  "endLine": 32,
+                  "endCol": 21,
+                  "offset": 667
                 }
-              ],
+              },
+              "value": {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"1\"",
+                "value": "1",
+                "span": {
+                  "file": "../parser/testdata/collections.art",
+                  "line": 32,
+                  "col": 24,
+                  "endLine": 32,
+                  "endCol": 27,
+                  "offset": 679
+                }
+              },
               "span": {
                 "file": "../parser/testdata/collections.art",
-                "line": 34,
+                "line": 32,
                 "col": 5,
-                "endLine": 34,
-                "endCol": 40,
-                "offset": 772
+                "endLine": 32,
+                "endCol": 27,
+                "offset": 660
               }
             }
           ],
           "span": {
             "file": "../parser/testdata/collections.art",
-            "line": 31,
+            "line": 29,
             "col": 3,
-            "endLine": 35,
+            "endLine": 33,
             "endCol": 4,
-            "offset": 702
+            "offset": 587
           }
         }
       ],
       "span": {
         "file": "../parser/testdata/collections.art",
-        "line": 22,
+        "line": 20,
         "col": 1,
-        "endLine": 36,
+        "endLine": 34,
         "endCol": 2,
-        "offset": 522
+        "offset": 407
       },
       "comments": {
         "blankAbove": true

@@ -79,13 +79,10 @@
       ]
     },
     "collectionItem": {
-      "doc": "What a collection body holds: a request or a flow.",
+      "doc": "What a collection body holds: requests.",
       "values": [
         {
           "value": "request"
-        },
-        {
-          "value": "flow"
         }
       ]
     },
@@ -179,11 +176,6 @@
           "severity": "error"
         },
         {
-          "value": "bad-collection-name",
-          "doc": "a collection's name is not an identifier, so no use can name it",
-          "severity": "error"
-        },
-        {
           "value": "bad-override",
           "doc": "a line in a use block is not an argument or an override that applies",
           "severity": "error"
@@ -196,11 +188,6 @@
         {
           "value": "drop-after-expect",
           "doc": "a drop expects line comes after an expect line in the same use block",
-          "severity": "error"
-        },
-        {
-          "value": "dropped-capture",
-          "doc": "a step a use brought in reads a capture that drop captures removed",
           "severity": "error"
         },
         {
@@ -219,8 +206,8 @@
           "severity": "error"
         },
         {
-          "value": "duplicate-collection",
-          "doc": "two collections in scope have the same name",
+          "value": "duplicate-import-name",
+          "doc": "two imports give their collections the same name",
           "severity": "error"
         },
         {
@@ -231,6 +218,16 @@
         {
           "value": "import-needs-file",
           "doc": "a file read from no disk imports another file",
+          "severity": "error"
+        },
+        {
+          "value": "import-needs-name",
+          "doc": "an import has no \"as\" and its file's name cannot be what a use names it by",
+          "severity": "error"
+        },
+        {
+          "value": "import-no-collection",
+          "doc": "an imported file holds no collection",
           "severity": "error"
         },
         {
@@ -304,6 +301,16 @@
           "severity": "error"
         },
         {
+          "value": "scenario-in-collection-file",
+          "doc": "a file holding a collection also holds a scenario",
+          "severity": "error"
+        },
+        {
+          "value": "second-collection",
+          "doc": "a file holds more than one collection",
+          "severity": "error"
+        },
+        {
           "value": "secret-argument",
           "doc": "an argument to a secret parameter is not itself secret",
           "severity": "error"
@@ -354,18 +361,13 @@
           "severity": "error"
         },
         {
-          "value": "unknown-flow-step",
-          "doc": "an in block names a step the flow does not have",
-          "severity": "error"
-        },
-        {
           "value": "unknown-identifier",
           "doc": "a name is bound nowhere in the file",
           "severity": "error"
         },
         {
           "value": "unknown-item",
-          "doc": "a use names a request or flow its collection does not declare",
+          "doc": "a use names a request its collection does not declare",
           "severity": "error"
         },
         {
@@ -381,11 +383,6 @@
         {
           "value": "unterminated-string",
           "doc": "a string literal has no closing quote",
-          "severity": "error"
-        },
-        {
-          "value": "use-cycle",
-          "doc": "a flow uses itself, directly or through other flows",
           "severity": "error"
         }
       ]
@@ -474,7 +471,7 @@
         },
         {
           "value": "in",
-          "purpose": "used in a use block to target one step of a flow, and reserved for a future loop form"
+          "purpose": "reserved for a future loop form"
         },
         {
           "value": "while",
@@ -502,7 +499,7 @@
         },
         {
           "value": "use",
-          "purpose": "expands a collection's request or flow in place: use auth.login { ... }"
+          "purpose": "expands a collection's request in place: use auth.login { ... }"
         },
         {
           "value": "let",
@@ -691,9 +688,6 @@
         },
         {
           "value": "expect"
-        },
-        {
-          "value": "in"
         }
       ]
     },

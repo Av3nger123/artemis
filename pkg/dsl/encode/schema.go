@@ -104,10 +104,9 @@ var groupSchemas = []groupSchema{
 	{"blockField", []string{kindField}},
 	{"browserAction", []string{kindBrowserAct}},
 	{"block", []string{kindBlock}},
-	{"collectionItem", []string{kindRequestDecl, kindFlow}},
+	{"collectionItem", []string{kindRequestDecl}},
 	{"param", []string{kindParam}},
-	{"flowBody", []string{kindStep, kindUse}},
-	{"useLine", []string{kindField, kindBodySet, kindDrop, kindExpect, kindIn}},
+	{"useLine", []string{kindField, kindBodySet, kindDrop, kindExpect}},
 	{"expression", []string{
 		kindIdent, kindLiteral, kindInterp, kindUnary, kindBinary, kindExists,
 		kindIsType, kindMember, kindIndex, kindCall, kindObject, kindArray, kindParen,
@@ -305,11 +304,12 @@ var nodeSchemas = []nodeSchema{
 		word("source", "the exact bytes, trivia included"),
 		spanField,
 	}},
-	{Kind: kindImport, Doc: "`import \"auth.art\"`; imports come before every collection and scenario", Fields: []fieldSchema{
+	{Kind: kindImport, Doc: "`import \"auth.art\"` or `import \"Backend APIs.art\" as api`; imports come before every collection and scenario", Fields: []fieldSchema{
 		word("path", "the file imported, decoded: escapes resolved, no quotes"),
+		{Name: "as", Type: "string", Optional: true, Doc: "the name after `as`, which a use reads the collection by; absent, it is the file's name"},
 		spanField, commentsField,
 	}},
-	{Kind: kindCollection, Doc: "`collection \"orders\" { request ... flow ... }`", Fields: []fieldSchema{
+	{Kind: kindCollection, Doc: "`collection \"Orders API\" { request ... }`: one per file; its name is a title", Fields: []fieldSchema{
 		recoveredName,
 		list("items", "collectionItem"),
 		spanField, commentsField,
@@ -328,16 +328,10 @@ var nodeSchemas = []nodeSchema{
 		list("body", "stepStatement"),
 		spanField, commentsField,
 	}},
-	{Kind: kindFlow, Doc: "`flow checkout(user) { step ... use ... }`", Fields: []fieldSchema{
-		word("name", "the identifier a use names it by"),
-		list("params", "param"),
-		list("body", "flowBody"),
-		spanField, commentsField,
-	}},
 	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`", Fields: []fieldSchema{
 		{Name: "collection", Type: "string", Optional: true,
-			Doc: "the collection before the dot; absent for a sibling in the same collection"},
-		word("item", "the request or flow used"),
+			Doc: "the collection before the dot"},
+		word("item", "the request used"),
 		{Name: "alias", Type: "string", Optional: true, Doc: "the name after `as`"},
 		list("lines", "useLine"),
 		spanField, commentsField,
@@ -349,12 +343,6 @@ var nodeSchemas = []nodeSchema{
 	}},
 	{Kind: kindDrop, Doc: "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed", Fields: []fieldSchema{
 		{Name: "what", Type: "string", InputRequired: true, Doc: "expects or captures: what the line removes"},
-		spanField, commentsField,
-	}},
-	{Kind: kindIn, Doc: "`in \"pay\" { ... }` in a use block: overrides aimed at one step of a flow", Fields: []fieldSchema{
-		{Name: "step", Type: "name", Optional: true, InputRequired: true,
-			Doc: "the step's name, as the flow writes it"},
-		list("lines", "useLine"),
 		spanField, commentsField,
 	}},
 	{Kind: kindIdent, Doc: "a name: a variable, a capture, or a bound root like `status`", Fields: []fieldSchema{
