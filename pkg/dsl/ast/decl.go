@@ -256,3 +256,20 @@ func (p *PhaseDecl) Tokens(dst []token.Token) []token.Token {
 
 func (p *PhaseDecl) Span() token.Span { return spanOf(p) }
 func (p *PhaseDecl) decl()            {}
+
+// TagsDecl is `tags = ["smoke", "payments"]`: words a run selects scenarios by.
+// In a suite, every scenario under it has them too.
+type TagsDecl struct {
+	Keyword token.Token // tags
+	Assign  token.Token // =
+	Value   Expr        // an array of string literals, which the checker holds it to
+}
+
+func (t *TagsDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, t.Keyword)
+	dst = appendTok(dst, t.Assign)
+	return appendNode(dst, t.Value)
+}
+
+func (t *TagsDecl) Span() token.Span { return spanOf(t) }
+func (t *TagsDecl) decl()            {}

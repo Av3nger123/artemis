@@ -215,6 +215,12 @@
           "value": "scenario"
         },
         {
+          "value": "suite"
+        },
+        {
+          "value": "tags"
+        },
+        {
           "value": "config"
         },
         {
@@ -225,6 +231,12 @@
         },
         {
           "value": "use"
+        },
+        {
+          "value": "setup"
+        },
+        {
+          "value": "teardown"
         }
       ]
     },
@@ -249,6 +261,11 @@
         {
           "value": "bad-row-name",
           "doc": "a data-driven scenario's name reads something other than its row",
+          "severity": "error"
+        },
+        {
+          "value": "bad-tag",
+          "doc": "a tag is not a lower-case word written out as a string, or is listed twice",
           "severity": "error"
         },
         {
@@ -314,6 +331,11 @@
         {
           "value": "duplicate-suite-name",
           "doc": "a suite exports a name a suite above it already exports",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-tags",
+          "doc": "a scenario or a suite has more than one tags list",
           "severity": "error"
         },
         {

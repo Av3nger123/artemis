@@ -41,7 +41,7 @@ var (
 	// Blocks are the top-level declarations of a file -- `import`,
 	// `collection` and `scenario` -- and the declarations a scenario body
 	// holds, `use` among them.
-	Blocks = []string{"import", "collection", "scenario", "config", "var", "step", "use"}
+	Blocks = []string{"import", "collection", "scenario", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
 
 	// StepStatements are the statements legal in a step after its action.
 	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}

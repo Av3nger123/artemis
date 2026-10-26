@@ -45,6 +45,9 @@ package check
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
@@ -342,6 +345,58 @@ func (c *checker) scenario(s *ast.Scenario) {
 		// *ast.Bad and anything else: the parser has already reported it.
 	}
 	c.phases(s)
+	c.tags(s)
+}
+
+// tagPattern is what a tag may be: lower case, so `Smoke` and `smoke` are not
+// two tags a --tags expression has to know about, and no space or operator
+// character, so a tag is always one word of that expression.
+var tagPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
+
+// tags holds a scenario's or a suite's `tags = [...]` to what a run selects by:
+// one list, of string literals -- a run selects before anything is evaluated --
+// each a single lower-case word, none twice.
+func (c *checker) tags(s *ast.Scenario) {
+	var first *ast.TagsDecl
+	for _, d := range s.Body {
+		t, ok := d.(*ast.TagsDecl)
+		if !ok {
+			continue
+		}
+		if first != nil {
+			c.bag.Error(t.Keyword.Span, diag.DuplicateTags, "this already has tags, on line %d", first.Keyword.Span.Line).
+				Hintf("list every tag in the one tags = [...]")
+			continue
+		}
+		first = t
+		arr, ok := t.Value.(*ast.Array)
+		if !ok {
+			c.bag.Error(t.Value.Span(), diag.BadTag, "tags is a list of words written out, like [\"smoke\"]").
+				Hintf(`tags = ["smoke", "payments"]`)
+			continue
+		}
+		seen := map[string]bool{}
+		for _, el := range arr.Elems {
+			lit, ok := el.Value.(*ast.Literal)
+			if !ok || lit.Kind() != token.String {
+				c.bag.Error(el.Value.Span(), diag.BadTag,
+					"a tag is a string written out, because a run selects scenarios before it evaluates anything")
+				continue
+			}
+			tag := lit.Tok.Value
+			switch {
+			case !tagPattern.MatchString(tag):
+				ref := c.bag.Error(lit.Span(), diag.BadTag,
+					"tag %q is not one lower-case word: letters, digits, \"_\", \".\" and \"-\"", tag)
+				if fixed := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(tag), " ", "-")); tagPattern.MatchString(fixed) {
+					ref.Hintf("%q", fixed).Suggest(strconv.Quote(fixed))
+				}
+			case seen[tag]:
+				c.bag.Error(lit.Span(), diag.BadTag, "tag %q is listed twice", tag)
+			}
+			seen[tag] = true
+		}
+	}
 }
 
 // phases holds setup and teardown to where they run: setup above the

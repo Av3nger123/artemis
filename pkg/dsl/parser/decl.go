@@ -187,6 +187,10 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 		return p.parseUse()
 	case p.atWord("setup"), p.atWord("teardown"):
 		return p.parsePhase()
+	case p.atWord("tags") && p.peekKindAt(1, token.Assign):
+		d := &ast.TagsDecl{Keyword: p.next(), Assign: p.next()}
+		d.Value = p.parseExpr()
+		return d
 	}
 
 	// `secret` before a word it cannot modify gets its own message. Falling

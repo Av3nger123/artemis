@@ -193,6 +193,10 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.LBrace)
 		p.list(decls(v.Body), c)
 		p.tok(v.RBrace)
+	case *ast.TagsDecl:
+		p.tok(v.Keyword)
+		p.tok(v.Assign)
+		p.node(v.Value, c)
 	case *ast.ConfigDecl:
 		p.tok(v.Keyword)
 		p.tok(v.Subject)
@@ -368,7 +372,7 @@ func (p *pres) descend(n ast.Node, c ctx) {
 // field gets a line, a new expression is spliced into the line it is part of.
 func lineOriented(n ast.Node) bool {
 	switch n.(type) {
-	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl, *ast.PhaseDecl,
+	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl, *ast.PhaseDecl, *ast.TagsDecl,
 		*ast.Request, *ast.Run, *ast.Browser, *ast.BrowserAct,
 		*ast.Field, *ast.Expect, *ast.Capture,
 		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.UseDecl,

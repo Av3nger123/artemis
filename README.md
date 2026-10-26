@@ -162,6 +162,7 @@ parameters and its response. The rules are in
 - Values captured from one step and used in the next, keeping their JSON type
 - A `suite.art` per folder: one login, once per run, for every scenario below it -- its values read as `suite.token` and its cookies copied into each scenario
 - `setup` and `teardown` blocks: teardown runs after every scenario, pass or fail, and skips the cleanup of anything a failed step never made
+- Tags and selection: `--tags "smoke and not slow"`, `--grep`, and `artemis list` to see what a run would run
 - Data-driven scenarios: `scenario "login as ${user.role}" for user in json("users.json")` is one scenario per row, each reported on its own
 - Data and files: `json()` and `csv()` read test data and `file()` names a fixture, each checked when the file compiles; a file is sent as a body, a `multipart` part, a command's `stdin` or a browser `upload`, and `form` sends a urlencoded form
 - A cookie jar per scenario, so an API that keeps its session in a cookie is tested by logging in once; `cookies` to assert what a response set, and `duration_ms` on every step to assert how long it took
@@ -1208,6 +1209,24 @@ live, which is why it is the default.
 One is also the default because the limit here is the service, not the machine.
 A suite pointed at a staging API will meet a rate limit long before it saturates
 a laptop, so the number is yours to choose.
+
+### Running part of a suite
+
+Tag scenarios -- `tags = ["smoke", "payments"]` in a scenario, or in a
+`suite.art` for its whole folder -- and select by tag, by name, or both:
+
+```sh
+artemis run suite/ --tags "smoke and not slow"
+artemis run suite/ --grep "^login as"
+artemis list suite/ --tags payments        # what would run, running nothing
+```
+
+What is not selected is skipped in the report and left off the console, and
+only what is selected has its `env()` variables checked: a smoke job needs the
+smoke tests' variables and nobody else's. A selection of nothing fails the run,
+and a tag no scenario has is a warning that names the nearest one -- `--tags
+smok` does not quietly run nothing. `artemis list --json` writes the selection
+as one document.
 
 ### Reproducing random test data
 

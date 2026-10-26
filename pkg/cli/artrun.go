@@ -8,9 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/lower"
+	"artemis/pkg/dsl/token"
 	"artemis/pkg/eval"
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
@@ -76,7 +79,17 @@ func (rt *runtimeEnv) load(file string, diagOut io.Writer) (compiled, error) {
 
 // runCompiled runs every scenario of one compiled file.
 func runCompiled(ctx context.Context, rt *runtimeEnv, c compiled, run *result.RunResult, rep *report.Console) {
-	for _, sc := range c.scenarios {
+	for i, sc := range c.scenarios {
+		if !c.runs(i) {
+			// In the report, as skipped and why, so a CI page still counts
+			// it; not on the console, where a smoke run of a large suite
+			// would otherwise be a page of lines saying nothing ran.
+			skipped := run.NewScenario(sc.Name, c.file)
+			skipped.Tags = rt.tagsOf(c.file, sc)
+			skipped.Status = result.StatusSkip
+			skipped.Error = rt.sel.reason()
+			continue
+		}
 		executeArtScenario(ctx, rt, sc, c.file, run, rep)
 	}
 }
@@ -126,7 +139,57 @@ func compileArtSource(path, src string, diagOut io.Writer) ([]*lower.Scenario, [
 		// names the file and says what it was doing.
 		return nil, nil, fmt.Errorf("lowering %s: %w", path, err)
 	}
+	attributeNeeds(u, scenarios, info.EnvNeeds())
 	return scenarios, info.EnvNeeds(), nil
+}
+
+// attributeNeeds gives each scenario the env() names it reads, so --tags can
+// check the environment of only what it selected. A call a use brought in is
+// placed by the use line, which is in the scenario; the rows of a data-driven
+// scenario share their spans, so each row is given what the template reads.
+func attributeNeeds(u *front.Unit, scenarios []*lower.Scenario, needs []check.EnvNeed) {
+	var trees []*ast.Scenario
+	for _, d := range u.Expanded.Scenarios {
+		if s, ok := d.(*ast.Scenario); ok {
+			trees = append(trees, s)
+		}
+	}
+	if len(trees) != len(scenarios) {
+		// Not expected; every scenario then counts every need, which is the
+		// safe answer: a run checks more than it needs, never less.
+		for _, sc := range scenarios {
+			sc.EnvNeeds = needs
+		}
+		return
+	}
+	for _, n := range needs {
+		at := n.Span
+		if at.Via > 0 && at.Via <= len(u.Uses) {
+			at = u.Uses[at.Via-1].Span
+		}
+		placed := false
+		for i, s := range trees {
+			if contains(s.Span(), at) {
+				scenarios[i].EnvNeeds = append(scenarios[i].EnvNeeds, n)
+				placed = true
+			}
+		}
+		if !placed {
+			for _, sc := range scenarios {
+				sc.EnvNeeds = append(sc.EnvNeeds, n)
+			}
+		}
+	}
+}
+
+// contains reports whether span inner lies within outer, in the same file.
+func contains(outer, inner token.Span) bool {
+	if outer.File != inner.File {
+		return false
+	}
+	after := inner.Line > outer.Line || (inner.Line == outer.Line && inner.Col >= outer.Col)
+	before := inner.Line < outer.EndLine || (inner.Line == outer.EndLine && inner.Col <= outer.EndCol)
+	return after && before
 }
 
 // firstError is the one-line reason attached to a scenario that would not
@@ -165,7 +228,7 @@ func firstError(diags []diag.Diagnostic) error {
 // more than one. A scenario under a suite.art starts from what the suite's
 // setup left: `suite` bound to its values, and a copy of its cookies.
 func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
-	in := scenarioIn{}
+	in := scenarioIn{tags: rt.tagsOf(file, sc)}
 	if st := rt.suiteFor(file); st != nil {
 		in.skip = st.failed
 		in.preset = map[string]any{"suite": st.view()}
@@ -192,6 +255,8 @@ type scenarioIn struct {
 	skip string
 	// kind is "suite" for a suite's setup or teardown, which a report marks.
 	kind string
+	// tags are the scenario's own and its suites', for the report.
+	tags []string
 }
 
 // scenarioOut is what a scenario ended with: what a suite's setup hands to the
@@ -206,6 +271,7 @@ type scenarioOut struct {
 func execute(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console, in scenarioIn) scenarioOut {
 	scenario := run.NewScenario(sc.Name, file)
 	scenario.Kind = in.kind
+	scenario.Tags = in.tags
 	if sc.Row != nil {
 		scenario.Row = &result.Row{Source: sc.Row.Source, Index: sc.Row.Index}
 	}

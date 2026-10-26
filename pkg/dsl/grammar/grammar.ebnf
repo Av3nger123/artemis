@@ -9,7 +9,11 @@ RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
-Scenario      = "scenario" String [ ForClause ] "{" { ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl } "}" ;
+Scenario      = "scenario" String [ ForClause ] "{" { TagsDecl | ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl } "}" ;
+(* suite.art: one block for a folder, shared by every scenario below it. *)
+Suite         = "suite" "{" { TagsDecl | ConfigDecl | VarDecl | PhaseDecl } "}" ;
+(* Lower-case words, written out: a run selects before it evaluates. *)
+TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
 (* setup runs before the scenario's steps and teardown after them, so setup is
    written above the first step and teardown below the last. *)
 PhaseDecl     = ( "setup" | "teardown" ) "{" { StepDecl | UseDecl } "}" ;

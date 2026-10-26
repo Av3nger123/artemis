@@ -112,6 +112,15 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		return err
 	}
 
+	// Before discovery too: a --tags expression that will not parse must not
+	// cost a suite run either.
+	tagsValue, _ := cmd.Flags().GetString(tagsFlag)
+	grepValue, _ := cmd.Flags().GetString(grepFlag)
+	sel, err := newSelector(tagsValue, grepValue)
+	if err != nil {
+		return err
+	}
+
 	item, captures, err := itemFromFlags(cmd, path)
 	if err != nil {
 		return err
@@ -148,6 +157,7 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		traces:   trace.New(traceDir(cmd)),
 		jobs:     jobsOf(cmd),
 		seed:     seedOf(cmd),
+		sel:      sel,
 		root:     path,
 		item:     item,
 		captures: captures,
@@ -194,7 +204,7 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// and falls back to "the run failed", which names nothing. run.Error
 	// already holds the text runFilesWith built from the same faults, so this
 	// reuses it rather than building it a second time from rt.envFaults.
-	if len(rt.envFaults) > 0 {
+	if len(rt.envFaults) > 0 || rt.noneSelected {
 		return errors.New(run.Error)
 	}
 	if !run.Passed() {
@@ -314,6 +324,12 @@ type runtimeEnv struct {
 	// run at once under --jobs.
 	seed uint64
 	drew atomic.Bool
+	// sel is --tags and --grep, nil when the run selects everything;
+	// noneSelected is a selection that chose nothing, which is an error and
+	// not a run of nothing that passes.
+	sel          *selector
+	noneSelected bool
+
 	// suites are the run's suite.art files by path, and suiteOfFile the
 	// innermost one each scenario file is under. See suite.go.
 	suites      map[string]*suiteState
@@ -411,9 +427,20 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// env() needs join the check before the run, and one that would not
 	// compile is reported as the errored file it is, first.
 	suiteLoaded, brokenSuites := rt.planSuites(scenarioFiles, diagOut)
-	loaded = append(loaded, suiteLoaded...)
 	for _, b := range brokenSuites {
 		failScenario(run, rep, rt.events, b.file, b.err)
+	}
+
+	// --tags and --grep, settled once every file and suite has compiled and
+	// before anything checks the environment or runs: a smoke run needs the
+	// smoke scenarios' variables, and nothing else's.
+	if rt.sel != nil {
+		loaded = rt.selectScenarios(attempts, diagOut)
+	}
+	for _, c := range suiteLoaded {
+		if st := rt.suites[c.file]; st != nil && st.used {
+			loaded = append(loaded, c)
+		}
 	}
 	// nil is os.LookupEnv: the real process environment, which is where the
 	// .env file was loaded to. A seam here would have had no caller -- the
@@ -430,7 +457,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// started, and the run ends with none of them in it.
 	// Files that will actually run, done ahead of time so the two paths below
 	// agree about which they are.
-	runnable := len(faults) == 0
+	runnable := len(faults) == 0 && !rt.noneSelected
 
 	// More than one job: every runnable file runs into its own result tree and
 	// its own buffer, and the ordered loop below drains them. See runParallel
@@ -479,6 +506,10 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	if len(faults) > 0 {
 		run.Status = result.StatusError
 		run.Error = envGateError(faults).Error()
+	}
+	if rt.noneSelected {
+		run.Status = result.StatusError
+		run.Error = "no scenario is " + rt.sel.reason()[len("not "):]
 	}
 	if rt.drew.Load() {
 		seed := rt.seed

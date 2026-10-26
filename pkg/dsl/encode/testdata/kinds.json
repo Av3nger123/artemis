@@ -1397,6 +1397,44 @@
       },
       "body": [
         {
+          "kind": "tags",
+          "value": {
+            "kind": "array",
+            "elems": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"smoke\"",
+                "value": "smoke",
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 46,
+                  "col": 11,
+                  "endLine": 46,
+                  "endCol": 18,
+                  "offset": 1263
+                }
+              }
+            ],
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 46,
+              "col": 10,
+              "endLine": 46,
+              "endCol": 19,
+              "offset": 1262
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 46,
+            "col": 3,
+            "endLine": 46,
+            "endCol": 19,
+            "offset": 1255
+          }
+        },
+        {
           "kind": "phase",
           "phase": "setup",
           "body": [
@@ -1415,29 +1453,29 @@
                   "value": "true",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 48,
+                    "line": 50,
                     "col": 11,
-                    "endLine": 48,
+                    "endLine": 50,
                     "endCol": 17,
-                    "offset": 1293
+                    "offset": 1313
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 48,
+                  "line": 50,
                   "col": 7,
-                  "endLine": 48,
+                  "endLine": 50,
                   "endCol": 17,
-                  "offset": 1289
+                  "offset": 1309
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 47,
+                "line": 49,
                 "col": 5,
-                "endLine": 49,
+                "endLine": 51,
                 "endCol": 6,
-                "offset": 1267
+                "offset": 1287
               },
               "stepType": "terminal",
               "scope": [
@@ -1450,11 +1488,14 @@
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 46,
+            "line": 48,
             "col": 3,
-            "endLine": 50,
+            "endLine": 52,
             "endCol": 4,
-            "offset": 1255
+            "offset": 1275
+          },
+          "comments": {
+            "blankAbove": true
           }
         },
         {
@@ -1472,29 +1513,29 @@
               "value": "echo",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 53,
+                "line": 55,
                 "col": 9,
-                "endLine": 53,
+                "endLine": 55,
                 "endCol": 15,
-                "offset": 1332
+                "offset": 1352
               }
             },
             "span": {
               "file": "testdata/kinds.art",
-              "line": 53,
+              "line": 55,
               "col": 5,
-              "endLine": 53,
+              "endLine": 55,
               "endCol": 15,
-              "offset": 1328
+              "offset": 1348
             }
           },
           "span": {
             "file": "testdata/kinds.art",
-            "line": 52,
+            "line": 54,
             "col": 3,
-            "endLine": 54,
+            "endLine": 56,
             "endCol": 4,
-            "offset": 1313
+            "offset": 1333
           },
           "stepType": "terminal",
           "scope": [
@@ -1526,29 +1567,29 @@
                   "value": "true",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 58,
+                    "line": 60,
                     "col": 11,
-                    "endLine": 58,
+                    "endLine": 60,
                     "endCol": 17,
-                    "offset": 1386
+                    "offset": 1406
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 58,
+                  "line": 60,
                   "col": 7,
-                  "endLine": 58,
+                  "endLine": 60,
                   "endCol": 17,
-                  "offset": 1382
+                  "offset": 1402
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 57,
+                "line": 59,
                 "col": 5,
-                "endLine": 59,
+                "endLine": 61,
                 "endCol": 6,
-                "offset": 1361
+                "offset": 1381
               },
               "stepType": "terminal",
               "scope": [
@@ -1561,11 +1602,11 @@
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 56,
+            "line": 58,
             "col": 3,
-            "endLine": 60,
+            "endLine": 62,
             "endCol": 4,
-            "offset": 1346
+            "offset": 1366
           },
           "comments": {
             "blankAbove": true
@@ -1576,7 +1617,7 @@
         "file": "testdata/kinds.art",
         "line": 45,
         "col": 1,
-        "endLine": 61,
+        "endLine": 63,
         "endCol": 2,
         "offset": 1208
       },

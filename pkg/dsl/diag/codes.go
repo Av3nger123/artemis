@@ -224,6 +224,10 @@ const (
 	SuiteHasScenario   Code = "suite-has-scenario"
 	SuiteHasStep       Code = "suite-has-step"
 	DuplicateSuiteName Code = "duplicate-suite-name"
+
+	// A scenario's tags, which a run selects by.
+	BadTag        Code = "bad-tag"
+	DuplicateTags Code = "duplicate-tags"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -299,6 +303,8 @@ var registry = []CodeInfo{
 	{SuiteHasScenario, Error, "a suite file holds a scenario, or a second suite block"},
 	{SuiteHasStep, Error, "a suite block holds a step or a use outside setup and teardown"},
 	{DuplicateSuiteName, Error, "a suite exports a name a suite above it already exports"},
+	{BadTag, Error, "a tag is not a lower-case word written out as a string, or is listed twice"},
+	{DuplicateTags, Error, "a scenario or a suite has more than one tags list"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

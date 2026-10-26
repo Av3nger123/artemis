@@ -49,6 +49,11 @@ func Init() {
 	fmtCmd.Flags().BoolP(writeFlag, "w", false, "Rewrite the file in place instead of printing to stdout")
 
 	// Run command: the way to run scenarios -- a .art file or a folder of them.
+	RootCmd.AddCommand(listCmd)
+	listCmd.Flags().String(tagsFlag, "", `List only the scenarios whose tags match this expression, as run --tags selects`)
+	listCmd.Flags().String(grepFlag, "", "List only the scenarios whose names match this regular expression")
+	listCmd.Flags().Bool(jsonFlag, false, "Write the list to stdout as one JSON document")
+
 	RootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringP("log", "l", "", "Write a JSON log of the run to this file (default: no log file)")
 	runCmd.Flags().StringP("env", "e", ".env", "Path to the env file")
@@ -82,6 +87,10 @@ func Init() {
 		"With --item: write every value the item's captures got, secret ones included, to this JSON file (mode 0600)")
 	runCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order, rather than streaming it live")
+	runCmd.Flags().String(tagsFlag, "",
+		`Run only the scenarios whose tags match this expression: "smoke", "smoke and not slow", "(api or ui) and smoke"`)
+	runCmd.Flags().String(grepFlag, "",
+		"Run only the scenarios whose names match this regular expression")
 	runCmd.Flags().Uint64(seedFlag, 0,
 		"Seed uuid(), random_int() and random_string() with this number, to draw the values a failed run printed (default: a new seed every run)")
 

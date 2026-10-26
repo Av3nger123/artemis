@@ -18,7 +18,8 @@
       "var",
       "step",
       "use",
-      "phase"
+      "phase",
+      "tags"
     ],
     "phaseBody": [
       "step",
@@ -299,6 +300,28 @@
           "type": "node[]",
           "accepts": "scenarioBody",
           "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "tags",
+      "doc": "`tags = [\"smoke\", \"payments\"]`: the words `artemis run --tags` selects a scenario by",
+      "fields": [
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
         },
         {
           "name": "span",

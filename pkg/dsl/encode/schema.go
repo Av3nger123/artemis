@@ -99,7 +99,7 @@ type groupSchema struct {
 var groupSchemas = []groupSchema{
 	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
 	{"forClause", []string{kindFor}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags}},
 	{"phaseBody", []string{kindStep, kindUse}},
 	{"action", []string{kindRequest, kindRun, kindBrowser}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
@@ -232,6 +232,10 @@ var nodeSchemas = []nodeSchema{
 	}},
 	{Kind: kindSuite, Doc: "`suite { ... }`, the one block of a suite.art: setup, teardown and vars every scenario in its folder and below shares", Fields: []fieldSchema{
 		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindTags, Doc: "`tags = [\"smoke\", \"payments\"]`: the words `artemis run --tags` selects a scenario by", Fields: []fieldSchema{
+		child("value", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindPhase, Doc: "`setup { ... }` or `teardown { ... }`: steps that run before a scenario's own, or after them whatever happened", Fields: []fieldSchema{

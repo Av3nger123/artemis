@@ -88,6 +88,8 @@ func (c *canon) decl(d ast.Decl) {
 		c.step(v)
 	case *ast.PhaseDecl:
 		c.phase(v)
+	case *ast.TagsDecl:
+		c.line(v.Tokens(nil), assign(v.Keyword.Text, v.Assign, c.expr(v.Value)))
 	case *ast.Import:
 		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text, v.As.Text, v.Name.Text))
 	case *ast.Collection:

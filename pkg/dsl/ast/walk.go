@@ -55,6 +55,8 @@ func Children(n Node) []Node {
 		return nodes(n.Source)
 	case *PhaseDecl:
 		return decls(n.Body)
+	case *TagsDecl:
+		return nodes(n.Value)
 	case *ConfigDecl:
 		return nodes(n.Block)
 	case *VarDecl:

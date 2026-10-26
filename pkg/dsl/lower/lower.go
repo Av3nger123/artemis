@@ -76,6 +76,15 @@ type Scenario struct {
 	// written with a for clause, and nil for every other.
 	Row *Row
 
+	// Tags are the scenario's own `tags = [...]`, in the order written. The
+	// suites above it add theirs when the run selects.
+	Tags []string
+
+	// EnvNeeds are the env() names this scenario reads that the checker could
+	// read, which the check before a run counts only for scenarios it will
+	// run. pkg/cli fills it in from the checker's list.
+	EnvNeeds []check.EnvNeed
+
 	// Browser is the scenario's `config browser`, or nil when it wrote none.
 	Browser *BrowserConfig
 
@@ -317,6 +326,14 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 			// the step that writes it.
 			addSecretCaptures(secrets, st)
 			addCaptured(captured, st)
+		case *ast.TagsDecl:
+			if arr, ok := d.Value.(*ast.Array); ok {
+				for _, el := range arr.Elems {
+					if lit, ok := el.Value.(*ast.Literal); ok && lit.Kind() == token.String {
+						out.Tags = append(out.Tags, lit.Tok.Value)
+					}
+				}
+			}
 		case *ast.PhaseDecl:
 			for _, inner := range d.Body {
 				switch inner := inner.(type) {

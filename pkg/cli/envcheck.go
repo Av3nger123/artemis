@@ -18,7 +18,14 @@ type compiled struct {
 	file      string
 	scenarios []*lower.Scenario
 	needs     []check.EnvNeed
+
+	// selected says, scenario by scenario, which --tags and --grep chose to
+	// run; nil when the run selects everything.
+	selected []bool
 }
+
+// runs reports whether the file's i-th scenario is one the run runs.
+func (c compiled) runs(i int) bool { return c.selected == nil || c.selected[i] }
 
 // envFault is one variable a run needs and the environment does not supply,
 // with the first place that needs it.

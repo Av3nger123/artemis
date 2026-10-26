@@ -14,6 +14,7 @@ const (
 	kindScenario   = "scenario"
 	kindFor        = "for"
 	kindSuite      = "suite"
+	kindTags       = "tags"
 	kindConfig     = "config"
 	kindVar        = "var"
 	kindStep       = "step"
@@ -97,6 +98,11 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.requestDecl(v)
 	case *ast.UseDecl:
 		return e.useDecl(v)
+	case *ast.TagsDecl:
+		return start(kindTags, v).
+			set("value", e.node(v.Value)).
+			span().
+			comments(v.Tokens(nil), zero, zero).done()
 	case *ast.PhaseDecl:
 		return start(kindPhase, v).
 			set("phase", v.Keyword.Text).

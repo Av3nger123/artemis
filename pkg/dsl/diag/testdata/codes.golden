@@ -2,6 +2,7 @@ action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-override	error	a line in a use block is not an argument or an override that applies
 bad-row-name	error	a data-driven scenario's name reads something other than its row
+bad-tag	error	a tag is not a lower-case word written out as a string, or is listed twice
 bad-value	error	a value is the wrong kind for the position it is in
 body-conflict	error	a request says what its body is more than one way
 data-file-missing	error	json(), csv() or file() names a path where there is no file
@@ -15,6 +16,7 @@ duplicate-import-name	error	two imports give their collections the same name
 duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-row-name	error	two rows of a data-driven scenario name it alike
 duplicate-suite-name	error	a suite exports a name a suite above it already exports
+duplicate-tags	error	a scenario or a suite has more than one tags list
 for-no-rows	error	a for clause's data has no rows
 for-source-not-array	error	a for clause's data is not an array of rows
 for-source-not-static	error	a for clause reads rows that are not known before the run

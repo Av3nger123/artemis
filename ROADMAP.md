@@ -4,13 +4,13 @@ What is being built, what is next, and the ideas not yet committed to. What the
 language deliberately leaves out is in `SPEC.md`, under **Not in this spec**; this
 file is for what is coming.
 
-## In progress
+## Done
 
 Designed together on 2026-10-26 and built as eight PRs: a builtin table shared
 by the checker, the evaluator and code generation first, with no change in
-behaviour; then cookies and timing, setup and teardown, the new builtins, files,
-data rows, suites, and selection last, because it reads tags from suites and
-names from data rows. Each PR documents its part in `SPEC.md`.
+behaviour; then the value builtins, cookies and timing, files, data rows, setup
+and teardown, suites, and selection last, because it reads tags from suites and
+names from data rows. `SPEC.md` documents each.
 
 1. **Data sources and files.** `json()`, `csv()` and `file()`; `form` and
    `multipart` bodies, a file as a body, as `stdin` and in `upload`; and

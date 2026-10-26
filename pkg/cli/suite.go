@@ -36,6 +36,10 @@ type suiteState struct {
 	// failed is why no scenario under this suite runs -- its setup, or one
 	// above it, did not pass -- and empty when they can.
 	failed string
+
+	// used is whether any scenario the run runs is under this suite: a suite
+	// with none, because --tags selected none of them, is not set up at all.
+	used bool
 }
 
 // view is a copy of the suite's values, so a scenario that captured over one
@@ -93,6 +97,9 @@ func (rt *runtimeEnv) planSuites(files []string, diagOut io.Writer) (loaded []co
 		if inner != nil {
 			rt.suiteOfFile[file] = inner
 		}
+		for st := inner; st != nil; st = st.parent {
+			st.used = true
+		}
 	}
 	return loaded, broken
 }
@@ -119,7 +126,7 @@ func (rt *runtimeEnv) ordered() []*suiteState {
 // scenario does. A suite whose parent failed is not set up, and fails with it.
 func (rt *runtimeEnv) setUpSuites(ctx context.Context, run *result.RunResult, rep *report.Console) {
 	for _, st := range rt.ordered() {
-		if st.failed != "" {
+		if st.failed != "" || !st.used {
 			continue
 		}
 		if st.parent != nil && st.parent.failed != "" {
@@ -164,7 +171,7 @@ func (rt *runtimeEnv) tearDownSuites(ctx context.Context, run *result.RunResult,
 	order := rt.ordered()
 	for i := len(order) - 1; i >= 0; i-- {
 		st := order[i]
-		if st.block == nil || st.scope == nil || len(st.block.Teardown) == 0 {
+		if !st.used || st.block == nil || st.scope == nil || len(st.block.Teardown) == 0 {
 			continue
 		}
 		sc := &lower.Scenario{

@@ -273,6 +273,38 @@ with the reason in `error`, and setup and teardown steps carry `"phase":
 "setup"` or `"phase": "teardown"`. The console prints them as `setup: make a
 cart`, and JUnit names them `[setup] make a cart`.
 
+### `tags`
+
+```art
+scenario "checkout" {
+  tags = ["smoke", "payments"]
+
+  step "pay" {
+    post "https://example.com/pay"
+    expect status == 200
+  }
+}
+```
+
+`tags` is the words a run selects scenarios by: `artemis run suite/ --tags
+"smoke and not slow"`. A scenario has its own tags and every tag of the
+[suites](#suites-suiteart) above it. They are written out -- a list of string
+literals, because a run selects before it evaluates anything -- and each is one
+lower-case word of letters, digits, `_`, `.` and `-`, so a tag is always one word
+of a `--tags` expression. A tag that is not, or is listed twice, is `bad-tag`;
+a second `tags` is `duplicate-tags`.
+
+`--tags` takes an expression of tags joined by `and`, `or` and `not`, with
+parentheses; `not` binds tightest and `or` loosest. `--grep` takes a regular
+expression over the scenario's name. A scenario a run does not select is in the
+[JSON report](#the-json-report) with `"status": "skip"` and why in `error`, and
+is not on the console. A selection of nothing is an error, and a tag the
+expression names that no scenario has is a warning naming the nearest one.
+
+Only what is selected is checked before the run: an `env()` only an unselected
+scenario reads is not [required](#builtins), and a suite with no selected
+scenario under it is not set up.
+
 ### Suites: `suite.art`
 
 ```art
@@ -1841,6 +1873,7 @@ setup  teardown  ai
 | --- | --- |
 | `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
 | `use` | Expands a collection's request in place: `use auth.login { ... }` |
+| `tags` | A scenario's or a suite's tags: `tags = ["smoke"]` -- see [tags](#tags). Positional, not reserved |
 | `setup`, `teardown` | Steps that run before a scenario's own, and after them whatever happened -- see [setup and teardown](#setup-and-teardown) |
 | `for`, `in` | Make a scenario one per row of data: `scenario "..." for user in json("users.json") { ... }` -- see [data-driven scenarios](#data-driven-scenarios) |
 
@@ -2119,6 +2152,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
 | `kind` | scenario | `"suite"` for a [suite's](#suites-suiteart) setup or teardown. **Omitted** on a scenario |
+| `tags` | scenario | The scenario's [tags](#tags), its own and its suites'. **Omitted** when it has none |
 | `row` | scenario | For a [data-driven scenario](#data-driven-scenarios), the row it was made from: `{"source": "users.json", "index": 0}`, where `source` is the file its rows were read from, or `"rows"` for an array written out. **Absent** on every other scenario |
 | `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
 | `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |

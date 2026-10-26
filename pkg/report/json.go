@@ -104,10 +104,13 @@ type jsonScenarioSummary struct {
 	Row  *jsonRow `json:"row,omitempty"`
 	// Kind is "suite" for a suite.art's setup or teardown, and omitted for a
 	// scenario, so a run with no suite writes the document it always did.
-	Kind       string  `json:"kind,omitempty"`
-	Status     string  `json:"status"`
-	DurationMS float64 `json:"duration_ms"`
-	Error      string  `json:"error"`
+	Kind string `json:"kind,omitempty"`
+	// Tags are omitted for a scenario with none, so a suite that tags nothing
+	// writes the document it always did.
+	Tags       []string `json:"tags,omitempty"`
+	Status     string   `json:"status"`
+	DurationMS float64  `json:"duration_ms"`
+	Error      string   `json:"error"`
 }
 
 // jsonRow is a data-driven scenario's row. Absent for every other scenario,
@@ -296,6 +299,7 @@ func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
 		DurationMS: millis(sc.Duration),
 		Error:      sc.Error,
 		Kind:       sc.Kind,
+		Tags:       sc.Tags,
 	}
 	if sc.Row != nil {
 		out.Row = &jsonRow{Source: sc.Row.Source, Index: sc.Row.Index}

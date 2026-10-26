@@ -70,6 +70,13 @@ func decl(v value) (ast.Decl, error) {
 		return useDecl(f)
 	case kindPhase:
 		return phaseDecl(f)
+	case kindTags:
+		d := &ast.TagsDecl{Keyword: syn(token.Ident, "tags"), Assign: syn(token.Assign, "=")}
+		var err error
+		if d.Value, err = exprOf(f, "value", true); err != nil {
+			return nil, err
+		}
+		return d, plain(f, &d.Keyword)
 	case kindSuite:
 		s := &ast.Scenario{
 			Keyword: syn(token.Ident, "suite"),
