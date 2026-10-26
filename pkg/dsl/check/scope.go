@@ -3,6 +3,7 @@ package check
 import (
 	"strings"
 
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
 )
@@ -17,9 +18,21 @@ import (
 // resolves and `url` is a member of it. memberRoots below holds what it may
 // hold.
 var roots = map[StepType][]string{
-	API:      {"status", "body", "raw", "headers"},
+	API:      {"status", "body", "raw", "headers", "cookies"},
 	Terminal: {"exit_code", "stdout", "stderr"},
 	Browser:  {"page"},
+}
+
+// everyStep are the roots every step binds whatever its type: what the runner
+// measured about the attempt rather than what the step's executor observed.
+// They are in scope in every step and in no var's value, which has no attempt
+// to measure.
+var everyStep = []string{"duration_ms"}
+
+// EveryStepRoots returns the roots every step type binds, which the runner
+// adds and no executor does. The slice is a copy.
+func EveryStepRoots() []string {
+	return append([]string(nil), everyStep...)
 }
 
 // memberRoots are the roots whose members are a closed set, so a typo in one
@@ -30,109 +43,16 @@ var memberRoots = map[string][]string{
 	"page": {"url", "title"},
 }
 
-// elementFns are the browser-scope element functions. They are callables, not
-// roots: `text` alone is not an expression, and `text(sel)` is legal only in a
-// browser step.
-var elementFns = []string{"text", "value", "attr", "count", "visible"}
-
-// param is one parameter of a builtin: what it wants, in the words a
-// diagnostic uses, and which literal kinds satisfy it.
-//
-// It exists because `match`'s second argument is a regex and every other
-// builtin's argument is a string, so "every parameter is a string" stopped
-// being true. Only *literals* are judged -- an identifier or an
-// interpolation could hold anything and this stage does not evaluate -- so a
-// param is a sentence plus a small set of token kinds.
-type param struct {
-	// want is the phrase after "must be": "a string", "a regular
-	// expression". The existing builtins' wording is unchanged by this
-	// table, which is what keeps the invalid-file corpus's goldens intact.
-	want string
-
-	// kinds are the literal kinds that satisfy it. A literal of any other
-	// kind is reported; a non-literal is left to run time.
-	kinds []token.Kind
-}
-
-// aString is the parameter every builtin but `match`'s pattern takes: a
-// variable name, a selector, an attribute name, the text to search.
-var aString = param{want: "a string", kinds: []token.Kind{token.String}}
-
-// aPattern is `match`'s second argument. A string is allowed as well as a
-// regex literal, which is the rule `matches` already follows, so a pattern
-// can live in a var.
-var aPattern = param{
-	want:  "a regular expression",
-	kinds: []token.Kind{token.Regex, token.String},
-}
-
-// params is what each builtin takes, in order. env() and match() are
-// everywhere; the rest are browser-only and rejected elsewhere by scope, not
-// by this table. Its length used to be the builtin's whole arity, back when
-// every builtin took exactly as many arguments as it had parameters; env()'s
-// default value ended that, so the length is now only the maximum and
-// minArgs below holds what the length cannot say.
-var params = map[string][]param{
-	"env":     {aString, aString},
-	"match":   {aString, aPattern},
-	"text":    {aString},
-	"value":   {aString},
-	"attr":    {aString, aString},
-	"count":   {aString},
-	"visible": {aString},
-}
-
-// minArgs is how few arguments a builtin accepts, for the builtins that take a
-// range. A name that is not here takes exactly as many as it has parameters,
-// which is every builtin but env().
-//
-// env()'s second argument is the default value for a variable with no value.
-// The arity of a builtin was the length of its parameter list until that
-// argument existed, and a length cannot say "one or two" -- so the length is
-// now the maximum and this is the minimum.
-var minArgs = map[string]int{
-	"env": 1,
-}
-
-// Arity is how many arguments name accepts: the fewest, the most, and whether
-// this is a builtin at all.
-//
-// Exported because pkg/eval and pkg/codegen each keep their own copy of these
-// numbers -- eval because Eval must be total over a tree that was never
-// checked, codegen because its own switch decides the emission -- and a test in
-// each package asserts its copy against this one. The third copy, in
-// pkg/codegen, still required exactly one argument for env() well after the
-// checker and eval had both learned about the default value, and it was found
-// by hand rather than by a test.
-//
-// This package depends on token, ast and diag alone, so neither of those
-// packages' tests can import it into a cycle.
-func Arity(name string) (minimum, maximum int, ok bool) {
-	ps, ok := params[name]
-	if !ok {
-		return 0, 0, false
-	}
-	if m, ok := minArgs[name]; ok {
-		return m, len(ps), true
-	}
-	return len(ps), len(ps), true
-}
-
-// freeFns are the builtins callable in every scope, as against the browser
-// element functions. env() reads the process environment and match() reads a
-// string, and neither needs a page or a response to be meaningful.
-var freeFns = []string{"env", "match"}
-
 // scopeHints is the second line of a not-in-scope diagnostic: the roots that
 // *are* available, which is the whole reason the fault has its own code. The
 // browser line is broken by hand because the renderer never wraps -- where a
 // hint breaks is the producer's decision -- and this is the break the design
 // document prints.
 var scopeHints = map[StepType]string{
-	API:      "an api step binds status, body, raw, headers",
-	Terminal: "a terminal step binds exit_code, stdout, stderr",
-	Browser: "a browser step binds page.url, page.title, text(), value(),\n" +
-		"attr(), count(), visible()",
+	API:      "an api step binds status, body, raw, headers, cookies, duration_ms",
+	Terminal: "a terminal step binds exit_code, stdout, stderr, duration_ms",
+	Browser: "a browser step binds page.url, page.title, duration_ms, text(),\n" +
+		"value(), attr(), count(), visible()",
 	Unknown: `a var's value may use env("NAME") and the vars above it`,
 }
 
@@ -165,15 +85,18 @@ func (v *view) where() string {
 func Roots(t StepType) []string {
 	out := make([]string, len(roots[t]))
 	copy(out, roots[t])
+	if _, isStep := roots[t]; isStep {
+		out = append(out, everyStep...)
+	}
 	return out
 }
 
 // Functions returns the builtins callable in a step of type t: env() and
 // match() always, plus the element functions in a browser step.
 func Functions(t StepType) []string {
-	out := append([]string{}, freeFns...)
+	out := builtin.In(builtin.Everywhere)
 	if t == Browser {
-		out = append(out, elementFns...)
+		out = append(out, builtin.In(builtin.Page)...)
 	}
 	return out
 }
@@ -201,26 +124,20 @@ var allRoots = func() map[string]StepType {
 			m[r] = t
 		}
 	}
-	return m
-}()
-
-// elementFnOf reports whether word is a browser element function.
-var elementFnOf = func() map[string]bool {
-	m := map[string]bool{}
-	for _, f := range elementFns {
-		m[f] = true
+	// A root every step binds belongs to no one type. Indexed under API it is
+	// still "in the language", which is all notFound asks: in scope in every
+	// step, so the one place it is reported from is a var's value.
+	for _, r := range everyStep {
+		m[r] = API
 	}
 	return m
 }()
 
-// freeFnOf reports whether word is a builtin callable in every scope.
-var freeFnOf = func() map[string]bool {
-	m := map[string]bool{}
-	for _, f := range freeFns {
-		m[f] = true
-	}
-	return m
-}()
+// callableIn reports whether word is a builtin callable in scope s.
+func callableIn(word string, s builtin.Scope) bool {
+	f, ok := builtin.Lookup(word)
+	return ok && f.Scope == s
+}
 
 // scope accumulates what a scenario has declared so far: its vars, and the
 // captures of the steps already walked.
@@ -283,7 +200,7 @@ type view struct {
 // view builds the resolution view for a position of type t. Unknown means a
 // var's value, which binds no roots at all -- only env() and the vars above.
 func (s *scope) view(t StepType) *view {
-	v := &view{typ: t, roots: roots[t]}
+	v := &view{typ: t, roots: Roots(t)}
 	v.vars = append(v.vars, s.vars...)
 	v.captures = append(v.captures, s.captures...)
 	return v

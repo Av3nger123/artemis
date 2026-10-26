@@ -1,12 +1,25 @@
 action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-override	error	a line in a use block is not an argument or an override that applies
+bad-row-name	error	a data-driven scenario's name reads something other than its row
+bad-tag	error	a tag is not a lower-case word written out as a string, or is listed twice
 bad-value	error	a value is the wrong kind for the position it is in
+body-conflict	error	a request says what its body is more than one way
+data-file-missing	error	json(), csv() or file() names a path where there is no file
+data-not-csv	error	csv() names a file that is not CSV
+data-not-json	error	json() names a file that is not JSON
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
 duplicate-import-name	error	two imports give their collections the same name
+duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
+duplicate-row-name	error	two rows of a data-driven scenario name it alike
+duplicate-suite-name	error	a suite exports a name a suite above it already exports
+duplicate-tags	error	a scenario or a suite has more than one tags list
+for-no-rows	error	a for clause's data has no rows
+for-source-not-array	error	a for clause's data is not an array of rows
+for-source-not-static	error	a for clause reads rows that are not known before the run
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
 import-needs-name	error	an import has no "as" and its file's name cannot be what a use names it by
@@ -28,6 +41,11 @@ root-capture	error	a collection's template captures under the name of a step's o
 scenario-in-collection-file	error	a file holding a collection also holds a scenario
 second-collection	error	a file holds more than one collection
 secret-argument	error	an argument to a secret parameter is not itself secret
+setup-after-step	error	a setup block is below a step it would run before
+suite-file-name	error	a suite block is in a file not named suite.art
+suite-has-scenario	error	a suite file holds a scenario, or a second suite block
+suite-has-step	error	a suite block holds a step or a use outside setup and teardown
+teardown-before-step	error	a teardown block is above a step it would run after
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"
 unclosed-interpolation-expr	error	a "${" expression is followed by neither "}" nor more string

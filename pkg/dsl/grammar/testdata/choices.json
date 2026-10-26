@@ -62,6 +62,60 @@
           "value": "match"
         },
         {
+          "value": "uuid"
+        },
+        {
+          "value": "now"
+        },
+        {
+          "value": "random_int"
+        },
+        {
+          "value": "random_string"
+        },
+        {
+          "value": "base64"
+        },
+        {
+          "value": "base64_decode"
+        },
+        {
+          "value": "url_encode"
+        },
+        {
+          "value": "sha256"
+        },
+        {
+          "value": "hmac_sha256"
+        },
+        {
+          "value": "jwt_claims"
+        },
+        {
+          "value": "to_json"
+        },
+        {
+          "value": "from_json"
+        },
+        {
+          "value": "len"
+        },
+        {
+          "value": "number"
+        },
+        {
+          "value": "string"
+        },
+        {
+          "value": "json"
+        },
+        {
+          "value": "csv"
+        },
+        {
+          "value": "file"
+        },
+        {
           "value": "text"
         },
         {
@@ -128,11 +182,23 @@
         }
       ]
     },
+    "configHttpField": {
+      "doc": "The settings of a config http block.",
+      "values": [
+        {
+          "value": "cookies",
+          "valueKind": "boolean"
+        }
+      ]
+    },
     "configSubject": {
       "doc": "The subjects of a config declaration.",
       "values": [
         {
           "value": "browser"
+        },
+        {
+          "value": "http"
         }
       ]
     },
@@ -149,6 +215,12 @@
           "value": "scenario"
         },
         {
+          "value": "suite"
+        },
+        {
+          "value": "tags"
+        },
+        {
           "value": "config"
         },
         {
@@ -159,6 +231,12 @@
         },
         {
           "value": "use"
+        },
+        {
+          "value": "setup"
+        },
+        {
+          "value": "teardown"
         }
       ]
     },
@@ -181,8 +259,38 @@
           "severity": "error"
         },
         {
+          "value": "bad-row-name",
+          "doc": "a data-driven scenario's name reads something other than its row",
+          "severity": "error"
+        },
+        {
+          "value": "bad-tag",
+          "doc": "a tag is not a lower-case word written out as a string, or is listed twice",
+          "severity": "error"
+        },
+        {
           "value": "bad-value",
           "doc": "a value is the wrong kind for the position it is in",
+          "severity": "error"
+        },
+        {
+          "value": "body-conflict",
+          "doc": "a request says what its body is more than one way",
+          "severity": "error"
+        },
+        {
+          "value": "data-file-missing",
+          "doc": "json(), csv() or file() names a path where there is no file",
+          "severity": "error"
+        },
+        {
+          "value": "data-not-csv",
+          "doc": "csv() names a file that is not CSV",
+          "severity": "error"
+        },
+        {
+          "value": "data-not-json",
+          "doc": "json() names a file that is not JSON",
           "severity": "error"
         },
         {
@@ -208,6 +316,41 @@
         {
           "value": "duplicate-import-name",
           "doc": "two imports give their collections the same name",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-phase",
+          "doc": "a scenario has two setup blocks or two teardown blocks",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-row-name",
+          "doc": "two rows of a data-driven scenario name it alike",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-suite-name",
+          "doc": "a suite exports a name a suite above it already exports",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-tags",
+          "doc": "a scenario or a suite has more than one tags list",
+          "severity": "error"
+        },
+        {
+          "value": "for-no-rows",
+          "doc": "a for clause's data has no rows",
+          "severity": "error"
+        },
+        {
+          "value": "for-source-not-array",
+          "doc": "a for clause's data is not an array of rows",
+          "severity": "error"
+        },
+        {
+          "value": "for-source-not-static",
+          "doc": "a for clause reads rows that are not known before the run",
           "severity": "error"
         },
         {
@@ -313,6 +456,31 @@
         {
           "value": "secret-argument",
           "doc": "an argument to a secret parameter is not itself secret",
+          "severity": "error"
+        },
+        {
+          "value": "setup-after-step",
+          "doc": "a setup block is below a step it would run before",
+          "severity": "error"
+        },
+        {
+          "value": "suite-file-name",
+          "doc": "a suite block is in a file not named suite.art",
+          "severity": "error"
+        },
+        {
+          "value": "suite-has-scenario",
+          "doc": "a suite file holds a scenario, or a second suite block",
+          "severity": "error"
+        },
+        {
+          "value": "suite-has-step",
+          "doc": "a suite block holds a step or a use outside setup and teardown",
+          "severity": "error"
+        },
+        {
+          "value": "teardown-before-step",
+          "doc": "a teardown block is above a step it would run after",
           "severity": "error"
         },
         {
@@ -451,6 +619,16 @@
         {
           "value": "body",
           "valueKind": "any"
+        },
+        {
+          "value": "form",
+          "valueKind": "any",
+          "needsKey": true
+        },
+        {
+          "value": "multipart",
+          "valueKind": "any",
+          "needsKey": true
         }
       ]
     },
@@ -606,11 +784,31 @@
             "status",
             "body",
             "raw",
-            "headers"
+            "headers",
+            "cookies",
+            "duration_ms"
           ],
           "functions": [
             "env",
-            "match"
+            "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string",
+            "json",
+            "csv",
+            "file"
           ]
         },
         {
@@ -618,21 +816,59 @@
           "roots": [
             "exit_code",
             "stdout",
-            "stderr"
+            "stderr",
+            "duration_ms"
           ],
           "functions": [
             "env",
-            "match"
+            "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string",
+            "json",
+            "csv",
+            "file"
           ]
         },
         {
           "value": "browser",
           "roots": [
-            "page"
+            "page",
+            "duration_ms"
           ],
           "functions": [
             "env",
             "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string",
+            "json",
+            "csv",
+            "file",
             "text",
             "value",
             "attr",
@@ -668,6 +904,9 @@
         },
         {
           "value": "null"
+        },
+        {
+          "value": "file"
         }
       ]
     },

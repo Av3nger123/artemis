@@ -7,11 +7,21 @@
     "declaration": [
       "scenario",
       "import",
-      "collection"
+      "collection",
+      "suite"
+    ],
+    "forClause": [
+      "for"
     ],
     "scenarioBody": [
       "config",
       "var",
+      "step",
+      "use",
+      "phase",
+      "tags"
+    ],
+    "phaseBody": [
       "step",
       "use"
     ],
@@ -259,10 +269,118 @@
           "doc": "absent only in a file the parser recovered past; Decode requires it"
         },
         {
+          "name": "for",
+          "type": "node",
+          "accepts": "forClause",
+          "optional": true
+        },
+        {
           "name": "body",
           "type": "node[]",
           "accepts": "scenarioBody",
           "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "suite",
+      "doc": "`suite { ... }`, the one block of a suite.art: setup, teardown and vars every scenario in its folder and below shares",
+      "fields": [
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "scenarioBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "tags",
+      "doc": "`tags = [\"smoke\", \"payments\"]`: the words `artemis run --tags` selects a scenario by",
+      "fields": [
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "phase",
+      "doc": "`setup { ... }` or `teardown { ... }`: steps that run before a scenario's own, or after them whatever happened",
+      "fields": [
+        {
+          "name": "phase",
+          "type": "string",
+          "doc": "`setup` or `teardown`"
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "phaseBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "for",
+      "doc": "`for user in json(\"users.json\")`: one scenario per row of data",
+      "fields": [
+        {
+          "name": "secret",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `secret` modifier: each row's values are withheld from every report. Absent means false"
+        },
+        {
+          "name": "var",
+          "type": "string",
+          "doc": "the name each row is bound to"
+        },
+        {
+          "name": "source",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
         },
         {
           "name": "span",

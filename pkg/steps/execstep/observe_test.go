@@ -26,7 +26,7 @@ func TestObservedRootsMatchTheChecker(t *testing.T) {
 	}
 
 	got := keys(roots)
-	want := append([]string{}, check.Roots(check.Terminal)...)
+	want := without(check.Roots(check.Terminal), check.EveryStepRoots())
 	sort.Strings(want)
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("observed roots = %v, want check.Roots(check.Terminal) = %v", got, want)
@@ -173,4 +173,36 @@ func keys(m map[string]any) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// without is roots less the ones the runner binds: an executor observes its own
+// roots, and duration_ms is measured around it.
+func without(roots, drop []string) []string {
+	var out []string
+	for _, r := range roots {
+		keep := true
+		for _, d := range drop {
+			keep = keep && r != d
+		}
+		if keep {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// A file as stdin is the file's bytes, streamed to the command: what `stdin =
+// file("seed.sql")` gives psql.
+func TestAFileIsTheCommandsStdin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seed.sql")
+	if err := os.WriteFile(path, []byte("select 1;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	roots, err := observe(t, models.Step{Name: "cat", Exec: models.Exec{Command: "cat", StdinFile: path}})
+	if err != nil {
+		t.Fatalf("Observe() error = %v", err)
+	}
+	if roots[RootStdout] != "select 1;\n" {
+		t.Errorf("stdout = %q, want the file's text", roots[RootStdout])
+	}
 }

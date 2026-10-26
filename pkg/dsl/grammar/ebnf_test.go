@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
@@ -46,7 +47,8 @@ func wordTables() map[string][]string {
 		"StepFields":          token.StepFields,
 		"ConfigBlocks":        token.ConfigBlocks,
 		"BrowserConfigFields": token.BrowserConfigFields,
-		"Builtins":            token.Builtins,
+		"HTTPConfigFields":    token.HTTPConfigFields,
+		"builtin.Names":       builtin.Names(),
 		"Reserved":            token.Reserved,
 		"CollectionItems":     token.CollectionItems,
 		"UseLines":            token.UseLines,

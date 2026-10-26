@@ -27,6 +27,9 @@ type Exec struct {
 	Cwd     string
 	Env     map[string]string
 	Stdin   string
+	// StdinFile is the absolute path of `stdin = file(...)`, whose bytes are
+	// the command's standard input in place of Stdin.
+	StdinFile string
 }
 
 // EnvKeys is the names in Env, sorted, so the environment handed to a child

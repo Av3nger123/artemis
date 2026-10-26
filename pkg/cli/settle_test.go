@@ -114,15 +114,15 @@ func (p *settlingPage) settled() bool {
 	return p.at > 0 && p.reads > p.at
 }
 
-func (p *settlingPage) Goto(string) error           { return nil }
-func (p *settlingPage) Click(string) error          { return nil }
-func (p *settlingPage) Hover(string) error          { return nil }
-func (p *settlingPage) Fill(string, string) error   { return nil }
-func (p *settlingPage) Select(string, string) error { return nil }
-func (p *settlingPage) Upload(string, string) error { return nil }
-func (p *settlingPage) Press(string) error          { return nil }
-func (p *settlingPage) Wait(time.Duration)          {}
-func (p *settlingPage) SetTimeout(time.Duration)    {}
+func (p *settlingPage) Goto(string) error              { return nil }
+func (p *settlingPage) Click(string) error             { return nil }
+func (p *settlingPage) Hover(string) error             { return nil }
+func (p *settlingPage) Fill(string, string) error      { return nil }
+func (p *settlingPage) Select(string, string) error    { return nil }
+func (p *settlingPage) Upload(string, ...string) error { return nil }
+func (p *settlingPage) Press(string) error             { return nil }
+func (p *settlingPage) Wait(time.Duration)             {}
+func (p *settlingPage) SetTimeout(time.Duration)       {}
 
 func (p *settlingPage) URL() (string, error) {
 	if p.rootErr != nil {
@@ -413,7 +413,7 @@ func TestABudgetThatWillNotParseIsAnErroredAssertion(t *testing.T) {
 	// The scope the runner would have bound, because the budget is a var and a
 	// `within` is evaluated against the same names an expect is.
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	if err := sc.Bind(scope, nil); err != nil {
 		t.Fatal(err)
 	}
 	env := envFor(t, b)

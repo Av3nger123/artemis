@@ -9,7 +9,16 @@ RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
-Scenario      = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
+Scenario      = "scenario" String [ ForClause ] "{" { TagsDecl | ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl } "}" ;
+(* suite.art: one block for a folder, shared by every scenario below it. *)
+Suite         = "suite" "{" { TagsDecl | ConfigDecl | VarDecl | PhaseDecl } "}" ;
+(* Lower-case words, written out: a run selects before it evaluates. *)
+TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
+(* setup runs before the scenario's steps and teardown after them, so setup is
+   written above the first step and teardown below the last. *)
+PhaseDecl     = ( "setup" | "teardown" ) "{" { StepDecl | UseDecl } "}" ;
+(* One scenario per row: the name may interpolate the row, and nothing else. *)
+ForClause     = "for" [ "secret" ] Ident "in" Expr ;
 UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
 ItemRef       = Ident "." Ident ;
 UseLine       = Ident "=" Expr
@@ -18,9 +27,10 @@ UseLine       = Ident "=" Expr
               | "drop" ( "expects" | "captures" )
               | Expect ;
 
-ConfigDecl    = "config" ConfigSubject "{" [ ConfigSetting { Sep ConfigSetting } ] "}" ;
-ConfigSubject = "browser" ;
-ConfigSetting = "headless" "=" Bool | "viewport" "=" Expr ;
+ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting } ] "}"
+                         | "http" "{" [ HTTPSetting { Sep HTTPSetting } ] "}" ) ;
+BrowserSetting = "headless" "=" Bool | "viewport" "=" Expr ;
+HTTPSetting   = "cookies" "=" Bool ;
 
 VarDecl       = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;
@@ -30,7 +40,9 @@ Request       = Method String [ "{" [ ReqField { Sep ReqField } ] "}" ] ;
 Method        = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
 ReqField      = "header" String "=" Expr
               | "query"  String "=" Expr
-              | "body"   "=" Expr ;
+              | "body"   "=" Expr
+              | "form"   String "=" Expr
+              | "multipart" String "=" Expr ;
 Run           = "run" Expr [ "{" [ RunField { Sep RunField } ] "}" ] ;
 RunField      = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
               | "env" "{" [ EnvSetting { Sep EnvSetting } ] "}" ;
@@ -60,7 +72,7 @@ Not           = "not" Not | Cmp ;
 Cmp           = Unary [ BinOp Unary | "exists" | "is" TypeName ] ;
 BinOp         = "==" | "!=" | "<" | "<=" | ">" | ">="
               | "contains" | "matches" ;
-TypeName      = "string" | "number" | "boolean" | "object" | "array" | "null" ;
+TypeName      = "string" | "number" | "boolean" | "object" | "array" | "null" | "file" ;
 Unary         = "-" Unary | Postfix ;
 Postfix       = Primary { "." Ident | "[" Expr "]" } ;
 Primary       = Number | String | Regex | Bool | "null" | Ident
@@ -72,6 +84,10 @@ Array         = "[" [ Expr { "," Expr } [ "," ] ] "]" ;
 (* Builtin is the closed set of callables. Which of them are in scope depends
    on the step type: see SCOPES below. *)
 Builtin       = "env" | "match"
+              | "uuid" | "now" | "random_int" | "random_string"
+              | "base64" | "base64_decode" | "url_encode" | "sha256" | "hmac_sha256" | "jwt_claims"
+              | "to_json" | "from_json" | "len" | "number" | "string"
+              | "json" | "csv" | "file"
               | "text" | "value" | "attr" | "count" | "visible" ;
 
 (* Reserved words are not reachable from File. They lex as ordinary

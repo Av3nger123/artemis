@@ -27,18 +27,60 @@ func (f *File) Tokens(dst []token.Token) []token.Token {
 
 func (f *File) Span() token.Span { return spanOf(f) }
 
-// Scenario is `scenario "name" { ... }`.
+// Scenario is `scenario "name" { ... }`, or with a `for` clause one scenario
+// per row of data: `scenario "login as ${user.role}" for user in rows { ... }`.
+//
+// Name is one String token even when it interpolates the row variable. The
+// parser folds an interpolated name back into a single token whose Text is the
+// source as written, so everything that prints, encodes or names a scenario
+// reads one token either way; pkg/dsl/expand is the one reader that parses the
+// template, once per row, when it turns the scenario into one per row.
 type Scenario struct {
 	Keyword token.Token // scenario
 	Name    token.Token // the String naming it
+	For     *ForClause  // nil for a scenario that is not data-driven
 	LBrace  token.Token
 	Body    []Decl // ConfigDecl, VarDecl, StepDecl, or Bad
 	RBrace  token.Token
+
+	// Row is where an expanded scenario came from: the row of its data it is.
+	// pkg/dsl/expand sets it on each scenario it makes out of one with a for
+	// clause; it is nil everywhere else and has no tokens.
+	Row *RowOrigin
 }
+
+// RowOrigin is the row an expanded scenario was made from.
+type RowOrigin struct {
+	Source string // what the for clause read: "data/users.json", or "rows" for a literal
+	Index  int    // the row's place in the data, from 0
+}
+
+// ForClause is `for user in json("data/users.json")`, or `for secret user in
+// ...` when a row holds credentials.
+type ForClause struct {
+	Keyword token.Token // for
+	Secret  token.Token // `secret`, zero when absent
+	Var     token.Token // the Ident each row is bound to
+	In      token.Token // in
+	Source  Expr
+}
+
+func (f *ForClause) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, f.Keyword)
+	dst = appendTok(dst, f.Secret)
+	dst = appendTok(dst, f.Var)
+	dst = appendTok(dst, f.In)
+	return appendNode(dst, f.Source)
+}
+
+func (f *ForClause) Span() token.Span { return spanOf(f) }
 
 func (s *Scenario) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, s.Keyword)
 	dst = appendTok(dst, s.Name)
+	if s.For != nil {
+		dst = s.For.Tokens(dst)
+	}
 	dst = appendTok(dst, s.LBrace)
 	for _, d := range s.Body {
 		dst = appendNode(dst, d)
@@ -182,3 +224,52 @@ func SplitOrigin(items []Node) (own, foreign []Node) {
 
 func (s *StepDecl) Span() token.Span { return spanOf(s) }
 func (s *StepDecl) decl()            {}
+
+// PhaseDecl is `setup { ... }` or `teardown { ... }`: steps that run before a
+// scenario's own steps, or after them whatever happened.
+//
+// Keyword says which. Body holds steps and use lines, which pkg/dsl/expand
+// expands in place as it does a scenario's own; the checker holds a phase to
+// where it is written -- setup above the first step, teardown below the last --
+// so the order in the file is the order things run.
+type PhaseDecl struct {
+	Keyword token.Token // setup or teardown
+	LBrace  token.Token
+	Body    []Decl // StepDecl, UseDecl, or Bad
+	RBrace  token.Token
+}
+
+// Phases are the two words a PhaseDecl opens with.
+const (
+	PhaseSetup    = "setup"
+	PhaseTeardown = "teardown"
+)
+
+func (p *PhaseDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, p.Keyword)
+	dst = appendTok(dst, p.LBrace)
+	for _, d := range p.Body {
+		dst = appendNode(dst, d)
+	}
+	return appendTok(dst, p.RBrace)
+}
+
+func (p *PhaseDecl) Span() token.Span { return spanOf(p) }
+func (p *PhaseDecl) decl()            {}
+
+// TagsDecl is `tags = ["smoke", "payments"]`: words a run selects scenarios by.
+// In a suite, every scenario under it has them too.
+type TagsDecl struct {
+	Keyword token.Token // tags
+	Assign  token.Token // =
+	Value   Expr        // an array of string literals, which the checker holds it to
+}
+
+func (t *TagsDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, t.Keyword)
+	dst = appendTok(dst, t.Assign)
+	return appendNode(dst, t.Value)
+}
+
+func (t *TagsDecl) Span() token.Span { return spanOf(t) }
+func (t *TagsDecl) decl()            {}

@@ -86,6 +86,10 @@ func (c *canon) decl(d ast.Decl) {
 		c.varDecl(v)
 	case *ast.StepDecl:
 		c.step(v)
+	case *ast.PhaseDecl:
+		c.phase(v)
+	case *ast.TagsDecl:
+		c.line(v.Tokens(nil), assign(v.Keyword.Text, v.Assign, c.expr(v.Value)))
 	case *ast.Import:
 		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text, v.As.Text, v.Name.Text))
 	case *ast.Collection:
@@ -105,11 +109,16 @@ func (c *canon) decl(d ast.Decl) {
 // nothing.
 func (c *canon) scenario(s *ast.Scenario) {
 	head := join(" ", s.Keyword.Text, s.Name.Text)
+	headToks := toks(s.Keyword, s.Name)
+	if f := s.For; f != nil {
+		head = join(" ", head, f.Keyword.Text, f.Secret.Text, f.Var.Text, f.In.Text, c.expr(f.Source))
+		headToks = f.Tokens(headToks)
+	}
 	if len(s.Body) == 0 && !hasComment(s) {
-		c.line(toks(s.Keyword, s.Name, s.LBrace, s.RBrace), join(" ", head, braces(s.LBrace, s.RBrace)))
+		c.line(append(headToks, s.LBrace, s.RBrace), join(" ", head, braces(s.LBrace, s.RBrace)))
 		return
 	}
-	c.line(toks(s.Keyword, s.Name, s.LBrace), join(" ", head, s.LBrace.Text))
+	c.line(append(headToks, s.LBrace), join(" ", head, s.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
 	for i, d := range s.Body {
@@ -119,13 +128,36 @@ func (c *canon) scenario(s *ast.Scenario) {
 		// no trivia at all and a wall of twelve steps with nothing between them
 		// is not a file anyone wants to read. The first item in the body is
 		// against the brace and gets nothing.
-		if _, ok := d.(*ast.StepDecl); ok && i > 0 {
-			c.w.blank()
+		switch d.(type) {
+		case *ast.StepDecl, *ast.PhaseDecl:
+			if i > 0 {
+				c.w.blank()
+			}
 		}
 		c.decl(d)
 	}
 	c.w.outd()
 	c.close(s.RBrace)
+}
+
+// phase is `setup { ... }` or `teardown { ... }`, broken like a scenario: its
+// steps are each a paragraph, a blank line between them.
+func (c *canon) phase(d *ast.PhaseDecl) {
+	if len(d.Body) == 0 && !hasComment(d) {
+		c.line(toks(d.Keyword, d.LBrace, d.RBrace), join(" ", d.Keyword.Text, braces(d.LBrace, d.RBrace)))
+		return
+	}
+	c.line(toks(d.Keyword, d.LBrace), join(" ", d.Keyword.Text, d.LBrace.Text))
+	c.w.in()
+	c.w.suppress()
+	for i, b := range d.Body {
+		if i > 0 {
+			c.w.blank()
+		}
+		c.decl(b)
+	}
+	c.w.outd()
+	c.close(d.RBrace)
 }
 
 // config is `config browser { ... }`, whose block follows the general

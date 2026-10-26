@@ -68,6 +68,29 @@ func decl(v value) (ast.Decl, error) {
 		return collection(f)
 	case kindUse:
 		return useDecl(f)
+	case kindPhase:
+		return phaseDecl(f)
+	case kindTags:
+		d := &ast.TagsDecl{Keyword: syn(token.Ident, "tags"), Assign: syn(token.Assign, "=")}
+		var err error
+		if d.Value, err = exprOf(f, "value", true); err != nil {
+			return nil, err
+		}
+		return d, plain(f, &d.Keyword)
+	case kindSuite:
+		s := &ast.Scenario{
+			Keyword: syn(token.Ident, "suite"),
+			LBrace:  syn(token.LBrace, "{"),
+			RBrace:  syn(token.RBrace, "}"),
+		}
+		body, err := f.list("body")
+		if err != nil {
+			return nil, err
+		}
+		if s.Body, err = decls(body); err != nil {
+			return nil, err
+		}
+		return s, braced(f, &s.Keyword, &s.LBrace, &s.RBrace)
 	}
 	return nil, badKind(f, kind, "a declaration")
 }
@@ -82,6 +105,9 @@ func scenario(f fields) (*ast.Scenario, error) {
 	if s.Name, err = nameTok(f, "name"); err != nil {
 		return nil, err
 	}
+	if s.For, err = forClause(f); err != nil {
+		return nil, err
+	}
 	body, err := f.list("body")
 	if err != nil {
 		return nil, err
@@ -90,6 +116,63 @@ func scenario(f fields) (*ast.Scenario, error) {
 		return nil, err
 	}
 	return s, braced(f, &s.Keyword, &s.LBrace, &s.RBrace)
+}
+
+// phaseDecl builds `setup { ... }` or `teardown { ... }`.
+func phaseDecl(f fields) (*ast.PhaseDecl, error) {
+	which, err := f.str("phase")
+	if err != nil {
+		return nil, err
+	}
+	if which != ast.PhaseSetup && which != ast.PhaseTeardown {
+		return nil, fmt.Errorf("%s: phase is %q, want setup or teardown", f.path, which)
+	}
+	d := &ast.PhaseDecl{
+		Keyword: syn(token.Ident, which),
+		LBrace:  syn(token.LBrace, "{"),
+		RBrace:  syn(token.RBrace, "}"),
+	}
+	body, err := f.list("body")
+	if err != nil {
+		return nil, err
+	}
+	if d.Body, err = decls(body); err != nil {
+		return nil, err
+	}
+	return d, braced(f, &d.Keyword, &d.LBrace, &d.RBrace)
+}
+
+// forClause reads a scenario's optional for clause.
+func forClause(f fields) (*ast.ForClause, error) {
+	o, present, err := f.child("for")
+	if err != nil || !present {
+		return nil, err
+	}
+	return forNode(o)
+}
+
+// forNode builds a for clause from its own node.
+func forNode(o fields) (*ast.ForClause, error) {
+	name, err := o.str("var")
+	if err != nil {
+		return nil, err
+	}
+	secret, err := o.flag("secret")
+	if err != nil {
+		return nil, err
+	}
+	c := &ast.ForClause{
+		Keyword: syn(token.Ident, "for"),
+		Var:     syn(token.Ident, name),
+		In:      syn(token.Ident, "in"),
+	}
+	if secret {
+		c.Secret = syn(token.Ident, "secret")
+	}
+	if c.Source, err = exprOf(o, "source", true); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func config(f fields) (*ast.ConfigDecl, error) {

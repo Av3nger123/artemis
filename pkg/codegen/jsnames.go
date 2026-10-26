@@ -43,8 +43,8 @@ var jsKeywords = words(
 // second edit -- the same arrangement names.go has.
 var jsEmitted = func() map[string]bool {
 	m := words(
-		// locals a step binds beside its roots
-		"resp", "proc",
+		// locals a step binds beside its roots, and the scenario's cookie jar
+		"resp", "proc", "started", "jar",
 		// what the module imports
 		"test", "expect", "onTestFinished", "chromium", "spawnSync",
 		// the globals the generated body calls

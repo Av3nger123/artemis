@@ -66,6 +66,8 @@ func typeOf(v any) string {
 		return "object"
 	case Regexp:
 		return "regex"
+	case File:
+		return "file"
 	default:
 		switch reflect.ValueOf(t).Kind() {
 		case reflect.Slice, reflect.Array:
@@ -109,6 +111,10 @@ func Render(v any) string {
 		return Render(map[string]any(t))
 	case Regexp:
 		return "/" + t.String() + "/"
+	case File:
+		// A file in text is its path: `args = ["-f", file("seed.sql")]` hands
+		// the command a path it can open.
+		return t.Abs
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -205,6 +211,10 @@ func text(v any) (string, bool) {
 func equal(a, b any) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
+	}
+	if af, ok := a.(File); ok {
+		bf, ok := b.(File)
+		return ok && af.Abs == bf.Abs
 	}
 
 	as, aIsStr := a.(string)

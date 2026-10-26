@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
+	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/lower"
+	"artemis/pkg/dsl/token"
 	"artemis/pkg/eval"
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
@@ -18,6 +22,7 @@ import (
 	"artemis/pkg/shared/logger"
 	"artemis/pkg/shared/models"
 	"artemis/pkg/steps/browserstep"
+	"artemis/pkg/steps/httpstep"
 	"artemis/pkg/trace"
 )
 
@@ -74,7 +79,17 @@ func (rt *runtimeEnv) load(file string, diagOut io.Writer) (compiled, error) {
 
 // runCompiled runs every scenario of one compiled file.
 func runCompiled(ctx context.Context, rt *runtimeEnv, c compiled, run *result.RunResult, rep *report.Console) {
-	for _, sc := range c.scenarios {
+	for i, sc := range c.scenarios {
+		if !c.runs(i) {
+			// In the report, as skipped and why, so a CI page still counts
+			// it; not on the console, where a smoke run of a large suite
+			// would otherwise be a page of lines saying nothing ran.
+			skipped := run.NewScenario(sc.Name, c.file)
+			skipped.Tags = rt.tagsOf(c.file, sc)
+			skipped.Status = result.StatusSkip
+			skipped.Error = rt.sel.reason()
+			continue
+		}
 		executeArtScenario(ctx, rt, sc, c.file, run, rep)
 	}
 }
@@ -124,7 +139,57 @@ func compileArtSource(path, src string, diagOut io.Writer) ([]*lower.Scenario, [
 		// names the file and says what it was doing.
 		return nil, nil, fmt.Errorf("lowering %s: %w", path, err)
 	}
+	attributeNeeds(u, scenarios, info.EnvNeeds())
 	return scenarios, info.EnvNeeds(), nil
+}
+
+// attributeNeeds gives each scenario the env() names it reads, so --tags can
+// check the environment of only what it selected. A call a use brought in is
+// placed by the use line, which is in the scenario; the rows of a data-driven
+// scenario share their spans, so each row is given what the template reads.
+func attributeNeeds(u *front.Unit, scenarios []*lower.Scenario, needs []check.EnvNeed) {
+	var trees []*ast.Scenario
+	for _, d := range u.Expanded.Scenarios {
+		if s, ok := d.(*ast.Scenario); ok {
+			trees = append(trees, s)
+		}
+	}
+	if len(trees) != len(scenarios) {
+		// Not expected; every scenario then counts every need, which is the
+		// safe answer: a run checks more than it needs, never less.
+		for _, sc := range scenarios {
+			sc.EnvNeeds = needs
+		}
+		return
+	}
+	for _, n := range needs {
+		at := n.Span
+		if at.Via > 0 && at.Via <= len(u.Uses) {
+			at = u.Uses[at.Via-1].Span
+		}
+		placed := false
+		for i, s := range trees {
+			if contains(s.Span(), at) {
+				scenarios[i].EnvNeeds = append(scenarios[i].EnvNeeds, n)
+				placed = true
+			}
+		}
+		if !placed {
+			for _, sc := range scenarios {
+				sc.EnvNeeds = append(sc.EnvNeeds, n)
+			}
+		}
+	}
+}
+
+// contains reports whether span inner lies within outer, in the same file.
+func contains(outer, inner token.Span) bool {
+	if outer.File != inner.File {
+		return false
+	}
+	after := inner.Line > outer.Line || (inner.Line == outer.Line && inner.Col >= outer.Col)
+	before := inner.Line < outer.EndLine || (inner.Line == outer.EndLine && inner.Col <= outer.EndCol)
+	return after && before
 }
 
 // firstError is the one-line reason attached to a scenario that would not
@@ -160,9 +225,56 @@ func firstError(diags []diag.Diagnostic) error {
 
 // executeArtScenario runs every step of one lowered scenario and appends the
 // outcome to run, so a run can hold a scenario per file -- and a file can hold
-// more than one.
+// more than one. A scenario under a suite.art starts from what the suite's
+// setup left: `suite` bound to its values, and a copy of its cookies.
 func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
+	in := scenarioIn{tags: rt.tagsOf(file, sc)}
+	if st := rt.suiteFor(file); st != nil {
+		in.skip = st.failed
+		in.preset = map[string]any{"suite": st.view()}
+		in.jar = st.jar
+		in.cloneJar = true
+	}
+	execute(ctx, rt, sc, file, run, rep, in)
+}
+
+// scenarioIn is how a scenario starts, when that is not from nothing.
+type scenarioIn struct {
+	// preset are values in scope before the vars are bound: `suite`, for a
+	// scenario under a suite.
+	preset map[string]any
+	// bound is a scope already bound, whose vars are not bound again: a
+	// suite's teardown resumes the scope its setup ended with.
+	bound executor.Scope
+	// jar is the cookie jar to start from, nil for a new one; cloneJar starts
+	// from a copy of it, so the scenario's cookies stay its own.
+	jar      *httpstep.Jar
+	cloneJar bool
+	// skip, when it is not empty, is why no step of the scenario runs: a
+	// suite above it whose setup did not pass.
+	skip string
+	// kind is "suite" for a suite's setup or teardown, which a report marks.
+	kind string
+	// tags are the scenario's own and its suites', for the report.
+	tags []string
+}
+
+// scenarioOut is what a scenario ended with: what a suite's setup hands to the
+// scenarios under it, and to its own teardown.
+type scenarioOut struct {
+	scope  executor.Scope
+	jar    *httpstep.Jar
+	passed bool
+}
+
+// execute runs one scenario from in. See executeArtScenario.
+func execute(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console, in scenarioIn) scenarioOut {
 	scenario := run.NewScenario(sc.Name, file)
+	scenario.Kind = in.kind
+	scenario.Tags = in.tags
+	if sc.Row != nil {
+		scenario.Row = &result.Row{Source: sc.Row.Source, Index: sc.Row.Index}
+	}
 	rep.Scenario(scenario)
 	rt.events.ScenarioStart(scenario, stepNames(sc))
 	// Deferred, so every way out of here -- vars that will not bind, a config
@@ -172,6 +284,22 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	defer rt.events.ScenarioEnd(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", sc.Name))
 
+	// A suite above that did not set up leaves this scenario nothing to stand
+	// on: every step is skipped, naming the suite, and nothing is bound or
+	// sent.
+	if in.skip != "" {
+		for _, steps := range [][]*lower.Step{sc.Setup, sc.Steps, sc.Teardown} {
+			for _, st := range steps {
+				r := scenario.NewStep(st.Name)
+				r.Line, r.File = st.Line, st.File
+				r.Skip(in.skip)
+				rep.Step(r)
+			}
+		}
+		scenario.Finish(0)
+		return scenarioOut{}
+	}
+
 	// The scenario's declared variables, with whatever the steps capture
 	// written over the top as the run goes on. Bind evaluates them in source
 	// order, so `var b = a` sees `a` only when `a` is above it.
@@ -179,15 +307,32 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	// Nothing substitutes {{env.NAME}} here and nothing needs to: the process
 	// environment is reached through `env("NAME")`, which is an expression the
 	// evaluator resolves like any other.
-	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
-		// A scenario whose variables do not resolve has nothing worth running,
-		// and it gets no steps -- which is the shape of a file that would not
-		// load, and is reported the same way.
-		scenario.Fail(0, err)
-		rep.ScenarioFailed(scenario)
-		logger.Logger.Error("Could not bind a scenario's variables", "file", file, "error", err.Error())
-		return
+	scope := in.bound
+	if scope == nil {
+		scope = executor.NewScope()
+		for name, v := range in.preset {
+			scope.Set(name, v)
+		}
+	}
+	// The scenario's generator: uuid(), now() and the random builtins draw
+	// from it in its vars and its steps alike, seeded so that --seed draws
+	// the same values again.
+	gen := eval.NewGen(rt.seed, rt.seedKey(file), sc.Name)
+	defer func() {
+		if gen.Used() {
+			rt.drew.Store(true)
+		}
+	}()
+	if in.bound == nil {
+		if err := sc.Bind(scope, gen); err != nil {
+			// A scenario whose variables do not resolve has nothing worth
+			// running, and it gets no steps -- which is the shape of a file
+			// that would not load, and is reported the same way.
+			scenario.Fail(0, err)
+			rep.ScenarioFailed(scenario)
+			logger.Logger.Error("Could not bind a scenario's variables", "file", file, "error", err.Error())
+			return scenarioOut{}
+		}
 	}
 
 	// `config browser`, resolved against the vars just bound: `viewport =
@@ -196,12 +341,38 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	// config that will not resolve fails the scenario -- the same shape as
 	// Bind failing, and the alternative is a scenario that reaches its first
 	// browser step and only then discovers it cannot open one.
-	cfg, err := sc.Browser.Resolve(&eval.Env{Vars: scope.Vars()})
+	cfg, err := sc.Browser.Resolve(&eval.Env{Vars: scope.Vars(), Gen: gen})
 	if err != nil {
 		scenario.Fail(0, err)
 		rep.ScenarioFailed(scenario)
 		logger.Logger.Error("Could not resolve a scenario's browser config", "file", file, "error", err.Error())
-		return
+		return scenarioOut{}
+	}
+
+	// `config http`: a cookie jar for the scenario's api steps unless it said
+	// cookies = false. Made here, per scenario, so one scenario's session
+	// never reaches another's requests -- or copied from the suite's, so it
+	// starts logged in and still keeps what it is given to itself.
+	httpCfg, err := sc.HTTP.Resolve(&eval.Env{Vars: scope.Vars(), Gen: gen})
+	if err != nil {
+		scenario.Fail(0, err)
+		rep.ScenarioFailed(scenario)
+		logger.Logger.Error("Could not resolve a scenario's http config", "file", file, "error", err.Error())
+		return scenarioOut{}
+	}
+	var jar *httpstep.Jar
+	if httpCfg.Cookies {
+		switch {
+		case in.jar != nil && in.cloneJar:
+			jar = in.jar.Clone()
+		case in.jar != nil:
+			jar = in.jar
+		default:
+			jar = httpstep.NewJar()
+		}
+		ctx = httpstep.WithJar(ctx, jar)
+	} else {
+		ctx = httpstep.WithJar(ctx, nil)
 	}
 
 	scenarioStart := time.Now()
@@ -214,8 +385,10 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		Headless: cfg.Headless,
 		Viewport: cfg.Viewport,
 	}, func(ctx context.Context) error {
-		for i, st := range sc.Steps {
-			rt.events.StepStart(scenario, i, st.Name)
+		index := 0
+		// one runs a step, or records why it was skipped, and reports it.
+		one := func(phase string, st *lower.Step, skip string) *result.StepResult {
+			rt.events.StepStart(scenario, index, st.Name)
 			stepResult := scenario.NewStep(st.Name)
 			// The line the step was written on, so a step that could not run
 			// at all -- and an assertion with no line of its own -- still
@@ -225,14 +398,45 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 			// from a collection: a line of auth.art is no use against the
 			// scenario's file.
 			stepResult.File = st.File
-			runArtStep(ctx, rt, sc.Name, st, scope, stepResult)
+			stepResult.Phase = phase
+			switch missing := missingNeeds(st, scope); {
+			case skip != "":
+				stepResult.Skip(skip)
+			case phase == result.PhaseTeardown && len(missing) > 0:
+				// Cleanup of something no step created: there is nothing to
+				// clean, so it is skipped, and says what was never captured.
+				stepResult.Skip(fmt.Sprintf("needs %s, which no step before it captured", strings.Join(missing, ", ")))
+			default:
+				runArtStep(ctx, rt, sc.Name, st, scope, gen, stepResult)
+			}
 			logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, stepResult.Duration))
 			// Every step that was reached gets a line, including one artemis
-			// could not execute.
+			// could not execute and one it skipped.
 			rep.Step(stepResult)
 			// After the console's line and after any screenshot, so the
 			// result a watcher gets is the one the report will hold.
-			rt.events.StepEnd(scenario, i, stepResult)
+			rt.events.StepEnd(scenario, index, stepResult)
+			index++
+			return stepResult
+		}
+
+		// Setup first. One that does not pass leaves nothing for the
+		// scenario's own steps to stand on, so the rest of setup and every
+		// step after it is skipped -- naming the setup step that failed.
+		skip := ""
+		for _, st := range sc.Setup {
+			if r := one(result.PhaseSetup, st, skip); skip == "" && r.Status != result.StatusPass {
+				skip = fmt.Sprintf("setup step %q did not pass", st.Name)
+			}
+		}
+		// The scenario's own steps. A failing one does not stop the next, as
+		// it never has: each says what it found.
+		for _, st := range sc.Steps {
+			one("", st, skip)
+		}
+		// Teardown always, every step of it, after a failure as after a pass.
+		for _, st := range sc.Teardown {
+			one(result.PhaseTeardown, st, "")
 		}
 		return nil
 	})
@@ -249,16 +453,31 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		logger.Logger.Error("Could not close a scenario's browser", "file", file, "error", closeErr.Error())
 	}
 	logger.Logger.Info("Testing ended")
+	return scenarioOut{scope: scope, jar: jar, passed: scenario.Status == result.StatusPass}
 }
 
-// stepNames is the names of a scenario's steps in order, for scenario-start: a
-// watcher can lay the whole scenario out before its first step runs.
+// stepNames is the names of a scenario's steps in the order they run -- setup,
+// its own, teardown -- for scenario-start: a watcher can lay the whole scenario
+// out before its first step runs.
 func stepNames(sc *lower.Scenario) []string {
-	names := make([]string, 0, len(sc.Steps))
-	for _, st := range sc.Steps {
-		names = append(names, st.Name)
+	names := make([]string, 0, len(sc.Setup)+len(sc.Steps)+len(sc.Teardown))
+	for _, steps := range [][]*lower.Step{sc.Setup, sc.Steps, sc.Teardown} {
+		for _, st := range steps {
+			names = append(names, st.Name)
+		}
 	}
 	return names
+}
+
+// missingNeeds is the captures st reads that the scope does not hold.
+func missingNeeds(st *lower.Step, scope executor.Scope) []string {
+	var out []string
+	for _, name := range st.Needs {
+		if _, ok := scope.Get(name); !ok {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // runArtStep attempts st until it passes or its attempts run out, and records
@@ -268,13 +487,13 @@ func stepNames(sc *lower.Scenario) []string {
 // mix of two tries. An attempt is one worth stopping on when it ran at all and
 // every assertion it made -- every `expect`, and every `capture` that had to be
 // read -- passed.
-func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, stepResult *result.StepResult) {
+func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, gen *eval.Gen, stepResult *result.StepResult) {
 	start := time.Now()
 
 	// The step's own scope with no roots on it: a URL, a command or a retry
 	// count may read a var or an earlier step's capture, and cannot read this
 	// step's own status.
-	env := &eval.Env{Vars: scope.Vars()}
+	env := &eval.Env{Vars: scope.Vars(), Gen: gen}
 
 	// Resolve the whole step before anything runs. Model evaluates the action
 	// and the per-step policy, which is where a retry delay or a timeout that
@@ -441,7 +660,7 @@ func attemptArtStep(ctx context.Context, reg *executor.Registry, st *lower.Step,
 	// `text(".x")` resolve and what the settle loop re-reads the roots through;
 	// a nil one means there is nothing an assertion could wait for.
 	page := livePage(ctx, st.Type)
-	observed := &eval.Env{Roots: roots, Vars: base.Vars, Lookup: base.Lookup}
+	observed := &eval.Env{Roots: roots, Vars: base.Vars, Lookup: base.Lookup, Gen: base.Gen}
 	if page != nil {
 		observed.Elements = page.Elements()
 	}

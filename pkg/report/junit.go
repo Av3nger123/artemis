@@ -195,8 +195,14 @@ func (s *xmlTestSuite) add(c xmlTestCase) {
 }
 
 func junitCase(step *result.StepResult, classname string) xmlTestCase {
+	name := step.Name
+	if step.Phase != "" {
+		// [setup] and [teardown] in front, so a CI page that lists cases
+		// alone still says which block a case ran in.
+		name = "[" + step.Phase + "] " + name
+	}
 	out := xmlTestCase{
-		Name:      step.Name,
+		Name:      name,
 		Classname: classname,
 		Time:      seconds(step.Duration),
 	}

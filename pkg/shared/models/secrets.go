@@ -46,6 +46,9 @@ type Secrets struct {
 	// Stdin is true when a terminal step's stdin read a secret binding.
 	Stdin bool
 
+	// Parts marks a form's fields by position, as Acts marks browser acts.
+	Parts map[int]bool
+
 	// Acts marks one browser act's value each, by its position in Browser.Acts:
 	// `fill "#password" = pw`.
 	Acts map[int]bool
@@ -75,6 +78,6 @@ type Secrets struct {
 func (s Secrets) Any() bool {
 	return s.URL || s.Body || s.Args || s.Stdin ||
 		len(s.Headers) > 0 || len(s.Env) > 0 ||
-		len(s.Acts) > 0 || len(s.BodyPaths) > 0 ||
+		len(s.Acts) > 0 || len(s.BodyPaths) > 0 || len(s.Parts) > 0 ||
 		len(s.ObservedRoots) > 0 || len(s.ObservedPaths) > 0
 }

@@ -12,6 +12,9 @@ import (
 // lists them, and a kind spelled three times could be spelled three ways.
 const (
 	kindScenario   = "scenario"
+	kindFor        = "for"
+	kindSuite      = "suite"
+	kindTags       = "tags"
 	kindConfig     = "config"
 	kindVar        = "var"
 	kindStep       = "step"
@@ -45,6 +48,7 @@ const (
 	kindParam       = "param"
 	kindRequestDecl = "requestDecl"
 	kindUse         = "use"
+	kindPhase       = "phase"
 	kindBodySet     = "bodySet"
 	kindDrop        = "drop"
 )
@@ -94,6 +98,17 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.requestDecl(v)
 	case *ast.UseDecl:
 		return e.useDecl(v)
+	case *ast.TagsDecl:
+		return start(kindTags, v).
+			set("value", e.node(v.Value)).
+			span().
+			comments(v.Tokens(nil), zero, zero).done()
+	case *ast.PhaseDecl:
+		return start(kindPhase, v).
+			set("phase", v.Keyword.Text).
+			set("body", e.list(toNodes(v.Body))).
+			span().
+			comments(toks(v.Keyword), v.LBrace, v.RBrace).done()
 	case *ast.BodySet:
 		return e.bodySet(v)
 	case *ast.Drop:
@@ -143,11 +158,33 @@ func (e *enc) expr(n ast.Node) *obj {
 }
 
 func (e *enc) scenario(s *ast.Scenario) *obj {
+	if s.Keyword.Value == "suite" {
+		// A suite has no name -- its folder names it -- and no for clause.
+		return start(kindSuite, s).
+			set("body", e.list(toNodes(s.Body))).
+			span().
+			comments(toks(s.Keyword), s.LBrace, s.RBrace).done()
+	}
+	var forObj *obj
+	if s.For != nil {
+		forObj = e.forClause(s.For)
+	}
 	return start(kindScenario, s).
 		set("name", nameObj(s.Name)).
+		set("for", forObj).
 		set("body", e.list(toNodes(s.Body))).
 		span().
 		comments(toks(s.Keyword, s.Name), s.LBrace, s.RBrace).done()
+}
+
+// forClause is a data-driven scenario's `for [secret] <var> in <source>`.
+func (e *enc) forClause(f *ast.ForClause) *obj {
+	return start(kindFor, f).
+		set("secret", f.Secret.Text != "").
+		set("var", f.Var.Text).
+		set("source", e.node(f.Source)).
+		span().
+		comments(f.Tokens(nil), zero, zero).done()
 }
 
 func (e *enc) config(d *ast.ConfigDecl) *obj {

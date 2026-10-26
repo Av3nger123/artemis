@@ -4,11 +4,11 @@ unknown_config.art:12:10: unknown config subject "browsr"
       |          ^^^^^^
    hint: did you mean "browser"?
 
-unknown_config.art:13:10: unknown config subject "http"
-   13 |   config http { timeout = "5s" }
-      |          ^^^^
-   hint: config configures: browser
+unknown_config.art:13:10: unknown config subject "network"
+   13 |   config network { timeout = "5s" }
+      |          ^^^^^^^
+   hint: config configures: browser, http
 
 === codes
 unknown-config	error	12:10-12:16	suggest: "browser"
-unknown-config	error	13:10-13:14
+unknown-config	error	13:10-13:17

@@ -129,9 +129,9 @@ func (p *pwPage) Select(selector, value string) error {
 // a path that is not there is Playwright's error rather than a stat here: the
 // engine resolves it relative to its own working directory and duplicating that
 // rule would be a second answer to where a relative path points.
-func (p *pwPage) Upload(selector, path string) error {
-	if err := p.locator(selector).SetInputFiles(path); err != nil {
-		return fmt.Errorf("upload %s = %q: %w", selector, path, err)
+func (p *pwPage) Upload(selector string, paths ...string) error {
+	if err := p.locator(selector).SetInputFiles(paths); err != nil {
+		return fmt.Errorf("upload %s = %q: %w", selector, strings.Join(paths, ", "), err)
 	}
 	return nil
 }

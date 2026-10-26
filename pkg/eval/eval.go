@@ -46,43 +46,9 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/token"
 )
-
-// arity is the most arguments each builtin takes, and minArity the fewest.
-// pkg/dsl/check enforces both at compile time. They are repeated here because
-// Eval must be total: a tree built in Go, or decoded from JSON by a UI,
-// reaches this package without having been checked.
-var arity = map[string]int{
-	"env":     2,
-	"match":   2,
-	"text":    1,
-	"value":   1,
-	"attr":    2,
-	"count":   1,
-	"visible": 1,
-}
-
-// minArity holds env()'s minimum of one argument. A name that is not here
-// takes exactly as many as arity says, which is every builtin but env(): its
-// second argument is the default value for a variable with no value, and
-// that argument is optional.
-var minArity = map[string]int{
-	"env": 1,
-}
-
-// wants is how many arguments name accepts: the fewest and the most.
-func wants(name string) (minimum, maximum int, known bool) {
-	high, ok := arity[name]
-	if !ok {
-		return 0, 0, false
-	}
-	low := high
-	if m, ok := minArity[name]; ok {
-		low = m
-	}
-	return low, high, true
-}
 
 // maxGroups is how many capturing groups a match() pattern may have, which is
 // pkg/dsl/check's maxGroups. The checker counts a literal pattern and reports
@@ -199,7 +165,7 @@ func evalIdent(x *ast.Ident, env *Env) (any, error) {
 	if v, ok := env.lookup(name); ok {
 		return v, nil
 	}
-	if _, isFn := arity[name]; isFn {
+	if builtin.Is(name) {
 		return nil, errorf(x.Span(), "%s is a function, not a value", name)
 	}
 	return nil, errorf(x.Span(), "unknown name %s", name)
@@ -531,19 +497,23 @@ func evalIndex(i *ast.Index, env *Env) (any, error) {
 	}
 }
 
-// evalCall calls a builtin: env() and match() everywhere, and the element
-// functions in a browser step.
+// evalCall calls a builtin: env(), match() and the value builtins everywhere,
+// and the element functions in a browser step.
 //
-// match() is handled before the argument loop because it is the one builtin
-// whose arguments are not all strings: its second is a regex. Everything else
-// takes string arguments -- a variable name, a selector, an attribute name --
-// and a value of another type there is a mistake in the expression.
+// match() is handled before the argument loop because its pattern compiles
+// with the same asRegexp `matches` uses. Every other argument is converted to
+// what pkg/dsl/builtin says its parameter takes -- a string for a variable
+// name or a selector, a number for a bound, anything for len() -- and a value
+// that cannot be is a mistake in the expression, reported as one.
 func evalCall(c *ast.Call, env *Env) (any, error) {
 	if c.Callee == nil {
 		return nil, errorf(c.Span(), "this call has no function name")
 	}
 	name := c.Callee.Name()
-	low, high, known := wants(name)
+	// The checker enforces these bounds at compile time. They are asked again
+	// because Eval must be total: a tree built in Go, or decoded from JSON by a
+	// UI, reaches this package without having been checked.
+	low, high, known := builtin.Arity(name)
 	if !known {
 		return nil, errorf(c.Span(), "unknown function %s", name)
 	}
@@ -565,25 +535,25 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		return evalMatch(c, env)
 	}
 
-	args := make([]string, 0, high)
-	for _, a := range c.Args {
+	fn, _ := builtin.Lookup(name)
+	args := make([]any, len(c.Args))
+	for i, a := range c.Args {
 		v, err := Eval(a.Value, env)
 		if err != nil {
 			return nil, err
 		}
-		s, ok := v.(string)
-		if !ok {
-			return nil, errorf(a.Value.Span(), "%s()'s argument must be a string, got %s at %s", name, typeOf(v), exprText(a.Value))
+		if args[i], err = argument(name, fn.Params[i], a.Value, v); err != nil {
+			return nil, err
 		}
-		args = append(args, s)
 	}
 
 	if name == "env" {
 		var fallback *string
 		if len(args) == 2 {
-			fallback = &args[1]
+			s := args[1].(string)
+			fallback = &s
 		}
-		v, err := env.getenv(args[0], fallback)
+		v, err := env.getenv(args[0].(string), fallback)
 		if err != nil {
 			// getenv's error is package-level text, not span-shaped -- Absent
 			// is also Task 3's check-time error, which has no expression to
@@ -593,23 +563,31 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		}
 		return v, nil
 	}
+	if fn.Scope != builtin.Page {
+		return evalValueFn(c, name, args, env)
+	}
 
 	page := env.elements()
 	if page == nil {
 		return nil, errorf(c.Span(), "%s() needs a browser page, and this step has none", name)
 	}
+	sel := args[0].(string)
 	switch name {
 	case "text":
-		return page.Text(args[0])
+		return page.Text(sel)
 	case "value":
-		return page.Value(args[0])
+		return page.Value(sel)
 	case "attr":
-		return page.Attr(args[0], args[1])
+		return page.Attr(sel, args[1].(string))
 	case "count":
-		return page.Count(args[0])
-	default:
-		return page.Visible(args[0])
+		return page.Count(sel)
+	case "visible":
+		return page.Visible(sel)
 	}
+	// A name pkg/dsl/builtin knows and this switch does not: a builtin added to
+	// the table without an evaluation. TestEveryBuiltinEvaluates catches it
+	// first; this keeps it a reason rather than a call to the wrong function.
+	return nil, errorf(c.Span(), "%s() has no evaluation", name)
 }
 
 // evalMatch is `match(<text>, <pattern>)`: the regex extraction a capture off

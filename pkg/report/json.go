@@ -70,6 +70,7 @@ type jsonRunSummary struct {
 	Status        string     `json:"status"`
 	Passed        bool       `json:"passed"`
 	Error         string     `json:"error"`
+	Seed          *uint64    `json:"seed,omitempty"`
 	Counts        jsonCounts `json:"counts"`
 }
 
@@ -98,15 +99,33 @@ type jsonScenario struct {
 // stream's scenario-end carries: by then every step has already arrived on its
 // own step-end. Embedded in jsonScenario for the same reason as jsonRunSummary.
 type jsonScenarioSummary struct {
-	Name       string  `json:"name"`
-	File       string  `json:"file"`
-	Status     string  `json:"status"`
-	DurationMS float64 `json:"duration_ms"`
-	Error      string  `json:"error"`
+	Name string   `json:"name"`
+	File string   `json:"file"`
+	Row  *jsonRow `json:"row,omitempty"`
+	// Kind is "suite" for a suite.art's setup or teardown, and omitted for a
+	// scenario, so a run with no suite writes the document it always did.
+	Kind string `json:"kind,omitempty"`
+	// Tags are omitted for a scenario with none, so a suite that tags nothing
+	// writes the document it always did.
+	Tags       []string `json:"tags,omitempty"`
+	Status     string   `json:"status"`
+	DurationMS float64  `json:"duration_ms"`
+	Error      string   `json:"error"`
+}
+
+// jsonRow is a data-driven scenario's row. Absent for every other scenario,
+// so a report of a suite that has none is the document it always was.
+type jsonRow struct {
+	Source string `json:"source"`
+	Index  int    `json:"index"`
 }
 
 type jsonStep struct {
-	Name       string  `json:"name"`
+	Name string `json:"name"`
+	// Phase is "setup" or "teardown" for a step of a scenario's setup or
+	// teardown block, and omitted for one of its own steps -- so a scenario
+	// with neither writes the document it always did.
+	Phase      string  `json:"phase,omitempty"`
 	Status     string  `json:"status"`
 	DurationMS float64 `json:"duration_ms"`
 	Attempts   int     `json:"attempts"`
@@ -225,6 +244,7 @@ func fromRunSummary(run *result.RunResult) jsonRunSummary {
 		Status:        run.Status.String(),
 		Passed:        run.Passed(),
 		Error:         run.Error,
+		Seed:          run.Seed,
 		Counts:        fromCounts(run.Counts()),
 	}
 }
@@ -272,18 +292,25 @@ func fromScenario(sc *result.ScenarioResult) jsonScenario {
 
 // fromScenarioSummary is the scenario's own keys, without its steps.
 func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
-	return jsonScenarioSummary{
+	out := jsonScenarioSummary{
 		Name:       sc.Name,
 		File:       sc.File,
 		Status:     sc.Status.String(),
 		DurationMS: millis(sc.Duration),
 		Error:      sc.Error,
+		Kind:       sc.Kind,
+		Tags:       sc.Tags,
 	}
+	if sc.Row != nil {
+		out.Row = &jsonRow{Source: sc.Row.Source, Index: sc.Row.Index}
+	}
+	return out
 }
 
 func fromStep(step *result.StepResult) jsonStep {
 	out := jsonStep{
 		Name:       step.Name,
+		Phase:      step.Phase,
 		Status:     step.Status.String(),
 		DurationMS: millis(step.Duration),
 		Attempts:   step.Attempts,

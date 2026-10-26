@@ -67,7 +67,7 @@ func scenarioArt(url string, wantStatus int, wantBody string) string {
 // warning is printed.
 func resetRunFlags(t *testing.T) {
 	t.Helper()
-	for _, cmd := range []*cobra.Command{runCmd, testCmd} {
+	for _, cmd := range []*cobra.Command{runCmd, testCmd, listCmd} {
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
 			// A repeatable flag appends, and its DefValue is the printed form
 			// "[]", so setting that would leave one bogus value behind rather

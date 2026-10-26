@@ -31,6 +31,41 @@ const (
 	jsHelperRegExp   = "art_regexp"
 	jsHelperMatches  = "art_matches"
 	jsHelperMatch    = "art_match"
+
+	// The value builtins, one helper each and named as in Python.
+	jsHelperStr          = "art_str"
+	jsHelperUUID         = "art_uuid"
+	jsHelperNow          = "art_now"
+	jsHelperWhole        = "art_whole"
+	jsHelperRandomInt    = "art_random_int"
+	jsHelperRandomString = "art_random_string"
+	jsHelperBase64       = "art_base64"
+	jsHelperBase64Decode = "art_base64_decode"
+	jsHelperURLEncode    = "art_url_encode"
+	jsHelperSHA256       = "art_sha256"
+	jsHelperHMACSHA256   = "art_hmac_sha256"
+	jsHelperJWTClaims    = "art_jwt_claims"
+	jsHelperToJSON       = "art_to_json"
+	jsHelperFromJSON     = "art_from_json"
+	jsHelperLen          = "art_len"
+	jsHelperNumber       = "art_number"
+	jsHelperString       = "art_string"
+
+	// The cookie jar fetch does not have.
+	jsHelperJar        = "art_jar"
+	jsHelperFetch      = "art_fetch"
+	jsHelperSetCookies = "art_set_cookies"
+	jsHelperCookies    = "art_cookies"
+
+	// Data and files.
+	jsHelperFile     = "art_file"
+	jsHelperReadJSON = "art_read_json"
+	jsHelperReadCSV  = "art_read_csv"
+	jsHelperBytes    = "art_bytes"
+	jsHelperBody     = "art_body"
+	jsHelperForm     = "art_form"
+	jsHelperStdin    = "art_stdin"
+	jsHelperFiles    = "art_files"
 	jsHelperText     = "art_text"
 	jsHelperValue    = "art_value"
 	jsHelperAttr     = "art_attr"
@@ -69,6 +104,7 @@ var jsHelpers = []jsHelper{{
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
+  if (value.art_path !== undefined) return value.art_path;
   return JSON.stringify(value);
 }
 `,
@@ -236,13 +272,14 @@ var jsHelpers = []jsHelper{{
   if (typeof value === "boolean") return "boolean";
   if (typeof value === "string") return "string";
   if (typeof value === "number") return "number";
+  if (value.art_path !== undefined) return "file";
   if (Array.isArray(value)) return "array";
   if (typeof value === "object") return "object";
   return "unknown";
 }
 
 function art_is(value, want) {
-  // ` + "`expr is <type>`" + `, over the six JSON type names.
+  // ` + "`expr is <type>`" + `, over the six JSON type names and file.
   return art_type(value) === want;
 }
 `,
@@ -315,7 +352,481 @@ function art_is(value, want) {
 }
 `,
 }, {
+	name: jsHelperStr,
+	src: `function art_str(name, value) {
+  // The text a builtin's argument has to be: eval converts each argument to
+  // what its parameter takes, and a value that is not text is a mistake.
+  if (typeof value !== "string") {
+    throw new TypeError(` + "`${name}()'s argument must be a string, got ${JSON.stringify(value)}`" + `);
+  }
+  return value;
+}
+`,
+}, {
+	name:    jsHelperUUID,
+	imports: []string{"node:crypto.randomUUID"},
+	src: `function art_uuid() {
+  // ` + "`uuid()`" + `: a random version 4 UUID. The interpreter seeds its generator
+  // so --seed repeats a failed run; a generated test is not repeating one.
+  return randomUUID();
+}
+`,
+}, {
+	name: jsHelperNow,
+	src: `function art_now(format = "rfc3339") {
+  // ` + "`now()`" + `: the time in UTC, as a timestamp with no fraction, a date, or
+  // seconds or milliseconds since the epoch -- eval's four formats and no other.
+  const moment = new Date();
+  switch (format) {
+    case "rfc3339":
+      return moment.toISOString().replace(/\.\d+Z$/, "Z");
+    case "date":
+      return moment.toISOString().slice(0, 10);
+    case "unix":
+      return Math.floor(moment.getTime() / 1000);
+    case "unix_ms":
+      return moment.getTime();
+  }
+  throw new Error(
+    ` + "`now()'s argument must be one of rfc3339, date, unix, unix_ms, got ${JSON.stringify(format)}`" + `,
+  );
+}
+`,
+}, {
+	name:  jsHelperWhole,
+	needs: []string{jsHelperNumber},
+	src: `function art_whole(name, value) {
+  // A count or a bound, read the way eval reads one: a number, or text that
+  // reads as one, with no fractional part and small enough to be exact.
+  const number = art_number(value);
+  if (!Number.isInteger(number) || Math.abs(number) > 2 ** 53) {
+    throw new Error(` + "`${name}()'s argument must be a whole number, got ${JSON.stringify(value)}`" + `);
+  }
+  return number;
+}
+`,
+}, {
+	name:  jsHelperRandomInt,
+	needs: []string{jsHelperWhole},
+	src: `function art_random_int(low, high) {
+  // ` + "`random_int(min, max)`" + `: a whole number from min to max, both included.
+  low = art_whole("random_int", low);
+  high = art_whole("random_int", high);
+  if (low > high) {
+    throw new Error(` + "`random_int()'s bounds are the wrong way round: ${low} is above ${high}`" + `);
+  }
+  return low + Math.floor(Math.random() * (high - low + 1));
+}
+`,
+}, {
+	name:  jsHelperRandomString,
+	needs: []string{jsHelperWhole},
+	src: `function art_random_string(length) {
+  // ` + "`random_string(n)`" + `: n characters of a-z and 0-9, n from 1 to 256.
+  length = art_whole("random_string", length);
+  if (length < 1 || length > 256) {
+    throw new Error(
+      ` + "`random_string() makes 1 to 256 characters, and this call asks for ${length}`" + `,
+    );
+  }
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  for (let i = 0; i < length; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+}
+`,
+}, {
+	name:  jsHelperBase64,
+	needs: []string{jsHelperBytes},
+	src: `function art_base64(text) {
+  // ` + "`base64(text)`" + `: standard base64, padded, of text or of a file's bytes.
+  return art_bytes("base64", text).toString("base64");
+}
+`,
+}, {
+	name:  jsHelperBase64Decode,
+	needs: []string{jsHelperStr},
+	src: `function art_base64_decode(text) {
+  // ` + "`base64_decode(text)`" + `: standard or URL-safe base64, padded or not. Buffer
+  // skips a character it cannot read rather than refusing it, so the text is
+  // checked first: eval refuses it, and the two have to agree.
+  const clean = art_str("base64_decode", text).trim().replace(/-/g, "+").replace(/_/g, "/");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(clean) || clean.replace(/=+$/, "").length % 4 === 1) {
+    throw new Error(` + "`base64_decode()'s argument is not base64: ${JSON.stringify(text)}`" + `);
+  }
+  return Buffer.from(clean, "base64").toString("utf8");
+}
+`,
+}, {
+	name:  jsHelperURLEncode,
+	needs: []string{jsHelperStr},
+	src: `function art_url_encode(text) {
+  // ` + "`url_encode(text)`" + `: query escaping, a space as +. encodeURIComponent
+  // leaves five characters Go's url.QueryEscape escapes, and writes a space as
+  // %20, so both are put right after it.
+  return encodeURIComponent(art_str("url_encode", text))
+    .replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+    .replace(/%20/g, "+");
+}
+`,
+}, {
+	name:    jsHelperSHA256,
+	imports: []string{"node:crypto.createHash"},
+	needs:   []string{jsHelperBytes},
+	src: `function art_sha256(text) {
+  // ` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, or of a file's, in
+  // lower-case hex.
+  return createHash("sha256").update(art_bytes("sha256", text)).digest("hex");
+}
+`,
+}, {
+	name:    jsHelperHMACSHA256,
+	imports: []string{"node:crypto.createHmac"},
+	needs:   []string{jsHelperStr, jsHelperBytes},
+	src: `function art_hmac_sha256(key, text) {
+  // ` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text, or of a file's bytes,
+  // under the key, in lower-case hex.
+  return createHmac("sha256", art_str("hmac_sha256", key))
+    .update(art_bytes("hmac_sha256", text))
+    .digest("hex");
+}
+`,
+}, {
+	name:  jsHelperJWTClaims,
+	needs: []string{jsHelperStr, jsHelperBase64Decode},
+	src: `function art_jwt_claims(token) {
+  // ` + "`jwt_claims(token)`" + `: the token's payload, decoded and NOT verified. A test
+  // asserts what a token says; whether the right key signed it is the
+  // service's business.
+  const parts = art_str("jwt_claims", token).trim().split(".");
+  if (parts.length !== 3) {
+    throw new Error(
+      ` + "`jwt_claims()'s argument is not a JWT: it has ${parts.length} part(s), and a JWT has 3`" + `,
+    );
+  }
+  const claims = JSON.parse(art_base64_decode(parts[1]));
+  if (claims === null || typeof claims !== "object" || Array.isArray(claims)) {
+    throw new Error("jwt_claims(): the token's payload is not an object");
+  }
+  return claims;
+}
+`,
+}, {
+	name: jsHelperToJSON,
+	src: `function art_to_json(value) {
+  // ` + "`to_json(value)`" + `: compact JSON with its keys in order -- the text the
+  // interpreter makes of the same value.
+  const plain = (item) => {
+    if (item instanceof RegExp) throw new TypeError("to_json() cannot write a regular expression");
+    if (Array.isArray(item)) return item.map(plain);
+    if (item !== null && typeof item === "object") {
+      return Object.fromEntries(Object.keys(item).sort().map((key) => [key, plain(item[key])]));
+    }
+    return item;
+  };
+  return JSON.stringify(plain(value));
+}
+`,
+}, {
+	name:  jsHelperFromJSON,
+	needs: []string{jsHelperStr},
+	src: `function art_from_json(text) {
+  // ` + "`from_json(text)`" + `: the value JSON text holds.
+  return JSON.parse(art_str("from_json", text));
+}
+`,
+}, {
+	name: jsHelperLen,
+	src: `function art_len(value) {
+  // ` + "`len(value)`" + `: the characters in a string -- code points, as Go counts
+  // runes, not UTF-16 units -- the items in an array, the keys of an object.
+  if (typeof value === "string") return [...value].length;
+  if (Array.isArray(value)) return value.length;
+  if (value !== null && typeof value === "object" && !(value instanceof RegExp)) {
+    return Object.keys(value).length;
+  }
+  throw new TypeError(` + "`len() measures a string, an array or an object, not ${JSON.stringify(value)}`" + `);
+}
+`,
+}, {
+	name: jsHelperNumber,
+	src: `function art_number(value) {
+  // ` + "`number(value)`" + `: a number, or text that reads as one. A boolean is not a
+  // number, and neither is empty text, which Number() would read as zero.
+  let result = NaN;
+  if (typeof value === "number") result = value;
+  else if (typeof value === "string" && value.trim() !== "") result = Number(value.trim());
+  if (!Number.isFinite(result)) {
+    throw new Error(` + "`number() cannot read ${JSON.stringify(value)} as a number`" + `);
+  }
+  return result;
+}
+`,
+}, {
+	name:  jsHelperString,
+	needs: []string{jsHelperRender},
+	src: `function art_string(value) {
+  // ` + "`string(value)`" + `: the text the value has in an interpolation.
+  return art_render(value);
+}
+`,
+}, {
+	name: jsHelperSetCookies,
+	src: `function art_set_cookies(resp) {
+  // Every Set-Cookie header of a response, parsed: name, value and attributes,
+  // an attribute the server did not send as null. Read off the headers as the
+  // interpreter reads them.
+  const out = [];
+  for (const line of resp.headers.getSetCookie()) {
+    const parts = line.split(";").map((part) => part.trim());
+    const eq = parts[0].indexOf("=");
+    if (eq <= 0) continue;
+    const raw = parts[0].slice(eq + 1).trim();
+    const quoted = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"');
+    const value = quoted ? raw.slice(1, -1) : raw;
+    const cookie = {
+      name: parts[0].slice(0, eq).trim(), value, domain: null, path: null, expires: null,
+      maxAge: null, secure: false, http_only: false, same_site: null,
+    };
+    for (const attribute of parts.slice(1)) {
+      const at = attribute.indexOf("=");
+      const key = (at < 0 ? attribute : attribute.slice(0, at)).trim().toLowerCase();
+      const setting = at < 0 ? "" : attribute.slice(at + 1).trim();
+      if (key === "domain" && setting) cookie.domain = setting;
+      else if (key === "path" && setting) cookie.path = setting;
+      else if (key === "expires" && setting && !Number.isNaN(Date.parse(setting))) {
+        cookie.expires = new Date(setting).toISOString().replace(/\.\d+Z$/, "Z");
+      } else if (key === "max-age" && /^-?\d+$/.test(setting)) cookie.maxAge = Number(setting);
+      else if (key === "secure") cookie.secure = true;
+      else if (key === "httponly") cookie.http_only = true;
+      else if (key === "samesite" && ["lax", "strict", "none"].includes(setting.toLowerCase())) {
+        cookie.same_site = setting.toLowerCase();
+      }
+    }
+    out.push(cookie);
+  }
+  return out;
+}
+`,
+}, {
+	name:  jsHelperCookies,
+	needs: []string{jsHelperSetCookies},
+	src: `function art_cookies(resp) {
+  // ` + "`cookies`" + `: what this response set, each name to its value and attributes.
+  const out = {};
+  for (const { name, maxAge, ...cookie } of art_set_cookies(resp)) out[name] = cookie;
+  return out;
+}
+`,
+}, {
+	name: jsHelperJar,
+	src: `function art_jar() {
+  // A scenario's cookie jar, which fetch does not keep: what a response sets is
+  // sent on the scenario's later requests to the same host, as the interpreter
+  // and a browser do. Keyed by name, so two cookies of one name on two paths
+  // keep the later one -- a suite talks to the services it names, and this
+  // is the jar those tests need, not a browser's.
+  return new Map();
+}
+`,
+}, {
+	name:  jsHelperFetch,
+	needs: []string{jsHelperSetCookies},
+	src: `async function art_fetch(jar, url, options) {
+  // fetch, with the scenario's jar: its cookies are sent unless the step wrote
+  // its own Cookie header -- a test of a forged session must not be handed the
+  // real one -- and what the response sets is stored either way. A null jar is
+  // a scenario that wrote ` + "`config http { cookies = false }`" + `.
+  if (jar === null) return fetch(url, options);
+  const target = new URL(url);
+  const headers = { ...(options.headers ?? {}) };
+  if (!Object.keys(headers).some((name) => name.toLowerCase() === "cookie")) {
+    const now = Date.now();
+    const sent = [];
+    for (const [name, c] of jar) {
+      const host = target.hostname;
+      const domainOk = c.hostOnly ? host === c.domain : host === c.domain || host.endsWith("." + c.domain);
+      if (!domainOk || !target.pathname.startsWith(c.path)) continue;
+      if (c.secure && target.protocol !== "https:") continue;
+      if (c.expires !== null && c.expires <= now) continue;
+      sent.push(name + "=" + c.value);
+    }
+    if (sent.length > 0) headers.Cookie = sent.join("; ");
+  }
+  const resp = await fetch(url, { ...options, headers });
+  for (const c of art_set_cookies(resp)) {
+    // Max-Age wins over Expires, as it does in every jar.
+    const expires =
+      c.maxAge !== null ? Date.now() + c.maxAge * 1000 : c.expires === null ? null : Date.parse(c.expires);
+    if (expires !== null && expires <= Date.now()) {
+      jar.delete(c.name);
+      continue;
+    }
+    jar.set(c.name, {
+      value: c.value,
+      domain: (c.domain ?? target.hostname).replace(/^\./, ""),
+      hostOnly: c.domain === null,
+      path: c.path ?? "/",
+      secure: c.secure,
+      expires,
+    });
+  }
+  return resp;
+}
+`,
+}, {
+	name:    jsHelperFile,
+	imports: []string{"node:fs.statSync", "node:path.resolve"},
+	src: `function art_file(path) {
+  // ` + "`file(path)`" + `: the file at path, by its path and not its contents. Where a
+  // step sends content the file's bytes are sent; anywhere else it is its
+  // absolute path -- eval.File's rule.
+  let found = null;
+  try {
+    found = statSync(path);
+  } catch {
+    // reported below, with the path the scenario wrote
+  }
+  if (found === null || !found.isFile()) throw new Error(` + "`file(): there is no file ${path}`" + `);
+  return { art_path: resolve(path) };
+}
+`,
+}, {
+	name:    jsHelperReadJSON,
+	imports: []string{"node:fs.readFileSync"},
+	src: `function art_read_json(path) {
+  // ` + "`json(path)`" + `: the value a JSON file holds.
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+`,
+}, {
+	name:    jsHelperReadCSV,
+	imports: []string{"node:fs.readFileSync"},
+	src: `function art_read_csv(path) {
+  // ` + "`csv(path)`" + `: a CSV file as an array of objects, the first row naming the
+  // columns and every cell a string -- RFC 4180: quotes, doubled quotes and
+  // line breaks inside quotes. A row with more or fewer cells than the header
+  // is an error, and so is a column named twice.
+  const text = readFileSync(path, "utf8");
+  const rows = [];
+  const state = { row: [], cell: "", quoted: false };
+  const endCell = () => {
+    state.row.push(state.cell);
+    state.cell = "";
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (state.quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        state.cell += '"';
+        i++;
+      } else if (c === '"') state.quoted = false;
+      else state.cell += c;
+    } else if (c === '"') state.quoted = true;
+    else if (c === ",") endCell();
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      endCell();
+      rows.push(state.row);
+      state.row = [];
+    } else state.cell += c;
+  }
+  if (state.cell !== "" || state.row.length > 0) {
+    endCell();
+    rows.push(state.row);
+  }
+  if (rows.length === 0) return [];
+  const header = rows[0];
+  if (new Set(header).size !== header.length) throw new Error(` + "`csv(): ${path} names a column twice`" + `);
+  return rows.slice(1).map((cells, i) => {
+    if (cells.length !== header.length) {
+      throw new Error(
+        ` + "`csv(): ${path} line ${i + 2} has ${cells.length} cells, and the header ${header.length}`" + `,
+      );
+    }
+    return Object.fromEntries(header.map((name, j) => [name, cells[j]]));
+  });
+}
+`,
+}, {
+	name:    jsHelperBytes,
+	imports: []string{"node:fs.readFileSync"},
+	src: `function art_bytes(name, value) {
+  // What base64() and the hashes read: text's UTF-8 bytes, or a file's.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  if (typeof value !== "string") {
+    throw new TypeError(` + "`${name}()'s argument must be a string or a file, got ${JSON.stringify(value)}`" + `);
+  }
+  return Buffer.from(value, "utf8");
+}
+`,
+}, {
+	name:    jsHelperBody,
+	imports: []string{"node:fs.readFileSync"},
+	needs:   []string{jsHelperRender},
+	src: `function art_body(value) {
+  // A request body: a file's bytes, or the value rendered as the interpreter
+  // renders it -- an object as compact JSON.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  return art_render(value);
+}
+`,
+}, {
+	name:    jsHelperForm,
+	imports: []string{"node:fs.readFileSync", "node:path.basename", "node:path.extname"},
+	needs:   []string{jsHelperRender},
+	src: `function art_form(fields) {
+  // A multipart body: a text field per value, and per file a part with its base
+  // name, its bytes and a type from its extension.
+  const types = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    ".webp": "image/webp", ".svg": "image/svg+xml", ".pdf": "application/pdf",
+    ".json": "application/json", ".txt": "text/plain; charset=utf-8", ".csv": "text/csv; charset=utf-8",
+    ".html": "text/html; charset=utf-8", ".xml": "text/xml; charset=utf-8",
+  };
+  const form = new FormData();
+  for (const [name, value] of fields) {
+    if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+      const type = types[extname(value.art_path).toLowerCase()] ?? "application/octet-stream";
+      form.append(name, new Blob([readFileSync(value.art_path)], { type }), basename(value.art_path));
+    } else {
+      form.append(name, art_render(value));
+    }
+  }
+  return form;
+}
+`,
+}, {
+	name:    jsHelperStdin,
+	imports: []string{"node:fs.readFileSync"},
+	needs:   []string{jsHelperRender},
+	src: `function art_stdin(value) {
+  // A command's input: a file's text, or the value rendered.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path, "utf8");
+  }
+  return art_render(value);
+}
+`,
+}, {
+	name:  jsHelperFiles,
+	needs: []string{jsHelperRender},
+	src: `function art_files(value) {
+  // What an upload attaches: a file's path, a list of files' paths, or a path
+  // written as a string.
+  const isFile = (item) => item !== null && typeof item === "object" && item.art_path !== undefined;
+  if (isFile(value)) return value.art_path;
+  if (Array.isArray(value) && value.length > 0 && value.every(isFile)) return value.map((item) => item.art_path);
+  return art_render(value);
+}
+`,
+}, {
 	name: jsHelperText,
+
 	src: `async function art_text(page, selector) {
   // ` + "`text(sel)`" + `: the first match's text content, or null for no match.
   //
@@ -485,7 +996,7 @@ var jsByName = func() map[string]jsHelper {
 // vitest's for a module with no browser step, and @playwright/test's for one
 // with. See jsFile.module.
 var jsImportGroups = [][]string{
-	{"node:child_process"},
+	{"node:child_process", "node:crypto", "node:fs", "node:path"},
 	{"vitest", "@playwright/test"},
 }
 
@@ -494,6 +1005,9 @@ var jsImportGroups = [][]string{
 // is what jshelpers_test.go checks.
 var jsImportable = words(
 	"node:child_process.spawnSync",
+	"node:crypto.randomUUID", "node:crypto.createHash", "node:crypto.createHmac",
+	"node:fs.readFileSync", "node:fs.statSync",
+	"node:path.resolve", "node:path.basename", "node:path.extname", "node:path.join",
 	"vitest.test", "vitest.expect", "vitest.onTestFinished",
 	"@playwright/test.chromium", "@playwright/test.expect",
 )

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
@@ -15,10 +16,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	mathrand "math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/spf13/cobra"
 )
@@ -109,6 +112,15 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		return err
 	}
 
+	// Before discovery too: a --tags expression that will not parse must not
+	// cost a suite run either.
+	tagsValue, _ := cmd.Flags().GetString(tagsFlag)
+	grepValue, _ := cmd.Flags().GetString(grepFlag)
+	sel, err := newSelector(tagsValue, grepValue)
+	if err != nil {
+		return err
+	}
+
 	item, captures, err := itemFromFlags(cmd, path)
 	if err != nil {
 		return err
@@ -144,6 +156,9 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		shots:    browserstep.NewShots(shotDir(cmd)),
 		traces:   trace.New(traceDir(cmd)),
 		jobs:     jobsOf(cmd),
+		seed:     seedOf(cmd),
+		sel:      sel,
+		root:     path,
 		item:     item,
 		captures: captures,
 	}
@@ -189,7 +204,7 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	// and falls back to "the run failed", which names nothing. run.Error
 	// already holds the text runFilesWith built from the same faults, so this
 	// reuses it rather than building it a second time from rt.envFaults.
-	if len(rt.envFaults) > 0 {
+	if len(rt.envFaults) > 0 || rt.noneSelected {
 		return errors.New(run.Error)
 	}
 	if !run.Passed() {
@@ -242,7 +257,9 @@ func discover(path string) ([]string, error) {
 			}
 			return nil
 		}
-		if isScenarioFile(d.Name()) {
+		// A suite.art is a folder's setup and teardown, not a scenario
+		// file: it runs with the scenarios under it.
+		if isScenarioFile(d.Name()) && !front.IsSuiteFile(p) {
 			files = append(files, p)
 		}
 		return nil
@@ -300,6 +317,29 @@ type runtimeEnv struct {
 	// one, which is the default and the behaviour every release before ART-56
 	// had.
 	jobs int
+
+	// seed is what every scenario's random generator is derived from, with
+	// the scenario's file and name; drew is set once any scenario drew from
+	// one, which is what puts the seed in the report. Atomic because files
+	// run at once under --jobs.
+	seed uint64
+	drew atomic.Bool
+	// sel is --tags and --grep, nil when the run selects everything;
+	// noneSelected is a selection that chose nothing, which is an error and
+	// not a run of nothing that passes.
+	sel          *selector
+	noneSelected bool
+
+	// suites are the run's suite.art files by path, and suiteOfFile the
+	// innermost one each scenario file is under. See suite.go.
+	suites      map[string]*suiteState
+	suiteOfFile map[string]*suiteState
+
+	// root is the path `run` was given, which a scenario's file is named
+	// relative to when its generator is seeded: `artemis run suite` from the
+	// repository and `artemis run .` from inside suite/ must draw the same
+	// values for the same seed.
+	root string
 
 	// events is the --events stream, nil when it was not asked for. Every
 	// method on a nil *report.Events writes nothing, so the runner calls them
@@ -376,9 +416,30 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	}
 
 	var loaded []compiled
+	var scenarioFiles []string
 	for _, a := range attempts {
 		if a.ok {
 			loaded = append(loaded, a.compiled)
+			scenarioFiles = append(scenarioFiles, a.file)
+		}
+	}
+	// The suite.art files above the scenarios, compiled once each. Their
+	// env() needs join the check before the run, and one that would not
+	// compile is reported as the errored file it is, first.
+	suiteLoaded, brokenSuites := rt.planSuites(scenarioFiles, diagOut)
+	for _, b := range brokenSuites {
+		failScenario(run, rep, rt.events, b.file, b.err)
+	}
+
+	// --tags and --grep, settled once every file and suite has compiled and
+	// before anything checks the environment or runs: a smoke run needs the
+	// smoke scenarios' variables, and nothing else's.
+	if rt.sel != nil {
+		loaded = rt.selectScenarios(attempts, diagOut)
+	}
+	for _, c := range suiteLoaded {
+		if st := rt.suites[c.file]; st != nil && st.used {
+			loaded = append(loaded, c)
 		}
 	}
 	// nil is os.LookupEnv: the real process environment, which is where the
@@ -396,11 +457,17 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// started, and the run ends with none of them in it.
 	// Files that will actually run, done ahead of time so the two paths below
 	// agree about which they are.
-	runnable := len(faults) == 0
+	runnable := len(faults) == 0 && !rt.noneSelected
 
 	// More than one job: every runnable file runs into its own result tree and
 	// its own buffer, and the ordered loop below drains them. See runParallel
 	// for why the output is buffered rather than streamed.
+	// Every suite's setup, once and before any scenario: the scenarios under
+	// it read what it left.
+	if runnable {
+		rt.setUpSuites(context.Background(), run, rep)
+	}
+
 	var parallel []*fileOutcome
 	if runnable && rt.workers() > 1 {
 		parallel = runParallel(context.Background(), rt, attempts)
@@ -425,6 +492,10 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		}
 		parallel[i].drainInto(run, rep)
 	}
+	// And every suite's teardown, once every scenario under it is done.
+	if runnable {
+		rt.tearDownSuites(context.Background(), run, rep)
+	}
 	run.Finish()
 	// Finish derives Status from the scenarios, and a gated run can hold
 	// scenarios that all passed -- the files that happened to need nothing
@@ -435,6 +506,14 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	if len(faults) > 0 {
 		run.Status = result.StatusError
 		run.Error = envGateError(faults).Error()
+	}
+	if rt.noneSelected {
+		run.Status = result.StatusError
+		run.Error = "no scenario is " + rt.sel.reason()[len("not "):]
+	}
+	if rt.drew.Load() {
+		seed := rt.seed
+		run.Seed = &seed
 	}
 	// After the gate has had its say about the status, so run-end says what
 	// the report and the exit code say.
@@ -520,6 +599,37 @@ func runParallel(ctx context.Context, rt *runtimeEnv, attempts []fileAttempt) []
 
 // jobsFlag is the flag saying how many scenario files may run at once.
 const jobsFlag = "jobs"
+
+// seedFlag is the flag fixing the seed the random builtins draw from.
+const seedFlag = "seed"
+
+// seedKey is file as a scenario's generator is seeded with it: its path within
+// what was run, with forward slashes. A path as given would change with the
+// directory a run started in, and the same seed would draw different values
+// from the same suite.
+func (rt *runtimeEnv) seedKey(file string) string {
+	base := rt.root
+	if info, err := os.Stat(base); err == nil && !info.IsDir() {
+		base = filepath.Dir(base)
+	}
+	if base != "" {
+		if rel, err := filepath.Rel(base, file); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(filepath.Base(file))
+}
+
+// seedOf reads --seed, or makes a new seed when it was not given: a run that
+// drew random values and failed prints the seed it used, and passing that back
+// is how the same values are drawn again.
+func seedOf(cmd *cobra.Command) uint64 {
+	if cmd.Flags().Changed(seedFlag) {
+		n, _ := cmd.Flags().GetUint64(seedFlag)
+		return n
+	}
+	return mathrand.Uint64()
+}
 
 // jobsOf reads --jobs, defaulting to one.
 //

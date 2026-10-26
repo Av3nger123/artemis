@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func bound(t *testing.T, src string) (*Scenario, executor.Scope) {
 	t.Helper()
 	sc := one(t, src)
 	scope := executor.NewScope()
-	if err := sc.Bind(scope); err != nil {
+	if err := sc.Bind(scope, nil); err != nil {
 		t.Fatalf("Bind() = %v, want nil", err)
 	}
 	return sc, scope
@@ -298,7 +299,7 @@ func TestABrowserStepsRuntimeShape(t *testing.T) {
 		t.Fatalf("Model() has %d acts, want %d", len(model.Browser.Acts), len(want))
 	}
 	for i, w := range want {
-		if model.Browser.Acts[i] != w {
+		if !reflect.DeepEqual(model.Browser.Acts[i], w) {
 			t.Errorf("Model().Browser.Acts[%d] = %#v, want %#v", i, model.Browser.Acts[i], w)
 		}
 	}
@@ -333,7 +334,7 @@ func TestActArgumentsAreEvaluatedOnce(t *testing.T) {
 		t.Fatalf("lowered %d acts, want %d", len(model.Browser.Acts), len(want))
 	}
 	for i, w := range want {
-		if model.Browser.Acts[i] != w {
+		if !reflect.DeepEqual(model.Browser.Acts[i], w) {
 			t.Errorf("act %d = %#v, want %#v", i, model.Browser.Acts[i], w)
 		}
 	}

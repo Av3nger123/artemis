@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "file": "testdata/suite.art",
+  "scenarios": [
+    {
+      "kind": "suite",
+      "body": [
+        {
+          "kind": "var",
+          "name": "url",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"https://example.test\"",
+            "value": "https://example.test",
+            "span": {
+              "file": "testdata/suite.art",
+              "line": 2,
+              "col": 13,
+              "endLine": 2,
+              "endCol": 35,
+              "offset": 20
+            }
+          },
+          "span": {
+            "file": "testdata/suite.art",
+            "line": 2,
+            "col": 3,
+            "endLine": 2,
+            "endCol": 35,
+            "offset": 10
+          }
+        },
+        {
+          "kind": "phase",
+          "phase": "setup",
+          "body": [
+            {
+              "kind": "step",
+              "name": {
+                "text": "\"log in\"",
+                "value": "log in"
+              },
+              "action": {
+                "kind": "request",
+                "method": "post",
+                "url": {
+                  "kind": "interp",
+                  "segments": [
+                    {
+                      "delim": "\"${",
+                      "expr": {
+                        "kind": "ident",
+                        "name": "url",
+                        "span": {
+                          "file": "testdata/suite.art",
+                          "line": 6,
+                          "col": 15,
+                          "endLine": 6,
+                          "endCol": 18,
+                          "offset": 88
+                        }
+                      }
+                    }
+                  ],
+                  "end": "}/login\"",
+                  "span": {
+                    "file": "testdata/suite.art",
+                    "line": 6,
+                    "col": 12,
+                    "endLine": 6,
+                    "endCol": 26,
+                    "offset": 85
+                  }
+                },
+                "span": {
+                  "file": "testdata/suite.art",
+                  "line": 6,
+                  "col": 7,
+                  "endLine": 6,
+                  "endCol": 26,
+                  "offset": 80
+                }
+              },
+              "body": [
+                {
+                  "kind": "capture",
+                  "name": "token",
+                  "value": {
+                    "kind": "member",
+                    "x": {
+                      "kind": "ident",
+                      "name": "body",
+                      "span": {
+                        "file": "testdata/suite.art",
+                        "line": 7,
+                        "col": 23,
+                        "endLine": 7,
+                        "endCol": 27,
+                        "offset": 122
+                      }
+                    },
+                    "name": "token",
+                    "span": {
+                      "file": "testdata/suite.art",
+                      "line": 7,
+                      "col": 23,
+                      "endLine": 7,
+                      "endCol": 33,
+                      "offset": 122
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/suite.art",
+                    "line": 7,
+                    "col": 7,
+                    "endLine": 7,
+                    "endCol": 33,
+                    "offset": 106
+                  }
+                }
+              ],
+              "span": {
+                "file": "testdata/suite.art",
+                "line": 5,
+                "col": 5,
+                "endLine": 8,
+                "endCol": 6,
+                "offset": 58
+              },
+              "stepType": "api",
+              "scope": [
+                "status",
+                "body",
+                "raw",
+                "headers",
+                "cookies",
+                "duration_ms",
+                "url"
+              ]
+            }
+          ],
+          "span": {
+            "file": "testdata/suite.art",
+            "line": 4,
+            "col": 3,
+            "endLine": 9,
+            "endCol": 4,
+            "offset": 46
+          },
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "phase",
+          "phase": "teardown",
+          "body": [
+            {
+              "kind": "step",
+              "name": {
+                "text": "\"log out\"",
+                "value": "log out"
+              },
+              "action": {
+                "kind": "request",
+                "method": "post",
+                "url": {
+                  "kind": "interp",
+                  "segments": [
+                    {
+                      "delim": "\"${",
+                      "expr": {
+                        "kind": "ident",
+                        "name": "url",
+                        "span": {
+                          "file": "testdata/suite.art",
+                          "line": 13,
+                          "col": 15,
+                          "endLine": 13,
+                          "endCol": 18,
+                          "offset": 192
+                        }
+                      }
+                    }
+                  ],
+                  "end": "}/logout\"",
+                  "span": {
+                    "file": "testdata/suite.art",
+                    "line": 13,
+                    "col": 12,
+                    "endLine": 13,
+                    "endCol": 27,
+                    "offset": 189
+                  }
+                },
+                "span": {
+                  "file": "testdata/suite.art",
+                  "line": 13,
+                  "col": 7,
+                  "endLine": 13,
+                  "endCol": 27,
+                  "offset": 184
+                }
+              },
+              "span": {
+                "file": "testdata/suite.art",
+                "line": 12,
+                "col": 5,
+                "endLine": 14,
+                "endCol": 6,
+                "offset": 161
+              },
+              "stepType": "api",
+              "scope": [
+                "status",
+                "body",
+                "raw",
+                "headers",
+                "cookies",
+                "duration_ms",
+                "url",
+                "token"
+              ]
+            }
+          ],
+          "span": {
+            "file": "testdata/suite.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 15,
+            "endCol": 4,
+            "offset": 146
+          },
+          "comments": {
+            "blankAbove": true
+          }
+        }
+      ],
+      "span": {
+        "file": "testdata/suite.art",
+        "line": 1,
+        "col": 1,
+        "endLine": 16,
+        "endCol": 2,
+        "offset": 0
+      }
+    }
+  ]
+}

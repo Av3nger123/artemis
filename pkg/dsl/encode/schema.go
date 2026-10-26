@@ -97,8 +97,10 @@ type groupSchema struct {
 }
 
 var groupSchemas = []groupSchema{
-	{"declaration", []string{kindScenario, kindImport, kindCollection}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse}},
+	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
+	{"forClause", []string{kindFor}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags}},
+	{"phaseBody", []string{kindStep, kindUse}},
 	{"action", []string{kindRequest, kindRun, kindBrowser}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
 	{"blockField", []string{kindField}},
@@ -224,7 +226,28 @@ var (
 var nodeSchemas = []nodeSchema{
 	{Kind: kindScenario, Doc: "`scenario \"name\" { ... }`", Fields: []fieldSchema{
 		recoveredName,
+		optChild("for", "forClause"),
 		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindSuite, Doc: "`suite { ... }`, the one block of a suite.art: setup, teardown and vars every scenario in its folder and below shares", Fields: []fieldSchema{
+		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindTags, Doc: "`tags = [\"smoke\", \"payments\"]`: the words `artemis run --tags` selects a scenario by", Fields: []fieldSchema{
+		child("value", "expression"),
+		spanField, commentsField,
+	}},
+	{Kind: kindPhase, Doc: "`setup { ... }` or `teardown { ... }`: steps that run before a scenario's own, or after them whatever happened", Fields: []fieldSchema{
+		word("phase", "`setup` or `teardown`"),
+		list("body", "phaseBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindFor, Doc: "`for user in json(\"users.json\")`: one scenario per row of data", Fields: []fieldSchema{
+		{Name: "secret", Type: "boolean", Optional: true,
+			Doc: "the `secret` modifier: each row's values are withheld from every report. Absent means false"},
+		word("var", "the name each row is bound to"),
+		child("source", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindConfig, Doc: "`config browser { headless = true }`", Fields: []fieldSchema{

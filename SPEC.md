@@ -220,13 +220,212 @@ operands the way its own framework does. The value still arrives through
 `art_env` rather than as a literal in the file, so the generated code holds no
 credential of its own.
 
+### `setup` and `teardown`
+
+```art
+scenario "checkout" {
+  var url = env("API_URL")
+
+  setup {
+    step "make a cart" {
+      post "${url}/carts"
+      expect status == 201
+      capture cart_id = body.id
+    }
+  }
+
+  step "pay" {
+    post "${url}/carts/${cart_id}/pay"
+    expect status == 200
+    capture order_id = body.id
+  }
+
+  teardown {
+    step "cancel the order" {
+      delete "${url}/orders/${order_id}"
+    }
+
+    step "drop the cart" {
+      delete "${url}/carts/${cart_id}"
+    }
+  }
+}
+```
+
+`setup` runs before the scenario's own steps and `teardown` after them. Each
+holds steps and [`use`](#use) lines, and a scenario has at most one of each.
+**The file is in run order**: `setup` is written above the first step and
+`teardown` below the last -- `setup-after-step`, `teardown-before-step` and
+`duplicate-phase` are compile errors otherwise -- so the [scope](#what-is-in-scope)
+rule is unchanged: setup's captures are in scope for every step below them,
+and teardown sees every capture above it.
+
+| | |
+| --- | --- |
+| A setup step does not pass | The rest of setup and every one of the scenario's own steps is **skipped**, each naming the setup step that failed. Teardown still runs |
+| One of the scenario's own steps fails | The steps after it run, as they always have. Teardown runs |
+| Teardown | Always runs, every step of it -- after a failure as after a pass, and after a teardown step that failed |
+| A teardown step reads a capture no step made | It is **skipped**, naming the capture: there is nothing to clean up. `cancel the order` above is skipped when `pay` failed before capturing `order_id` |
+| A teardown step fails | The scenario fails: cleanup that did not happen is a fault, and the next run may meet what it left |
+
+A skipped step is `"status": "skip"` in the [JSON report](#the-json-report),
+with the reason in `error`, and setup and teardown steps carry `"phase":
+"setup"` or `"phase": "teardown"`. The console prints them as `setup: make a
+cart`, and JUnit names them `[setup] make a cart`.
+
+### `tags`
+
+```art
+scenario "checkout" {
+  tags = ["smoke", "payments"]
+
+  step "pay" {
+    post "https://example.com/pay"
+    expect status == 200
+  }
+}
+```
+
+`tags` is the words a run selects scenarios by: `artemis run suite/ --tags
+"smoke and not slow"`. A scenario has its own tags and every tag of the
+[suites](#suites-suiteart) above it. They are written out -- a list of string
+literals, because a run selects before it evaluates anything -- and each is one
+lower-case word of letters, digits, `_`, `.` and `-`, so a tag is always one word
+of a `--tags` expression. A tag that is not, or is listed twice, is `bad-tag`;
+a second `tags` is `duplicate-tags`.
+
+`--tags` takes an expression of tags joined by `and`, `or` and `not`, with
+parentheses; `not` binds tightest and `or` loosest. `--grep` takes a regular
+expression over the scenario's name. A scenario a run does not select is in the
+[JSON report](#the-json-report) with `"status": "skip"` and why in `error`, and
+is not on the console. A selection of nothing is an error, and a tag the
+expression names that no scenario has is a warning naming the nearest one.
+
+Only what is selected is checked before the run: an `env()` only an unselected
+scenario reads is not [required](#builtins), and a suite with no selected
+scenario under it is not set up.
+
+### Suites: `suite.art`
+
+```art
+# suite/suite.art
+suite {
+  var url = env("API_URL")
+
+  setup {
+    step "log in" {
+      post "${url}/login" {
+        body = {"user": env("ADMIN"), "password": env("ADMIN_PW")}
+      }
+      expect status == 200
+      capture token = body.token
+    }
+  }
+
+  teardown {
+    step "log out" {
+      post "${url}/logout" {
+        header "Authorization" = "Bearer ${token}"
+      }
+    }
+  }
+}
+```
+
+```art
+# suite/orders/create.art
+scenario "create an order" {
+  step "create" {
+    post "${suite.url}/orders" {
+      header "Authorization" = "Bearer ${suite.token}"
+    }
+    expect status == 201
+  }
+}
+```
+
+A file named `suite.art` holds one `suite { ... }` block -- vars, `config`, and
+a [`setup` and `teardown`](#setup-and-teardown) -- for **every scenario in its
+folder and every folder below it**. Its setup runs **once per run**, before any
+scenario under it, and its teardown once, after all of them. Every scenario
+under it reads what the suite set up through one name, `suite`: its vars and
+its setup's captures, as `suite.url`, `suite.token`. `suite`'s members are a
+closed set, like [`page`](#what-a-browser-step-binds)'s, so `suite.tokn` is a
+compile error with a did-you-mean, and `suite.token` cannot collide with a name
+the scenario declares.
+
+| | |
+| --- | --- |
+| Which suites apply | Every `suite.art` from the scenario file's folder up to the working directory. An inner suite's setup runs after its parent's and reads it as `suite.<name>` too; its names join the parent's, and a name both give is `duplicate-suite-name` |
+| Cookies | A suite's api steps keep a [cookie jar](#cookies), and every scenario under it starts with a copy of it: a suite that logs in with a cookie logs every scenario in. A copy, so what one scenario's responses set reaches no other |
+| A suite's setup fails | No scenario under it runs: each is reported with its steps skipped, naming the suite. The suite's teardown still runs |
+| In the report | The setup and the teardown are each an entry in `scenarios`, named `suite setup` and `suite teardown`, with the suite file as `file` and `"kind": "suite"` |
+| Secrets | A `secret var` or a `secret` capture of a suite makes `suite` secret: a report withholds every value read through it |
+| What it may hold | A suite runs setup and teardown, not steps of its own (`suite-has-step`). A suite block belongs in a file named `suite.art` (`suite-file-name`), and a `suite.art` holds the suite and no scenario (`suite-has-scenario`) |
+
+`artemis run suite/` never runs `suite.art` as a scenario file; it runs with the
+scenarios under it. `artemis build` does not export a suite yet, and refuses a
+scenario that reads `suite`, naming it, rather than export a test with nothing
+behind the name.
+
 ### `config`
 
-**Spec decision.** `config` takes the name of a step type and settings for it.
-No setting is defined for `api` or `terminal` scenarios; the only block with keys
-today is `config browser`, which belongs to the browser step type and is
-specified with it -- see [`config browser`](#config-browser). A `config` block naming a step type that does not exist, or
-setting a key that type does not define, is a compile error.
+**Spec decision.** `config` takes a subject and settings for it. There are two:
+`config browser`, which belongs to the browser step type and is specified with
+it -- see [`config browser`](#config-browser) -- and `config http`, how the
+scenario's api steps talk:
+
+```art
+scenario "anonymous" {
+  config http { cookies = false }
+
+  step "no session" {
+    get "https://example.com/me"
+    expect status == 401
+  }
+}
+```
+
+| Setting | Value | Default |
+| --- | --- | --- |
+| `cookies` | `true` or `false` | `true`: the scenario's api steps share a [cookie jar](#cookies) |
+
+A `config` block naming a subject that does not exist, or setting a key that
+subject does not define, is a compile error.
+
+### Cookies
+
+A scenario's api steps share one cookie jar, as a browser's pages do: a cookie a
+response sets is sent on the scenario's later requests to the site that set it,
+so an API that keeps its session in a cookie is tested by logging in once.
+
+```art
+scenario "a cookie session" {
+  var url = env("API_URL")
+
+  step "log in" {
+    post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
+    expect status == 200
+    expect cookies.sid.http_only == true
+  }
+
+  step "read the profile" {
+    get "${url}/me"
+    expect status == 200
+  }
+}
+```
+
+Each scenario starts with an empty jar, and its cookies never reach another
+scenario. A step that writes its own `header "Cookie" = ...` sends exactly that
+and nothing from the jar -- a test of a forged or expired session must not be
+handed the real one -- and what its response sets is still kept for the steps
+after it. `config http { cookies = false }` keeps no jar: every request sends
+only the headers it wrote.
+
+`cookies` reads what *this* response set; what the jar holds is not a value a
+scenario can read. A [trace](#tracing-a-step) withholds every cookie's value,
+in `cookies` and in `headers["Set-Cookie"]`, as it withholds a `secret`.
 
 ---
 
@@ -294,7 +493,9 @@ step "create an order" {
 | the URL | `<verb> <expr>` | Required, and the first thing in the block. Any expression that renders to a string |
 | `header` | `header <expr> = <expr>` | Repeatable. The name is a string expression, as is the value. A repeated name keeps the last value |
 | `query` | `query <expr> = <expr>` | Repeatable. Appended to the URL's query string and escaped. A non-string value renders by the [rendering rules](#how-a-value-renders) |
-| `body` | `body = <expr>` | At most one. An object or array literal is serialised to JSON; a string is sent as it is |
+| `body` | `body = <expr>` | At most one. An object or array literal is serialised to JSON; a string is sent as it is; a [`file()`](#data-and-files) is sent as its bytes |
+| `form` | `form <expr> = <expr>` | Repeatable. A urlencoded form field, in source order |
+| `multipart` | `multipart <expr> = <expr>` | Repeatable. A `multipart/form-data` field: text, or a [`file()`](#data-and-files) sent as a file part |
 
 A verb with no block -- `get "${url}/health"` -- sends no headers of its own and
 no body, which is what you want for a health check.
@@ -330,6 +531,31 @@ A string body is still accepted, for a payload that is not JSON:
 body = "name=alice&roles=admin"
 ```
 
+A form is fields rather than a body. `form` sends them urlencoded and
+`multipart` as `multipart/form-data`, where a field may be a file:
+
+```art
+step "sign in" {
+  post "https://example.com/login" {
+    form "user" = "alice"
+    form "password" = "s3cret"
+  }
+  expect status == 200
+}
+
+step "upload an avatar" {
+  post "https://example.com/me/avatar" {
+    multipart "avatar" = file("fixtures/avatar.png")
+    multipart "caption" = "hello"
+  }
+  expect status == 201
+}
+```
+
+A request has one body, so `body`, `form` and `multipart` exclude one another:
+writing two of them is the compile error `body-conflict`. A file in a `form` is
+a step error naming `multipart`, because a urlencoded form cannot carry one.
+
 ---
 
 ## `terminal` steps
@@ -353,7 +579,7 @@ step "the tag exists" {
 | the command | `run <expr>` | Required, and the first thing in the block. The program to execute |
 | `args` | `args = [<expr>, ...]` | At most one. Each entry arrives at the command exactly as written |
 | `cwd` | `cwd = <expr>` | At most one. Relative to where artemis was run from, **not** to the scenario file |
-| `stdin` | `stdin = <expr>` | At most one. Text written to the command's standard input |
+| `stdin` | `stdin = <expr>` | At most one. Text written to the command's standard input, or a [`file()`](#data-and-files) whose bytes are |
 | `env` | `env { <NAME> = <expr>, ... }` | At most one. Variables added to the command's environment |
 
 **There is no shell.** The command is executed directly with its arguments: no
@@ -449,7 +675,7 @@ The block is **required** -- a browser step with no actions does nothing at all
 | `select` | `select "#plan" = "pro"` | Chooses an option of a `<select>`, by the option's value |
 | `press` | `press "Enter"` | Sends one key to whatever has focus |
 | `hover` | `hover ".plan-menu"` | Moves the pointer over the first match |
-| `upload` | `upload "#avatar" = "me.png"` | Attaches a file to a file input |
+| `upload` | `upload "#avatar" = file("me.png")` | Attaches a [`file()`](#data-and-files), or a list of them, to a file input. A string is a path as the browser resolves it |
 | `wait` | `wait "1s"` | Waits for a fixed duration |
 
 Three of them -- `fill`, `select` and `upload` -- take a value after an `=`; the
@@ -1033,9 +1259,10 @@ What the observation binds depends on the step's type:
 
 | Step type | Bound roots |
 | --- | --- |
-| `api` | `status`, `body`, `raw`, `headers` |
+| `api` | `status`, `body`, `raw`, `headers`, `cookies` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
 | `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
+| every step | `duration_ms` |
 
 | Root | Type | What it is |
 | --- | --- | --- |
@@ -1043,6 +1270,8 @@ What the observation binds depends on the step's type:
 | `body` | object, array or null | The response body parsed as JSON, and `null` when it was not JSON |
 | `raw` | string | The response body as unparsed text. This is what a regex reads when the body is not JSON |
 | `headers` | object | The response headers, keyed by name. Lookup is case-insensitive |
+| `cookies` | object | The cookies this response set, keyed by name. Each is `{value, domain, path, expires, secure, http_only, same_site}`; an attribute the response did not send is `null`, and `expires` is an RFC 3339 time in UTC. See [cookies](#cookies) |
+| `duration_ms` | number | How long the attempt took, in milliseconds: for an api step, from sending the request to having read the whole body; for a terminal step, the command's run; for a browser step, its actions. Bound in every step, and in no `var`'s value |
 | `exit_code` | number | The command's exit code |
 | `stdout`, `stderr` | string | The two streams, as text |
 | `page.url` | string | The page's current address |
@@ -1055,7 +1284,7 @@ message lists the roots that are in scope:
 checkout.art:31:10: "status" is not in scope in a terminal step
    31 |   expect status == 200
       |          ^^^^^^
-   hint: a terminal step binds exit_code, stdout, stderr
+   hint: a terminal step binds exit_code, stdout, stderr, duration_ms
 ```
 
 Every `var` of the scenario and every `capture` of an **earlier** step is in
@@ -1131,8 +1360,8 @@ error -- nothing knows the shape of the response until it arrives. It is an
 | `not <expr>` | The expression is false | never |
 | `and`, `or` | Both sides, or either side | never |
 
-The six type names for `is`: `string`, `number`, `boolean`, `object`, `array`,
-`null`.
+The seven type names for `is`: `string`, `number`, `boolean`, `object`, `array`,
+`null`, and `file` -- the type of a value [`file()`](#data-and-files) makes.
 
 ```art
 expect status == 200
@@ -1170,11 +1399,15 @@ Parentheses group: `expect (a == 1 or a == 2) and b exists`.
 | `env("NAME")` | The environment variable `NAME`. A variable that is not set, that is empty, or that holds only space characters has no value, and a call with no default is an error |
 | `env("NAME", "default")` | The same, with `default` when `NAME` has no value. `env("FLAG", "")` is how a scenario asks for an empty value |
 | `match(<text>, /re/)` | The text the regex matched: capturing group 1 when the pattern has one, the whole match when it does not |
+| `uuid()`, `now()`, `random_int()`, `random_string()` | A value the run makes up: [test data](#making-and-converting-values) |
+| `base64()`, `base64_decode()`, `url_encode()`, `sha256()`, `hmac_sha256()`, `jwt_claims()` | An encoding, a hash or a token's claims: [test data](#making-and-converting-values) |
+| `to_json()`, `from_json()`, `len()`, `number()`, `string()` | A value turned into another: [test data](#making-and-converting-values) |
 | `text()`, `value()`, `attr()`, `count()`, `visible()` | What an element on the page says -- [in a `browser` step only](#what-a-browser-step-binds) |
 
-`env()` and `match()` are callable in every scope, including a `var`'s value.
-The five element functions are callable in a `browser` step and nowhere else:
-calling one anywhere else is a compile error naming what is in scope there.
+`env()`, `match()` and the value builtins are callable in every scope,
+including a `var`'s value. The five element functions are callable in a
+`browser` step and nowhere else: calling one anywhere else is a compile error
+naming what is in scope there.
 
 `env()` is an ordinary expression and is legal wherever an expression is -- in a
 `var`, in a URL, in a header, in a `body`, in an `expect`.
@@ -1256,6 +1489,161 @@ answering false -- the text was there and the question was asked.
 The first argument is the text to search and the second is the pattern. The
 pattern may be a regex literal or a string, which is the same rule `matches`
 follows, so a pattern can live in a `var`.
+
+### Making and converting values
+
+```art
+scenario "sign up" {
+  var url   = env("API_URL")
+  var id    = uuid()
+  var email = "user-${random_string(8)}@example.test"
+  var basic = base64("admin:secret")
+
+  step "create the user" {
+    post "${url}/users" {
+      header "Authorization" = "Basic ${basic}"
+      header "X-Signature" = hmac_sha256(env("SIGNING_KEY"), to_json({"id": id}))
+      body = {"id": id, "email": email, "created": now()}
+    }
+    expect status == 201
+    expect len(body.roles) > 0
+    expect jwt_claims(body.token).sub == id
+  }
+}
+```
+
+| Builtin | Returns |
+| --- | --- |
+| `uuid()` | A random version 4 UUID, as a string |
+| `now()`, `now("<format>")` | The time in UTC. `"rfc3339"`, the default, is `2026-10-26T09:30:15Z`; `"date"` is `2026-10-26`; `"unix"` and `"unix_ms"` are seconds and milliseconds since the epoch, as numbers |
+| `random_int(min, max)` | A whole number from `min` to `max`, both included |
+| `random_string(n)` | `n` characters of `a`-`z` and `0`-`9`, `n` from 1 to 256 |
+| `base64(text)` | Standard base64, padded |
+| `base64_decode(text)` | The text base64 holds. Standard and URL-safe, padded or not, are all read |
+| `url_encode(text)` | Query escaping: `a b&c` is `a+b%26c` |
+| `sha256(text)` | The SHA-256 of the text's UTF-8 bytes, in lower-case hex |
+| `hmac_sha256(key, text)` | The HMAC-SHA256 of the text under the key, in lower-case hex |
+| `jwt_claims(token)` | A JWT's payload as an object, **without** checking its signature: a test asserts what a token says, and checking who signed it is the service's job |
+| `to_json(value)` | The value as compact JSON, keys in order |
+| `from_json(text)` | The value JSON text holds |
+| `len(value)` | The characters in a string, the items in an array or the keys of an object |
+| `number(value)` | A number, or a string that reads as one |
+| `string(value)` | The text the value has in an interpolation: `string(x)` is `"${x}"` |
+
+A literal argument a builtin cannot use is a compile error: `now("iso")` with
+a did-you-mean, `random_int(10, 1)`, `random_int(1.5, 2)`, `random_string(0)`.
+The same mistake arriving through a `var`, and every argument a builtin cannot
+answer for -- `number("abc")`, `len(1)`, `base64_decode("%%")`, a token that is
+not a JWT -- is an errored assertion with the reason.
+
+A value is made where it is written and then kept. A `var` is evaluated once,
+so `var id = uuid()` is one UUID for the whole scenario; a step's request is
+evaluated once, so a [`retry`](#retry) resends the same `random_string()`; an
+`expect` is evaluated on every attempt.
+
+**Random values are reproducible.** Each scenario draws from its own generator,
+seeded from the run's seed, the scenario's name and its file's path within what
+was run -- not from the order scenarios run in, so `--jobs 8` draws what
+`--jobs 1` does, and `artemis run suite` and `artemis run .` inside `suite/`
+draw alike. A run that
+drew a random value and failed prints its seed, and `artemis run --seed <n>`
+draws the same values again. The [JSON report](#the-json-report) carries it as
+`seed`. `now()` reads the clock and is not reproducible; assert on its shape.
+
+### Data and files
+
+```art
+scenario "import the users" {
+  var url   = env("API_URL")
+  var users = json("data/users.json")
+  var plans = csv("data/plans.csv")
+
+  step "upload the sheet" {
+    post "${url}/imports" {
+      multipart "sheet" = file("data/users.csv")
+    }
+    expect status == 202
+    expect body.count == len(users)
+  }
+
+  step "seed the database" {
+    run "psql" {
+      args  = ["-v", "ON_ERROR_STOP=1"]
+      stdin = file("fixtures/seed.sql")
+    }
+    expect exit_code == 0
+  }
+}
+```
+
+| Builtin | Returns |
+| --- | --- |
+| `json(path)` | The value a JSON file holds |
+| `csv(path)` | A CSV file as an array of objects: the first row names the columns, each later row is an object of those names to its cells, and every cell is a string |
+| `file(path)` | The file, as a value of type `file` |
+
+A path is relative to **the file it is written in**: `json("data/users.json")`
+in `suite/users/login.art` reads `suite/users/data/users.json`, and a `file()`
+inside a collection's request is found next to the collection, not next to the
+scenario that used it. An absolute path is itself.
+
+A literal path is read **when the file compiles**, because the data is in the
+same repository as the scenario: a path that names nothing is the compile error
+`data-file-missing`, a JSON file that does not parse is `data-not-json` with its
+line and column, and a CSV file with a row of the wrong width or a column named
+twice is `data-not-csv`. A path built at run time -- `json(env("DATA"))` -- is
+read when the step reaches it, and the same faults are errored assertions.
+
+A `file` is a path, not its contents. **Where a step sends content, a file sends
+its bytes; everywhere else it is its absolute path:**
+
+| Written as | What is sent |
+| --- | --- |
+| `body = file(p)` | The file's bytes, labelled with a `Content-Type` from its extension unless a `header` sets one |
+| `multipart "k" = file(p)` | A file part, with the file's name and a type from its extension |
+| `stdin = file(p)` | The file's bytes, as the command's standard input |
+| `upload "#x" = file(p)`, `[file(a), file(b)]` | The file, or the files, attached to the input |
+| `base64(file(p))`, `sha256(file(p))`, `hmac_sha256(k, file(p))` | Computed over the file's bytes |
+| `args = ["-f", file(p)]`, `"${file(p)}"` | The absolute path |
+
+A file cannot go inside a JSON body -- `body = {"logo": file(p)}` is a step error
+that names the two ways to send one: as a `multipart` part, or its contents as
+`base64(file(p))`. `is file` asks whether a value is one, and two files are
+equal when they are the same path. A trace records a file it sent by its path
+and size, never its contents.
+
+### Data-driven scenarios
+
+```art
+scenario "login as ${user.role}" for user in json("data/users.json") {
+  var url = env("API_URL")
+
+  step "log in" {
+    post "${url}/login" {
+      body = {"email": user.email, "password": user.password}
+    }
+    expect status == user.expect_status
+  }
+}
+```
+
+A `for` clause makes a scenario **one scenario per row** of its data. Each row's
+scenario opens with `var user = <that row>`, so the steps read it like any var,
+and runs, passes and fails on its own: two rows are two lines on the console and
+two entries in the report, each saying which [`row`](#the-json-report) it is.
+
+The rows are made when the file compiles, so they have to be known before the
+run: an array written out, or `json()` or `csv()` of a path written out,
+optionally followed by a member or an index (`json("data.json").admins`).
+`artemis expand` prints every row's scenario, and the checker checks each one --
+a mistake every row shares is reported once.
+
+| | |
+| --- | --- |
+| The name | May interpolate the row -- `"login as ${user.role}"` -- and nothing else: not a var, and not a call, so a name is something the report can repeat. A name that does not interpolate gets the row's number: `"smoke [1]"`, `"smoke [2]"`. Two rows that name their scenario alike are the compile error `duplicate-row-name` |
+| The rows | An array. Data that is not one is `for-source-not-array`; an empty one is `for-no-rows`, because a run of nothing would pass; a source known only at run time -- `json(env("DATA"))` -- is `for-source-not-static` |
+| `for secret` | `for secret user in ...` makes each row's var a [`secret`](#secret) one, for rows that hold credentials |
+| Types | A JSON row keeps its types. A CSV row's every cell is a string: compare with a string, or convert with [`number()`](#making-and-converting-values) |
 
 ### How a value renders
 
@@ -1485,6 +1873,9 @@ setup  teardown  ai
 | --- | --- |
 | `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
 | `use` | Expands a collection's request in place: `use auth.login { ... }` |
+| `tags` | A scenario's or a suite's tags: `tags = ["smoke"]` -- see [tags](#tags). Positional, not reserved |
+| `setup`, `teardown` | Steps that run before a scenario's own, and after them whatever happened -- see [setup and teardown](#setup-and-teardown) |
+| `for`, `in` | Make a scenario one per row of data: `scenario "..." for user in json("users.json") { ... }` -- see [data-driven scenarios](#data-driven-scenarios) |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
 implemented** and will not parse. A CI gate's most valuable property is
@@ -1752,12 +2143,17 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `schema_version` | run | `1`. It goes up when a key is removed or its meaning changes; a new key does not change it |
 | `started_at` | run | When the run began, RFC 3339 |
 | `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. Not nanoseconds, and not the seconds the JUnit report uses |
-| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. Nothing produces `skip` today; it is in the vocabulary |
+| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. A step is skipped when a [setup](#setup-and-teardown) step before it did not pass, or when it is a teardown step reading a capture no step made; its `error` says which |
+| `phase` | step | `"setup"` or `"teardown"` for a step of a scenario's [setup or teardown](#setup-and-teardown) block. **Omitted** on the scenario's own steps |
 | `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary |
 | `error` | run | Why the run could not proceed at all, and `""` for every run that reached its scenarios. An environment error is the one thing that sets it |
+| `seed` | run | The seed the run's `uuid()`, `random_int()` and `random_string()` drew from, and absent when no scenario called one. Passed back as `artemis run --seed <n>`, it draws the same values |
 | `counts` | run | Totals per level, each a `{total, passed, failed, errored, skipped}` tally, so nobody walks the tree to say "2 of 5 assertions failed" |
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
+| `kind` | scenario | `"suite"` for a [suite's](#suites-suiteart) setup or teardown. **Omitted** on a scenario |
+| `tags` | scenario | The scenario's [tags](#tags), its own and its suites'. **Omitted** when it has none |
+| `row` | scenario | For a [data-driven scenario](#data-driven-scenarios), the row it was made from: `{"source": "users.json", "index": 0}`, where `source` is the file its rows were read from, or `"rows"` for an array written out. **Absent** on every other scenario |
 | `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
 | `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |
 | `error` | scenario, step, assertion, failure | Why it could not run, or `""`. A scenario's error is a file that would not compile, and such a scenario has no steps |
@@ -1844,8 +2240,8 @@ adding one: after expansion the language is unchanged.
 | | |
 | --- | --- |
 | **`db` steps** | Designed, specified with the database step type |
-| **Control flow** | `if`, `else`, loops, data-driven tables, `parallel`, `group`. Reserved words, not features |
-| **Functions, fixtures** | `fn`, `return`, `let`, `setup`, `teardown`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction" |
+| **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
+| **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |

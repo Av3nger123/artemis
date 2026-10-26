@@ -195,6 +195,39 @@ const (
 	DropAfterExpect          Code = "drop-after-expect"
 	SecretArgument           Code = "secret-argument"
 	RootCapture              Code = "root-capture"
+
+	// A json(), csv() or file() whose literal path names nothing, or names a
+	// data file that does not parse. Settled when the file compiles, because
+	// the data is in the scenario's own repository.
+	DataFileMissing Code = "data-file-missing"
+	DataNotJSON     Code = "data-not-json"
+	DataNotCSV      Code = "data-not-csv"
+
+	// BodyConflict is a request with a body two ways: `body` and `form`, or
+	// `form` and `multipart`.
+	BodyConflict Code = "body-conflict"
+
+	// A data-driven scenario's for clause, and the rows it makes.
+	ForSourceNotStatic Code = "for-source-not-static"
+	ForSourceNotArray  Code = "for-source-not-array"
+	ForNoRows          Code = "for-no-rows"
+	DuplicateRowName   Code = "duplicate-row-name"
+	BadRowName         Code = "bad-row-name"
+
+	// setup and teardown, held to where they run.
+	SetupAfterStep     Code = "setup-after-step"
+	TeardownBeforeStep Code = "teardown-before-step"
+	DuplicatePhase     Code = "duplicate-phase"
+
+	// suite.art: a folder's suite, and the rules it is under.
+	SuiteFileName      Code = "suite-file-name"
+	SuiteHasScenario   Code = "suite-has-scenario"
+	SuiteHasStep       Code = "suite-has-step"
+	DuplicateSuiteName Code = "duplicate-suite-name"
+
+	// A scenario's tags, which a run selects by.
+	BadTag        Code = "bad-tag"
+	DuplicateTags Code = "duplicate-tags"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -254,6 +287,24 @@ var registry = []CodeInfo{
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
 	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
 	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
+	{DataFileMissing, Error, "json(), csv() or file() names a path where there is no file"},
+	{DataNotJSON, Error, "json() names a file that is not JSON"},
+	{DataNotCSV, Error, "csv() names a file that is not CSV"},
+	{BodyConflict, Error, "a request says what its body is more than one way"},
+	{ForSourceNotStatic, Error, "a for clause reads rows that are not known before the run"},
+	{ForSourceNotArray, Error, "a for clause's data is not an array of rows"},
+	{ForNoRows, Error, "a for clause's data has no rows"},
+	{DuplicateRowName, Error, "two rows of a data-driven scenario name it alike"},
+	{BadRowName, Error, "a data-driven scenario's name reads something other than its row"},
+	{SetupAfterStep, Error, "a setup block is below a step it would run before"},
+	{TeardownBeforeStep, Error, "a teardown block is above a step it would run after"},
+	{DuplicatePhase, Error, "a scenario has two setup blocks or two teardown blocks"},
+	{SuiteFileName, Error, "a suite block is in a file not named suite.art"},
+	{SuiteHasScenario, Error, "a suite file holds a scenario, or a second suite block"},
+	{SuiteHasStep, Error, "a suite block holds a step or a use outside setup and teardown"},
+	{DuplicateSuiteName, Error, "a suite exports a name a suite above it already exports"},
+	{BadTag, Error, "a tag is not a lower-case word written out as a string, or is listed twice"},
+	{DuplicateTags, Error, "a scenario or a suite has more than one tags list"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

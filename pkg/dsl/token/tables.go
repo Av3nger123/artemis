@@ -27,7 +27,7 @@ var (
 	BrowserActions = []string{"goto", "click", "fill", "select", "press", "hover", "upload", "wait"}
 
 	// TypeNames are the right-hand side of `is`.
-	TypeNames = []string{"string", "number", "boolean", "object", "array", "null"}
+	TypeNames = []string{"string", "number", "boolean", "object", "array", "null", "file"}
 
 	// WordOperators are the operators spelled as words. `and`, `or` and `not`
 	// are logical; `contains` and `matches` are binary comparisons alongside
@@ -41,13 +41,13 @@ var (
 	// Blocks are the top-level declarations of a file -- `import`,
 	// `collection` and `scenario` -- and the declarations a scenario body
 	// holds, `use` among them.
-	Blocks = []string{"import", "collection", "scenario", "config", "var", "step", "use"}
+	Blocks = []string{"import", "collection", "scenario", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
 
 	// StepStatements are the statements legal in a step after its action.
 	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}
 
 	// RequestFields are the fields of an api step's action block.
-	RequestFields = []string{"header", "query", "body"}
+	RequestFields = []string{"header", "query", "body", "form", "multipart"}
 
 	// RunFields are the fields of a `run` block.
 	RunFields = []string{"args", "cwd", "stdin", "env"}
@@ -73,17 +73,16 @@ var (
 	// `drop expects` its expects, `drop captures` its captures.
 	DropTargets = []string{"expects", "captures"}
 
-	// ConfigBlocks are the subjects of a `config` declaration. Only `browser`
-	// has settings today.
-	ConfigBlocks = []string{"browser"}
+	// ConfigBlocks are the subjects of a `config` declaration: the browser a
+	// scenario opens, and how its api steps talk HTTP.
+	ConfigBlocks = []string{"browser", "http"}
 
 	// BrowserConfigFields are what `config browser` accepts. Deliberately tiny.
 	BrowserConfigFields = []string{"headless", "viewport"}
 
-	// Builtins are the functions callable in any expression scope. env() and
-	// match() are the two that are everywhere; the rest are browser-scope
-	// element functions and the checker rejects them elsewhere.
-	Builtins = []string{"env", "match", "text", "value", "attr", "count", "visible"}
+	// HTTPConfigFields are what `config http` accepts: whether the scenario's
+	// api steps keep a cookie jar.
+	HTTPConfigFields = []string{"cookies"}
 
 	// Reserved words are a parse error wherever a name is expected, so that a
 	// later tier can add control flow, functions or agentic assertions without
@@ -104,7 +103,6 @@ var (
 	browserActions = set(BrowserActions)
 	typeNames      = set(TypeNames)
 	wordOperators  = set(WordOperators)
-	builtins       = set(Builtins)
 	reserved       = set(Reserved)
 	useLines       = set(UseLines)
 	dropTargets    = set(DropTargets)
@@ -159,9 +157,6 @@ func IsUseLine(word string) bool { return useLines[word] }
 
 // IsDropTarget reports whether word may follow `drop` in a use block.
 func IsDropTarget(word string) bool { return dropTargets[word] }
-
-// IsBuiltin reports whether word names a callable builtin.
-func IsBuiltin(word string) bool { return builtins[word] }
 
 // IsReserved reports whether word is reserved for a later tier of the language.
 func IsReserved(word string) bool { return reserved[word] }

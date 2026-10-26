@@ -166,7 +166,7 @@ func TestJSRetryWrapsTheWholeStep(t *testing.T) {
 		t.Errorf("the module does not open the retry with %q:\n%s", want, module)
 	}
 	for _, want := range []string{
-		"    resp = await fetch(",
+		"    resp = await art_fetch(",
 		"    expect(status === 200, 'status == 200').toBe(true);",
 		"    id = raw;",
 		"  });",

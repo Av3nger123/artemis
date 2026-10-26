@@ -88,6 +88,11 @@ type Step struct {
 	// Captures are the step's `capture` statements in source order.
 	Captures []*Capture
 
+	// Needs are the captures of earlier steps this step reads, in the order
+	// it reads them. A teardown step whose needs are not all in scope did not
+	// have the thing it would clean up, and is skipped.
+	Needs []string
+
 	// secretNames are the bindings declared `secret` and in scope for this
 	// step: the scenario's secret vars, plus the secret captures of the steps
 	// above this one. ART-54.

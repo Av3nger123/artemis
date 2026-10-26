@@ -47,7 +47,16 @@ func Children(n Node) []Node {
 	case *File:
 		return decls(n.Scenarios)
 	case *Scenario:
+		if n.For != nil {
+			return append([]Node{n.For}, decls(n.Body)...)
+		}
 		return decls(n.Body)
+	case *ForClause:
+		return nodes(n.Source)
+	case *PhaseDecl:
+		return decls(n.Body)
+	case *TagsDecl:
+		return nodes(n.Value)
 	case *ConfigDecl:
 		return nodes(n.Block)
 	case *VarDecl:

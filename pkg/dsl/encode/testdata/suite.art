@@ -1,0 +1,16 @@
+suite {
+  var url = "https://example.test"
+
+  setup {
+    step "log in" {
+      post "${url}/login"
+      capture token = body.token
+    }
+  }
+
+  teardown {
+    step "log out" {
+      post "${url}/logout"
+    }
+  }
+}

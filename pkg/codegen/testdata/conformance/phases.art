@@ -1,0 +1,59 @@
+# setup and teardown, run by all three backends: setup first, teardown last,
+# and a teardown that fails fails the scenario even when its steps passed. A
+# teardown step skipped for a capture no step made is not here: it only follows
+# a step that errored, which fails the scenario under every backend anyway, so
+# an outcome cannot tell the skip apart -- pkg/cli's phase tests pin it.
+
+# conformance: pass
+scenario "setup and teardown around the steps" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  setup {
+    step "log in" {
+      post "${base}/login"
+      timeout = "10s"
+
+      expect status == 200
+      capture sid = cookies.sid.value
+    }
+  }
+
+  step "use the session" {
+    get "${base}/session"
+    timeout = "10s"
+
+    expect raw == "sid=${sid}"
+  }
+
+  teardown {
+    step "check out" {
+      post "${base}/echo" {
+        form "sid" = sid
+      }
+      timeout = "10s"
+
+      expect body.form.sid == sid
+    }
+  }
+}
+
+# conformance: fail
+scenario "a failing teardown fails the scenario" {
+  var base = env("ARTEMIS_BASE_URL")
+
+  step "pass" {
+    get "${base}/echo"
+    timeout = "10s"
+
+    expect status == 200
+  }
+
+  teardown {
+    step "fail" {
+      get "${base}/echo"
+      timeout = "10s"
+
+      expect status == 404
+    }
+  }
+}

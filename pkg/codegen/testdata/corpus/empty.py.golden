@@ -12,4 +12,8 @@
 #   - stdout and stderr are not truncated; artemis caps them for its report;
 #   - a variable with no value raises at the point of use. `artemis run`
 #     reports all of them before the first step; an exported module has no
-#     such moment.
+#     such moment;
+#   - a file json(), csv() or file() names is found from the directory the
+#     test runs in, by the .art file's path as it was given to `artemis
+#     build`; a file sent as a body has no Content-Type the step did not write;
+#   - teardown stops at its first failing step, where artemis runs every one.

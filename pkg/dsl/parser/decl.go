@@ -36,6 +36,9 @@ func (p *parser) parseFile() *ast.File {
 		case p.atWord("scenario"):
 			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseScenario())
+		case p.atWord("suite") && p.peekKindAt(1, token.LBrace):
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseSuite())
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected \"import\", \"collection\" or \"scenario\", found %s", describe(p.peek())).
@@ -60,19 +63,95 @@ func (p *parser) parseFile() *ast.File {
 func (p *parser) parseScenario() ast.Decl {
 	s := &ast.Scenario{Keyword: p.next()}
 
-	name, ok := p.expectIdentOrString("a scenario name in quotes")
-	if !ok {
-		return p.badFrom(s.Keyword)
+	// A data-driven scenario's name may interpolate its row, so an
+	// interpolated string is a name here -- but only with a for clause, which
+	// is checked once the clause has had its chance to appear.
+	templated := p.at(token.StringStart)
+	if templated {
+		s.Name = template(p.parseInterp().Tokens(nil))
+	} else {
+		name, ok := p.expectIdentOrString("a scenario name in quotes")
+		if !ok {
+			return p.badFrom(s.Keyword)
+		}
+		s.Name = name
 	}
-	s.Name = name
+
+	if p.atWord("for") {
+		s.For = p.parseFor()
+	}
+	if templated && s.For == nil {
+		p.errorf(s.Name, diag.UnexpectedToken,
+			"a scenario name can interpolate only a row of data, and this scenario has no for clause").
+			Hintf(`scenario "login as ${user.role}" for user in json("users.json") { ... }`)
+	}
 
 	open, ok := p.expect(token.LBrace, "\"{\" to open the scenario")
 	if !ok {
-		return p.badFrom(s.Keyword, s.Name)
+		consumed := []token.Token{s.Keyword, s.Name}
+		if s.For != nil {
+			consumed = s.For.Tokens(consumed)
+		}
+		return p.badFrom(consumed...)
 	}
 	s.LBrace = open
 
 	s.Body, s.RBrace = p.parseScenarioBody(open)
+	return s
+}
+
+// parseFor is `for [secret] <name> in <expr>`, the clause that makes a scenario
+// one per row of data. What the expression may be -- a value known before the
+// run -- is pkg/dsl/expand's to judge, where the rows are made.
+func (p *parser) parseFor() *ast.ForClause {
+	f := &ast.ForClause{Keyword: p.next()}
+	if p.atWord("secret") {
+		f.Secret = p.next()
+	}
+	if !p.at(token.Ident) {
+		p.errorf(p.peek(), diag.UnexpectedToken,
+			"expected the name each row is bound to after \"for\", found %s", describe(p.peek())).
+			Hintf(`for user in json("users.json")`)
+		return f
+	}
+	f.Var = p.next()
+	if !p.atWord("in") {
+		p.errorf(p.peek(), diag.UnexpectedToken,
+			"expected \"in\" after \"for %s\", found %s", f.Var.Value, describe(p.peek())).
+			Hintf(`for %s in json("rows.json")`, f.Var.Value)
+		return f
+	}
+	f.In = p.next()
+	f.Source = p.parseExpr()
+	return f
+}
+
+// template is an interpolated scenario name as one String token: the source
+// exactly as written, delimiters and all, with the trivia either side of it
+// kept on the token rather than in its text. Its Value is the template between
+// the quotes, which pkg/dsl/expand parses once per row.
+func template(toks []token.Token) token.Token {
+	t := fuse(toks)
+	last := toks[len(toks)-1]
+	var trail strings.Builder
+	token.WriteTrivia(&trail, last.Trailing)
+	t.Text = strings.TrimSuffix(t.Text, trail.String())
+	t.Trailing = last.Trailing
+	t.Kind, t.Code, t.Message = token.String, "", ""
+	if len(t.Text) >= 2 {
+		t.Value = t.Text[1 : len(t.Text)-1]
+	}
+	return t
+}
+
+// parseSuite is `suite { ... }`: a folder's setup, teardown and vars, shared by
+// every scenario below it. It is a Scenario whose keyword is `suite` and which
+// has no name -- it is named by its folder -- so it is expanded, checked and
+// lowered by everything a scenario is, setup and teardown included.
+func (p *parser) parseSuite() ast.Decl {
+	s := &ast.Scenario{Keyword: p.next()}
+	s.LBrace = p.next() // the caller saw it
+	s.Body, s.RBrace = p.parseScenarioBody(s.LBrace)
 	return s
 }
 
@@ -106,6 +185,12 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 		return p.parseStep()
 	case p.atWord("use"):
 		return p.parseUse()
+	case p.atWord("setup"), p.atWord("teardown"):
+		return p.parsePhase()
+	case p.atWord("tags") && p.peekKindAt(1, token.Assign):
+		d := &ast.TagsDecl{Keyword: p.next(), Assign: p.next()}
+		d.Value = p.parseExpr()
+		return d
 	}
 
 	// `secret` before a word it cannot modify gets its own message. Falling
@@ -120,9 +205,43 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 	}
 
 	p.errorf(p.peek(), diag.UnexpectedToken,
-		"expected \"config\", \"var\", \"step\" or \"use\", found %s", describe(p.peek())).
-		DidYouMean(p.peek().Value, []string{"config", "var", "step", "use"})
+		"expected \"config\", \"var\", \"step\", \"use\", \"setup\" or \"teardown\", found %s", describe(p.peek())).
+		DidYouMean(p.peek().Value, []string{"config", "var", "step", "use", "setup", "teardown"})
 	return p.recoverTo()
+}
+
+// parsePhase is `setup { ... }` or `teardown { ... }`: the steps and use lines
+// that run before the scenario's own steps, or after them.
+func (p *parser) parsePhase() ast.Decl {
+	d := &ast.PhaseDecl{Keyword: p.next()}
+	open, ok := p.expect(token.LBrace, `"{" to open `+d.Keyword.Value)
+	if !ok {
+		return p.badFrom(d.Keyword)
+	}
+	d.LBrace = open
+	for !p.at(token.RBrace) && !p.at(token.EOF) {
+		before := p.i
+		switch {
+		case p.atWord("step"):
+			d.Body = append(d.Body, p.parseStep())
+		case p.atWord("use"):
+			d.Body = append(d.Body, p.parseUse())
+		default:
+			p.errorf(p.peek(), diag.UnexpectedToken,
+				"expected \"step\" or \"use\" in %s, found %s", d.Keyword.Value, describe(p.peek())).
+				Hintf("a %s block holds steps; a var belongs to the scenario", d.Keyword.Value)
+			d.Body = append(d.Body, p.recoverTo())
+		}
+		if p.i == before {
+			d.Body = append(d.Body, &ast.Bad{Toks: []token.Token{p.consumeRaw()}})
+		}
+	}
+	if p.at(token.EOF) {
+		p.unclosed(open, d.Keyword.Value)
+		return d
+	}
+	d.RBrace = p.next()
+	return d
 }
 
 // parseConfig is `config <ident> { Setting... }`.

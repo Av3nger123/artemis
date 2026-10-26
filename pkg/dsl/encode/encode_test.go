@@ -26,6 +26,7 @@ var goldenFixtures = map[string]string{
 	"print-comments.json":     "../print/testdata/comments.art",
 	"parser-recover.json":     "../parser/testdata/recover.art",
 	"parser-collections.json": "../parser/testdata/collections.art",
+	"suite.json":              "testdata/suite.art",
 }
 
 // TestEncodingGoldens pins the encoding of the three fixtures.

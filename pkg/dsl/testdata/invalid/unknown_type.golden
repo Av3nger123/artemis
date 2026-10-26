@@ -7,7 +7,7 @@ unknown_type.art:11:31: unknown type name "numbr"
 unknown_type.art:12:31: unknown type name "int"
    12 |     expect body.data.total is int
       |                               ^^^
-   hint: a type is one of: string, number, boolean, object, array, null
+   hint: a type is one of: string, number, boolean, object, array, null, file
 
 === codes
 unknown-type	error	11:31-11:36	suggest: "number"

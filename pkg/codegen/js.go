@@ -51,6 +51,9 @@ func (JS) Generate(tree *ast.File) ([]GeneratedFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := refuseSuites(tree, scenarios); err != nil {
+		return nil, err
+	}
 
 	source := SourceName(tree)
 	if source == "" {
@@ -98,6 +101,13 @@ type jsFile struct {
 	// decides whether a step gets a blank line above it. An arrow function
 	// followed by a blank line reads as a mistake.
 	wrote bool
+
+	// nest is how far inside a try, a finally and a teardown step's guard the
+	// lines being written are, added to every line's own level.
+	nest int
+
+	// phase is "setup" or "teardown" while that block's steps are emitted.
+	phase string
 }
 
 // use records that a helper is needed and returns its JavaScript name, so a call
@@ -236,12 +246,19 @@ func jsHeader(source string) string {
 		"//     such moment;\n" +
 		"//   - vite owns two environment variables, so `env(\"BASE_URL\")` reads vite's\n" +
 		"//     own base path here and `env(\"NODE_ENV\")` reads the mode vitest ran in.\n" +
-		"//     Name yours something else.\n"
+		"//     Name yours something else;\n" +
+		"//   - a scenario's cookies are kept by name: two cookies of one name for two\n" +
+		"//     paths keep the later one, where artemis keeps both, and a redirect\n" +
+		"//     fetch follows does not send or keep them;\n" +
+		"//   - a file json(), csv() or file() names is found from the directory the\n" +
+		"//     test runs in, by the .art file's path as it was given to `artemis\n" +
+		"//     build`; a file sent as a body has no Content-Type the step did not write;\n" +
+		"//   - teardown stops at its first failing step, where artemis runs every one.\n"
 }
 
 // hasBrowserStep reports whether the scenario holds a step that needs a page.
 func hasBrowserStep(sc *lower.Scenario) bool {
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		if st.Type == browserKey {
 			return true
 		}
@@ -296,12 +313,59 @@ func (f *jsFile) scenario(sc *lower.Scenario) error {
 		}
 		f.line(1, "const page = "+open+";")
 	}
-	f.wrote = len(declared) > 0 || needsPage
-
-	for _, st := range sc.Steps {
-		if err := f.emitStep(st); err != nil {
+	session := hasAPIStep(sc)
+	if session {
+		jar, err := f.jar(sc)
+		if err != nil {
 			return fmt.Errorf("scenario %q: %w", sc.Name, err)
 		}
+		f.line(1, "const jar = "+jar+";")
+	}
+	f.wrote = len(declared) > 0 || needsPage || session
+
+	// With a teardown, setup and the scenario's own steps go in a try and
+	// teardown in its finally, as in the Python export.
+	teardown := len(sc.Teardown) > 0
+	if teardown {
+		f.line(1, "try {")
+		f.nest++
+		f.wrote = false
+	}
+	if err := f.emitSteps(sc.Setup, "setup"); err != nil {
+		return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	}
+	if err := f.emitSteps(sc.Steps, ""); err != nil {
+		return fmt.Errorf("scenario %q: %w", sc.Name, err)
+	}
+	if teardown {
+		f.nest--
+		f.line(1, "} finally {")
+		f.nest++
+		f.wrote = false
+		for _, st := range sc.Teardown {
+			if len(st.Needs) > 0 {
+				conds := make([]string, len(st.Needs))
+				for i, n := range st.Needs {
+					conds[i] = jsLocal(n) + " !== undefined"
+				}
+				if f.wrote {
+					f.out.WriteString("\n")
+				}
+				f.line(1, "if ("+strings.Join(conds, " && ")+") {")
+				f.nest++
+				f.wrote = false
+			}
+			if err := f.emitSteps([]*lower.Step{st}, "teardown"); err != nil {
+				return fmt.Errorf("scenario %q: %w", sc.Name, err)
+			}
+			if len(st.Needs) > 0 {
+				f.nest--
+				f.line(1, "}")
+			}
+		}
+		f.nest--
+		f.line(1, "}")
+		f.wrote = true
 	}
 	if !f.wrote {
 		// A scenario with no bindings and no steps is a test with an empty body,
@@ -335,6 +399,26 @@ func (f *jsFile) trimLast() {
 // The order is fixed -- vars and captures in source order, then the step types
 // in check.StepTypes()' order -- so the declaration line is a function of the
 // scenario and not of a map walk.
+// jar is what a scenario's requests keep their cookies in: a jar, or null for a
+// scenario that wrote `config http { cookies = false }`.
+func (f *jsFile) jar(sc *lower.Scenario) (string, error) {
+	cookies := httpCookies(sc)
+	if cookies == nil {
+		return f.use(jsHelperJar) + "()", nil
+	}
+	if lit, ok := cookies.(*ast.Literal); ok && lit.Kind() == token.Bool {
+		if lit.Tok.Value == "true" {
+			return f.use(jsHelperJar) + "()", nil
+		}
+		return "null", nil
+	}
+	src, err := f.expr(cookies, jsPrecOr)
+	if err != nil {
+		return "", fmt.Errorf("config http cookies: %w", err)
+	}
+	return "(" + src.src + ") ? " + f.use(jsHelperJar) + "() : null", nil
+}
+
 func declarations(sc *lower.Scenario) []string {
 	var names []string
 	seen := map[string]bool{}
@@ -349,15 +433,19 @@ func declarations(sc *lower.Scenario) []string {
 	for _, v := range sc.Vars {
 		add(jsLocal(v.Name))
 	}
-	for _, st := range sc.Steps {
+	for _, st := range allSteps(sc) {
 		for _, c := range st.Captures {
 			add(jsLocal(c.Name))
 		}
 	}
 
 	used := map[string]bool{}
-	for _, st := range sc.Steps {
+	read := map[string]bool{}
+	for _, st := range allSteps(sc) {
 		used[st.Type] = true
+		for _, root := range []string{"cookies", "duration_ms"} {
+			read[root] = read[root] || mentions(st, root)
+		}
 	}
 	for _, t := range check.StepTypes() {
 		key, ok := lower.TypeKey(t)
@@ -367,9 +455,18 @@ func declarations(sc *lower.Scenario) []string {
 			continue
 		}
 		for _, root := range jsRootList[key] {
+			// cookies and duration_ms are bound only by a step that reads
+			// one, so they are declared only for a scenario that does.
+			if (root == "cookies" || root == "duration_ms") && !read[root] {
+				continue
+			}
 			add(root)
 		}
 		add(jsStepLocal(key))
+	}
+	if read["duration_ms"] {
+		add("duration_ms")
+		add("started")
 	}
 	return names
 }
@@ -445,7 +542,11 @@ func (f *jsFile) emitStep(st *lower.Step) error {
 		f.out.WriteString("\n")
 	}
 	f.wrote = true
-	f.line(1, "// step "+jsQuoteComment(st.Name)+", line "+strconv.Itoa(st.Line))
+	label := "// step "
+	if f.phase != "" {
+		label = "// " + f.phase + " step "
+	}
+	f.line(1, label+jsQuoteComment(st.Name)+", line "+strconv.Itoa(st.Line))
 
 	indent := 1
 	if retried(st) {
@@ -468,6 +569,18 @@ func (f *jsFile) emitStep(st *lower.Step) error {
 	}
 	if retried(st) {
 		f.line(1, "});")
+	}
+	return nil
+}
+
+// emitSteps emits steps of one block, each comment naming the block.
+func (f *jsFile) emitSteps(steps []*lower.Step, phase string) error {
+	f.phase = phase
+	defer func() { f.phase = "" }()
+	for _, st := range steps {
+		if err := f.emitStep(st); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -545,12 +658,33 @@ func (f *jsFile) request(st *lower.Step, indent int) error {
 	if r.Body != nil {
 		// The rendered expression, which is what the interpreter sends: no
 		// Content-Type the scenario did not write, and no second spelling of a
-		// JSON body.
-		body, err := f.value(r.Body)
+		// JSON body. A string literal is sent as it is; anything else goes
+		// through art_body, which sends a file's bytes.
+		body, err := f.expr(r.Body, jsPrecOr)
 		if err != nil {
 			return fmt.Errorf("body: %w", err)
 		}
-		options = append(options, "body: "+body.src)
+		src := body.src
+		if !staticString(r.Body) {
+			src = f.use(jsHelperBody) + "(" + src + ")"
+		}
+		options = append(options, "body: "+src)
+	}
+	if len(r.Form) > 0 {
+		// URLSearchParams from pairs, in order, so a repeated name keeps both
+		// values; fetch labels it urlencoded.
+		pairs, err := f.pairs(r.Form, func(v string) string { return f.use(jsHelperRender) + "(" + v + ")" })
+		if err != nil {
+			return fmt.Errorf("form: %w", err)
+		}
+		options = append(options, "body: new URLSearchParams(["+pairs+"])")
+	}
+	if len(r.Multipart) > 0 {
+		pairs, err := f.pairs(r.Multipart, func(v string) string { return v })
+		if err != nil {
+			return fmt.Errorf("multipart: %w", err)
+		}
+		options = append(options, "body: "+f.use(jsHelperForm)+"(["+pairs+"])")
 	}
 	if st.Timeout != nil {
 		ms, err := f.millis(st.Timeout)
@@ -560,12 +694,39 @@ func (f *jsFile) request(st *lower.Step, indent int) error {
 		options = append(options, "signal: AbortSignal.timeout("+ms+")")
 	}
 
-	f.optionsCall(indent, "resp = await fetch", []string{target}, options)
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.line(indent, "started = performance.now();")
+	}
+	f.optionsCall(indent, "resp = await "+f.use(jsHelperFetch), []string{"jar", target}, options)
 	f.line(indent, "raw = await resp.text();")
+	if timed {
+		f.line(indent, "duration_ms = performance.now() - started;")
+	}
 	f.line(indent, "status = resp.status;")
 	f.line(indent, "body = "+f.use(jsHelperJSON)+"(raw);")
 	f.line(indent, "headers = resp.headers;")
+	if mentions(st, "cookies") {
+		f.line(indent, "cookies = "+f.use(jsHelperCookies)+"(resp);")
+	}
 	return nil
+}
+
+// pairs emits a form's fields as `[name, value]` pairs, each value through wrap.
+func (f *jsFile) pairs(ps []*lower.Param, wrap func(string) string) (string, error) {
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		name, err := f.value(p.Key)
+		if err != nil {
+			return "", err
+		}
+		value, err := f.expr(p.Value, jsPrecOr)
+		if err != nil {
+			return "", err
+		}
+		out = append(out, "["+name.src+", "+wrap(value.src)+"]")
+	}
+	return strings.Join(out, ", "), nil
 }
 
 // params emits the `"name": value` pairs of a header or env block.
@@ -678,6 +839,11 @@ func (f *jsFile) run(st *lower.Step, indent int) error {
 		if err != nil {
 			return fmt.Errorf("stdin: %w", err)
 		}
+		if !staticString(r.Stdin) {
+			// art_stdin rather than art_render: a file's text is the input.
+			raw, _ := f.expr(r.Stdin, jsPrecOr)
+			stdin = atom(f.use(jsHelperStdin)+"("+raw.src+")", raw.await)
+		}
 		options = append(options, "input: "+stdin.src)
 	}
 	if len(r.Env) > 0 {
@@ -698,7 +864,14 @@ func (f *jsFile) run(st *lower.Step, indent int) error {
 		options = append(options, "timeout: "+ms)
 	}
 
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.line(indent, "started = performance.now();")
+	}
 	f.optionsCall(indent, "proc = spawnSync", []string{command.src, argv}, options)
+	if timed {
+		f.line(indent, "duration_ms = performance.now() - started;")
+	}
 	f.line(indent, "exit_code = "+f.use(jsHelperExit)+"(proc);")
 	f.line(indent, "stdout = proc.stdout ?? \"\";")
 	f.line(indent, "stderr = proc.stderr ?? \"\";")
@@ -750,12 +923,19 @@ func (f *jsFile) acts(st *lower.Step, indent int) error {
 		}
 		f.line(indent, "page.setDefaultTimeout("+ms+");")
 	}
+	timed := mentions(st, "duration_ms")
+	if timed {
+		f.line(indent, "started = performance.now();")
+	}
 	for _, a := range st.Acts {
 		line, err := f.act(a)
 		if err != nil {
 			return err
 		}
 		f.line(indent, line+";")
+	}
+	if timed {
+		f.line(indent, "duration_ms = performance.now() - started;")
 	}
 	return nil
 }
@@ -799,8 +979,17 @@ func (f *jsFile) act(a *lower.Act) (string, error) {
 		v, err := two()
 		return "await page.selectOption(" + target.src + ", { value: " + v + " })", err
 	case "upload":
-		v, err := two()
-		return "await page.setInputFiles(" + target.src + ", " + v + ")", err
+		if staticString(a.Value) {
+			v, err := two()
+			return "await page.setInputFiles(" + target.src + ", " + v + ")", err
+		}
+		// A file, or a list of them, is attached by its path; art_files
+		// decides at run time, as the interpreter does.
+		v, err := f.expr(a.Value, jsPrecOr)
+		if err != nil {
+			return "", fmt.Errorf("line %d: upload: %w", a.Line, err)
+		}
+		return "await page.setInputFiles(" + target.src + ", " + f.use(jsHelperFiles) + "(" + v.src + "))", nil
 	case "wait":
 		ms, err := f.millis(a.Target)
 		if err != nil {
@@ -987,7 +1176,7 @@ func (f *jsFile) millis(x ast.Expr) (string, error) {
 // line writes one line of JavaScript at the given indentation level. Two spaces,
 // which is what prettier would do to the file anyway.
 func (f *jsFile) line(indent int, text string) {
-	f.out.WriteString(strings.Repeat("  ", indent))
+	f.out.WriteString(strings.Repeat("  ", indent+f.nest))
 	f.out.WriteString(text)
 	f.out.WriteString("\n")
 }
@@ -1000,7 +1189,7 @@ func (f *jsFile) line(indent int, text string) {
 // prettier would choose: everything on one line, the object broken out, or every
 // argument broken out because the ones before the object did not fit either.
 func (f *jsFile) optionsCall(indent int, callee string, args, options []string) {
-	pad := strings.Repeat("  ", indent)
+	pad := strings.Repeat("  ", indent+f.nest)
 	object := "{}"
 	if len(options) > 0 {
 		object = "{ " + strings.Join(options, ", ") + " }"

@@ -1,7 +1,7 @@
 testdata/art/template_error.art:11:27: unknown name "tokn"
    11 |       body = {"token": "${tokn}"}
       |                           ^^^^
-   hint: an api step binds status, body, raw, headers
+   hint: an api step binds status, body, raw, headers, cookies, duration_ms
 scenario: testdata/art/template_error.art
   ERROR testdata/art/template_error.art:11:27: unknown name "tokn"
 

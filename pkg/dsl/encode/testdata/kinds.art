@@ -41,3 +41,23 @@ scenario "kinds" {
     expect text("[role=status]") contains "Pro"
   }
 }
+
+scenario "row ${n}" for secret n in [1, 2] {
+  tags = ["smoke"]
+
+  setup {
+    step "before" {
+      run "true"
+    }
+  }
+
+  step "s" {
+    run "echo"
+  }
+
+  teardown {
+    step "after" {
+      run "true"
+    }
+  }
+}

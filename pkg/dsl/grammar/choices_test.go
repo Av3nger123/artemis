@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
 	dsltoken "artemis/pkg/dsl/token"
@@ -48,7 +50,7 @@ var owner = map[string]string{
 	"StepFields":          "stepField",
 	"ConfigBlocks":        "configSubject",
 	"BrowserConfigFields": "configBrowserField",
-	"Builtins":            "builtin",
+	"HTTPConfigFields":    "configHttpField",
 	"Reserved":            "reservedWord",
 	"CollectionItems":     "collectionItem",
 	"UseLines":            "useLine",
@@ -89,6 +91,21 @@ func TestEveryTableIsAChoicePoint(t *testing.T) {
 	}
 }
 
+// TestTheBuiltinChoiceIsTheBuiltinTable is TestEveryTableIsAChoicePoint for
+// the one word set that is not in token/tables.go: the builtins are
+// pkg/dsl/builtin's, so the "builtin" choice point is compared to that table
+// here, in its order.
+func TestTheBuiltinChoiceIsTheBuiltinTable(t *testing.T) {
+	c, ok := Choices().Choices["builtin"]
+	if !ok {
+		t.Fatal(`Choices() emits no "builtin" choice point`)
+	}
+	got, want := valuesOf(c), builtin.Names()
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("choice \"builtin\" = %v, pkg/dsl/builtin has %v", got, want)
+	}
+}
+
 // TestEveryChoicePointIsDocumented stops a choice point shipping with an
 // empty doc or an empty list, either of which is a dropdown a client cannot
 // label or cannot fill.
@@ -118,6 +135,7 @@ func TestEveryBlockIsAChoicePoint(t *testing.T) {
 		"retry":         "retryField",
 		"step":          "stepField",
 		"configBrowser": "configBrowserField",
+		"configHttp":    "configHttpField",
 	}
 	doc := Choices()
 	for _, block := range check.BlockNames() {

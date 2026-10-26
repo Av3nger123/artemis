@@ -18,4 +18,11 @@
 //     such moment;
 //   - vite owns two environment variables, so `env("BASE_URL")` reads vite's
 //     own base path here and `env("NODE_ENV")` reads the mode vitest ran in.
-//     Name yours something else.
+//     Name yours something else;
+//   - a scenario's cookies are kept by name: two cookies of one name for two
+//     paths keep the later one, where artemis keeps both, and a redirect
+//     fetch follows does not send or keep them;
+//   - a file json(), csv() or file() names is found from the directory the
+//     test runs in, by the .art file's path as it was given to `artemis
+//     build`; a file sent as a body has no Content-Type the step did not write;
+//   - teardown stops at its first failing step, where artemis runs every one.

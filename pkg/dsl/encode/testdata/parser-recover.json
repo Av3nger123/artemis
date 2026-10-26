@@ -287,6 +287,8 @@
             "body",
             "raw",
             "headers",
+            "cookies",
+            "duration_ms",
             "url",
             "kept"
           ],
@@ -457,6 +459,8 @@
             "body",
             "raw",
             "headers",
+            "cookies",
+            "duration_ms",
             "url",
             "kept",
             "token"
@@ -603,7 +607,8 @@
           "scope": [
             "exit_code",
             "stdout",
-            "stderr"
+            "stderr",
+            "duration_ms"
           ]
         }
       ],

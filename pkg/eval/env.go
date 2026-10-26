@@ -44,6 +44,11 @@ type Env struct {
 	// terminal step -- where calling one is an errored assertion rather than a
 	// panic, even though the checker rejects it first.
 	Elements Elements
+
+	// Gen is the scenario's random generator and clock, for uuid(), now()
+	// and the random builtins. Nil draws from the process's own, which is
+	// right for an expression evaluated outside a run.
+	Gen *Gen
 }
 
 // Elements is the browser page a browser step's element functions read.
@@ -137,6 +142,13 @@ func (e *Env) getenv(name string, fallback *string) (string, error) {
 }
 
 // elements is the page, or nil.
+func (e *Env) gen() *Gen {
+	if e == nil {
+		return nil
+	}
+	return e.Gen
+}
+
 func (e *Env) elements() Elements {
 	if e == nil {
 		return nil

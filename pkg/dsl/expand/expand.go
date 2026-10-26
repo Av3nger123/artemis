@@ -110,6 +110,13 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 		case *ast.Scenario:
 			cp := *v
 			cp.Body = e.body(root, v.Body)
+			if cp.For != nil {
+				// After the uses, so each row is a copy of the scenario as
+				// it runs; a scenario whose rows could not be made is
+				// dropped, its fault already reported.
+				out.Scenarios = append(out.Scenarios, e.rows(&cp)...)
+				continue
+			}
 			out.Scenarios = append(out.Scenarios, &cp)
 		default:
 			out.Scenarios = append(out.Scenarios, d)
@@ -135,9 +142,19 @@ func needsExpansion(tree *ast.File) bool {
 		case *ast.Import, *ast.Collection:
 			return true
 		case *ast.Scenario:
+			if v.For != nil {
+				return true
+			}
 			for _, b := range v.Body {
 				if _, ok := b.(*ast.UseDecl); ok {
 					return true
+				}
+				if phase, ok := b.(*ast.PhaseDecl); ok {
+					for _, pb := range phase.Body {
+						if _, ok := pb.(*ast.UseDecl); ok {
+							return true
+						}
+					}
 				}
 			}
 		}
@@ -163,9 +180,20 @@ func fileName(tree *ast.File) string {
 // steps, in use order: there they see the vars the use's arguments see, and
 // the checker binds them for the steps that read them.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
+	return e.bodyIn(u, decls, newScope(decls))
+}
+
+// bodyIn is body with the scenario's scope given, so a use inside setup or
+// teardown is expanded knowing the scenario's vars, as one beside its steps is.
+func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 	out := make([]ast.Decl, 0, len(decls))
-	sc := newScope(decls)
 	for _, d := range decls {
+		if phase, ok := d.(*ast.PhaseDecl); ok {
+			cp := *phase
+			cp.Body = e.bodyIn(u, phase.Body, sc)
+			out = append(out, &cp)
+			continue
+		}
 		if use, ok := d.(*ast.UseDecl); ok {
 			steps := e.expandUse(u, use, sc.at(nil, out))
 			out = append(out, *sc.hoisted...)
@@ -408,9 +436,11 @@ func synth(kind token.Kind, text, value string, at token.Span) token.Token {
 	return token.Token{Kind: kind, Text: text, Value: value, Span: at}
 }
 
-// quote is name as a string literal's source.
+// quote is name as a string literal's source: the escapes the lexer reads
+// back, so a row's text -- which may hold a quote, a dollar or a newline --
+// round-trips through `artemis expand`.
 func quote(name string) string {
-	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`)
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
 	return `"` + r.Replace(name) + `"`
 }
 

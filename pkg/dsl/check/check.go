@@ -45,6 +45,9 @@ package check
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
@@ -152,7 +155,13 @@ type Info struct {
 	scopes  map[*ast.StepDecl][]string
 	envs    []EnvNeed
 	envSeen map[string]bool
+
+	suiteSecret bool
 }
+
+// SuiteSecret reports whether any name a suite above the file exports is
+// secret, which makes every value read through `suite` one a report withholds.
+func (i *Info) SuiteSecret() bool { return i != nil && i.suiteSecret }
 
 // EnvNeed is one env() call whose variable name the checker could read: a
 // single string literal, with no interpolation and no default value.
@@ -233,14 +242,33 @@ func Check(tree *ast.File) (*Info, *diag.Bag) {
 // diagnostic that names another binding names it by the scenario's use line
 // when a use brought that binding in. A nil chain is Check.
 func CheckChained(tree *ast.File, chain func(token.Span) []token.Span) (*Info, *diag.Bag) {
+	return CheckWith(tree, chain, Prelude{})
+}
+
+// Prelude is what a file's scenarios can read that the file did not declare:
+// the names the suite.art files above it export, as members of `suite`.
+type Prelude struct {
+	// Suite is the names `suite.<name>` may read -- every var and setup
+	// capture of every suite above the file -- or nil when no suite applies.
+	Suite []string
+	// SuiteSecret is whether any of them is secret, in which case `suite`
+	// is: a report withholds every value read through it.
+	SuiteSecret bool
+}
+
+// CheckWith is CheckChained with the file's prelude.
+func CheckWith(tree *ast.File, chain func(token.Span) []token.Span, prelude Prelude) (*Info, *diag.Bag) {
 	c := &checker{
-		chain: chain,
-		bag:   diag.New(),
+		chain:   chain,
+		prelude: prelude,
+		bag:     diag.New(),
 		info: &Info{
 			steps:   map[*ast.StepDecl]StepType{},
 			expects: map[*ast.Expect]Class{},
 			scopes:  map[*ast.StepDecl][]string{},
 			envSeen: map[string]bool{},
+
+			suiteSecret: prelude.SuiteSecret,
 		},
 	}
 	if tree != nil {
@@ -258,9 +286,10 @@ func CheckChained(tree *ast.File, chain func(token.Span) []token.Span) (*Info, *
 // step's statements see different ones and a field on the checker would make
 // that an ordering bug waiting to happen.
 type checker struct {
-	bag   *diag.Bag
-	info  *Info
-	chain func(token.Span) []token.Span // nil outside an expansion
+	bag     *diag.Bag
+	info    *Info
+	chain   func(token.Span) []token.Span // nil outside an expansion
+	prelude Prelude
 }
 
 // scenario walks one scenario's body in source order.
@@ -272,6 +301,14 @@ type checker struct {
 func (c *checker) scenario(s *ast.Scenario) {
 	sc := newScope()
 	sc.file = s.Keyword.Span.File
+
+	// `suite` is a name every scenario under a suite.art has, as if it were
+	// its first var: binding it here is what makes a var of the same name a
+	// clash rather than a quiet second meaning.
+	if c.prelude.Suite != nil {
+		sc.bind(token.Token{Kind: token.Ident, Value: "suite"}, "var", -1)
+		sc.addVar("suite")
+	}
 
 	// Every var of the scenario is a name a capture may not take, whether it
 	// is declared above the capture or below: either way the scenario would
@@ -292,8 +329,119 @@ func (c *checker) scenario(s *ast.Scenario) {
 			c.varDecl(d, sc)
 		case *ast.StepDecl:
 			c.step(d, sc)
+		case *ast.PhaseDecl:
+			// A phase's steps are walked where the phase is written, which
+			// is where they run: setup's captures are in scope for every
+			// step below, and teardown sees everything above it.
+			for _, inner := range d.Body {
+				switch inner := inner.(type) {
+				case *ast.StepDecl:
+					c.step(inner, sc)
+				case *ast.VarDecl:
+					c.varDecl(inner, sc)
+				}
+			}
 		}
 		// *ast.Bad and anything else: the parser has already reported it.
+	}
+	c.phases(s)
+	c.tags(s)
+}
+
+// tagPattern is what a tag may be: lower case, so `Smoke` and `smoke` are not
+// two tags a --tags expression has to know about, and no space or operator
+// character, so a tag is always one word of that expression.
+var tagPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
+
+// tags holds a scenario's or a suite's `tags = [...]` to what a run selects by:
+// one list, of string literals -- a run selects before anything is evaluated --
+// each a single lower-case word, none twice.
+func (c *checker) tags(s *ast.Scenario) {
+	var first *ast.TagsDecl
+	for _, d := range s.Body {
+		t, ok := d.(*ast.TagsDecl)
+		if !ok {
+			continue
+		}
+		if first != nil {
+			c.bag.Error(t.Keyword.Span, diag.DuplicateTags, "this already has tags, on line %d", first.Keyword.Span.Line).
+				Hintf("list every tag in the one tags = [...]")
+			continue
+		}
+		first = t
+		arr, ok := t.Value.(*ast.Array)
+		if !ok {
+			c.bag.Error(t.Value.Span(), diag.BadTag, "tags is a list of words written out, like [\"smoke\"]").
+				Hintf(`tags = ["smoke", "payments"]`)
+			continue
+		}
+		seen := map[string]bool{}
+		for _, el := range arr.Elems {
+			lit, ok := el.Value.(*ast.Literal)
+			if !ok || lit.Kind() != token.String {
+				c.bag.Error(el.Value.Span(), diag.BadTag,
+					"a tag is a string written out, because a run selects scenarios before it evaluates anything")
+				continue
+			}
+			tag := lit.Tok.Value
+			switch {
+			case !tagPattern.MatchString(tag):
+				ref := c.bag.Error(lit.Span(), diag.BadTag,
+					"tag %q is not one lower-case word: letters, digits, \"_\", \".\" and \"-\"", tag)
+				if fixed := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(tag), " ", "-")); tagPattern.MatchString(fixed) {
+					ref.Hintf("%q", fixed).Suggest(strconv.Quote(fixed))
+				}
+			case seen[tag]:
+				c.bag.Error(lit.Span(), diag.BadTag, "tag %q is listed twice", tag)
+			}
+			seen[tag] = true
+		}
+	}
+}
+
+// phases holds setup and teardown to where they run: setup above the
+// scenario's first step, teardown below its last, at most one of each. With
+// the file in run order, the scope rule needs nothing new -- a capture is in
+// scope below the step that makes it, in a phase as anywhere -- and a reader
+// never has to know that the order on the page is not the order of the run.
+func (c *checker) phases(s *ast.Scenario) {
+	var setup, teardown *ast.PhaseDecl
+	stepSeen := false
+	for _, d := range s.Body {
+		switch d := d.(type) {
+		case *ast.StepDecl:
+			stepSeen = true
+			if teardown != nil {
+				c.bag.Error(teardown.Keyword.Span, diag.TeardownBeforeStep,
+					"teardown is above the step %q, and it runs after every step", d.Name.Value).
+					Hintf("move teardown { ... } below the scenario's last step")
+				teardown = &ast.PhaseDecl{} // reported once
+			}
+		case *ast.PhaseDecl:
+			switch d.Keyword.Value {
+			case ast.PhaseSetup:
+				if setup != nil {
+					c.bag.Error(d.Keyword.Span, diag.DuplicatePhase, "this scenario already has a setup block").
+						Hintf("put every setup step in the one setup { ... }")
+					continue
+				}
+				setup = d
+				if stepSeen {
+					c.bag.Error(d.Keyword.Span, diag.SetupAfterStep,
+						"setup is below a step, and it runs before every step").
+						Hintf("move setup { ... } above the scenario's first step")
+				}
+			case ast.PhaseTeardown:
+				if teardown != nil && teardown.Keyword.Text != "" {
+					c.bag.Error(d.Keyword.Span, diag.DuplicatePhase, "this scenario already has a teardown block").
+						Hintf("put every teardown step in the one teardown { ... }")
+					continue
+				}
+				if teardown == nil {
+					teardown = d
+				}
+			}
+		}
 	}
 }
 

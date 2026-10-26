@@ -12,7 +12,11 @@
 #   - stdout and stderr are not truncated; artemis caps them for its report;
 #   - a variable with no value raises at the point of use. `artemis run`
 #     reports all of them before the first step; an exported module has no
-#     such moment.
+#     such moment;
+#   - a file json(), csv() or file() names is found from the directory the
+#     test runs in, by the .art file's path as it was given to `artemis
+#     build`; a file sent as a body has no Content-Type the step did not write;
+#   - teardown stops at its first failing step, where artemis runs every one.
 
 import json
 
@@ -28,6 +32,8 @@ def art_render(value):
         return "null"
     if isinstance(value, str):
         return value
+    if hasattr(value, "art_path"):
+        return value.art_path
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float) and value.is_integer():
@@ -47,12 +53,23 @@ def art_json(response):
         return None
 
 
+def art_body(value):
+    """A request body: a file's bytes, or the value rendered as the interpreter
+    renders it -- an object as compact JSON."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, "rb") as data:
+            return data.read()
+    return art_render(value)
+
+
 # scenario "sign in", line 4
 def test_sign_in():
+    http = requests.Session()
+
     # step "post the form", line 5
-    resp = requests.post(
+    resp = http.post(
         "https://example.test/session",
-        data=art_render({"email": "alice@example.test"}),
+        data=art_body({"email": "alice@example.test"}),
     )
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
@@ -61,10 +78,12 @@ def test_sign_in():
 
 # scenario "sign-in", line 13
 def test_sign_in_2():
+    http = requests.Session()
+
     # step "post the form again", line 14
-    resp = requests.post(
+    resp = http.post(
         "https://example.test/session",
-        data=art_render({"email": "bob@example.test"}),
+        data=art_body({"email": "bob@example.test"}),
     )
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)

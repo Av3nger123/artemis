@@ -3,8 +3,6 @@ package codegen
 import (
 	"strings"
 	"testing"
-
-	"artemis/pkg/dsl/token"
 )
 
 // emitJS is one expression through the whole front end and out as JavaScript, in
@@ -253,31 +251,6 @@ func TestJSPatternRefusesAnInlineFlagGroup(t *testing.T) {
 	for _, pattern := range []string{`(?:a)`, `(?=a)`, `(?!a)`, `(?P<n>a)`} {
 		if _, err := jsPattern(pattern, 1); err != nil {
 			t.Errorf("jsPattern(%q) = %v, want it accepted", pattern, err)
-		}
-	}
-}
-
-// Every builtin the language has needs a JavaScript spelling, or a .art file
-// that compiles produces a module that calls something undefined.
-//
-// Names only, and the arity table is shared with the Python target: the
-// numbers are TestArityAgreesWithTheChecker's subject, so this is about the
-// switch.
-func TestEveryBuiltinHasAJavaScriptSpelling(t *testing.T) {
-	for _, name := range token.Builtins {
-		if _, ok := builtinArity[name]; !ok {
-			t.Errorf("%s() is a builtin with no arity; the js target cannot emit it", name)
-		}
-	}
-	for name := range builtinArity {
-		found := false
-		for _, b := range token.Builtins {
-			if b == name {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("%s() has an arity and is not a builtin", name)
 		}
 	}
 }

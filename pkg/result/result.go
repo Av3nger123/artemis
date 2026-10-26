@@ -154,6 +154,9 @@ func (a Assertion) with(status Status, errMsg string) AssertionResult {
 type StepResult struct {
 	// Name is the step's name from the scenario.
 	Name string
+	// Phase is PhaseSetup or PhaseTeardown for a step of the scenario's setup
+	// or teardown, and empty for one of its own steps.
+	Phase string
 	// Status is derived from the assertions by Finish, or set outright by Fail
 	// and Skip.
 	Status Status
@@ -236,6 +239,12 @@ func (s *StepResult) Fail(dur time.Duration, err error) {
 	s.Error = errText(err)
 }
 
+// The phases a step can run in: a scenario's setup, its teardown, or neither.
+const (
+	PhaseSetup    = "setup"
+	PhaseTeardown = "teardown"
+)
+
 // Skip closes the step as never run.
 func (s *StepResult) Skip(reason string) {
 	s.Status = StatusSkip
@@ -257,6 +266,22 @@ type ScenarioResult struct {
 	Error string
 	// Steps are its steps, in the order they ran.
 	Steps []*StepResult
+	// Row is the row of data a data-driven scenario was made from, and nil
+	// for every other scenario.
+	Row *Row
+	// Kind is "suite" for a suite.art's setup or teardown, which the run
+	// reports beside the scenarios it was for, and empty for a scenario.
+	Kind string
+	// Tags are the scenario's tags as the run selected by them: its own and
+	// its suites'.
+	Tags []string
+}
+
+// Row is a data-driven scenario's row: where its data came from and its place
+// in it, from 0.
+type Row struct {
+	Source string
+	Index  int
 }
 
 // Passed reports whether the scenario did not fail the run.
@@ -305,6 +330,10 @@ type RunResult struct {
 	Error string
 	// Scenarios are the scenarios it ran, in order.
 	Scenarios []*ScenarioResult
+	// Seed is the seed the run's random builtins drew from, and nil when no
+	// scenario called one: a seed is worth reporting only when passing it
+	// back with --seed would reproduce something.
+	Seed *uint64
 
 	now func() time.Time
 }

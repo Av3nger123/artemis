@@ -69,9 +69,9 @@ type response struct {
 // Observe is its only caller. It stays a function of its own because the
 // deadline wording, the draining and the logging are the parts worth having in
 // one place when the browser step arrives.
-func (e Executor) exchange(ctx context.Context, step models.Step, req *http.Request, timeout time.Duration) (response, error) {
+func (e Executor) exchange(ctx context.Context, step models.Step, client *http.Client, req *http.Request, timeout time.Duration) (response, error) {
 	start := time.Now()
-	resp, err := e.client().Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		// The deadline is the scenario's own number, so say which one was hit
 		// rather than leaving the reader to recognise "context deadline

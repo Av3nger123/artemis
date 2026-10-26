@@ -18,7 +18,14 @@
 //     such moment;
 //   - vite owns two environment variables, so `env("BASE_URL")` reads vite's
 //     own base path here and `env("NODE_ENV")` reads the mode vitest ran in.
-//     Name yours something else.
+//     Name yours something else;
+//   - a scenario's cookies are kept by name: two cookies of one name for two
+//     paths keep the later one, where artemis keeps both, and a redirect
+//     fetch follows does not send or keep them;
+//   - a file json(), csv() or file() names is found from the directory the
+//     test runs in, by the .art file's path as it was given to `artemis
+//     build`; a file sent as a body has no Content-Type the step did not write;
+//   - teardown stops at its first failing step, where artemis runs every one.
 
 import { onTestFinished, test } from "vitest";
 import { chromium, expect } from "@playwright/test";
@@ -32,6 +39,7 @@ function art_render(value) {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
+  if (value.art_path !== undefined) return value.art_path;
   return JSON.stringify(value);
 }
 
@@ -91,13 +99,14 @@ function art_type(value) {
   if (typeof value === "boolean") return "boolean";
   if (typeof value === "string") return "string";
   if (typeof value === "number") return "number";
+  if (value.art_path !== undefined) return "file";
   if (Array.isArray(value)) return "array";
   if (typeof value === "object") return "object";
   return "unknown";
 }
 
 function art_is(value, want) {
-  // `expr is <type>`, over the six JSON type names.
+  // `expr is <type>`, over the six JSON type names and file.
   return art_type(value) === want;
 }
 

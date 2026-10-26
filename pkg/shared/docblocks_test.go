@@ -95,7 +95,7 @@ func isArtFile(b docBlock) bool {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		for _, opener := range []string{"scenario ", "import ", "collection "} {
+		for _, opener := range []string{"scenario ", "import ", "collection ", "suite {"} {
 			if strings.HasPrefix(line, opener) {
 				return true
 			}
@@ -105,14 +105,16 @@ func isArtFile(b docBlock) bool {
 	return false
 }
 
-// collectionPath is the path a documented collection file names in its first
-// line -- `# collections/auth.art` -- and "" for any other block. It is how
-// the documents say which file an example is, so that an example importing
-// "collections/auth.art" can be compiled against the block that is that file.
+// collectionPath is the path a documented collection or suite file names in
+// its first line -- `# collections/auth.art`, `# suite/suite.art` -- and "" for
+// any other block. It is how the documents say which file an example is, so
+// that an example importing "collections/auth.art", or under "suite/", can be
+// compiled against the block that is that file.
 func collectionPath(b docBlock) string {
 	first, _, _ := strings.Cut(b.body, "\n")
 	name, ok := strings.CutPrefix(strings.TrimSpace(first), "# ")
-	if !ok || !strings.HasPrefix(name, "collections/") || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
+	named := strings.HasPrefix(name, "collections/") || strings.HasPrefix(name, "suite/")
+	if !ok || !named || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
 		return ""
 	}
 	return name
@@ -143,6 +145,32 @@ func docCollections(t *testing.T) expand.MapLoader {
 	}
 	return files
 }
+
+// docLoader is docCollections for the files an example imports, and a stand-in
+// for every data file it reads: json() and csv() in a document name files the
+// document does not show, and what they hold is beside the point of the
+// example. A .json path serves one row holding the fields the documents'
+// examples read, and a .csv path a header and a row, so a data-driven example
+// has a row to make and compiles exactly as it would beside real data; whether
+// a path names a file at all is pkg/dsl/front's test, not the documents'.
+type docLoader struct{ collections expand.MapLoader }
+
+func (d docLoader) Load(from, p string) (string, string, error) {
+	if strings.HasSuffix(p, ".art") {
+		return d.collections.Load(from, p)
+	}
+	switch {
+	case strings.HasSuffix(p, ".json"):
+		return p, docRow, nil
+	case strings.HasSuffix(p, ".csv"):
+		return p, "name,plan\nalice,pro\n", nil
+	}
+	return p, "", nil
+}
+
+// docRow is the one row a documented JSON file holds.
+const docRow = `[{"id": 1, "name": "alice", "role": "admin", "email": "alice@example.com",
+  "password": "s3cret", "plan": "pro", "expect_status": 200}]`
 
 // frontEnd is the whole front end over one documented file -- parse, expand
 // its uses against the documented collections, name-check -- with every bag

@@ -95,8 +95,17 @@ func (e Executor) run(ctx context.Context, step models.Step, spec models.Exec, t
 	cmd.Dir = spec.Cwd
 	cmd.Env = e.environ(spec)
 	// Always a reader, even an empty one: a child that inherited artemis's own
-	// stdin and read from it would hang a run with no sign of why.
+	// stdin and read from it would hang a run with no sign of why. A file is
+	// opened rather than read, so a large one is streamed to the command.
 	cmd.Stdin = strings.NewReader(spec.Stdin)
+	if spec.StdinFile != "" {
+		f, err := os.Open(spec.StdinFile)
+		if err != nil {
+			return outcome{}, fmt.Errorf("stdin: %w", err)
+		}
+		defer f.Close()
+		cmd.Stdin = f
+	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 

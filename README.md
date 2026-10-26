@@ -160,6 +160,13 @@ parameters and its response. The rules are in
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
+- A `suite.art` per folder: one login, once per run, for every scenario below it -- its values read as `suite.token` and its cookies copied into each scenario
+- `setup` and `teardown` blocks: teardown runs after every scenario, pass or fail, and skips the cleanup of anything a failed step never made
+- Tags and selection: `--tags "smoke and not slow"`, `--grep`, and `artemis list` to see what a run would run
+- Data-driven scenarios: `scenario "login as ${user.role}" for user in json("users.json")` is one scenario per row, each reported on its own
+- Data and files: `json()` and `csv()` read test data and `file()` names a fixture, each checked when the file compiles; a file is sent as a body, a `multipart` part, a command's `stdin` or a browser `upload`, and `form` sends a urlencoded form
+- A cookie jar per scenario, so an API that keeps its session in a cookie is tested by logging in once; `cookies` to assert what a response set, and `duration_ms` on every step to assert how long it took
+- Test data made up where it is needed -- `uuid()`, `now()`, `random_string()` -- reproducible with `--seed`, and builtins for base64, hashes, HMAC signatures, JWT claims and JSON
 - Collections: write a request once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
 - A run summary on the terminal, plus a block per failure naming the file and line, the scenario, the step, expected and actual -- output an agent can act on
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
@@ -1203,6 +1210,45 @@ One is also the default because the limit here is the service, not the machine.
 A suite pointed at a staging API will meet a rate limit long before it saturates
 a laptop, so the number is yours to choose.
 
+### Running part of a suite
+
+Tag scenarios -- `tags = ["smoke", "payments"]` in a scenario, or in a
+`suite.art` for its whole folder -- and select by tag, by name, or both:
+
+```sh
+artemis run suite/ --tags "smoke and not slow"
+artemis run suite/ --grep "^login as"
+artemis list suite/ --tags payments        # what would run, running nothing
+```
+
+What is not selected is skipped in the report and left off the console, and
+only what is selected has its `env()` variables checked: a smoke job needs the
+smoke tests' variables and nobody else's. A selection of nothing fails the run,
+and a tag no scenario has is a warning that names the nearest one -- `--tags
+smok` does not quietly run nothing. `artemis list --json` writes the selection
+as one document.
+
+### Reproducing random test data
+
+`uuid()`, `random_int()` and `random_string()` make test data up, so a sign-up
+test does not collide with the last run's user. Every scenario draws from its own
+generator, seeded from the run's seed, the scenario's name and its file's path
+within the suite, so a failed run says how to draw the same values again:
+
+```
+Seed        8817265503411  (rerun with --seed 8817265503411 for the same values)
+FAIL in 1.2s
+```
+
+```sh
+artemis run suite/ --seed 8817265503411
+```
+
+The seed is in the JSON report as `seed`, and only when a scenario drew a random
+value. The rest of the value builtins -- `now()`, `base64()`, `sha256()`,
+`hmac_sha256()`, `jwt_claims()`, `to_json()`, `len()` and the others -- are in
+[SPEC.md](SPEC.md#making-and-converting-values).
+
 ## The MCP server
 
 `artemis mcp` serves the Model Context Protocol on stdin and stdout, so an agent
@@ -1378,10 +1424,11 @@ command makes -- so it stays an input the command can read.
 ## Not yet
 
 - **`db` steps.** Designed, not implemented.
-- **Control flow and functions.** `if`, loops, `parallel`, `group`, `fn`,
-  `setup`, `teardown` are reserved words, not features. Reusing a request is
-  [collections](#reusing-requests), which expand into plain steps before
-  anything runs; code generation is the answer to "I need real abstraction".
+- **Control flow and functions.** `if`, loops, `parallel`, `group` and `fn`
+  are reserved words, not features. Reusing a request is
+  [collections](#reusing-requests), and running a scenario per row of data is a
+  `for` clause, both of which expand into plain scenarios before anything runs;
+  code generation is the answer to "I need real abstraction".
 - **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
   valuable property is determinism, and an assertion that flakes for
   unreproducible reasons is worse than a missing one.

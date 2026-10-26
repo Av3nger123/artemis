@@ -6,21 +6,10 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
 )
-
-// signatures are what a builtin's call looks like, for an arity hint. A hint
-// that shows the shape is worth more than one that restates the count.
-var signatures = map[string]string{
-	"env":     `env("API_URL") or env("PORT", "8080")`,
-	"match":   `match(raw, /id=([0-9]+)/)`,
-	"text":    `text("[role=status]")`,
-	"value":   `value("#email")`,
-	"attr":    `attr("#link", "href")`,
-	"count":   `count(".invoice")`,
-	"visible": `visible(".modal")`,
-}
 
 // counts and numbers spell a small number for a message, because "takes 1
 // argument; this call has 2" reads like a template and "takes one argument;
@@ -167,10 +156,10 @@ func (c *checker) ident(x *ast.Ident, v *view) {
 	// did-you-mean against the roots would be the wrong advice: the name is
 	// right and the call is what is missing. Checked after the scope, so a
 	// `var text = ...` that shadows one still resolves.
-	if elementFnOf[t.Value] {
+	if fn, ok := builtin.Lookup(t.Value); ok && fn.Scope == builtin.Page {
 		c.bag.Error(t.Span, diag.UnknownIdentifier, "%q is a function, not a value", t.Value).
-			Hintf("call it: %s", signatures[t.Value]).
-			Suggest(signatures[t.Value])
+			Hintf("call it: %s", fn.Signature).
+			Suggest(fn.Signature)
 		return
 	}
 	c.notFound(t.Span, t.Value, v)
@@ -190,6 +179,11 @@ func (c *checker) member(m *ast.Member, v *view) {
 		return
 	}
 	members, closed := memberRoots[root.Name()]
+	if root.Name() == "suite" && c.prelude.Suite != nil {
+		// What the suites above export is a closed set, like a page's: a
+		// misspelt suite.tokn is caught here rather than at run time.
+		members, closed = c.prelude.Suite, true
+	}
 	if !closed || m.Name.Kind != token.Ident {
 		return
 	}
@@ -220,13 +214,13 @@ func (c *checker) call(x *ast.Call, v *view) {
 	}
 
 	switch {
-	case freeFnOf[name]:
+	case callableIn(name, builtin.Everywhere):
 		// env() and match() are legal in every scope, including a var's
 		// value. That is the design's whole point about env(): it is an
 		// ordinary expression legal wherever an expression is, rather than a
 		// template form that only works inside a variable's value. match()
 		// joins it because searching a string needs no page and no response.
-	case elementFnOf[name]:
+	case callableIn(name, builtin.Page):
 		if v.typ != Browser {
 			c.notInScopeFn(t.Span, name, v)
 			return
@@ -239,12 +233,12 @@ func (c *checker) call(x *ast.Call, v *view) {
 		return
 	}
 
-	ps := params[name]
-	low, high, _ := Arity(name)
-	if len(x.Args) < low || len(x.Args) > high {
+	fn, _ := builtin.Lookup(name)
+	ps := fn.Params
+	if len(x.Args) < fn.Min || len(x.Args) > fn.Max() {
 		c.bag.Error(x.Span(), diag.BadArity,
-			"%s() takes %s; this call has %s", name, takes(low, high), number(len(x.Args))).
-			Hintf("%s", signatures[name])
+			"%s() takes %s; this call has %s", name, takes(fn.Min, fn.Max()), number(len(x.Args))).
+			Hintf("%s", fn.Signature)
 		return
 	}
 	// Each parameter says what it takes -- a string for a variable name, a
@@ -254,7 +248,7 @@ func (c *checker) call(x *ast.Call, v *view) {
 	// stage does not evaluate.
 	for i, a := range x.Args {
 		lit, ok := a.Value.(*ast.Literal)
-		if !ok || lit == nil || ps[i].accepts(lit.Kind()) {
+		if !ok || lit == nil || ps[i].Accepts(lit.Kind()) {
 			continue
 		}
 		// "argument 1" of a one-argument function is noise; a second argument
@@ -264,15 +258,67 @@ func (c *checker) call(x *ast.Call, v *view) {
 			which = ordinals[i] + " "
 		}
 		c.bag.Error(lit.Span(), diag.BadValue,
-			"%s()'s %sargument must be %s, not %s", name, which, ps[i].want, describeLiteral(lit)).
-			Hintf("%s", signatures[name])
+			"%s()'s %sargument must be %s, not %s", name, which, ps[i].Want, describeLiteral(lit)).
+			Hintf("%s", fn.Signature)
 	}
+	c.literalArgs(x, fn)
 	if name == "env" {
 		c.envName(x)
 		c.envNeed(x)
 	}
 	if name == "match" && len(x.Args) == 2 {
 		c.groups(x.Args[1].Value)
+	}
+}
+
+// literalArgs judges the literal arguments a builtin's parameters say more
+// about than their kind: a format from a fixed set, a whole number, and the
+// two bounds random_int() and random_string() put on theirs. Only a literal is
+// judged, as above; a value that came out of a var is pkg/eval's, with the same
+// reason.
+func (c *checker) literalArgs(x *ast.Call, fn builtin.Fn) {
+	nums := make([]*float64, len(x.Args))
+	for i, a := range x.Args {
+		lit, ok := a.Value.(*ast.Literal)
+		if !ok || lit == nil || i >= len(fn.Params) || !fn.Params[i].Accepts(lit.Kind()) {
+			continue
+		}
+		p := fn.Params[i]
+		switch lit.Kind() {
+		case token.String:
+			if len(p.OneOf) > 0 && !contains(p.OneOf, lit.Tok.Value) {
+				ref := c.bag.Error(lit.Span(), diag.BadValue, "%s()'s argument must be one of %s, not %q",
+					fn.Name, strings.Join(p.OneOf, ", "), lit.Tok.Value)
+				if !ref.DidYouMean(lit.Tok.Value, p.OneOf) {
+					ref.Hintf("%s", fn.Signature)
+				}
+			}
+		case token.Number:
+			f, err := strconv.ParseFloat(lit.Tok.Value, 64)
+			if err != nil {
+				continue
+			}
+			if p.Whole && f != float64(int64(f)) {
+				c.bag.Error(lit.Span(), diag.BadValue, "%s()'s argument must be a whole number, not %s",
+					fn.Name, lit.Tok.Text).Hintf("%s", fn.Signature)
+				continue
+			}
+			nums[i] = &f
+		}
+	}
+	switch fn.Name {
+	case "random_int":
+		if len(nums) == 2 && nums[0] != nil && nums[1] != nil && *nums[0] > *nums[1] {
+			c.bag.Error(x.Span(), diag.BadValue, "random_int()'s bounds are the wrong way round: %s is above %s",
+				x.Args[0].Value.(*ast.Literal).Tok.Text, x.Args[1].Value.(*ast.Literal).Tok.Text).
+				Hintf("random_int(%s, %s)", x.Args[1].Value.(*ast.Literal).Tok.Text, x.Args[0].Value.(*ast.Literal).Tok.Text)
+		}
+	case "random_string":
+		if len(nums) == 1 && nums[0] != nil && (*nums[0] < 1 || *nums[0] > 256) {
+			c.bag.Error(x.Args[0].Value.Span(), diag.BadValue,
+				"random_string() makes 1 to 256 characters, and this call asks for %s",
+				x.Args[0].Value.(*ast.Literal).Tok.Text).Hintf("%s", fn.Signature)
+		}
 	}
 }
 
@@ -296,7 +342,7 @@ func (c *checker) envName(x *ast.Call) {
 	}
 	c.bag.Error(lit.Span(), diag.BadValue,
 		"env()'s argument must name an environment variable, not the empty string").
-		Hintf("%s", signatures["env"])
+		Hintf("%s", envSignature())
 }
 
 // envNeed records the variable an env() call names, when the name is one the
@@ -326,14 +372,10 @@ func (c *checker) envNeed(x *ast.Call) {
 	c.info.envs = append(c.info.envs, EnvNeed{Name: name, Span: lit.Span()})
 }
 
-// accepts reports whether a literal of kind k satisfies this parameter.
-func (p param) accepts(k token.Kind) bool {
-	for _, want := range p.kinds {
-		if k == want {
-			return true
-		}
-	}
-	return false
+// envSignature is env()'s call shape, for the hint under a misused env().
+func envSignature() string {
+	fn, _ := builtin.Lookup("env")
+	return fn.Signature
 }
 
 // groups rejects a `match()` pattern with more than one capturing group.

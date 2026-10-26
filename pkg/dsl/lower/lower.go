@@ -72,8 +72,24 @@ type Scenario struct {
 	// Line is the line the `scenario` keyword sits on.
 	Line int
 
+	// Row is the row of data this scenario was made from, for a scenario
+	// written with a for clause, and nil for every other.
+	Row *Row
+
+	// Tags are the scenario's own `tags = [...]`, in the order written. The
+	// suites above it add theirs when the run selects.
+	Tags []string
+
+	// EnvNeeds are the env() names this scenario reads that the checker could
+	// read, which the check before a run counts only for scenarios it will
+	// run. pkg/cli fills it in from the checker's list.
+	EnvNeeds []check.EnvNeed
+
 	// Browser is the scenario's `config browser`, or nil when it wrote none.
 	Browser *BrowserConfig
+
+	// HTTP is the scenario's `config http`, or nil when it wrote none.
+	HTTP *HTTPConfig
 
 	// Vars are the scenario's `var` declarations in source order. The order is
 	// load-bearing: a var sees the vars above it and no others, which is only
@@ -82,6 +98,19 @@ type Scenario struct {
 
 	// Steps are the scenario's steps in source order.
 	Steps []*Step
+
+	// Setup and Teardown are its setup and teardown blocks' steps, in source
+	// order. Setup runs before Steps and stops them when it fails; Teardown
+	// runs after them whatever happened.
+	Setup    []*Step
+	Teardown []*Step
+}
+
+// Row is where a data-driven scenario's row came from: the file its data was
+// read from, or "rows" for an array written out, and the row's place in it.
+type Row struct {
+	Source string
+	Index  int
 }
 
 // Var is one `var name = expr`.
@@ -114,6 +143,39 @@ type Browser struct {
 	// when it wrote none. It is not parsed here -- what a viewport string means
 	// belongs to whatever opens the window.
 	Viewport string
+}
+
+// HTTPConfig is `config http { cookies = false }`. Cookies is nil when the block
+// did not write it.
+type HTTPConfig struct {
+	Cookies ast.Expr
+	Line    int
+}
+
+// HTTP is the resolved form of an HTTPConfig: how a scenario's api steps talk.
+type HTTP struct {
+	// Cookies is whether the scenario's api steps share a cookie jar. The
+	// default is true, as in a browser: a cookie a login response sets is sent
+	// on the scenario's later requests.
+	Cookies bool
+}
+
+// Resolve evaluates the config against env. A nil config is the defaults.
+func (c *HTTPConfig) Resolve(env *eval.Env) (HTTP, error) {
+	out := HTTP{Cookies: true}
+	if c == nil || c.Cookies == nil {
+		return out, nil
+	}
+	v, err := eval.Eval(c.Cookies, env)
+	if err != nil {
+		return out, fmt.Errorf("config http cookies: %w", err)
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return out, fmt.Errorf("config http cookies is %s, want true or false", eval.Render(v))
+	}
+	out.Cookies = b
+	return out, nil
 }
 
 // Resolve evaluates the config against env.
@@ -154,11 +216,14 @@ func (c *BrowserConfig) Resolve(env *eval.Env) (Browser, error) {
 // evaluated against the vars already bound, so `var b = a` sees `a` only when
 // `a` is above it, and the first var that cannot be evaluated stops the
 // scenario. A scenario whose variables do not resolve has nothing worth running.
-func (s *Scenario) Bind(scope executor.Scope) error {
+//
+// gen is the scenario's generator, so `var id = uuid()` draws from the same
+// seeded sequence as the steps after it; nil draws from the process's own.
+func (s *Scenario) Bind(scope executor.Scope, gen *eval.Gen) error {
 	if s == nil {
 		return nil
 	}
-	env := &eval.Env{Vars: scope.Vars()}
+	env := &eval.Env{Vars: scope.Vars(), Gen: gen}
 	for _, v := range s.Vars {
 		val, err := eval.Eval(v.Value, env)
 		if err != nil {
@@ -211,10 +276,25 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 		Name: sc.Name.Value,
 		Line: sc.Keyword.Span.Line,
 	}
+	if sc.Row != nil {
+		out.Row = &Row{Source: sc.Row.Source, Index: sc.Row.Index}
+	}
 	secrets := secretVars(sc)
+	if info.SuiteSecret() {
+		// Conservative: one secret among the suite's names withholds every
+		// value read through suite, since which member an expression reads
+		// is only a path, and the taint walk follows names.
+		secrets["suite"] = true
+	}
+	captured := map[string]bool{}
 	for _, d := range sc.Body {
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
+			if http := httpConfig(d); http != nil {
+				// As with `config browser`, a second one replaces the first.
+				out.HTTP = http
+				continue
+			}
 			cfg, err := config(d)
 			if err != nil {
 				return nil, err
@@ -240,14 +320,72 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)
 			}
 			st.relativeTo(sc.Keyword.Span.File)
+			st.Needs = needs(d, captured)
 			out.Steps = append(out.Steps, st)
 			// After the step, never before it: a capture is not in scope for
 			// the step that writes it.
 			addSecretCaptures(secrets, st)
+			addCaptured(captured, st)
+		case *ast.TagsDecl:
+			if arr, ok := d.Value.(*ast.Array); ok {
+				for _, el := range arr.Elems {
+					if lit, ok := el.Value.(*ast.Literal); ok && lit.Kind() == token.String {
+						out.Tags = append(out.Tags, lit.Tok.Value)
+					}
+				}
+			}
+		case *ast.PhaseDecl:
+			for _, inner := range d.Body {
+				switch inner := inner.(type) {
+				case *ast.VarDecl:
+					// A use's hoisted var, bound with the scenario's own.
+					if inner.Name.Kind == token.Ident {
+						out.Vars = append(out.Vars, &Var{Name: inner.Name.Value, Value: inner.Value, Line: inner.Name.Span.Line})
+					}
+				case *ast.StepDecl:
+					st, err := step(inner, info, secrets)
+					if err != nil {
+						return nil, fmt.Errorf("scenario %q: %s: %w", out.Name, d.Keyword.Value, err)
+					}
+					st.relativeTo(sc.Keyword.Span.File)
+					st.Needs = needs(inner, captured)
+					if d.Keyword.Value == ast.PhaseSetup {
+						out.Setup = append(out.Setup, st)
+					} else {
+						out.Teardown = append(out.Teardown, st)
+					}
+					addSecretCaptures(secrets, st)
+					addCaptured(captured, st)
+				}
+			}
 		}
 		// *ast.Bad and anything else: already reported by the parser.
 	}
 	return out, nil
+}
+
+// addCaptured adds the names st captures to captured.
+func addCaptured(captured map[string]bool, st *Step) {
+	for _, c := range st.Captures {
+		captured[c.Name] = true
+	}
+}
+
+// needs is the captures of earlier steps that d reads: the names a teardown
+// step checks are in scope before it runs, so a cleanup of something a failed
+// step never created is skipped rather than an error.
+func needs(d *ast.StepDecl, captured map[string]bool) []string {
+	var out []string
+	seen := map[string]bool{}
+	ast.Inspect(d, func(n ast.Node) {
+		id, ok := n.(*ast.Ident)
+		if !ok || !captured[id.Name()] || seen[id.Name()] {
+			return
+		}
+		seen[id.Name()] = true
+		out = append(out, id.Name())
+	})
+	return out
 }
 
 // secretVars is the names of the scenario's `secret var` declarations.
@@ -302,6 +440,20 @@ func config(d *ast.ConfigDecl) (*BrowserConfig, error) {
 		// Any other name is an unknown field the checker reported.
 	}
 	return out, nil
+}
+
+// httpConfig lowers `config http { ... }`, and is nil for any other subject.
+func httpConfig(d *ast.ConfigDecl) *HTTPConfig {
+	if d.Subject.Kind != token.Ident || d.Subject.Value != "http" {
+		return nil
+	}
+	out := &HTTPConfig{Line: d.Keyword.Span.Line}
+	for _, f := range fields(d.Block) {
+		if f.Name.Kind == token.Ident && f.Name.Value == "cookies" {
+			out.Cookies = f.Value
+		}
+	}
+	return out
 }
 
 // fields is the *ast.Field items of a block, skipping the ast.Bad a line that

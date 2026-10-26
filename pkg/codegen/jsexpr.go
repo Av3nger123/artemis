@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/token"
 )
 
@@ -454,7 +455,7 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 		return jsExpr{}, err
 	}
 	if ok, min, max := arity(name, len(args)); !ok {
-		if _, known := builtinArity[name]; !known {
+		if !builtin.Is(name) {
 			return jsExpr{}, fmt.Errorf("line %d: %s() is not a function artemis exports",
 				c.Span().Line, name)
 		}
@@ -484,6 +485,17 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 		return src(f.use(jsHelperEnv) + "(" + args[0].src + ")"), nil
 	case "match":
 		return src(f.use(jsHelperMatch) + "(" + args[0].src + ", " + args[1].src + ")"), nil
+	case "uuid", "now", "random_int", "random_string", "base64", "base64_decode", "url_encode",
+		"sha256", "hmac_sha256", "jwt_claims", "to_json", "from_json", "len", "number", "string":
+		// One helper per value builtin, named for it and as in Python.
+		srcs := make([]string, len(args))
+		for i, a := range args {
+			srcs[i] = a.src
+		}
+		return src(f.use("art_"+name) + "(" + strings.Join(srcs, ", ") + ")"), nil
+	case "json", "csv", "file":
+		helper := map[string]string{"json": jsHelperReadJSON, "csv": jsHelperReadCSV, "file": jsHelperFile}[name]
+		return src(f.use(helper) + "(" + f.dataPath(c, args[0].src) + ")"), nil
 	case "text":
 		return asyncSrc(f.use(jsHelperText) + "(page, " + args[0].src + ")"), nil
 	case "value":
@@ -796,4 +808,19 @@ func (f *jsFile) pageMember(x ast.Expr) (string, bool) {
 		return "", false
 	}
 	return m.Name.Value, true
+}
+
+// dataPath is a data builtin's path as the generated test opens it: a literal
+// joined to the .art file's directory here, and anything else joined at run
+// time.
+func (f *jsFile) dataPath(c *ast.Call, arg string) string {
+	dir := dataDir(c)
+	if path, ok := literalPath(c, dir); ok {
+		return jsQuote(path)
+	}
+	if dir == "" {
+		return arg
+	}
+	f.need("node:path.join")
+	return "join(" + jsQuote(dir) + ", " + arg + ")"
 }
