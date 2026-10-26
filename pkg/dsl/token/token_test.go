@@ -124,7 +124,6 @@ func TestLookupsAgreeWithTheirTables(t *testing.T) {
 		{"BrowserActions", BrowserActions, IsBrowserAction},
 		{"TypeNames", TypeNames, IsTypeName},
 		{"WordOperators", WordOperators, IsWordOperator},
-		{"Builtins", Builtins, IsBuiltin},
 		{"Reserved", Reserved, IsReserved},
 		{"UseLines", UseLines, IsUseLine},
 		{"DropTargets", DropTargets, IsDropTarget},
@@ -149,11 +148,12 @@ func TestLookupsAgreeWithTheirTables(t *testing.T) {
 func TestReservedDoesNotCollideWithTheLanguage(t *testing.T) {
 	// A word cannot be both reserved for a later tier and part of the grammar
 	// today: the checker rejects reserved words, so a collision would reject
-	// valid files.
+	// valid files. The builtins' names are pkg/dsl/builtin's, and that
+	// package's tests hold them to the same rule.
 	live := [][]string{
 		Methods, Actions, BrowserActions, TypeNames, WordOperators,
 		Blocks, StepStatements, RequestFields, RunFields, RetryFields,
-		StepFields, ConfigBlocks, BrowserConfigFields, Builtins,
+		StepFields, ConfigBlocks, BrowserConfigFields,
 		CollectionItems, UseLines, DropTargets,
 	}
 	// keywordNotName are the reserved words the language now uses as keywords

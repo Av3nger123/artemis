@@ -2,6 +2,7 @@ package check
 
 import (
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/token"
 )
 
@@ -84,7 +85,7 @@ func isPath(x ast.Expr) bool {
 		if x.Callee == nil || x.Callee.Tok.Kind != token.Ident {
 			return false
 		}
-		if !token.IsBuiltin(x.Callee.Name()) {
+		if !builtin.Is(x.Callee.Name()) {
 			return false
 		}
 		for _, a := range x.Args {

@@ -46,43 +46,9 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/token"
 )
-
-// arity is the most arguments each builtin takes, and minArity the fewest.
-// pkg/dsl/check enforces both at compile time. They are repeated here because
-// Eval must be total: a tree built in Go, or decoded from JSON by a UI,
-// reaches this package without having been checked.
-var arity = map[string]int{
-	"env":     2,
-	"match":   2,
-	"text":    1,
-	"value":   1,
-	"attr":    2,
-	"count":   1,
-	"visible": 1,
-}
-
-// minArity holds env()'s minimum of one argument. A name that is not here
-// takes exactly as many as arity says, which is every builtin but env(): its
-// second argument is the default value for a variable with no value, and
-// that argument is optional.
-var minArity = map[string]int{
-	"env": 1,
-}
-
-// wants is how many arguments name accepts: the fewest and the most.
-func wants(name string) (minimum, maximum int, known bool) {
-	high, ok := arity[name]
-	if !ok {
-		return 0, 0, false
-	}
-	low := high
-	if m, ok := minArity[name]; ok {
-		low = m
-	}
-	return low, high, true
-}
 
 // maxGroups is how many capturing groups a match() pattern may have, which is
 // pkg/dsl/check's maxGroups. The checker counts a literal pattern and reports
@@ -199,7 +165,7 @@ func evalIdent(x *ast.Ident, env *Env) (any, error) {
 	if v, ok := env.lookup(name); ok {
 		return v, nil
 	}
-	if _, isFn := arity[name]; isFn {
+	if builtin.Is(name) {
 		return nil, errorf(x.Span(), "%s is a function, not a value", name)
 	}
 	return nil, errorf(x.Span(), "unknown name %s", name)
@@ -543,7 +509,10 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		return nil, errorf(c.Span(), "this call has no function name")
 	}
 	name := c.Callee.Name()
-	low, high, known := wants(name)
+	// The checker enforces these bounds at compile time. They are asked again
+	// because Eval must be total: a tree built in Go, or decoded from JSON by a
+	// UI, reaches this package without having been checked.
+	low, high, known := builtin.Arity(name)
 	if !known {
 		return nil, errorf(c.Span(), "unknown function %s", name)
 	}
@@ -607,9 +576,13 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 		return page.Attr(args[0], args[1])
 	case "count":
 		return page.Count(args[0])
-	default:
+	case "visible":
 		return page.Visible(args[0])
 	}
+	// A name pkg/dsl/builtin knows and this switch does not: a builtin added to
+	// the table without an evaluation. TestEveryBuiltinEvaluates catches it
+	// first; this keeps it a reason rather than a call to the wrong function.
+	return nil, errorf(c.Span(), "%s() has no evaluation", name)
 }
 
 // evalMatch is `match(<text>, <pattern>)`: the regex extraction a capture off

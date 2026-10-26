@@ -1,6 +1,7 @@
 package grammar
 
 import (
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
@@ -97,7 +98,7 @@ func Choices() ChoicePoints {
 			"comparison":         words("The grammar's BinOp: the operator dropdown of a simple assertion.", token.Comparisons),
 			"wordOperator":       words("The operators spelled as words: and, or and not are logical, contains and matches are comparisons, exists and is are postfix predicates.", token.WordOperators),
 			"typeName":           words("The right-hand side of is.", token.TypeNames),
-			"builtin":            words("The functions callable in an expression. Which are in scope depends on the step type; see stepType.", token.Builtins),
+			"builtin":            words("The functions callable in an expression. Which are in scope depends on the step type; see stepType.", builtin.Names()),
 			"configSubject":      words("The subjects of a config declaration.", token.ConfigBlocks),
 			"collectionItem":     words("What a collection body holds: requests.", token.CollectionItems),
 			"useLine":            words("The words that open an override line in a use block. Any other identifier opening a line there is an argument.", token.UseLines),

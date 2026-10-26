@@ -80,11 +80,6 @@ var (
 	// BrowserConfigFields are what `config browser` accepts. Deliberately tiny.
 	BrowserConfigFields = []string{"headless", "viewport"}
 
-	// Builtins are the functions callable in any expression scope. env() and
-	// match() are the two that are everywhere; the rest are browser-scope
-	// element functions and the checker rejects them elsewhere.
-	Builtins = []string{"env", "match", "text", "value", "attr", "count", "visible"}
-
 	// Reserved words are a parse error wherever a name is expected, so that a
 	// later tier can add control flow, functions or agentic assertions without
 	// a breaking change. The lexer does not enforce this -- using one lexes to
@@ -104,7 +99,6 @@ var (
 	browserActions = set(BrowserActions)
 	typeNames      = set(TypeNames)
 	wordOperators  = set(WordOperators)
-	builtins       = set(Builtins)
 	reserved       = set(Reserved)
 	useLines       = set(UseLines)
 	dropTargets    = set(DropTargets)
@@ -159,9 +153,6 @@ func IsUseLine(word string) bool { return useLines[word] }
 
 // IsDropTarget reports whether word may follow `drop` in a use block.
 func IsDropTarget(word string) bool { return dropTargets[word] }
-
-// IsBuiltin reports whether word names a callable builtin.
-func IsBuiltin(word string) bool { return builtins[word] }
 
 // IsReserved reports whether word is reserved for a later tier of the language.
 func IsReserved(word string) bool { return reserved[word] }

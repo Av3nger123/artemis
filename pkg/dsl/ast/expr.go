@@ -186,8 +186,8 @@ type Arg struct {
 //
 // Callee is an *Ident: the grammar is `Call = Ident "(" ... ")"`, so there are
 // no first-class functions and no `body.f()`. Which names are callable is
-// token.Builtins, and the checker is what rejects a browser element function
-// in an api step.
+// pkg/dsl/builtin's table, and the checker is what rejects a browser element
+// function in an api step.
 type Call struct {
 	Callee *Ident
 	LParen token.Token

@@ -2,11 +2,11 @@ package eval
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
-	"artemis/pkg/dsl/check"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/parser"
-	"artemis/pkg/dsl/token"
 )
 
 // apiEnv is an api step's observation: the shapes a decoded HTTP response
@@ -322,39 +322,24 @@ func TestEnvNonStringDefaultNamesTheType(t *testing.T) {
 	}
 }
 
-// This package's arity and minArity are a second copy of pkg/dsl/check's
-// numbers -- Eval must be total over a tree a UI built, which never went
-// through the checker -- and a copy nothing compares is a copy that drifts.
-//
-// ART-25's own history is the argument: a *third* copy, in pkg/codegen, still
-// required exactly one argument for env() after both of these had learned
-// about the default value, and it was found by hand in the middle of the
-// implementation rather than by a test.
-//
-// Comparing rather than unifying: each package's reason for its own table is
-// documented where the table is, and one shared table is a change for its own
-// issue.
-func TestArityAgreesWithTheChecker(t *testing.T) {
-	for name := range arity {
-		low, high, ok := check.Arity(name)
-		if !ok {
-			t.Errorf("%s() is in this package's arity table and the checker does not know it", name)
-			continue
+// Every builtin in pkg/dsl/builtin reaches a case of evalCall's own. The table
+// says what a builtin takes and this package says what it does, so a builtin
+// added to the table without an evaluation is this test's failure -- not a
+// call that quietly ran a different function, which is what the switch's old
+// default did for any name it did not list.
+func TestEveryBuiltinEvaluates(t *testing.T) {
+	for _, name := range builtin.Names() {
+		fn, _ := builtin.Lookup(name)
+		// A string satisfies every parameter, match()'s pattern included.
+		args := make([]string, len(fn.Params))
+		for i := range args {
+			args[i] = `"x"`
 		}
-		gotLow, gotHigh, known := wants(name)
-		if !known {
-			t.Errorf("%s() is in the arity table and wants() does not know it", name)
-			continue
-		}
-		if gotLow != low || gotHigh != high {
-			t.Errorf("%s() takes %d to %d arguments here and %d to %d in pkg/dsl/check",
-				name, gotLow, gotHigh, low, high)
-		}
-	}
-	for _, name := range token.Builtins {
-		if _, ok := arity[name]; !ok {
-			t.Errorf("%s() is a builtin of the language and this package has no arity for it, "+
-				"so Eval would report it as unknown", name)
+		src := name + "(" + strings.Join(args, ", ") + ")"
+		_, err := evalSrc(t, src, browserEnv())
+		if err != nil && (strings.Contains(err.Error(), "has no evaluation") ||
+			strings.Contains(err.Error(), "unknown function")) {
+			t.Errorf("%s: %v", src, err)
 		}
 	}
 }

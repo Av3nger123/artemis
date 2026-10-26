@@ -165,24 +165,11 @@ func TestModuleWordsSayWhatTheyDoNow(t *testing.T) {
 	}
 }
 
-// TestEveryBuiltinHasAnArityAndASignature holds the three tables that describe
-// a call -- token.Builtins, params and signatures -- to each other, so a
-// builtin added to the language cannot reach a user as `() takes 0 arguments`
-// with an empty hint.
-func TestEveryBuiltinHasAnArityAndASignature(t *testing.T) {
-	for _, b := range token.Builtins {
-		if _, ok := params[b]; !ok {
-			t.Errorf("builtin %q has no arity", b)
-		}
-		if signatures[b] == "" {
-			t.Errorf("builtin %q has no signature for its hint", b)
-		}
-	}
-	for _, f := range elementFns {
-		if !token.IsBuiltin(f) {
-			t.Errorf("element function %q is not in token.Builtins", f)
-		}
-	}
+// TestEveryBrowserActionHasASignature holds the browser actions to the hints
+// their arity diagnostics print, so an action added to the language cannot
+// reach a user with an empty hint. A builtin's signature is in its own entry
+// in pkg/dsl/builtin, which cannot be written without one.
+func TestEveryBrowserActionHasASignature(t *testing.T) {
 	for _, a := range token.BrowserActions {
 		if actSignatures[a] == "" {
 			t.Errorf("browser action %q has no signature for its arity hint", a)
@@ -424,53 +411,6 @@ func TestEnvRejectsAnEmptyName(t *testing.T) {
 		}
 		if needs := info.EnvNeeds(); len(needs) != 0 {
 			t.Errorf("EnvNeeds() = %v, want none: a nameless row in the gate's block names nothing", needs)
-		}
-	}
-}
-
-// Every builtin the language names is one the checker knows, each of its
-// parameters says what it takes, and its two bounds are coherent.
-//
-// The bounds are the part that had no test. The assertion used to be `high !=
-// len(ps)` against a high that Arity derives from len(ps) -- len(ps) !=
-// len(ps), which cannot fail -- and nothing read minArgs at all: minArgs["env"]
-// = 3 would have made every env() call an arity error with every test still
-// green. A minimum above the maximum, or below one, is now the failure.
-func TestParamsAndBuiltinsAgree(t *testing.T) {
-	for name, ps := range params {
-		low, high, ok := Arity(name)
-		if !ok {
-			t.Errorf("%s() is in params and Arity does not know it", name)
-			continue
-		}
-		if high != len(ps) {
-			t.Errorf("%s(): max arity %d, %d parameters", name, high, len(ps))
-		}
-		if low < 1 || low > high {
-			t.Errorf("%s(): accepts %d to %d arguments, which is not a range a call can satisfy",
-				name, low, high)
-		}
-		if !token.IsBuiltin(name) {
-			t.Errorf("%s() is in params and not in token.Builtins, so token.IsBuiltin "+
-				"disagrees with the checker about what is callable", name)
-		}
-		for i, p := range ps {
-			if p.want == "" || len(p.kinds) == 0 {
-				t.Errorf("%s()'s parameter %d says nothing about what it takes", name, i)
-			}
-		}
-	}
-	for name, low := range minArgs {
-		ps, ok := params[name]
-		if !ok {
-			t.Errorf("minArgs has %q, which has no parameter list -- so Arity never reads it", name)
-			continue
-		}
-		// A minimum equal to the maximum is the default and says nothing; a
-		// builtin that no longer takes a range should leave minArgs instead.
-		if low >= len(ps) {
-			t.Errorf("minArgs[%q] = %d against %d parameters: a minimum that is not below the "+
-				"maximum is either a contradiction or a line with no effect", name, low, len(ps))
 		}
 	}
 }

@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
 	dsltoken "artemis/pkg/dsl/token"
@@ -48,7 +50,6 @@ var owner = map[string]string{
 	"StepFields":          "stepField",
 	"ConfigBlocks":        "configSubject",
 	"BrowserConfigFields": "configBrowserField",
-	"Builtins":            "builtin",
 	"Reserved":            "reservedWord",
 	"CollectionItems":     "collectionItem",
 	"UseLines":            "useLine",
@@ -86,6 +87,21 @@ func TestEveryTableIsAChoicePoint(t *testing.T) {
 				t.Errorf("choice %q value %d = %q, token.%s[%d] = %q", choice, i, got[i], name, i, words[i])
 			}
 		}
+	}
+}
+
+// TestTheBuiltinChoiceIsTheBuiltinTable is TestEveryTableIsAChoicePoint for
+// the one word set that is not in token/tables.go: the builtins are
+// pkg/dsl/builtin's, so the "builtin" choice point is compared to that table
+// here, in its order.
+func TestTheBuiltinChoiceIsTheBuiltinTable(t *testing.T) {
+	c, ok := Choices().Choices["builtin"]
+	if !ok {
+		t.Fatal(`Choices() emits no "builtin" choice point`)
+	}
+	got, want := valuesOf(c), builtin.Names()
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("choice \"builtin\" = %v, pkg/dsl/builtin has %v", got, want)
 	}
 }
 

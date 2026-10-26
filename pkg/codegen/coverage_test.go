@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/token"
 )
@@ -58,7 +59,7 @@ func TestCorpusCoversTheLanguage(t *testing.T) {
 	missing(t, corpusDir, "comparison operator", token.Comparisons, got.ops)
 	missing(t, corpusDir, "word operator", token.WordOperators, got.ops)
 	missing(t, corpusDir, "type name", token.TypeNames, got.types)
-	missing(t, corpusDir, "builtin", token.Builtins, got.fns)
+	missing(t, corpusDir, "builtin", builtin.Names(), got.fns)
 	missing(t, corpusDir, "config subject", token.ConfigBlocks, got.settings)
 
 	// Every field of every block, which is where a request, a run, a retry, a

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/token"
 )
 
@@ -454,7 +455,7 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 		return jsExpr{}, err
 	}
 	if ok, min, max := arity(name, len(args)); !ok {
-		if _, known := builtinArity[name]; !known {
+		if !builtin.Is(name) {
 			return jsExpr{}, fmt.Errorf("line %d: %s() is not a function artemis exports",
 				c.Span().Line, name)
 		}

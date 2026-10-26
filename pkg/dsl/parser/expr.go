@@ -225,8 +225,8 @@ func (p *parser) parsePrimary() ast.Expr {
 	case token.Ident:
 		// An identifier followed immediately by "(" is a call. The grammar is
 		// `Call = Ident "(" ... ")"`, so there are no first-class functions
-		// and no `body.f()`; which names are callable is token.Builtins and
-		// the checker's business.
+		// and no `body.f()`; which names are callable is pkg/dsl/builtin's
+		// table and the checker's business.
 		name := &ast.Ident{Tok: p.next()}
 		if p.at(token.LParen) && p.continues() {
 			return p.parseCall(name)
