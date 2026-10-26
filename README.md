@@ -693,16 +693,6 @@ themselves consult, so a word added to the language appears here without
 anything shipping. A client building a form reads it instead of hardcoding a
 list that drifts.
 
-### `artemis build` (deprecated)
-
-`artemis build --lang=python|js` exports a `.art` file as pytest or vitest. It is
-**deprecated** and will be removed in a future release: it still works, prints a
-warning, and gains nothing new -- it refuses a scenario with a `db` step or one
-that reads a suite. Keeping two exports in step with `artemis run` cost every
-feature three implementations, and turning a scenario into pytest or vitest when
-a team wants one is a request an AI assistant answers well. `artemis run` is how
-a `.art` file runs.
-
 ### Machine-readable reports
 
 `--report` writes the outcome of a run in a format another program can read. Its
@@ -1465,8 +1455,7 @@ command makes -- so it stays an input the command can read.
 - **Control flow and functions.** `if`, loops, `parallel`, `group` and `fn`
   are reserved words, not features. Reusing a request is
   [collections](#reusing-requests), and running a scenario per row of data is a
-  `for` clause, both of which expand into plain scenarios before anything runs;
-  code generation is the answer to "I need real abstraction".
+  `for` clause, both of which expand into plain scenarios before anything runs.
 - **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
   valuable property is determinism, and an assertion that flakes for
   unreproducible reasons is worse than a missing one.

@@ -212,12 +212,7 @@ goes.
 A `secret` binding that no step reads is not an error. A file under edit must
 still compile.
 
-`secret` reaches artemis's own reports and traces, and no further. The
-deprecated `artemis build` exports a scenario as a test for another runner, and
-that runner has no idea what a secret is: a generated pytest or vitest test that
-fails prints both operands the way its own framework does. The value still
-arrives through `art_env` rather than as a literal in the file, so the generated
-code holds no credential of its own.
+`secret` reaches artemis's own reports and traces, and no further.
 
 ### `setup` and `teardown`
 
@@ -363,8 +358,7 @@ the scenario declares.
 | What it may hold | A suite runs setup and teardown, not steps of its own (`suite-has-step`). A suite block belongs in a file named `suite.art` (`suite-file-name`), and a `suite.art` holds the suite and no scenario (`suite-has-scenario`) |
 
 `artemis run suite/` never runs `suite.art` as a scenario file; it runs with the
-scenarios under it. The deprecated `artemis build` does not export a suite, and
-refuses a scenario that reads `suite`, naming it.
+scenarios under it.
 
 ### `config`
 
@@ -2411,7 +2405,6 @@ and their output.
 | `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
 | `artemis expand x.art [-o out.art] [--force]` | The file that will run: every `use` replaced by its steps, each preceded by a comment naming where it came from. See [`artemis expand`](#artemis-expand) |
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
-| `artemis build --lang=python\|js [-o dir]` | **Deprecated**, to be removed in a future release; it warns when run and refuses `db` steps and suites. The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`; js is vitest with `fetch`, `child_process` and `@playwright/test`. The lowering rules are the same for both: one scenario becomes one test, a `capture` a local variable, an `expect` the runner's own assertion, a `within` on a browser assertion playwright's own timeout. Playwright on both sides and under `artemis run` means a browser scenario behaves the same way three ways. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `go` target is reserved and will not be built |
 
 A scenario is converted into this language once, never translated on the fly:
 `artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f

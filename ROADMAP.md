@@ -7,7 +7,7 @@ file is for what is coming.
 ## Done
 
 Designed together on 2026-10-26 and built as eight PRs: a builtin table shared
-by the checker, the evaluator and code generation first, with no change in
+by the checker and the evaluator first, with no change in
 behaviour; then the value builtins, cookies and timing, files, data rows, setup
 and teardown, suites, and selection last, because it reads tags from suites and
 names from data rows. `SPEC.md` documents each.
@@ -20,7 +20,7 @@ names from data rows. `SPEC.md` documents each.
    teardown always running; a `suite.art` per folder whose setup runs once and
    whose values every scenario below it reads as `suite.<name>`.
 3. **Builtins, cookies and timing.** One builtin table for the checker, the
-   evaluator and code generation; `uuid()`, `now()`, `random_*()`, encoding and
+   evaluator; `uuid()`, `now()`, `random_*()`, encoding and
    hashing builtins, reproducible with `--seed`; a cookie jar per scenario and a
    `cookies` root; `duration_ms` on every step.
 4. **Selection.** `tags = [...]`, `--tags "smoke and not slow"`, `--grep`, and
@@ -31,21 +31,15 @@ names from data rows. `SPEC.md` documents each.
    build carries the PostgreSQL, MySQL and SQLite drivers and `make build-full`
    every one. CI runs the server tests against all six in service containers.
 
-## Next
+## Removed
 
-### `artemis build`: deprecated, then removed
-
-Deprecated on 2026-10-26. `artemis build` exported a `.art` file as pytest or
-vitest, held to `artemis run` by a conformance corpus run three ways in CI. That
-cost every language feature three implementations -- suites and `db` steps were
-never exported for that reason -- and a Python and Node toolchain in CI, for
-something an AI assistant does well on request: translating one scenario into
-the test framework a team already uses.
-
-It still works and warns when run; it gains nothing new. The removal, a release
-later, deletes `pkg/codegen` and `pkg/cli/build.go` with their tests and
-goldens, the Python and Node steps in CI, and the `art_*` helpers' mention in
-SPEC.md.
+**`artemis build`**, on 2026-10-26, before any release. It exported a `.art`
+file as pytest or vitest, held to `artemis run` by a conformance corpus run
+three ways in CI. That cost every language feature three implementations --
+suites and `db` steps were never exported for that reason -- and a Python and
+Node toolchain in CI, for something an AI assistant does well on request:
+translating a scenario into the test framework a team already uses. `artemis
+run` is how a `.art` file runs.
 
 ## Ideas
 

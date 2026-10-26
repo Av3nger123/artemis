@@ -300,13 +300,8 @@ func TestAnElementFunctionWithNoPageIsAReason(t *testing.T) {
 	}
 }
 
-// TestEnvNonStringDefaultNamesTheType is the interpreter's half of a sentence
-// the two generated helpers also have to write.
-//
-// The checker judges only a literal, so env("PORT", port) compiles and this is
-// what the step then says. pkg/codegen's art_env tests assert the part of it a
-// helper can reproduce -- everything before " at ", which is the source text
-// of the argument and is not something a helper has.
+// TestEnvNonStringDefaultNamesTheType: the checker judges only a literal, so
+// env("PORT", port) compiles and this is what the step then says.
 func TestEnvNonStringDefaultNamesTheType(t *testing.T) {
 	env := &Env{
 		Lookup: func(string) (string, bool) { return "", false },

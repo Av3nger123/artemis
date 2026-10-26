@@ -271,8 +271,7 @@ func TestLogicalOperatorsTakeBooleansOnly(t *testing.T) {
 }
 
 // Short-circuiting is what keeps `no and body.nope == 1` a verdict rather than
-// a reason, and it is what the Python and JavaScript targets will do, so ART-48
-// lowers mechanically.
+// a reason.
 func TestLogicalOperatorsShortCircuit(t *testing.T) {
 	runRows(t, "shortcircuit", []row{
 		{src: "no and body.nope == 1", want: false},
@@ -429,7 +428,7 @@ func textEnv() *Env {
 }
 
 // TestMatchExtraction is the whole of match()'s contract, which SPEC.md
-// states and ART-48 and ART-50 port: which group, how many, what no match
+// states: which group, how many, what no match
 // does, and what type comes out.
 func TestMatchExtraction(t *testing.T) {
 	env := textEnv()

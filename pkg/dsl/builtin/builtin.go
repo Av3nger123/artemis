@@ -2,18 +2,15 @@
 // call: each one's name, what each of its parameters takes, how many arguments
 // it accepts, where it is callable, and what a call looks like for a hint.
 //
-// Before this package the same facts were kept four times -- token.Builtins
+// Before this package the same facts were kept in several places -- token
 // for the names, pkg/dsl/check's params and minArgs for the checker, pkg/eval's
-// arity for Eval, which must be total over a tree that was never checked, and
-// pkg/codegen's builtinArity for `artemis build` -- with a test in each package
-// comparing its copy to the checker's. The comparing worked until it did not:
-// codegen's copy still said env() took exactly one argument after the other
-// three had learned about its default, and that was found by hand. Every
+// arity for Eval, which must be total over a tree that was never checked --
+// with a test in each package comparing its copy to the checker's. Every
 // package now reads this table, so there is nothing left to compare.
 //
 // What is not here is what each builtin *does*. Evaluating one is pkg/eval's
-// switch and emitting one is pkg/codegen's, and each of those packages has a
-// test that every name in this table reaches a case of its own. Keeping the
+// switch, which has a test that every name in this table reaches a case of
+// its own. Keeping the
 // behaviour out is also what keeps this package's imports to token alone, so
 // pkg/dsl/check can read it and still depend on nothing that runs.
 package builtin

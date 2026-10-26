@@ -14,9 +14,7 @@ import (
 // something broke.
 //
 // It is here rather than in the runner because the naming is the part worth
-// having in one place, and because a target other than a browser -- ART-48's
-// generated Python -- will want to agree with it about what the file beside a
-// failed step is called.
+// having in one place.
 
 // DefaultDir is where a failed browser step's screenshot goes when nothing says
 // otherwise.
