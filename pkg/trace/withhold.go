@@ -19,7 +19,7 @@ import (
 
 // sent is what the step did, in the shape its type gives it, already withheld.
 //
-// The three arms are the three action shapes models.Step has. A fourth step type
+// The four arms are the four action shapes models.Step has. A fourth step type
 // adds an arm here and nothing else in this package.
 func sent(step models.Step) map[string]any {
 	s := step.Secrets
@@ -97,6 +97,28 @@ func sent(step models.Step) map[string]any {
 			acts = append(acts, act)
 		}
 		return map[string]any{"acts": acts}
+
+	case "db":
+		// The URL's password is never written, secret or not; a secret URL
+		// is withheld whole.
+		out := map[string]any{"url": hide(models.RedactURL(step.DB.URL), s.URL)}
+		if step.DB.SQL != "" {
+			out["sql"] = hide(step.DB.SQL, s.SQL)
+		}
+		if step.DB.SQLFile != "" {
+			out["sql_file"] = fileSent(step.DB.SQLFile)
+		}
+		if len(step.DB.Args) > 0 {
+			out["args"] = dbArgs(step.DB.Args, s.Args)
+		}
+		if step.DB.Command != nil {
+			if s.SQL {
+				out["command"] = Redacted
+			} else {
+				out["command"] = dbCommand(models.Plain(step.DB.Command))
+			}
+		}
+		return out
 	}
 	return map[string]any{}
 }
@@ -312,6 +334,49 @@ func hideList(values []string, secret bool) any {
 		out = append(out, v)
 	}
 	return out
+}
+
+// dbArgs is a db step's args as a trace writes them: each keeping its type, a
+// file by its path and size, and the whole list withheld when any of it read a
+// secret, for hideList's reason.
+func dbArgs(args []any, secret bool) any {
+	if secret {
+		return Redacted
+	}
+	out := make([]any, 0, len(args))
+	for _, a := range args {
+		switch v := a.(type) {
+		case models.FileArg:
+			out = append(out, fileSent(string(v)))
+		case int64:
+			out = append(out, float64(v))
+		default:
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// dbCommand is a command as a trace writes it: a file in it by its path and
+// size, as everywhere else a trace names a file.
+func dbCommand(v any) any {
+	switch t := v.(type) {
+	case models.FileArg:
+		return fileSent(string(t))
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = dbCommand(e)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			out[k] = dbCommand(e)
+		}
+		return out
+	}
+	return v
 }
 
 // clamp cuts every string in a tree down to MaxBytes and names what it cut.

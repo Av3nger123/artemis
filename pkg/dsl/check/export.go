@@ -48,6 +48,7 @@ type ReservedInfo struct {
 var blockSpecs = map[string]blockSpec{
 	"request":       requestBlock,
 	"run":           runBlock,
+	"db":            dbBlock,
 	"retry":         retryBlock,
 	"step":          stepBlock,
 	"configBrowser": browserConfigBlock,
@@ -57,7 +58,7 @@ var blockSpecs = map[string]blockSpec{
 // BlockNames returns the blocks BlockFields knows, in grammar order: the three
 // action-and-statement blocks, the step's own fields, then config's.
 func BlockNames() []string {
-	return []string{"request", "run", "retry", "step", "configBrowser", "configHttp"}
+	return []string{"request", "run", "db", "retry", "step", "configBrowser", "configHttp"}
 }
 
 // BlockFields returns block's fields in the order its token table lists them,
@@ -112,10 +113,10 @@ func ReservedWords() []ReservedInfo {
 	return out
 }
 
-// StepTypes returns the three step types a file can hold. Unknown is not one
+// StepTypes returns the four step types a file can hold. Unknown is not one
 // of them: it is what the checker uses for a step whose action did not parse
 // and for a var's initialiser, and it is not a type anybody writes.
-func StepTypes() []StepType { return []StepType{API, Terminal, Browser} }
+func StepTypes() []StepType { return []StepType{API, Terminal, Browser, DB} }
 
 // Classes returns the two labels an expect carries, simple first, because that
 // is the one a form renders as three widgets and the interesting one to read.

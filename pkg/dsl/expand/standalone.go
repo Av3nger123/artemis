@@ -129,7 +129,7 @@ func paramVars(params *ast.Params) []ast.Decl {
 // stdout, page and the rest.
 var observationRoots = func() map[string]bool {
 	m := map[string]bool{}
-	for _, t := range []check.StepType{check.API, check.Terminal, check.Browser} {
+	for _, t := range check.StepTypes() {
 		for _, r := range check.Roots(t) {
 			m[r] = true
 		}

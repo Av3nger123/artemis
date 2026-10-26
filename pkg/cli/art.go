@@ -28,7 +28,7 @@ func isArtFile(path string) bool { return front.IsArtFile(path) }
 //
 // The Unit carries both trees: Tree is the file as written, which is what
 // `artemis fmt` and `artemis ast` print, and Expanded is what runs, which is
-// what `artemis run` and `artemis build` read. Info is about Expanded.
+// what `artemis run` reads. Info is about Expanded.
 //
 // pkg/dsl/corpus_test.go keeps its own copy, deliberately. That one tests the
 // front end rather than the CLI, and the two agreeing is what makes the corpus
@@ -146,20 +146,6 @@ func loadArt(cmd *cobra.Command, path string) (*ast.File, *check.Info, error) {
 		return f.tree, f.info, err
 	}
 	return f.tree, f.info, f.err()
-}
-
-// loadArtExpanded is loadArt for a caller that runs or exports the file: the
-// tree it answers is the expanded one, with no import and no use left in it,
-// and the Info is about that tree.
-func loadArtExpanded(cmd *cobra.Command, path string) (*ast.File, *check.Info, error) {
-	f, err := readArt(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := f.render(cmd.ErrOrStderr()); err != nil {
-		return f.expanded, f.info, err
-	}
-	return f.expanded, f.info, f.err()
 }
 
 // errorsIn is the one-line reason attached to a non-zero exit. The diagnostics

@@ -18,6 +18,65 @@ jobs:
   test:
     name: build, vet, test
     runs-on: ubuntu-latest
+    # pkg/steps/dbstep's server tests run against these, through the two
+    # ARTEMIS_TEST_*_URL variables on `go test` below; without them the tests
+    # skip and SQLite, in-process, is the only database covered.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: "p@ss:w/rd"
+          POSTGRES_DB: shop
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d shop"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_USER: app
+          MYSQL_PASSWORD: "p@ss:w/rd"
+          MYSQL_DATABASE: shop
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -uapp -pp@ss:w/rd --silent"
+          --health-interval 2s --health-timeout 5s --health-retries 60
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Art3mis!Pass"
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Art3mis!Pass' -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 5s --health-timeout 5s --health-retries 40
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: Art3misSys
+          APP_USER: app
+          APP_USER_PASSWORD: Art3misApp
+        ports: ["1521:1521"]
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 5s --health-timeout 5s --health-retries 60
+      mongo:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: app
+          MONGO_INITDB_ROOT_PASSWORD: "p@ss:w/rd"
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1})'"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 5s --health-retries 30
     steps:
       - uses: actions/checkout@v4
 
@@ -27,39 +86,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Both builds: the default, with PostgreSQL, MySQL and SQLite, and the
+      # full one with every database driver behind its build tag. Vet and the
+      # tests run on the full one, so no driver goes untested.
       - name: go build
-        run: go build ./...
+        run: go build ./... && go build -tags db_all ./...
 
       - name: go vet
-        run: go vet ./...
-
-      # pkg/codegen's execution-parity tests run the *generated* pytest and the
-      # *generated* vitest against the same fixture server the interpreter's
-      # tests use, and assert the same pass/fail per scenario. Each skips with a
-      # note when its toolchain is missing -- which is for a developer's machine,
-      # not for here: these are the gates that catch a codegen backend drifting
-      # from the interpreter, so CI installs what they need to actually run.
-      #
-      # Playwright is deliberately not installed on either side. The browser half
-      # of the corpus is behind the `browser` build tag for the reason the rest of
-      # the browser suite is: CI has no browser and a cold run downloads about
-      # 683 MB (docs/browser-engine.md).
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: install the python test runner
-        run: python3 -m pip install --disable-pip-version-check pytest requests
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      # Globally, because artemis is a Go module and ships no package.json:
-      # `npm root -g` is the one place pkg/codegen/jsparity_test.go can find
-      # vitest without adding a JavaScript package to this repository.
-      - name: install the javascript test runner
-        run: npm install -g vitest
+        run: go vet -tags db_all ./...
 
       - name: gofmt
         run: |
@@ -73,8 +107,19 @@ jobs:
       # -race because the runner makes HTTP calls and the tests stand up
       # servers; a data race that only shows up under load is exactly what a
       # single-threaded run misses.
+      #
+      # The password has an @, a : and a / in it on purpose: the URL escapes
+      # them, and turning a mysql:// URL into the driver's own DSN has to read
+      # them back.
       - name: go test
-        run: go test -race -coverprofile=coverage.out ./...
+        env:
+          ARTEMIS_TEST_POSTGRES_URL: postgres://app:p%40ss%3Aw%2Frd@localhost:5432/shop?sslmode=disable
+          ARTEMIS_TEST_MYSQL_URL: mysql://app:p%40ss%3Aw%2Frd@127.0.0.1:3306/shop
+          ARTEMIS_TEST_SQLSERVER_URL: sqlserver://sa:Art3mis%21Pass@localhost:1433?database=master
+          ARTEMIS_TEST_ORACLE_URL: oracle://app:Art3misApp@localhost:1521/FREEPDB1
+          ARTEMIS_TEST_MONGO_URL: mongodb://app:p%40ss%3Aw%2Frd@localhost:27017/shop?authSource=admin
+          ARTEMIS_TEST_REDIS_URL: redis://localhost:6379/0
+        run: go test -race -tags db_all -coverprofile=coverage.out ./...
 
       - name: coverage
         run: go tool cover -func=coverage.out | tail -1
@@ -102,4 +147,4 @@ jobs:
           # Pinned to the version .golangci.yml is written for. An unpinned
           # linter turns someone else's release into a red build here.
           version: v2.14.0
-          args: --timeout=5m
+          args: --timeout=5m --build-tags=db_all

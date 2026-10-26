@@ -198,8 +198,7 @@ func evalUnary(u *ast.Unary, env *Env) (any, error) {
 // evalBinary is a comparison or a logical operator.
 //
 // `and` and `or` short-circuit, so `false and body.missing.x == 1` is false
-// rather than an error -- which is also what the Python and JavaScript targets
-// will do, so ART-48 lowers mechanically.
+// rather than an error.
 func evalBinary(b *ast.Binary, env *Env) (any, error) {
 	op := operatorOf(b.Op)
 	if op == "and" || op == "or" {
@@ -595,7 +594,7 @@ func evalCall(c *ast.Call, env *Env) (any, error) {
 //
 // It is the DSL's spelling of what pkg/shared/capture.readRegex does for a
 // YAML `{regex: ...}` capture, with one rule tightened. The whole of the
-// contract, which SPEC.md states and ART-48 and ART-50 port:
+// contract, which SPEC.md states:
 //
 //   - the value is capturing group 1 when the pattern has one and the whole
 //     match when it has none, so `id=([0-9]+)` needs no second argument

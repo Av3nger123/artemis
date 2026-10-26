@@ -1,6 +1,7 @@
 package check
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,6 +82,16 @@ var (
 			"env":   {kind: kindBlock},
 		},
 		names: token.RunFields,
+	}
+
+	dbBlock = blockSpec{
+		what: "a db block",
+		fields: map[string]fieldSpec{
+			"sql":     {kind: kindAny},
+			"args":    {kind: kindArray},
+			"command": {kind: kindAny},
+		},
+		names: token.DBFields,
 	}
 
 	retryBlock = blockSpec{
@@ -167,6 +178,128 @@ func (c *checker) oneBody(b *ast.Block) {
 func (c *checker) run(r *ast.Run, v *view) {
 	c.expr(r.Command, v)
 	c.block(r.Block, runBlock, v)
+}
+
+// db checks a db step's action: the connection, the block's fields, that
+// there is one statement to run -- sql, or a command -- and, for a URL written
+// out, that its scheme is a database artemis has a driver for and that it is
+// sent the kind of statement it takes. A URL from a var or env() is the usual
+// case and is only known at run time, where the same faults are step errors.
+func (c *checker) db(d *ast.DB, v *view) {
+	c.expr(d.Conn, v)
+	c.block(d.Block, dbBlock, v)
+	scheme, known := c.dbScheme(d.Conn)
+
+	var sql, args, command *ast.Field
+	for _, f := range fields(d.Block) {
+		switch f.Name.Value {
+		case "sql":
+			sql = f
+		case "args":
+			args = f
+		case "command":
+			command = f
+		}
+	}
+	switch {
+	case sql != nil && command != nil:
+		c.bag.Error(command.Name.Span, diag.DBStatementConflict,
+			"this db step already runs sql, and a command would be a second statement").
+			Hintf("a SQL database takes sql = ...; MongoDB and Redis take command = ...")
+	case sql == nil && command == nil && args != nil:
+		c.bag.Error(args.Name.Span, diag.DBArgsWithoutSQL,
+			"args are bound to the placeholders of sql, and this db step has no sql").
+			Hintf(`sql = "SELECT * FROM orders WHERE id = $1"`)
+	case sql == nil && command == nil:
+		c.bag.Error(d.Keyword.Span, diag.DBNeedsStatement, "this db step has no sql or command to run").
+			Hintf(`db %s { sql = "SELECT 1" }`, connText(d.Conn))
+	case command != nil && args != nil:
+		c.bag.Error(args.Name.Span, diag.DBArgsWithoutSQL,
+			"args are bound to the placeholders of sql, and a command carries its values in itself").
+			Hintf(`command = ["GET", "session:${sid}"]`)
+	}
+	if !known {
+		return
+	}
+	takesCommand := contains(token.DBCommandSchemes, scheme)
+	switch {
+	case sql != nil && takesCommand:
+		c.bag.Error(sql.Name.Span, diag.DBStatementKind, "%s takes a command, not sql", scheme).
+			Hintf("%s", commandHint(scheme))
+	case command != nil && !takesCommand:
+		c.bag.Error(command.Name.Span, diag.DBStatementKind, "%s takes sql, not a command", scheme).
+			Hintf(`sql = "SELECT 1"`)
+	}
+}
+
+// commandHint is what a command looks like for a database that takes one.
+func commandHint(scheme string) string {
+	if strings.HasPrefix(scheme, "redis") {
+		return `command = ["GET", "session:${sid}"]`
+	}
+	return `command = {"find": "orders", "filter": {"status": "paid"}}`
+}
+
+// dbScheme checks the scheme of a connection URL that is written out:
+// `db "postgress://..."` is a typo the run would only report after the
+// steps above it had run. It returns the scheme, and whether it is a known
+// one of a URL written out.
+func (c *checker) dbScheme(conn ast.Expr) (string, bool) {
+	lit, ok := conn.(*ast.Literal)
+	if !ok || lit == nil || lit.Kind() != token.String {
+		return "", false
+	}
+	scheme, rest, found := strings.Cut(lit.Tok.Value, ":")
+	scheme = strings.ToLower(scheme)
+	if found && contains(token.DBSchemes, scheme) {
+		return scheme, true
+	}
+	ref := c.bag.Error(lit.Span(), diag.UnknownDBScheme, "artemis has no driver for %q", lit.Tok.Value)
+	// The fix is the whole URL with its scheme corrected: a suggestion
+	// replaces the span, and the span is the literal.
+	if best, near := diag.Nearest(scheme, token.DBSchemes); found && near {
+		fixed := best + ":" + rest
+		ref.Hintf("did you mean %q?", fixed).Suggest(strconv.Quote(fixed))
+		return "", false
+	}
+	ref.Hintf("a db URL starts with one of: %s", strings.Join(schemes(), ", "))
+	return "", false
+}
+
+// schemes is token.DBSchemes as a URL starts with them.
+func schemes() []string {
+	out := make([]string, 0, len(token.DBSchemes))
+	for _, s := range token.DBSchemes {
+		if s == "sqlite" {
+			out = append(out, "sqlite:")
+			continue
+		}
+		out = append(out, s+"://")
+	}
+	return out
+}
+
+// connText is how a hint writes the step's connection back: the variable it
+// names, or a placeholder for anything longer.
+func connText(x ast.Expr) string {
+	if id, ok := x.(*ast.Ident); ok {
+		return id.Name()
+	}
+	return "<url>"
+}
+
+// fields is a block's *ast.Field items with a name, skipping what did not parse.
+func fields(b *ast.Block) []*ast.Field {
+	if b == nil {
+		return nil
+	}
+	out := make([]*ast.Field, 0, len(b.Fields))
+	for _, s := range b.Fields {
+		if f, ok := s.(*ast.Field); ok && f != nil && f.Name.Kind == token.Ident {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // browser checks a browser step's action: every act's arity and expressions.

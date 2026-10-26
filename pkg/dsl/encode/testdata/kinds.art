@@ -32,6 +32,14 @@ scenario "kinds" {
     expect stdout contains "COPY"
   }
 
+  step "db" {
+    db env("DB_URL") {
+      sql = "SELECT id FROM orders WHERE id = $1"
+      args = [id]
+    }
+    expect affected == 1
+  }
+
   step "browser" {
     browser { # opening the browser block
       goto "/a" # trailing a browser action

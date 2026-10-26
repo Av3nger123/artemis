@@ -1,0 +1,63 @@
+# The db step's own mistakes, each on its own step so every one is reported.
+#
+# A scheme written out is checked when the file compiles, because a typo in it
+# would otherwise surface only after the steps above had run. A URL from a var
+# or env() is the usual case and is checked when the step runs.
+
+scenario "orders" {
+  secret var pg = env("ORDERS_DB")
+
+  step "misspelled scheme" {
+    db "postgress://app@localhost/orders" { sql = "SELECT 1" }
+    expect affected == 1
+  }
+
+  step "nothing to run" {
+    db pg
+    expect rows exists
+  }
+
+  step "args with no sql" {
+    db pg { args = [1] }
+  }
+
+  step "unknown field" {
+    db pg {
+      query = "SELECT 1"
+      sql = "SELECT 1"
+    }
+  }
+
+  step "an api root" {
+    db pg { sql = "SELECT 1" }
+    expect status == 200
+  }
+
+  step "sql and a command" {
+    db pg {
+      sql = "SELECT 1"
+      command = ["PING"]
+    }
+  }
+
+  step "sql to mongodb" {
+    db "mongodb://localhost:27017/shop" { sql = "SELECT 1" }
+  }
+
+  step "a command to postgres" {
+    db "postgres://localhost/shop" { command = {"find": "orders"} }
+  }
+
+  step "args with a command" {
+    db "redis://localhost:6379" {
+      command = ["GET", "k"]
+      args = [1]
+    }
+    expect result == "v"
+  }
+
+  step "rows outside a db step" {
+    get "https://example.com/orders"
+    expect rows[0].id == 1
+  }
+}

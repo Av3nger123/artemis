@@ -12,7 +12,7 @@
 //
 // There is no `type:` key anywhere in the language. A step's type is the Go
 // type of its action block -- *ast.Request is api, *ast.Run is terminal,
-// *ast.Browser is browser -- and TypeOf is the only thing that decides it. The
+// *ast.Browser is browser, *ast.DB is db -- and TypeOf is the only thing that decides it. The
 // checker therefore knows a step's type *before* it resolves any name in it,
 // which is what makes per-type scopes possible at all: `status` resolves in an
 // api step and is a compile error in a browser one, and the error can name the
@@ -70,6 +70,9 @@ const (
 
 	// Browser is a step whose action is `browser { ... }`.
 	Browser
+
+	// DB is a step whose action is `db <url> { ... }`.
+	DB
 )
 
 var typeNames = map[StepType]string{
@@ -77,6 +80,7 @@ var typeNames = map[StepType]string{
 	API:      "api",
 	Terminal: "terminal",
 	Browser:  "browser",
+	DB:       "db",
 }
 
 // String is the name the design document uses, which is also what a
@@ -114,6 +118,10 @@ func TypeOf(a ast.Action) StepType {
 	case *ast.Browser:
 		if a != nil {
 			return Browser
+		}
+	case *ast.DB:
+		if a != nil {
+			return DB
 		}
 	}
 	return Unknown
@@ -497,6 +505,8 @@ func (c *checker) step(s *ast.StepDecl, sc *scope) {
 			c.run(it, v)
 		case *ast.Browser:
 			c.browser(it, v)
+		case *ast.DB:
+			c.db(it, v)
 		case *ast.Expect:
 			c.expect(it, v)
 		case *ast.Capture:

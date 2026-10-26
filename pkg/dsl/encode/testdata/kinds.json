@@ -1121,6 +1121,204 @@
         {
           "kind": "step",
           "name": {
+            "text": "\"db\"",
+            "value": "db"
+          },
+          "action": {
+            "kind": "db",
+            "conn": {
+              "kind": "call",
+              "callee": "env",
+              "args": [
+                {
+                  "kind": "literal",
+                  "literal": "string",
+                  "text": "\"DB_URL\"",
+                  "value": "DB_URL",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 36,
+                    "col": 12,
+                    "endLine": 36,
+                    "endCol": 20,
+                    "offset": 989
+                  }
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 36,
+                "col": 8,
+                "endLine": 36,
+                "endCol": 21,
+                "offset": 985
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "sql",
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"SELECT id FROM orders WHERE id = $1\"",
+                    "value": "SELECT id FROM orders WHERE id = $1",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 37,
+                      "col": 13,
+                      "endLine": 37,
+                      "endCol": 50,
+                      "offset": 1013
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 37,
+                    "col": 7,
+                    "endLine": 37,
+                    "endCol": 50,
+                    "offset": 1007
+                  }
+                },
+                {
+                  "kind": "field",
+                  "name": "args",
+                  "value": {
+                    "kind": "array",
+                    "elems": [
+                      {
+                        "kind": "ident",
+                        "name": "id",
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 38,
+                          "col": 15,
+                          "endLine": 38,
+                          "endCol": 17,
+                          "offset": 1065
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 38,
+                      "col": 14,
+                      "endLine": 38,
+                      "endCol": 18,
+                      "offset": 1064
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 38,
+                    "col": 7,
+                    "endLine": 38,
+                    "endCol": 18,
+                    "offset": 1057
+                  }
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 36,
+                "col": 22,
+                "endLine": 39,
+                "endCol": 6,
+                "offset": 999
+              }
+            },
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 36,
+              "col": 5,
+              "endLine": 39,
+              "endCol": 6,
+              "offset": 982
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "affected",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 40,
+                    "col": 12,
+                    "endLine": 40,
+                    "endCol": 20,
+                    "offset": 1086
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "1",
+                  "value": "1",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 40,
+                    "col": 24,
+                    "endLine": 40,
+                    "endCol": 25,
+                    "offset": 1098
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 40,
+                  "col": 12,
+                  "endLine": 40,
+                  "endCol": 25,
+                  "offset": 1086
+                }
+              },
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 40,
+                "col": 5,
+                "endLine": 40,
+                "endCol": 25,
+                "offset": 1079
+              },
+              "class": "simple"
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 35,
+            "col": 3,
+            "endLine": 41,
+            "endCol": 4,
+            "offset": 966
+          },
+          "stepType": "db",
+          "scope": [
+            "rows",
+            "affected",
+            "result",
+            "duration_ms",
+            "num",
+            "re",
+            "nothing",
+            "obj",
+            "url",
+            "id"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
             "text": "\"browser\"",
             "value": "browser"
           },
@@ -1137,20 +1335,20 @@
                   "value": "/a",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 37,
+                    "line": 45,
                     "col": 12,
-                    "endLine": 37,
+                    "endLine": 45,
                     "endCol": 16,
-                    "offset": 1036
+                    "offset": 1177
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 37,
+                  "line": 45,
                   "col": 7,
-                  "endLine": 37,
+                  "endLine": 45,
                   "endCol": 16,
-                  "offset": 1031
+                  "offset": 1172
                 },
                 "comments": {
                   "after": [
@@ -1168,11 +1366,11 @@
                   "value": "#email",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 38,
+                    "line": 46,
                     "col": 12,
-                    "endLine": 38,
+                    "endLine": 46,
                     "endCol": 20,
-                    "offset": 1080
+                    "offset": 1221
                   }
                 },
                 "value": {
@@ -1182,30 +1380,30 @@
                   "value": "a@b.c",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 38,
+                    "line": 46,
                     "col": 23,
-                    "endLine": 38,
+                    "endLine": 46,
                     "endCol": 30,
-                    "offset": 1091
+                    "offset": 1232
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 38,
+                  "line": 46,
                   "col": 7,
-                  "endLine": 38,
+                  "endLine": 46,
                   "endCol": 30,
-                  "offset": 1075
+                  "offset": 1216
                 }
               }
             ],
             "span": {
               "file": "testdata/kinds.art",
-              "line": 36,
+              "line": 44,
               "col": 5,
-              "endLine": 40,
+              "endLine": 48,
               "endCol": 6,
-              "offset": 987
+              "offset": 1128
             },
             "comments": {
               "open": [
@@ -1235,21 +1433,21 @@
                       "value": "[role=status]",
                       "span": {
                         "file": "testdata/kinds.art",
-                        "line": 41,
+                        "line": 49,
                         "col": 17,
-                        "endLine": 41,
+                        "endLine": 49,
                         "endCol": 32,
-                        "offset": 1169
+                        "offset": 1310
                       }
                     }
                   ],
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 41,
+                    "line": 49,
                     "col": 12,
-                    "endLine": 41,
+                    "endLine": 49,
                     "endCol": 33,
-                    "offset": 1164
+                    "offset": 1305
                   }
                 },
                 "y": {
@@ -1259,40 +1457,40 @@
                   "value": "Pro",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 41,
+                    "line": 49,
                     "col": 43,
-                    "endLine": 41,
+                    "endLine": 49,
                     "endCol": 48,
-                    "offset": 1195
+                    "offset": 1336
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 41,
+                  "line": 49,
                   "col": 12,
-                  "endLine": 41,
+                  "endLine": 49,
                   "endCol": 48,
-                  "offset": 1164
+                  "offset": 1305
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 41,
+                "line": 49,
                 "col": 5,
-                "endLine": 41,
+                "endLine": 49,
                 "endCol": 48,
-                "offset": 1157
+                "offset": 1298
               },
               "class": "simple"
             }
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 35,
+            "line": 43,
             "col": 3,
-            "endLine": 42,
+            "endLine": 50,
             "endCol": 4,
-            "offset": 966
+            "offset": 1107
           },
           "stepType": "browser",
           "scope": [
@@ -1314,7 +1512,7 @@
         "file": "testdata/kinds.art",
         "line": 5,
         "col": 1,
-        "endLine": 43,
+        "endLine": 51,
         "endCol": 2,
         "offset": 284
       },
@@ -1355,11 +1553,11 @@
               "value": "1",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 45,
+                "line": 53,
                 "col": 38,
-                "endLine": 45,
+                "endLine": 53,
                 "endCol": 39,
-                "offset": 1245
+                "offset": 1386
               }
             },
             {
@@ -1369,30 +1567,30 @@
               "value": "2",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 45,
+                "line": 53,
                 "col": 41,
-                "endLine": 45,
+                "endLine": 53,
                 "endCol": 42,
-                "offset": 1248
+                "offset": 1389
               }
             }
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 45,
+            "line": 53,
             "col": 37,
-            "endLine": 45,
+            "endLine": 53,
             "endCol": 43,
-            "offset": 1244
+            "offset": 1385
           }
         },
         "span": {
           "file": "testdata/kinds.art",
-          "line": 45,
+          "line": 53,
           "col": 21,
-          "endLine": 45,
+          "endLine": 53,
           "endCol": 43,
-          "offset": 1228
+          "offset": 1369
         }
       },
       "body": [
@@ -1408,30 +1606,30 @@
                 "value": "smoke",
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 46,
+                  "line": 54,
                   "col": 11,
-                  "endLine": 46,
+                  "endLine": 54,
                   "endCol": 18,
-                  "offset": 1263
+                  "offset": 1404
                 }
               }
             ],
             "span": {
               "file": "testdata/kinds.art",
-              "line": 46,
+              "line": 54,
               "col": 10,
-              "endLine": 46,
+              "endLine": 54,
               "endCol": 19,
-              "offset": 1262
+              "offset": 1403
             }
           },
           "span": {
             "file": "testdata/kinds.art",
-            "line": 46,
+            "line": 54,
             "col": 3,
-            "endLine": 46,
+            "endLine": 54,
             "endCol": 19,
-            "offset": 1255
+            "offset": 1396
           }
         },
         {
@@ -1453,29 +1651,29 @@
                   "value": "true",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 50,
+                    "line": 58,
                     "col": 11,
-                    "endLine": 50,
+                    "endLine": 58,
                     "endCol": 17,
-                    "offset": 1313
+                    "offset": 1454
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 50,
+                  "line": 58,
                   "col": 7,
-                  "endLine": 50,
+                  "endLine": 58,
                   "endCol": 17,
-                  "offset": 1309
+                  "offset": 1450
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 49,
+                "line": 57,
                 "col": 5,
-                "endLine": 51,
+                "endLine": 59,
                 "endCol": 6,
-                "offset": 1287
+                "offset": 1428
               },
               "stepType": "terminal",
               "scope": [
@@ -1488,11 +1686,11 @@
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 48,
+            "line": 56,
             "col": 3,
-            "endLine": 52,
+            "endLine": 60,
             "endCol": 4,
-            "offset": 1275
+            "offset": 1416
           },
           "comments": {
             "blankAbove": true
@@ -1513,29 +1711,29 @@
               "value": "echo",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 55,
+                "line": 63,
                 "col": 9,
-                "endLine": 55,
+                "endLine": 63,
                 "endCol": 15,
-                "offset": 1352
+                "offset": 1493
               }
             },
             "span": {
               "file": "testdata/kinds.art",
-              "line": 55,
+              "line": 63,
               "col": 5,
-              "endLine": 55,
+              "endLine": 63,
               "endCol": 15,
-              "offset": 1348
+              "offset": 1489
             }
           },
           "span": {
             "file": "testdata/kinds.art",
-            "line": 54,
+            "line": 62,
             "col": 3,
-            "endLine": 56,
+            "endLine": 64,
             "endCol": 4,
-            "offset": 1333
+            "offset": 1474
           },
           "stepType": "terminal",
           "scope": [
@@ -1567,29 +1765,29 @@
                   "value": "true",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 60,
+                    "line": 68,
                     "col": 11,
-                    "endLine": 60,
+                    "endLine": 68,
                     "endCol": 17,
-                    "offset": 1406
+                    "offset": 1547
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 60,
+                  "line": 68,
                   "col": 7,
-                  "endLine": 60,
+                  "endLine": 68,
                   "endCol": 17,
-                  "offset": 1402
+                  "offset": 1543
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 59,
+                "line": 67,
                 "col": 5,
-                "endLine": 61,
+                "endLine": 69,
                 "endCol": 6,
-                "offset": 1381
+                "offset": 1522
               },
               "stepType": "terminal",
               "scope": [
@@ -1602,11 +1800,11 @@
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 58,
+            "line": 66,
             "col": 3,
-            "endLine": 62,
+            "endLine": 70,
             "endCol": 4,
-            "offset": 1366
+            "offset": 1507
           },
           "comments": {
             "blankAbove": true
@@ -1615,11 +1813,11 @@
       ],
       "span": {
         "file": "testdata/kinds.art",
-        "line": 45,
+        "line": 53,
         "col": 1,
-        "endLine": 63,
+        "endLine": 71,
         "endCol": 2,
-        "offset": 1208
+        "offset": 1349
       },
       "comments": {
         "blankAbove": true

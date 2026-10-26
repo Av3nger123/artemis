@@ -157,7 +157,7 @@ parameters and its response. The rules are in
 ## Features
 
 - Scenarios in a real language: lexed, parsed and name-checked before anything runs, with compiler-grade diagnostics -- the source line, a caret, and `did you mean "status"?`
-- Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
+- Four step types: `api` for an HTTP call, `terminal` for a command, `browser` for a page, `db` for a database. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
 - A `suite.art` per folder: one login, once per run, for every scenario below it -- its values read as `suite.token` and its cookies copied into each scenario
@@ -172,8 +172,8 @@ parameters and its response. The rules are in
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
 - `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
+- `db` steps against PostgreSQL, MySQL, SQLite, SQL Server and Oracle -- SQL with typed `args`, `rows` and `affected`, a seed script in `setup` -- and against MongoDB and Redis with their own commands
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
-- A one-way export to pytest or vitest (`artemis build --lang=python|js`), for a team whose tests live in another language
 - One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
 - A non-zero exit code whenever anything fails, and no third code to learn
 
@@ -692,59 +692,6 @@ Every one of those is read out of the table the parser and the checker
 themselves consult, so a word added to the language appears here without
 anything shipping. A client building a form reads it instead of hardcoding a
 list that drifts.
-
-### `artemis build`
-
-```sh
-artemis build --lang=python checkout.art              # to stdout
-artemis build --lang=python -o tests/ checkout.art    # tests/test_checkout.py
-artemis build --lang=js -o tests/ checkout.art        # tests/checkout.test.js
-```
-
-Exports the scenarios as tests for another runner, for a team whose tests live in
-another language. Two targets, with no artemis runtime in either beyond a handful
-of small helpers at the top of the file:
-
-| `--lang` | Output |
-| --- | --- |
-| `python` | pytest: `requests`, `subprocess`, `playwright.sync_api` |
-| `js` | vitest: `fetch`, `child_process`, `@playwright/test` |
-
-The lowering rules are the same for both. One scenario becomes one test with its
-steps as ordered statements, a `var` and a `capture` become local variables, an
-`expect` becomes the runner's own assertion, a `retry` becomes a helper around
-the step, and a `within` on a browser assertion becomes Playwright's own timeout
--- `expect visible(".modal") within "5s"` is
-`expect(page.locator(".modal")).to_be_visible(timeout=5000)` under pytest and
-`await expect(page.locator(".modal")).toBeVisible({ timeout: 5000 })` under
-vitest. A browser scenario gets one page for the whole test.
-
-That both exports drive Playwright, as `artemis run` does, is the point rather
-than a coincidence: a browser scenario behaves the same way three ways because
-the three are one protocol, not three reimplementations. A shared conformance
-corpus is run all three ways in CI, and a scenario they disagree about fails the
-build.
-
-The export is **one way**. Artemis never reads generated code back: the `.art`
-file stays the source of truth, running the command again overwrites the output,
-and the header of every generated file says both, along with the few places the
-generated test and `artemis run` differ. One of those is worth knowing before you
-hit it: Vite owns `process.env.BASE_URL` and `process.env.NODE_ENV`, so a
-scenario that reads `env("BASE_URL")` reads Vite's base path under the generated
-vitest. Name yours something else.
-
-The generated JavaScript is ESM, which Vite transforms whatever your
-`package.json` says, and it needs `npm install -D vitest` -- plus
-`@playwright/test` for a scenario with a browser step. Nothing else ships with
-it: no `package.json`, no `vitest.config.js`, no lockfile.
-
-`--lang` is required. A file that does not compile is reported and nothing is
-written. Without `-o` the module goes to stdout; with it, `-o` names a directory,
-created if it is not there, and each path written is printed. There is no
-`--force`: the output is derived, and regenerating it is the point.
-
-A Go target is reserved and will not be built, because the `.art` file is already
-the Go-side source of truth and `artemis run` is how Go runs it.
 
 ### Machine-readable reports
 
@@ -1360,6 +1307,88 @@ what a failed command is diagnosed from.
 the `run` block -- `args`, `cwd`, `stdin`, `env` -- and the 1 MiB per attempt
 each stream is kept up to.
 
+## Checking what landed in the database
+
+An API that answered 201 has said it saved the order; a `db` step checks that
+it did. The action is `db` and the connection URL, whose scheme picks the
+database -- `postgres://`, `mysql://`, `sqlite:`, `sqlserver://` or `oracle://`
+-- and the block holds the
+SQL and the values bound to its placeholders:
+
+```art
+scenario "an order is saved as paid" {
+  var url = env("API_URL")
+  secret var orders_db = env("ORDERS_DB")
+
+  setup {
+    step "seed" {
+      db orders_db { sql = file("fixtures/seed.sql") }
+    }
+  }
+
+  step "pay" {
+    post "${url}/orders" { body = {"sku": "A-1", "pay": true} }
+    expect status == 201
+    capture order_id = body.id
+  }
+
+  step "the row says paid" {
+    db orders_db {
+      sql  = "SELECT status, total FROM orders WHERE id = $1"
+      args = [order_id]
+    }
+    retry { times = 5, delay = "1s" }
+    expect rows[0].status == "paid"
+    expect rows[0].total > 0
+  }
+
+  teardown {
+    step "remove it" {
+      db orders_db {
+        sql  = "DELETE FROM orders WHERE id = $1"
+        args = [order_id]
+      }
+      expect affected == 1
+    }
+  }
+}
+```
+
+`rows` is the query's rows, each an object keyed by column name, and `affected`
+is how many rows a statement changed. SQL goes to the database as written, so
+its placeholders are the database's own: `$1` for PostgreSQL, `?` for MySQL and
+SQLite, `@p1` for SQL Server, `:1` for Oracle. An SQL file run with no `args` is
+a script, every statement in it -- split at `GO` lines on SQL Server and the
+SQL*Plus way on Oracle -- which is how the setup above seeds the database. A connection is opened once per run
+and shared by every step that names the same URL, and a trace never prints the
+password in it. [SPEC.md's *`db` steps*](SPEC.md#db-steps) specifies how each
+column type reads.
+
+`make build` includes PostgreSQL, MySQL and SQLite; `make build-full`, which
+`install.sh` uses, adds SQL Server, Oracle, MongoDB and Redis.
+
+MongoDB and Redis take their own commands instead of SQL -- a command document
+as `db.runCommand()` takes it, the words `redis-cli` takes -- and the reply is
+`result`:
+
+```art
+scenario "the session is cached" {
+  secret var mongo = env("MONGO_URL")
+  secret var cache = env("REDIS_URL")
+
+  step "the user" {
+    db mongo { command = {"find": "users", "filter": {"email": "a@example.test"}} }
+    expect len(rows) == 1
+    capture user_id = rows[0]._id
+  }
+
+  step "their session" {
+    db cache { command = ["GET", "session:${user_id}"] }
+    expect result == "active"
+  }
+}
+```
+
 ## Development
 
 ```sh
@@ -1423,12 +1452,10 @@ command makes -- so it stays an input the command can read.
 
 ## Not yet
 
-- **`db` steps.** Designed, not implemented.
 - **Control flow and functions.** `if`, loops, `parallel`, `group` and `fn`
   are reserved words, not features. Reusing a request is
   [collections](#reusing-requests), and running a scenario per row of data is a
-  `for` clause, both of which expand into plain scenarios before anything runs;
-  code generation is the answer to "I need real abstraction".
+  `for` clause, both of which expand into plain scenarios before anything runs.
 - **Agentic assertions.** `ai` is reserved and will not parse. A CI gate's most
   valuable property is determinism, and an assertion that flakes for
   unreproducible reasons is worse than a missing one.

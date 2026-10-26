@@ -85,16 +85,6 @@ func TestRunAScenarioThatUsesACollection(t *testing.T) {
 	}
 }
 
-func TestBuildAScenarioThatUsesACollection(t *testing.T) {
-	out, stderr, err := runCLI(t, "build", "--lang=python", "testdata/collections/checkout.art")
-	if err != nil {
-		t.Fatalf("build failed: %v\n%s", err, stderr)
-	}
-	if !strings.Contains(out, "auth.login") || !strings.Contains(out, "/orders") {
-		t.Fatalf("build did not generate the expanded steps:\n%s", out)
-	}
-}
-
 func TestParseAScenarioThatUsesACollection(t *testing.T) {
 	out, stderr, err := runCLI(t, "parse", "-f", "testdata/collections/checkout.art")
 	if err != nil {

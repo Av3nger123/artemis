@@ -21,6 +21,7 @@ var roots = map[StepType][]string{
 	API:      {"status", "body", "raw", "headers", "cookies"},
 	Terminal: {"exit_code", "stdout", "stderr"},
 	Browser:  {"page"},
+	DB:       {"rows", "affected", "result"},
 }
 
 // everyStep are the roots every step binds whatever its type: what the runner
@@ -53,6 +54,7 @@ var scopeHints = map[StepType]string{
 	Terminal: "a terminal step binds exit_code, stdout, stderr, duration_ms",
 	Browser: "a browser step binds page.url, page.title, duration_ms, text(),\n" +
 		"value(), attr(), count(), visible()",
+	DB:      "a db step binds rows, affected, result, duration_ms",
 	Unknown: `a var's value may use env("NAME") and the vars above it`,
 }
 

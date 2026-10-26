@@ -28,7 +28,8 @@
     "action": [
       "request",
       "run",
-      "browser"
+      "browser",
+      "db"
     ],
     "stepStatement": [
       "expect",
@@ -538,6 +539,34 @@
       "fields": [
         {
           "name": "command",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "block",
+          "type": "node",
+          "accepts": "block",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "db",
+      "doc": "a db step's action: `db orders_db { sql = \"SELECT ...\", args = [...] }`",
+      "fields": [
+        {
+          "name": "conn",
           "type": "node",
           "accepts": "expression",
           "optional": true,

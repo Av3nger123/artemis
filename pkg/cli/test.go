@@ -9,6 +9,7 @@ import (
 	// page the registry cannot hand over; this is the one place the binary
 	// says which types it is built with.
 	_ "artemis/pkg/steps/browserstep"
+	_ "artemis/pkg/steps/dbstep"
 	_ "artemis/pkg/steps/execstep"
 	_ "artemis/pkg/steps/httpstep"
 

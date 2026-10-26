@@ -23,7 +23,7 @@
 // owns the two real print modes.
 //
 // Nodes are built by pkg/dsl/parser and read by pkg/dsl/check, pkg/dsl/print,
-// pkg/dsl/lower, pkg/dsl/encode and pkg/codegen. A tree may be *invalid* -- a
+// pkg/dsl/lower and pkg/dsl/encode. A tree may be *invalid* -- a
 // step with no action, a Bad node where a line did not parse -- because the
 // parser recovers rather than giving up, so a consumer must tolerate a nil
 // Action and a nil Expr anywhere one is optional.
@@ -63,8 +63,8 @@ type Stmt interface {
 
 // Action is a step's action block, the one thing in a step that decides the
 // step's type. There is no `type:` key: *Request is an api step, *Run a
-// terminal step, *Browser a browser step, and pkg/dsl/check reads nothing but
-// which of the three this is to know.
+// terminal step, *Browser a browser step, *DB a db step, and pkg/dsl/check
+// reads nothing but which of the four this is to know.
 type Action interface {
 	Node
 	action()

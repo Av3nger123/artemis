@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"artemis/pkg/codegen"
 	"artemis/pkg/steps/browserstep"
 
 	"github.com/spf13/cobra"
@@ -94,17 +93,6 @@ func Init() {
 	runCmd.Flags().Uint64(seedFlag, 0,
 		"Seed uuid(), random_int() and random_string() with this number, to draw the values a failed run printed (default: a new seed every run)")
 
-	// Build command: a .art file out as tests in another language. --lang is
-	// required rather than defaulted, so an invocation that means python today
-	// cannot come to mean something else when a second target lands.
-	RootCmd.AddCommand(buildCmd)
-	buildCmd.Flags().String(langFlag, "",
-		"The target language: "+strings.Join(codegen.Names(), "|")+". Required")
-	if err := buildCmd.MarkFlagRequired(langFlag); err != nil {
-		slog.Error("Error marking flag as required", "error", err)
-	}
-	buildCmd.Flags().StringP(outFlag, "o", "", "Write the generated files into this directory instead of printing to stdout")
-
 	// Deprecated: superseded by run, kept so the old invocation keeps working.
 	RootCmd.AddCommand(testCmd)
 	testCmd.Flags().StringP("file", "f", "", "Path to the .art scenario file")
@@ -160,6 +148,6 @@ var RootCmd = &cobra.Command{
     Scenarios are written in the Artemis DSL, in .art files: artemis parses,
     checks and runs them, and converts an old YAML scenario with migrate.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one, 'artemis build --lang=python <file.art>' to export it as pytest, and 'artemis grammar' for the language itself.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one, and 'artemis grammar' for the language itself.")
 	},
 }

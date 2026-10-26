@@ -7,7 +7,7 @@ file is for what is coming.
 ## Done
 
 Designed together on 2026-10-26 and built as eight PRs: a builtin table shared
-by the checker, the evaluator and code generation first, with no change in
+by the checker and the evaluator first, with no change in
 behaviour; then the value builtins, cookies and timing, files, data rows, setup
 and teardown, suites, and selection last, because it reads tags from suites and
 names from data rows. `SPEC.md` documents each.
@@ -20,33 +20,26 @@ names from data rows. `SPEC.md` documents each.
    teardown always running; a `suite.art` per folder whose setup runs once and
    whose values every scenario below it reads as `suite.<name>`.
 3. **Builtins, cookies and timing.** One builtin table for the checker, the
-   evaluator and code generation; `uuid()`, `now()`, `random_*()`, encoding and
+   evaluator; `uuid()`, `now()`, `random_*()`, encoding and
    hashing builtins, reproducible with `--seed`; a cookie jar per scenario and a
    `cookies` root; `duration_ms` on every step.
 4. **Selection.** `tags = [...]`, `--tags "smoke and not slow"`, `--grep`, and
    `artemis list`. The environment check covers only what was selected.
+5. **`db` steps.** `db <url> { sql, args }` against PostgreSQL, MySQL, SQLite,
+   SQL Server and Oracle, and `db <url> { command }` against MongoDB and Redis,
+   binding `rows`, `affected` and `result`; one pool per URL per run. A default
+   build carries the PostgreSQL, MySQL and SQLite drivers and `make build-full`
+   every one. CI runs the server tests against all six in service containers.
 
-## Next
+## Removed
 
-### Suites in `artemis build`
-
-`artemis build` exports one file's scenarios, and a `suite.art` runs once for a
-whole folder, so a scenario that reads `suite.<name>` is refused today rather
-than exported with nothing behind the name. The export is a pytest
-`conftest.py` with a session-scoped fixture per suite and a vitest
-`globalSetup`, built from the same suite file; what it needs from `build` is
-an output that is a directory of modules rather than one.
-
-### `db` steps
-
-A step type that runs a query and binds its rows, beside `api`, `terminal` and
-`browser`. Designed earlier and never built. The work is mostly integration:
-a driver per database (Postgres, MySQL, SQLite first; others behind the same
-interface), a connection named once per scenario or suite rather than per step,
-and a rule for what a query's rows look like as a value -- an array of objects,
-keyed by column name, in the evaluator's JSON domain like a response body.
-Connection strings are secrets, so they go through `secret var` and the taint
-walk like any credential.
+**`artemis build`**, on 2026-10-26, before any release. It exported a `.art`
+file as pytest or vitest, held to `artemis run` by a conformance corpus run
+three ways in CI. That cost every language feature three implementations --
+suites and `db` steps were never exported for that reason -- and a Python and
+Node toolchain in CI, for something an AI assistant does well on request:
+translating a scenario into the test framework a team already uses. `artemis
+run` is how a `.art` file runs.
 
 ## Ideas
 

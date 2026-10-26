@@ -1,12 +1,9 @@
 // Package fixture is the local web server the browser tests drive.
 //
-// It is a package and not a helper in a _test.go file on purpose. Subsystem C
-// -- ART-48's Python target and ART-49's execution-parity test -- runs
-// generated pytest "against the same fixture server", which it cannot do if
-// the server only exists inside a Go test binary. So NewServer takes no
-// *testing.T, returns a plain *httptest.Server, and the one definition of what
-// /done serves is shared by a Go test, a browser-tagged test and a Python
-// subprocess.
+// It is a package and not a helper in a _test.go file so that two packages'
+// tests -- pkg/steps/browserstep's and pkg/cli's -- drive the one server. So
+// NewServer takes no *testing.T, returns a plain *httptest.Server, and the one
+// definition of what /done serves is shared by both.
 //
 // Every page is static HTML with one exception, and that exception is the whole
 // reason this exists: [role=status] on /done says "Working" and becomes "Pro"
@@ -105,8 +102,7 @@ const (
 const Invoices = 3
 
 // NewServer starts the fixture on 127.0.0.1 and returns it. The caller closes
-// it -- in a Go test, srv.Close via t.Cleanup; in ART-49's parity test,
-// whatever stands the Python run up.
+// it, with srv.Close via t.Cleanup.
 func NewServer() *httptest.Server {
 	return httptest.NewServer(Handler())
 }

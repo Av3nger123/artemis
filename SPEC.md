@@ -14,8 +14,7 @@ If this document and anything else disagree, this document is right.
 >
 > The language was designed and approved in `docs/artemis-dsl-design.md`; four
 > places where this spec decides something that design left open are marked
-> **spec decision**. All three step types are specified here; `browser` steps
-> compile and format but do not run yet -- see [`browser` steps](#browser-steps).
+> **spec decision**. All four step types are specified here.
 > YAML is not a runtime format: it is an input to `artemis migrate`, and the
 > [README](README.md) documents the commands.
 
@@ -213,12 +212,7 @@ goes.
 A `secret` binding that no step reads is not an error. A file under edit must
 still compile.
 
-`secret` reaches artemis's own reports and traces, and no further. `artemis
-build` exports a scenario as a test for another runner, and that runner has no
-idea what a secret is: a generated pytest or vitest test that fails prints both
-operands the way its own framework does. The value still arrives through
-`art_env` rather than as a literal in the file, so the generated code holds no
-credential of its own.
+`secret` reaches artemis's own reports and traces, and no further.
 
 ### `setup` and `teardown`
 
@@ -364,9 +358,7 @@ the scenario declares.
 | What it may hold | A suite runs setup and teardown, not steps of its own (`suite-has-step`). A suite block belongs in a file named `suite.art` (`suite-file-name`), and a `suite.art` holds the suite and no scenario (`suite-has-scenario`) |
 
 `artemis run suite/` never runs `suite.art` as a scenario file; it runs with the
-scenarios under it. `artemis build` does not export a suite yet, and refuses a
-scenario that reads `suite`, naming it, rather than export a test with nothing
-behind the name.
+scenarios under it.
 
 ### `config`
 
@@ -451,6 +443,7 @@ step "build it" {
 | `get`, `post`, `put`, `patch`, `delete`, `head`, `options` | `api` |
 | `run "<command>" { ... }` | `terminal` |
 | `browser { ... }` | `browser` -- see [`browser` steps](#browser-steps) |
+| `db <url> { ... }` | `db` -- see [`db` steps](#db-steps) |
 
 A step with no action block, and a step with two, are both compile errors. The
 type is known before any name in the step is resolved, which is what makes
@@ -856,6 +849,195 @@ when a browser step actually fails, so a suite of `api` steps never grows one.
 
 ---
 
+## `db` steps
+
+The action is `db`, the database to connect to, and the SQL to run there:
+
+```art
+scenario "an order lands in the database" {
+  var url = env("API_URL")
+  secret var orders_db = env("ORDERS_DB")   # postgres://app:pw@localhost:5432/orders
+
+  setup {
+    step "seed" {
+      db orders_db { sql = file("fixtures/seed.sql") }
+    }
+  }
+
+  step "place an order" {
+    post "${url}/orders" { body = {"sku": "A-1"} }
+    expect status == 201
+    capture order_id = body.id
+  }
+
+  step "the row is there" {
+    db orders_db {
+      sql  = "SELECT status, total FROM orders WHERE id = $1"
+      args = [order_id]
+    }
+    retry { times = 5, delay = "1s" }
+    expect len(rows) == 1
+    expect rows[0].status == "paid"
+    capture total = rows[0].total
+  }
+
+  teardown {
+    step "remove it" {
+      db orders_db {
+        sql  = "DELETE FROM orders WHERE id = $1"
+        args = [order_id]
+      }
+      expect affected == 1
+    }
+  }
+}
+```
+
+| Field | Form | Rules |
+| --- | --- | --- |
+| the connection | `db <expr>` | Required, and the first thing in the block. A URL; its scheme picks the database |
+| `sql` | `sql = <expr>` | For a SQL database. The statement as text, or a [`file()`](#data-and-files) whose contents are the SQL |
+| `args` | `args = [<expr>, ...]` | At most one, with `sql`. Values bound to the statement's placeholders, **keeping their types** |
+| `command` | `command = <expr>` | For MongoDB and Redis, in place of `sql`. See [commands](#mongodb-and-redis-command) |
+
+A step has exactly one of `sql` and `command`: neither is `db-needs-statement`,
+both is `db-statement-conflict`, and a URL written out that is sent the kind it
+does not take -- `sql` to `mongodb://` -- is `db-statement-kind`.
+
+| Scheme | Database |
+| --- | --- |
+| `postgres://`, `postgresql://` | PostgreSQL, and what speaks its protocol: CockroachDB, Supabase, Neon, Timescale |
+| `mysql://` | MySQL, and what speaks its protocol: MariaDB, TiDB, PlanetScale |
+| `sqlite:` | SQLite: `sqlite:app.db`, `sqlite:///abs/app.db`, `sqlite::memory:`. A relative path is relative to where artemis was run, like a `run` step's `cwd` |
+| `sqlserver://` | SQL Server and Azure SQL: `sqlserver://user:pw@host:1433?database=shop`. The URL's path names an instance, not a database |
+| `oracle://` | Oracle: `oracle://user:pw@host:1521/SERVICE` |
+| `mongodb://`, `mongodb+srv://` | MongoDB: `mongodb://user:pw@host:27017/shop?authSource=admin`. The path names the database, and is required |
+| `redis://`, `rediss://` | Redis and Valkey: `redis://:pw@host:6379/0`, `rediss://` over TLS |
+
+PostgreSQL, MySQL and SQLite are in every build of artemis. SQL Server, Oracle,
+MongoDB and Redis are in a full build -- `make build-full`, or `go build -tags
+db_all` -- because their drivers add about 28 MB; a step naming one a binary was
+built without is a step error naming the build tag that adds it.
+
+A connection is a value, so it lives where a credential does: a `secret var`, a
+[suite](#suites-suiteart)'s var read as `suite.db`, an `env()` call. A URL written
+out is checked when the file compiles -- `postgress://` is `unknown-db-scheme`
+with the fix -- and one from a variable when the step runs.
+
+**SQL is sent as written.** Artemis never rewrites a statement, so its
+placeholders are the database's own: `$1` for PostgreSQL, `?` for MySQL and
+SQLite, `@p1` for SQL Server, `:1` for Oracle. An `args` value keeps its type -- a whole number is bound as an
+integer, a string as text, `null` as SQL `NULL` -- because a placeholder is
+compared against a typed column. An object or an array is bound as its JSON
+text, for a `json` column; a `file()` is bound as its bytes.
+
+### What a db step binds
+
+| Name | Type | What it is |
+| --- | --- | --- |
+| `rows` | array of objects | The rows a query returned, each keyed by column name. `[]` for a statement that returns none |
+| `affected` | number or null | How many rows a statement changed, or a query returned; `null` when the database does not say |
+| `result` | any | A command's reply. `null` for `sql` |
+
+A row's values arrive as the scenario would have written them:
+
+| Column | Value |
+| --- | --- |
+| `NULL` | `null` |
+| an integer | a number, or its digits as a string past 2^53, where a number would round |
+| `numeric`, `decimal` | a number when the number reads back as the same decimal -- `12.50` is `12.5` -- and the text when it would not, so money is never rounded |
+| a float, a boolean, text | a number, a boolean, a string |
+| `date` | `"2026-10-26"` |
+| `timestamp`, `datetime` | an RFC 3339 time in UTC |
+| `json`, `jsonb` | the value it holds |
+| `bytea`, `blob`, `varbinary`, `raw` | base64 |
+| SQL Server `uniqueidentifier` | its usual text, `6f1c0c5e-6c3c-...` |
+
+A `date` with a time of day -- Oracle's `DATE` holds one -- is a time like any
+other. MySQL's `BOOLEAN` is a `TINYINT(1)` and reads as `1` or `0`, and Oracle
+returns an unquoted column name in capitals: `SELECT id` is `rows[0].ID`, and
+`SELECT id AS "id"` is `rows[0].id`.
+
+**A query or a statement.** A database cannot be asked which a statement is
+before it runs, and running one twice would repeat its writes, so its first
+keyword decides: `SELECT`, `WITH`, `SHOW`, `EXPLAIN`, `VALUES`, `PRAGMA`,
+`DESCRIBE` and `TABLE` -- and on SQL Server `EXEC` -- are queried for `rows`, as
+is a write with a `RETURNING` clause, or on SQL Server an `OUTPUT inserted.` /
+`deleted.` one; anything else is executed for `affected`. Oracle's `RETURNING ...
+INTO` binds out-parameters and returns no rows, so it is a statement there.
+
+An SQL file with no `args` is a **script**: every statement in it runs, in
+order, which is how a database is seeded, and `affected` is their total. A
+script is read the way the database's own command-line tool reads one: on SQL
+Server a line holding only `GO` ends a batch, as in `sqlcmd` and SSMS; on Oracle
+a statement ends with a `;` at the end of a line and a PL/SQL block with a line
+holding only `/`, as in SQL*Plus. A failing statement stops the script and is
+named by its place in it. On Oracle a single statement's trailing `;`, which the
+database would reject, is dropped.
+
+| | |
+| --- | --- |
+| Connections | One per URL for the whole run, opened by the first step that names it and closed when the run ends, shared by every scenario, suite and `--jobs` worker. A step has no connection of its own, so a `SET` or a temporary table may not be there for the next step |
+| Transactions | None: every statement commits on its own. A test cleans up in [teardown](#setup-and-teardown) |
+| More than 10,000 rows | A step error: a cut `rows` would make `len(rows)` a quiet lie. Ask for a `LIMIT`, or `count(*)` |
+| Two columns alike | `SELECT a.id, b.id` is a step error naming the column: a row holds one `id`. Name one with `AS` |
+| `timeout` | The statement's deadline. A query that outlives it is cancelled, and the step is an error naming it |
+| `within` | Evaluated once, as for an api step: a result is complete when it arrives. Waiting for a row to appear is [`retry`](#retry) |
+
+A database that refuses the connection, SQL it rejects and a timeout are
+**step errors**: the step could not run. A row that holds the wrong value is an
+**assertion failure**. A [trace](#tracing-a-step) of a db step records the URL
+with its password replaced by `***` whether or not the URL is secret, the
+statement, and the args.
+
+### MongoDB and Redis: `command`
+
+```art
+scenario "a paid order is cached" {
+  secret var mongo = env("MONGO_URL")
+  secret var cache = env("REDIS_URL")
+
+  step "the order" {
+    db mongo {
+      command = {"find": "orders", "filter": {"status": "paid"}, "sort": {"_id": -1}, "limit": 1}
+    }
+    expect len(rows) == 1
+    capture order_id = rows[0]._id
+  }
+
+  step "by its id" {
+    db mongo { command = {"find": "orders", "filter": {"_id": {"$oid": order_id}}} }
+    expect rows[0].status == "paid"
+  }
+
+  step "the cache has it" {
+    db cache { command = ["GET", "order:${order_id}"] }
+    expect result == "paid"
+  }
+}
+```
+
+A database that takes no SQL takes its own command, written the way its own
+shell takes it:
+
+| Database | `command` | `rows` | `affected` | `result` |
+| --- | --- | --- | --- | --- |
+| MongoDB | The document `db.runCommand()` takes, its first key the command: `{"find": "orders", "filter": {...}}` | The documents of a command that answers with a cursor -- `find`, `aggregate`, `listCollections`, `listIndexes` -- read to the end, past the first batch | The reply's `n` -- what an `insert`, `update` or `delete` counted -- or the number of documents a cursor returned | Any other command's reply document; `null` for a cursor |
+| Redis | Its words as an array, as `redis-cli` takes them: `["SET", "k", "v", "EX", 60]` | `[]` | `null` | The reply: a string, a number, an array, an object for a map reply, and `null` for a key that is not there, which is an answer and not an error |
+
+**An object written out keeps its key order**, because MongoDB reads it: a
+command's name is its first key, and a `sort`'s keys are its order. An object
+from a var has no written order and is sent with its keys sorted. A whole
+number is sent as a 32-bit integer when it fits and a double when not, as
+`mongosh` sends them. A value of a BSON type JSON has no spelling for is written
+in **Extended JSON**: `{"$oid": id}` is an ObjectId -- how a filter finds a
+document by an `_id` a step captured -- `{"$date": "2026-10-26T09:30:15Z"}` a
+date, `{"$numberDecimal": "19.99"}` a decimal, `{"$numberLong": "42"}` a 64-bit
+integer. A reply reads the other way: an ObjectId is its hex string, a date an
+RFC 3339 time, a decimal a number by the rule above.
+
+---
+
 ## Collections
 
 A **collection** is a named set of single requests -- each one action, with
@@ -943,8 +1125,7 @@ scenario "checkout" {
 
 **A use is expanded, not called.** Before a file is checked, every `use` in it
 is replaced by the plain steps it stands for, with its arguments substituted and
-its overrides applied. What is checked, run, reported and exported by
-`artemis build` is a file made only of `scenario`, `var` and `step` -- the
+its overrides applied. What is checked, run and reported is a file made only of `scenario`, `var` and `step` -- the
 language the rest of this document specifies. There is no runtime function, no
 call stack, and no value shared between scenarios. Expansion works on the syntax
 tree, not on text: an argument is substituted as an expression, so `qty = limit
@@ -1262,6 +1443,7 @@ What the observation binds depends on the step's type:
 | `api` | `status`, `body`, `raw`, `headers`, `cookies` |
 | `terminal` | `exit_code`, `stdout`, `stderr` |
 | `browser` | `page.url`, `page.title`, `text()`, `value()`, `attr()`, `count()`, `visible()` -- [specified with the step type](#what-a-browser-step-binds) |
+| `db` | `rows`, `affected`, `result` -- [specified with the step type](#what-a-db-step-binds) |
 | every step | `duration_ms` |
 
 | Root | Type | What it is |
@@ -1276,6 +1458,9 @@ What the observation binds depends on the step's type:
 | `stdout`, `stderr` | string | The two streams, as text |
 | `page.url` | string | The page's current address |
 | `page.title` | string | The document's title |
+| `rows` | array | The rows a db step's query returned, each an object keyed by column name |
+| `affected` | number or null | How many rows a db step's statement changed, or its query returned |
+| `result` | any | A db step's command reply, for MongoDB and Redis |
 
 Naming a root that the step's type does not bind is a **compile error**, and the
 message lists the roots that are in scope:
@@ -1729,7 +1914,7 @@ condition has to settle.
 | Step type | Default `within` |
 | --- | --- |
 | `browser` | 5s |
-| `api`, `terminal` | none -- the assertion is evaluated once |
+| `api`, `terminal`, `db` | none -- the assertion is evaluated once |
 
 **Spec decision.** An explicit `within` on an `api` or a `terminal` step is
 accepted and the assertion is still evaluated **once**. Those two observations
@@ -1816,7 +2001,7 @@ scenario, so:
 | --- | --- | --- |
 | `retry { times, delay }` | Re-runs the **whole step**, action included | one attempt, no delay |
 | `timeout = "<duration>"` | Bounds **one attempt** of the step | `30s` |
-| `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api` and `terminal`; 5s for `browser` |
+| `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api`, `terminal` and `db`; 5s for `browser` |
 
 ```art
 step "wait for the import" {
@@ -1883,7 +2068,7 @@ determinism, and an assertion that flakes for unreproducible reasons is worse
 than a missing one.
 
 The keywords the language actually uses are positional, not reserved:
-`scenario`, `config`, `var`, `step`, `run`, `browser`, `expect`, `capture`,
+`scenario`, `config`, `var`, `step`, `run`, `browser`, `db`, `sql`, `command`, `expect`, `capture`,
 `retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
 `env`, `times`, `delay`, `collection`, `request`, `secret`, `as`,
 `drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
@@ -1921,7 +2106,7 @@ Setting     = Ident "=" Expr ;
 VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
 StepDecl    = "step" String "{" Action { StepStmt } "}" ;
 
-Action      = Request | Run | Browser ;
+Action      = Request | Run | Browser | DB ;
 Request     = Method String [ "{" { ReqField } "}" ] ;
 Method      = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
 ReqField    = "header" String "=" Expr
@@ -1930,6 +2115,8 @@ ReqField    = "header" String "=" Expr
 Run         = "run" Expr [ "{" { RunField } "}" ] ;
 RunField    = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
             | "env" "{" [ Setting { Sep Setting } ] "}" ;
+DB          = "db" Expr [ "{" { DBField } "}" ] ;
+DBField     = "sql" "=" Expr | "args" "=" Array | "command" "=" Expr ;
 Browser     = "browser" "{" { BrowserAct } "}" ;
 BrowserAct  = "goto"   Expr
             | "click"  Expr
@@ -1986,7 +2173,7 @@ and in what it decides to retry:
 | --- | --- | --- |
 | **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse, an import that does not resolve, a `use` whose arguments or overrides do not fit |
 | **Environment error** | The run cannot start: a variable an `env()` call needs has no value. Nothing executes | an absent `API_URL`, an `API_URL=` with no value |
-| **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
+| **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, SQL the database rejects, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
 | **Assertion failure** | The step ran and gave the wrong answer | `status == 200` against a 404 |
 
 A compile error is reported before anything executes, and **every** error in the
@@ -2218,7 +2405,6 @@ and their output.
 | `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
 | `artemis expand x.art [-o out.art] [--force]` | The file that will run: every `use` replaced by its steps, each preceded by a comment naming where it came from. See [`artemis expand`](#artemis-expand) |
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
-| `artemis build --lang=python\|js [-o dir]` | The scenarios exported as tests for another runner. Python is pytest with `requests`, `subprocess` and `playwright.sync_api`; js is vitest with `fetch`, `child_process` and `@playwright/test`. The lowering rules are the same for both: one scenario becomes one test, a `capture` a local variable, an `expect` the runner's own assertion, a `within` on a browser assertion playwright's own timeout. Playwright on both sides and under `artemis run` means a browser scenario behaves the same way three ways. The export is **one way** -- artemis never reads generated code back, and every generated file says so. A `go` target is reserved and will not be built |
 
 A scenario is converted into this language once, never translated on the fly:
 `artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
@@ -2239,9 +2425,8 @@ adding one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **`db` steps** | Designed, specified with the database step type |
 | **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
-| **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
+| **Functions** | `fn`, `return`, `let`. Reserved words. A general-purpose language -- a test framework an AI assistant can translate a scenario into -- is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
 | **Parallelism** | Scenarios and steps run one after another, in the order they are written |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |

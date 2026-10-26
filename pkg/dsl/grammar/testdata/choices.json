@@ -2,13 +2,16 @@
   "schemaVersion": 1,
   "choices": {
     "action": {
-      "doc": "The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step.",
+      "doc": "The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step, db is a db step.",
       "values": [
         {
           "value": "run"
         },
         {
           "value": "browser"
+        },
+        {
+          "value": "db"
         }
       ]
     },
@@ -202,6 +205,75 @@
         }
       ]
     },
+    "dbCommandScheme": {
+      "doc": "The db schemes whose databases take a command rather than sql: MongoDB and Redis.",
+      "values": [
+        {
+          "value": "mongodb"
+        },
+        {
+          "value": "mongodb+srv"
+        },
+        {
+          "value": "redis"
+        },
+        {
+          "value": "rediss"
+        }
+      ]
+    },
+    "dbField": {
+      "doc": "The fields of a db block.",
+      "values": [
+        {
+          "value": "sql",
+          "valueKind": "any"
+        },
+        {
+          "value": "args",
+          "valueKind": "array"
+        },
+        {
+          "value": "command",
+          "valueKind": "any"
+        }
+      ]
+    },
+    "dbScheme": {
+      "doc": "The connection URL schemes a db step has a driver for.",
+      "values": [
+        {
+          "value": "postgres"
+        },
+        {
+          "value": "postgresql"
+        },
+        {
+          "value": "mysql"
+        },
+        {
+          "value": "sqlite"
+        },
+        {
+          "value": "sqlserver"
+        },
+        {
+          "value": "oracle"
+        },
+        {
+          "value": "mongodb"
+        },
+        {
+          "value": "mongodb+srv"
+        },
+        {
+          "value": "redis"
+        },
+        {
+          "value": "rediss"
+        }
+      ]
+    },
     "declaration": {
       "doc": "The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
       "values": [
@@ -291,6 +363,26 @@
         {
           "value": "data-not-json",
           "doc": "json() names a file that is not JSON",
+          "severity": "error"
+        },
+        {
+          "value": "db-args-without-sql",
+          "doc": "a db step binds args with no sql to bind them to",
+          "severity": "error"
+        },
+        {
+          "value": "db-needs-statement",
+          "doc": "a db step has no sql or command to run",
+          "severity": "error"
+        },
+        {
+          "value": "db-statement-conflict",
+          "doc": "a db step has both sql and a command",
+          "severity": "error"
+        },
+        {
+          "value": "db-statement-kind",
+          "doc": "a db step sends sql to a database that takes a command, or the other way round",
           "severity": "error"
         },
         {
@@ -521,6 +613,11 @@
         {
           "value": "unknown-config",
           "doc": "a \"config\" names a subject the language does not configure",
+          "severity": "error"
+        },
+        {
+          "value": "unknown-db-scheme",
+          "doc": "a db step's connection URL names a database artemis has no driver for",
           "severity": "error"
         },
         {
@@ -881,6 +978,37 @@
               "title"
             ]
           }
+        },
+        {
+          "value": "db",
+          "roots": [
+            "rows",
+            "affected",
+            "result",
+            "duration_ms"
+          ],
+          "functions": [
+            "env",
+            "match",
+            "uuid",
+            "now",
+            "random_int",
+            "random_string",
+            "base64",
+            "base64_decode",
+            "url_encode",
+            "sha256",
+            "hmac_sha256",
+            "jwt_claims",
+            "to_json",
+            "from_json",
+            "len",
+            "number",
+            "string",
+            "json",
+            "csv",
+            "file"
+          ]
         }
       ]
     },

@@ -65,6 +65,6 @@
 // The pages the browser tests drive are served by the fixture subpackage, on
 // loopback, with no script, style or image loaded from anywhere. No test in
 // artemis reaches a public site under any build tag. It is a package rather
-// than a test helper because ART-48's and ART-49's generated Python runs
-// against the same server.
+// than a test helper so that pkg/cli's browser tests and this package's drive
+// the one server.
 package browserstep

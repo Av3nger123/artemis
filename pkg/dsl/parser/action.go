@@ -12,7 +12,7 @@ import (
 // Which of the three it is decides the step's type, and that is the whole
 // mechanism -- there is no `type:` key anywhere in the language. An HTTP verb
 // from token.Methods opens an api step, `run` a terminal step, `browser` a
-// browser step, and the checker reads nothing but the node's Go type to know
+// browser step, `db` a db step, and the checker reads nothing but the node's Go type to know
 // which roots the step binds.
 func (p *parser) tryParseAction() (ast.Action, bool) {
 	t := p.peek()
@@ -26,6 +26,8 @@ func (p *parser) tryParseAction() (ast.Action, bool) {
 		return p.parseRun(), true
 	case t.Value == "browser":
 		return p.parseBrowser(), true
+	case t.Value == "db":
+		return p.parseDB(), true
 	}
 	return nil, false
 }
@@ -58,6 +60,18 @@ func (p *parser) parseRun() ast.Action {
 	}
 	p.endDecl("a run action")
 	return r
+}
+
+// parseDB is `db Expr [ "{" { DBField } "}" ]`, the same shape as a run.
+func (p *parser) parseDB() ast.Action {
+	d := &ast.DB{Keyword: p.next()}
+	d.Conn = p.parseExpr()
+
+	if p.at(token.LBrace) && p.continues() {
+		d.Block = p.parseBlock()
+	}
+	p.endDecl("a db action")
+	return d
 }
 
 // parseBrowser is `browser "{" { BrowserAct } "}"`. The block is required:

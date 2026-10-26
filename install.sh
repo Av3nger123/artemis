@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Compile the Go code
-make build
+# Compile the Go code: every database driver, so a db step against SQL Server,
+# Oracle, MongoDB or Redis works out of the box. `make build` is the smaller
+# binary with PostgreSQL, MySQL and SQLite only.
+make build-full
 
 # Move the binary to a directory in PATH
 install_dir="/usr/local/bin"

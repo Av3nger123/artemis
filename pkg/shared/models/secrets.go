@@ -13,8 +13,8 @@ package models
 // second index: Headers by header name, as Request.Headers is, Env by variable
 // name, as Exec.Env is, and Acts by position in Browser.Acts.
 type Secrets struct {
-	// URL is true when the URL of an api step, or the command of a terminal
-	// step, came from a secret binding.
+	// URL is true when the URL of an api step, the command of a terminal
+	// step, or the connection of a db step came from a secret binding.
 	//
 	// A secret `query` value also sets this, and that is not an approximation:
 	// Request.Model folds the query into the URL, so the URL string is where
@@ -37,7 +37,8 @@ type Secrets struct {
 	// Env marks one environment setting each, by name: `env { PGPASSWORD = pw }`.
 	Env map[string]bool
 
-	// Args is true when a terminal step's argument list read a secret binding.
+	// Args is true when a terminal step's argument list, or a db step's, read a
+	// secret binding.
 	// It is one flag and not a set of positions, because the list is a single
 	// expression -- `args = argv` is legal -- so a position is not always a
 	// thing that exists.
@@ -45,6 +46,10 @@ type Secrets struct {
 
 	// Stdin is true when a terminal step's stdin read a secret binding.
 	Stdin bool
+
+	// SQL is true when a db step's statement -- its sql or its command --
+	// read a secret binding.
+	SQL bool
 
 	// Parts marks a form's fields by position, as Acts marks browser acts.
 	Parts map[int]bool
@@ -76,7 +81,7 @@ type Secrets struct {
 // Any reports whether anything at all is secret, so a caller can skip the work
 // of redaction for the common step that declares nothing.
 func (s Secrets) Any() bool {
-	return s.URL || s.Body || s.Args || s.Stdin ||
+	return s.URL || s.Body || s.Args || s.Stdin || s.SQL ||
 		len(s.Headers) > 0 || len(s.Env) > 0 ||
 		len(s.Acts) > 0 || len(s.BodyPaths) > 0 || len(s.Parts) > 0 ||
 		len(s.ObservedRoots) > 0 || len(s.ObservedPaths) > 0
