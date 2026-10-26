@@ -21,4 +21,7 @@
 //     Name yours something else;
 //   - a scenario's cookies are kept by name: two cookies of one name for two
 //     paths keep the later one, where artemis keeps both, and a redirect
-//     fetch follows does not send or keep them.
+//     fetch follows does not send or keep them;
+//   - a file json(), csv() or file() names is found from the directory the
+//     test runs in, by the .art file's path as it was given to `artemis
+//     build`; a file sent as a body has no Content-Type the step did not write.

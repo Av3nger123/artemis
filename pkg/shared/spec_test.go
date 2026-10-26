@@ -46,7 +46,7 @@ const wantSpecScenarios = 4
 // wrapped in the part of a scenario its prose puts it in and has to parse. See
 // compileBlock.
 func TestSpecArtExamplesCompile(t *testing.T) {
-	collections := docCollections(t)
+	collections := docLoader{docCollections(t)}
 	scenarios := 0
 	for _, b := range docBlocks(t, specPath, "art") {
 		if isArtScenario(b) {
@@ -88,7 +88,7 @@ func TestSpecExamplesHaveNoYAMLisms(t *testing.T) {
 	}
 }
 
-// TestSpecTypeNamesMatchTheCode holds the six type names SPEC.md documents for
+// TestSpecTypeNamesMatchTheCode holds the seven type names SPEC.md documents for
 // `is` to the list the checker actually accepts. A seventh name in the code and
 // not in the spec is an undocumented feature; a name in the spec and not in the
 // code is a documented one that does not work.
@@ -109,16 +109,24 @@ func TestSpecTypeNamesMatchTheCode(t *testing.T) {
 	// The spec's own list, as it is written for `is`. Kept here rather than
 	// scraped out of the prose: the point is that the two agree, and a scraper
 	// that silently matched nothing would pass whatever the spec said.
-	documented := []string{"string", "number", "boolean", "object", "array", "null"}
+	documented := []string{"string", "number", "boolean", "object", "array", "null", "file"}
 	if len(documented) != len(token.TypeNames) {
 		t.Errorf("SPEC.md documents %d type names, token.TypeNames has %d: %v vs %v",
 			len(documented), len(token.TypeNames), documented, token.TypeNames)
 	}
 
-	// The YAML `type:` a migration translates has to name the same six, or a
-	// scenario that loaded would migrate into one the checker rejects.
-	if !reflect.DeepEqual(migrate.TypeNames, token.TypeNames) {
-		t.Errorf("migrate.TypeNames = %v, token.TypeNames = %v; they have to be the same list", migrate.TypeNames, token.TypeNames)
+	// The YAML `type:` a migration translates has to name the same JSON
+	// types, or a scenario that loaded would migrate into one the checker
+	// rejects. `file` is the one name YAML never had: it is the type of a
+	// value file() makes, and a response is never one.
+	var jsonTypes []string
+	for _, name := range token.TypeNames {
+		if name != "file" {
+			jsonTypes = append(jsonTypes, name)
+		}
+	}
+	if !reflect.DeepEqual(migrate.TypeNames, jsonTypes) {
+		t.Errorf("migrate.TypeNames = %v, token.TypeNames less file = %v; they have to be the same list", migrate.TypeNames, jsonTypes)
 	}
 }
 

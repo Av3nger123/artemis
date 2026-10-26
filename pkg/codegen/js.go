@@ -239,7 +239,10 @@ func jsHeader(source string) string {
 		"//     Name yours something else;\n" +
 		"//   - a scenario's cookies are kept by name: two cookies of one name for two\n" +
 		"//     paths keep the later one, where artemis keeps both, and a redirect\n" +
-		"//     fetch follows does not send or keep them.\n"
+		"//     fetch follows does not send or keep them;\n" +
+		"//   - a file json(), csv() or file() names is found from the directory the\n" +
+		"//     test runs in, by the .art file's path as it was given to `artemis\n" +
+		"//     build`; a file sent as a body has no Content-Type the step did not write.\n"
 }
 
 // hasBrowserStep reports whether the scenario holds a step that needs a page.
@@ -589,12 +592,33 @@ func (f *jsFile) request(st *lower.Step, indent int) error {
 	if r.Body != nil {
 		// The rendered expression, which is what the interpreter sends: no
 		// Content-Type the scenario did not write, and no second spelling of a
-		// JSON body.
-		body, err := f.value(r.Body)
+		// JSON body. A string literal is sent as it is; anything else goes
+		// through art_body, which sends a file's bytes.
+		body, err := f.expr(r.Body, jsPrecOr)
 		if err != nil {
 			return fmt.Errorf("body: %w", err)
 		}
-		options = append(options, "body: "+body.src)
+		src := body.src
+		if !staticString(r.Body) {
+			src = f.use(jsHelperBody) + "(" + src + ")"
+		}
+		options = append(options, "body: "+src)
+	}
+	if len(r.Form) > 0 {
+		// URLSearchParams from pairs, in order, so a repeated name keeps both
+		// values; fetch labels it urlencoded.
+		pairs, err := f.pairs(r.Form, func(v string) string { return f.use(jsHelperRender) + "(" + v + ")" })
+		if err != nil {
+			return fmt.Errorf("form: %w", err)
+		}
+		options = append(options, "body: new URLSearchParams(["+pairs+"])")
+	}
+	if len(r.Multipart) > 0 {
+		pairs, err := f.pairs(r.Multipart, func(v string) string { return v })
+		if err != nil {
+			return fmt.Errorf("multipart: %w", err)
+		}
+		options = append(options, "body: "+f.use(jsHelperForm)+"(["+pairs+"])")
 	}
 	if st.Timeout != nil {
 		ms, err := f.millis(st.Timeout)
@@ -620,6 +644,23 @@ func (f *jsFile) request(st *lower.Step, indent int) error {
 		f.line(indent, "cookies = "+f.use(jsHelperCookies)+"(resp);")
 	}
 	return nil
+}
+
+// pairs emits a form's fields as `[name, value]` pairs, each value through wrap.
+func (f *jsFile) pairs(ps []*lower.Param, wrap func(string) string) (string, error) {
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		name, err := f.value(p.Key)
+		if err != nil {
+			return "", err
+		}
+		value, err := f.expr(p.Value, jsPrecOr)
+		if err != nil {
+			return "", err
+		}
+		out = append(out, "["+name.src+", "+wrap(value.src)+"]")
+	}
+	return strings.Join(out, ", "), nil
 }
 
 // params emits the `"name": value` pairs of a header or env block.
@@ -731,6 +772,11 @@ func (f *jsFile) run(st *lower.Step, indent int) error {
 		stdin, err := f.value(r.Stdin)
 		if err != nil {
 			return fmt.Errorf("stdin: %w", err)
+		}
+		if !staticString(r.Stdin) {
+			// art_stdin rather than art_render: a file's text is the input.
+			raw, _ := f.expr(r.Stdin, jsPrecOr)
+			stdin = atom(f.use(jsHelperStdin)+"("+raw.src+")", raw.await)
 		}
 		options = append(options, "input: "+stdin.src)
 	}
@@ -867,8 +913,17 @@ func (f *jsFile) act(a *lower.Act) (string, error) {
 		v, err := two()
 		return "await page.selectOption(" + target.src + ", { value: " + v + " })", err
 	case "upload":
-		v, err := two()
-		return "await page.setInputFiles(" + target.src + ", " + v + ")", err
+		if staticString(a.Value) {
+			v, err := two()
+			return "await page.setInputFiles(" + target.src + ", " + v + ")", err
+		}
+		// A file, or a list of them, is attached by its path; art_files
+		// decides at run time, as the interpreter does.
+		v, err := f.expr(a.Value, jsPrecOr)
+		if err != nil {
+			return "", fmt.Errorf("line %d: upload: %w", a.Line, err)
+		}
+		return "await page.setInputFiles(" + target.src + ", " + f.use(jsHelperFiles) + "(" + v.src + "))", nil
 	case "wait":
 		ms, err := f.millis(a.Target)
 		if err != nil {

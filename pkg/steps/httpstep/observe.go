@@ -1,7 +1,6 @@
 package httpstep
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -88,10 +87,25 @@ func (e Executor) Observe(ctx context.Context, step models.Step, _ executor.Scop
 // are the whole difference between the two front ends at this point, and a
 // boolean parameter would make the one line that matters the easiest to miss.
 func rendered(ctx context.Context, step models.Step) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, step.Request.Method, step.Request.URL, bytes.NewBufferString(step.Request.Body))
+	body, err := bodyOf(step.Request)
 	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, step.Request.Method, step.Request.URL, body.reader)
+	if err != nil {
+		if body.close != nil {
+			body.close()
+		}
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
+	if body.length >= 0 {
+		req.ContentLength = body.length
+	}
+	req.GetBody = body.again
+	if body.contentType != "" {
+		req.Header.Set("Content-Type", body.contentType)
+	}
+	// After the body's own type, so a Content-Type the step wrote wins.
 	for key, value := range step.Request.Headers {
 		req.Header.Set(key, value)
 	}

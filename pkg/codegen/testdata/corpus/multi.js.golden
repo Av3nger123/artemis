@@ -21,7 +21,12 @@
 //     Name yours something else;
 //   - a scenario's cookies are kept by name: two cookies of one name for two
 //     paths keep the later one, where artemis keeps both, and a redirect
-//     fetch follows does not send or keep them.
+//     fetch follows does not send or keep them;
+//   - a file json(), csv() or file() names is found from the directory the
+//     test runs in, by the .art file's path as it was given to `artemis
+//     build`; a file sent as a body has no Content-Type the step did not write.
+
+import { readFileSync } from "node:fs";
 
 import { expect, test } from "vitest";
 
@@ -34,6 +39,7 @@ function art_render(value) {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
+  if (value.art_path !== undefined) return value.art_path;
   return JSON.stringify(value);
 }
 
@@ -138,6 +144,15 @@ async function art_fetch(jar, url, options) {
   return resp;
 }
 
+function art_body(value) {
+  // A request body: a file's bytes, or the value rendered as the interpreter
+  // renders it -- an object as compact JSON.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  return art_render(value);
+}
+
 // scenario "sign in", line 4
 test("sign in", async () => {
   let status, body, raw, headers, resp;
@@ -146,7 +161,7 @@ test("sign in", async () => {
   // step "post the form", line 5
   resp = await art_fetch(jar, "https://example.test/session", {
     method: "POST",
-    body: art_render({ "email": "alice@example.test" }),
+    body: art_body({ "email": "alice@example.test" }),
   });
   raw = await resp.text();
   status = resp.status;
@@ -163,7 +178,7 @@ test("sign-in", async () => {
   // step "post the form again", line 14
   resp = await art_fetch(jar, "https://example.test/session", {
     method: "POST",
-    body: art_render({ "email": "bob@example.test" }),
+    body: art_body({ "email": "bob@example.test" }),
   });
   raw = await resp.text();
   status = resp.status;

@@ -31,7 +31,9 @@ Request       = Method String [ "{" [ ReqField { Sep ReqField } ] "}" ] ;
 Method        = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
 ReqField      = "header" String "=" Expr
               | "query"  String "=" Expr
-              | "body"   "=" Expr ;
+              | "body"   "=" Expr
+              | "form"   String "=" Expr
+              | "multipart" String "=" Expr ;
 Run           = "run" Expr [ "{" [ RunField { Sep RunField } ] "}" ] ;
 RunField      = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
               | "env" "{" [ EnvSetting { Sep EnvSetting } ] "}" ;
@@ -61,7 +63,7 @@ Not           = "not" Not | Cmp ;
 Cmp           = Unary [ BinOp Unary | "exists" | "is" TypeName ] ;
 BinOp         = "==" | "!=" | "<" | "<=" | ">" | ">="
               | "contains" | "matches" ;
-TypeName      = "string" | "number" | "boolean" | "object" | "array" | "null" ;
+TypeName      = "string" | "number" | "boolean" | "object" | "array" | "null" | "file" ;
 Unary         = "-" Unary | Postfix ;
 Postfix       = Primary { "." Ident | "[" Expr "]" } ;
 Primary       = Number | String | Regex | Bool | "null" | Ident
@@ -76,6 +78,7 @@ Builtin       = "env" | "match"
               | "uuid" | "now" | "random_int" | "random_string"
               | "base64" | "base64_decode" | "url_encode" | "sha256" | "hmac_sha256" | "jwt_claims"
               | "to_json" | "from_json" | "len" | "number" | "string"
+              | "json" | "csv" | "file"
               | "text" | "value" | "attr" | "count" | "visible" ;
 
 (* Reserved words are not reachable from File. They lex as ordinary

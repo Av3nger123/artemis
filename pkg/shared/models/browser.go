@@ -47,6 +47,11 @@ type Act struct {
 	// whether this field means anything.
 	Value string
 
+	// Files are the absolute paths an `upload` attaches when its value was
+	// file() or a list of them. A string value stays in Value, as it always
+	// has.
+	Files []string
+
 	// Line is the line the action was written on, which is where a failure
 	// inside the page points. A step's own line is the fallback the result tree
 	// already has; this is finer, because a browser step is the one step type

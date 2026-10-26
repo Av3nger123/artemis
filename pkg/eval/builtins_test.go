@@ -84,7 +84,7 @@ func TestValueBuiltinErrors(t *testing.T) {
 		{`random_string(0)`, "random_string() makes 1 to 256 characters, and this call asks for 0"},
 		{`random_string(257)`, "random_string() makes 1 to 256 characters, and this call asks for 257"},
 		{`base64_decode("%%%")`, "base64_decode()'s argument is not base64"},
-		{`base64(1)`, "base64()'s argument must be a string, got number"},
+		{`base64(1)`, "base64()'s argument must be a string or a file, got number"},
 		{`jwt_claims("a.b")`, "jwt_claims()'s argument is not a JWT: it has 2 part(s)"},
 		{`from_json("{")`, "from_json()'s argument is not JSON"},
 		{`len(1)`, "len() measures a string, an array or an object, and 1 is a number"},

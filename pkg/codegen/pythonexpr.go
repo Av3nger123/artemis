@@ -402,6 +402,9 @@ func (f *pyFile) call(c *ast.Call) (string, error) {
 		// One helper per value builtin, named for it, so the call reads as the
 		// .art did and the rule it follows is the helper's docstring.
 		return f.use("art_"+name) + "(" + strings.Join(args, ", ") + ")", nil
+	case "json", "csv", "file":
+		helper := map[string]string{"json": helperReadJSON, "csv": helperReadCSV, "file": helperFile}[name]
+		return f.use(helper) + "(" + f.dataPath(c, args[0]) + ")", nil
 	case "text":
 		return f.use(helperText) + "(page, " + args[0] + ")", nil
 	case "value":
@@ -740,4 +743,19 @@ func unparen(x ast.Expr) ast.Expr {
 		}
 		x = p.X
 	}
+}
+
+// dataPath is a data builtin's path as the generated test opens it: a literal
+// joined to the .art file's directory here, and anything else joined at run
+// time.
+func (f *pyFile) dataPath(c *ast.Call, arg string) string {
+	dir := dataDir(c)
+	if path, ok := literalPath(c, dir); ok {
+		return quote(path)
+	}
+	if dir == "" {
+		return arg
+	}
+	f.need("os")
+	return "os.path.join(" + quote(dir) + ", " + arg + ")"
 }

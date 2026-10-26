@@ -29,10 +29,10 @@ bad_value_builtin.art:16:19: len()'s argument must be a value, not a regex
       |                   ^^^
    hint: len(body.items)
 
-bad_value_builtin.art:17:22: base64()'s argument must be a string, not a number
+bad_value_builtin.art:17:22: base64()'s argument must be a string or a file, not a number
    17 |   var token = base64(1)
       |                      ^
-   hint: base64("user:password")
+   hint: base64("user:password") or base64(file("logo.png"))
 
 === codes
 bad-value	error	11:19-11:24	suggest: "date"

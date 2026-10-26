@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -95,6 +96,18 @@ func argument(name string, p builtin.Param, x ast.Expr, v any) (any, error) {
 				name, strings.Join(p.OneOf, ", "), s)
 		}
 		return s, nil
+	case builtin.TypeBytes:
+		switch t := v.(type) {
+		case string:
+			return t, nil
+		case File:
+			b, err := os.ReadFile(t.Abs) //nolint:gosec // the path is the one the scenario names
+			if err != nil {
+				return nil, errorf(x.Span(), "%s(): reading %s: %v", name, t.Rel, err)
+			}
+			return string(b), nil
+		}
+		return nil, errorf(x.Span(), "%s()'s argument must be a string or a file, got %s at %s", name, typeOf(v), exprText(x))
 	case builtin.TypeNumber:
 		f, ok := number(v)
 		if !ok {
@@ -237,6 +250,9 @@ func evalValueFn(c *ast.Call, name string, args []any, env *Env) (any, error) {
 
 	case "string":
 		return Render(args[0]), nil
+
+	case "json", "csv", "file":
+		return evalDataFn(c, name, args[0].(string))
 	}
 	return nil, errorf(c.Span(), "%s() has no evaluation", name)
 }
@@ -289,6 +305,9 @@ func toJSON(c *ast.Call, v any) (any, error) {
 	}
 	if h, ok := v.(Headers); ok {
 		v = map[string]any(h)
+	}
+	if ContainsFile(v) {
+		return nil, errorf(c.Span(), "to_json(): %v", ErrFileInJSON)
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

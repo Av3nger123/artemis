@@ -35,6 +35,9 @@ func TestEveryEntryIsCoherent(t *testing.T) {
 			if len(p.OneOf) > 0 && p.Type != TypeString {
 				t.Errorf("%s()'s parameter %d lists the strings it accepts and is not a string", f.Name, i)
 			}
+			if p.Type == TypeBytes && !p.Accepts(token.String) {
+				t.Errorf("%s()'s parameter %d takes text and does not accept a string literal", f.Name, i)
+			}
 			if p.Whole && p.Type != TypeNumber {
 				t.Errorf("%s()'s parameter %d is a whole number and is not a number", f.Name, i)
 			}

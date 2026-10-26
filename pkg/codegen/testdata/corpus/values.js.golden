@@ -21,9 +21,13 @@
 //     Name yours something else;
 //   - a scenario's cookies are kept by name: two cookies of one name for two
 //     paths keep the later one, where artemis keeps both, and a redirect
-//     fetch follows does not send or keep them.
+//     fetch follows does not send or keep them;
+//   - a file json(), csv() or file() names is found from the directory the
+//     test runs in, by the .art file's path as it was given to `artemis
+//     build`; a file sent as a body has no Content-Type the step did not write.
 
 import { createHash, createHmac, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { expect, test } from "vitest";
 
@@ -36,6 +40,7 @@ function art_render(value) {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
+  if (value.art_path !== undefined) return value.art_path;
   return JSON.stringify(value);
 }
 
@@ -207,8 +212,8 @@ function art_random_string(length) {
 }
 
 function art_base64(text) {
-  // `base64(text)`: standard base64, padded.
-  return Buffer.from(art_str("base64", text), "utf8").toString("base64");
+  // `base64(text)`: standard base64, padded, of text or of a file's bytes.
+  return art_bytes("base64", text).toString("base64");
 }
 
 function art_base64_decode(text) {
@@ -232,15 +237,16 @@ function art_url_encode(text) {
 }
 
 function art_sha256(text) {
-  // `sha256(text)`: the digest of the text's UTF-8 bytes, in lower-case hex.
-  return createHash("sha256").update(art_str("sha256", text), "utf8").digest("hex");
+  // `sha256(text)`: the digest of the text's UTF-8 bytes, or of a file's, in
+  // lower-case hex.
+  return createHash("sha256").update(art_bytes("sha256", text)).digest("hex");
 }
 
 function art_hmac_sha256(key, text) {
-  // `hmac_sha256(key, text)`: the HMAC-SHA256 of the text under the key, in
-  // lower-case hex.
+  // `hmac_sha256(key, text)`: the HMAC-SHA256 of the text, or of a file's bytes,
+  // under the key, in lower-case hex.
   return createHmac("sha256", art_str("hmac_sha256", key))
-    .update(art_str("hmac_sha256", text), "utf8")
+    .update(art_bytes("hmac_sha256", text))
     .digest("hex");
 }
 
@@ -395,6 +401,26 @@ async function art_fetch(jar, url, options) {
   return resp;
 }
 
+function art_bytes(name, value) {
+  // What base64() and the hashes read: text's UTF-8 bytes, or a file's.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  if (typeof value !== "string") {
+    throw new TypeError(`${name}()'s argument must be a string or a file, got ${JSON.stringify(value)}`);
+  }
+  return Buffer.from(value, "utf8");
+}
+
+function art_body(value) {
+  // A request body: a file's bytes, or the value rendered as the interpreter
+  // renders it -- an object as compact JSON.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  return art_render(value);
+}
+
 // scenario "values", line 4
 test("values", async () => {
   let id, when, pick, word, basic, status, body, raw, headers, resp;
@@ -412,7 +438,7 @@ test("values", async () => {
     {
       method: "POST",
       headers: { "Authorization": `Basic ${art_render(basic)}`, "X-Signature": art_render(art_hmac_sha256("key", art_to_json({ "id": id }))) },
-      body: art_render({ "id": id, "at": when, "pick": pick, "word": word, "digest": art_sha256(word) }),
+      body: art_body({ "id": id, "at": when, "pick": pick, "word": word, "digest": art_sha256(word) }),
     },
   );
   raw = await resp.text();

@@ -32,7 +32,7 @@ const wantREADMEScenarios = 5
 // whoever copies it, and that is what keeps the README and the language from
 // drifting apart the way they did before the DSL landed.
 func TestREADMEArtExamplesCompile(t *testing.T) {
-	collections := docCollections(t)
+	collections := docLoader{docCollections(t)}
 	scenarios := 0
 	for _, b := range docBlocks(t, readmePath, "art") {
 		if isArtScenario(b) {

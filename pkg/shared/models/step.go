@@ -68,11 +68,32 @@ type Step struct {
 }
 
 // Request is what an `api` step sends, with every value already resolved.
+//
+// A body is one of three things, and at most one is set: Body, text the step
+// rendered; BodyFile, a file whose bytes are the body, read when it is sent;
+// or Parts, a form -- multipart when Multipart is set, urlencoded when not.
 type Request struct {
 	URL     string
 	Method  string
 	Headers map[string]string
 	Body    string
+
+	// BodyFile is the absolute path of `body = file(...)`.
+	BodyFile string
+
+	// Parts are a `form` or `multipart` block's fields, in source order.
+	Parts     []Part
+	Multipart bool
+}
+
+// Part is one field of a form: a name and either text or a file.
+type Part struct {
+	Name string
+	// Value is the field's text, when File is empty.
+	Value string
+	// File is the absolute path of a file sent as this part, in a multipart
+	// form only.
+	File string
 }
 
 // AttemptTimeout is how long one attempt of the step may take, falling back to

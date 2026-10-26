@@ -27,7 +27,7 @@ var (
 	BrowserActions = []string{"goto", "click", "fill", "select", "press", "hover", "upload", "wait"}
 
 	// TypeNames are the right-hand side of `is`.
-	TypeNames = []string{"string", "number", "boolean", "object", "array", "null"}
+	TypeNames = []string{"string", "number", "boolean", "object", "array", "null", "file"}
 
 	// WordOperators are the operators spelled as words. `and`, `or` and `not`
 	// are logical; `contains` and `matches` are binary comparisons alongside
@@ -47,7 +47,7 @@ var (
 	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}
 
 	// RequestFields are the fields of an api step's action block.
-	RequestFields = []string{"header", "query", "body"}
+	RequestFields = []string{"header", "query", "body", "form", "multipart"}
 
 	// RunFields are the fields of a `run` block.
 	RunFields = []string{"args", "cwd", "stdin", "env"}

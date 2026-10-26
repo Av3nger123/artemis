@@ -12,7 +12,10 @@
 #   - stdout and stderr are not truncated; artemis caps them for its report;
 #   - a variable with no value raises at the point of use. `artemis run`
 #     reports all of them before the first step; an exported module has no
-#     such moment.
+#     such moment;
+#   - a file json(), csv() or file() names is found from the directory the
+#     test runs in, by the .art file's path as it was given to `artemis
+#     build`; a file sent as a body has no Content-Type the step did not write.
 
 import json
 import os
@@ -30,6 +33,8 @@ def art_render(value):
         return "null"
     if isinstance(value, str):
         return value
+    if hasattr(value, "art_path"):
+        return value.art_path
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float) and value.is_integer():
@@ -89,6 +94,15 @@ def art_contains(haystack, needle):
     raise TypeError("contains needs a string, array or object on the left")
 
 
+def art_body(value):
+    """A request body: a file's bytes, or the value rendered as the interpreter
+    renders it -- an object as compact JSON."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, "rb") as data:
+            return data.read()
+    return art_render(value)
+
+
 class art_attempt:
     """One attempt of a retried step. Entered as a context manager: a failure
     inside the block is swallowed on every attempt but the last, which raises."""
@@ -131,7 +145,7 @@ def test_the_orders_api():
             resp = http.post(
                 f"{art_render(base)}/orders",
                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + art_render(art_env("TOKEN"))},
-                data=art_render({"sku": "ART-1", "qty": 2, "gift": True, "note": None}),
+                data=art_body({"sku": "ART-1", "qty": 2, "gift": True, "note": None}),
                 timeout=10.0,
             )
             status, body, raw, headers = (
@@ -153,7 +167,7 @@ def test_the_orders_api():
     # step "replace it", line 30
     resp = http.put(
         f"{art_render(base)}/orders/{art_render(id)}",
-        data=art_render({"sku": "ART-2", "qty": 1}),
+        data=art_body({"sku": "ART-2", "qty": 1}),
     )
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)
@@ -162,7 +176,7 @@ def test_the_orders_api():
     # step "amend it", line 37
     resp = http.patch(
         f"{art_render(base)}/orders/{art_render(id)}",
-        data=art_render({"qty": 4}),
+        data=art_body({"qty": 4}),
     )
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)

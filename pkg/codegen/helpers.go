@@ -45,14 +45,24 @@ const (
 	helperNumber       = "art_number"
 	helperString       = "art_string"
 	helperCookies      = "art_cookies"
-	helperText         = "art_text"
-	helperValue        = "art_value"
-	helperAttr         = "art_attr"
-	helperArgv         = "art_argv"
-	helperGoto         = "art_goto"
-	helperRetry        = "art_retry"
-	helperWithin       = "art_within"
-	helperBrowser      = "browser"
+
+	// Data and files.
+	helperFile     = "art_file"
+	helperReadJSON = "art_read_json"
+	helperReadCSV  = "art_read_csv"
+	helperBytes    = "art_bytes"
+	helperBody     = "art_body"
+	helperPart     = "art_part"
+	helperStdin    = "art_stdin"
+	helperFiles    = "art_files"
+	helperText     = "art_text"
+	helperValue    = "art_value"
+	helperAttr     = "art_attr"
+	helperArgv     = "art_argv"
+	helperGoto     = "art_goto"
+	helperRetry    = "art_retry"
+	helperWithin   = "art_within"
+	helperBrowser  = "browser"
 )
 
 // helper is one emitted definition: its Python source, the modules it imports
@@ -79,6 +89,8 @@ var helpers = []helper{{
         return "null"
     if isinstance(value, str):
         return value
+    if hasattr(value, "art_path"):
+        return value.art_path
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float) and value.is_integer():
@@ -159,9 +171,11 @@ var helpers = []helper{{
 }, {
 	name: helperIs,
 	src: `def art_type(value):
-    """A value's JSON type, in the names ` + "`is`" + ` accepts."""
+    """A value's JSON type, in the names ` + "`is`" + ` accepts, or "file" for a file()."""
     if value is None:
         return "null"
+    if hasattr(value, "art_path"):
+        return "file"
     if isinstance(value, bool):
         return "boolean"
     if isinstance(value, str):
@@ -176,7 +190,7 @@ var helpers = []helper{{
 
 
 def art_is(value, want):
-    """` + "`expr is <type>`" + `, over the six JSON type names."""
+    """` + "`expr is <type>`" + `, over the six JSON type names and file."""
     return art_type(value) == want
 `,
 }, {
@@ -304,10 +318,10 @@ def art_is(value, want):
 }, {
 	name:    helperBase64,
 	imports: []string{"base64"},
-	needs:   []string{helperStr},
+	needs:   []string{helperBytes},
 	src: `def art_base64(text):
-    """` + "`base64(text)`" + `: standard base64, padded."""
-    return base64.b64encode(art_str("base64", text).encode("utf-8")).decode("ascii")
+    """` + "`base64(text)`" + `: standard base64, padded, of text or of a file's bytes."""
+    return base64.b64encode(art_bytes("base64", text)).decode("ascii")
 `,
 }, {
 	name:    helperBase64Decode,
@@ -333,20 +347,21 @@ def art_is(value, want):
 }, {
 	name:    helperSHA256,
 	imports: []string{"hashlib"},
-	needs:   []string{helperStr},
+	needs:   []string{helperBytes},
 	src: `def art_sha256(text):
-    """` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, in lower-case hex."""
-    return hashlib.sha256(art_str("sha256", text).encode("utf-8")).hexdigest()
+    """` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, or of a file's, in
+    lower-case hex."""
+    return hashlib.sha256(art_bytes("sha256", text)).hexdigest()
 `,
 }, {
 	name:    helperHMACSHA256,
 	imports: []string{"hashlib", "hmac"},
-	needs:   []string{helperStr},
+	needs:   []string{helperStr, helperBytes},
 	src: `def art_hmac_sha256(key, text):
-    """` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text under the key, in
-    lower-case hex."""
+    """` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text, or of a file's bytes,
+    under the key, in lower-case hex."""
     return hmac.new(art_str("hmac_sha256", key).encode("utf-8"),
-                    art_str("hmac_sha256", text).encode("utf-8"), hashlib.sha256).hexdigest()
+                    art_bytes("hmac_sha256", text), hashlib.sha256).hexdigest()
 `,
 }, {
 	name:    helperJWTClaims,
@@ -471,6 +486,119 @@ def art_is(value, want):
                 cookie["same_site"] = setting.lower()
         out[name.strip()] = cookie
     return out
+`,
+}, {
+	name:    helperFile,
+	imports: []string{"os"},
+	src: `class ArtFile:
+    """A file a scenario named with file(): its path, not its contents. Where a
+    step sends content the file's bytes are sent; anywhere else it is its
+    absolute path -- eval.File's rule."""
+
+    def __init__(self, path):
+        self.art_path = os.path.abspath(path)
+
+    def __eq__(self, other):
+        return isinstance(other, ArtFile) and other.art_path == self.art_path
+
+    def __repr__(self):
+        return "file(%r)" % self.art_path
+
+
+def art_file(path):
+    """` + "`file(path)`" + `: the file at path, which has to be there and not be a
+    directory."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError("file(): there is no file %s" % path)
+    return ArtFile(path)
+`,
+}, {
+	name:    helperReadJSON,
+	imports: []string{"json"},
+	src: `def art_read_json(path):
+    """` + "`json(path)`" + `: the value a JSON file holds."""
+    with open(path, encoding="utf-8") as data:
+        return json.load(data)
+`,
+}, {
+	name:    helperReadCSV,
+	imports: []string{"csv"},
+	src: `def art_read_csv(path):
+    """` + "`csv(path)`" + `: a CSV file as a list of dicts, the first row naming the
+    columns and every cell a string. A row with more or fewer cells than the
+    header is an error, and so is a column named twice."""
+    with open(path, newline="", encoding="utf-8") as data:
+        rows = list(csv.reader(data))
+    if not rows:
+        return []
+    header = rows[0]
+    if len(set(header)) != len(header):
+        raise ValueError("csv(): %s names a column twice" % path)
+    out = []
+    for number, row in enumerate(rows[1:], start=2):
+        if len(row) != len(header):
+            raise ValueError("csv(): %s line %d has %d cells, and the header %d"
+                             % (path, number, len(row), len(header)))
+        out.append(dict(zip(header, row)))
+    return out
+`,
+}, {
+	name: helperBytes,
+	src: `def art_bytes(name, value):
+    """What base64() and the hashes read: text's UTF-8 bytes, or a file's."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, "rb") as data:
+            return data.read()
+    if not isinstance(value, str):
+        raise TypeError("%s()'s argument must be a string or a file, got %r" % (name, value))
+    return value.encode("utf-8")
+`,
+}, {
+	name:  helperBody,
+	needs: []string{helperRender},
+	src: `def art_body(value):
+    """A request body: a file's bytes, or the value rendered as the interpreter
+    renders it -- an object as compact JSON."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, "rb") as data:
+            return data.read()
+    return art_render(value)
+`,
+}, {
+	name:    helperPart,
+	imports: []string{"mimetypes", "os"},
+	needs:   []string{helperRender},
+	src: `def art_part(value):
+    """One multipart field, as requests' files= takes it: a file as its base name,
+    its bytes and a type from its extension, and text as a field with no file
+    name."""
+    if hasattr(value, "art_path"):
+        kind = mimetypes.guess_type(value.art_path)[0] or "application/octet-stream"
+        with open(value.art_path, "rb") as data:
+            return (os.path.basename(value.art_path), data.read(), kind)
+    return (None, art_render(value))
+`,
+}, {
+	name:  helperStdin,
+	needs: []string{helperRender},
+	src: `def art_stdin(value):
+    """A command's input: a file's text, or the value rendered."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, encoding="utf-8") as data:
+            return data.read()
+    return art_render(value)
+`,
+}, {
+	name:  helperFiles,
+	needs: []string{helperRender},
+	src: `def art_files(value):
+    """What an upload attaches: a file's path, a list of files' paths, or a
+    path written as a string."""
+    if hasattr(value, "art_path"):
+        return value.art_path
+    if isinstance(value, list) and value and all(hasattr(item, "art_path") for item in value):
+        return [item.art_path for item in value]
+    return art_render(value)
 `,
 }, {
 	name: helperText,
@@ -639,6 +767,8 @@ var byName = func() map[string]helper {
 // file import one without the other.
 var importLines = map[string]string{
 	"base64":       "import base64",
+	"csv":          "import csv",
+	"mimetypes":    "import mimetypes",
 	"datetime":     "import datetime",
 	"email.utils":  "import email.utils",
 	"hashlib":      "import hashlib",
@@ -663,6 +793,6 @@ var importLines = map[string]string{
 // between -- isort's grouping, which is what a linter in a Python repo would do
 // to the file anyway.
 var importGroups = [][]string{
-	{"base64", "datetime", "email.utils", "hashlib", "hmac", "json", "math", "os", "random", "re", "subprocess", "time", "urllib", "urllib.parse", "uuid"},
+	{"base64", "csv", "datetime", "email.utils", "hashlib", "hmac", "json", "math", "mimetypes", "os", "random", "re", "subprocess", "time", "urllib", "urllib.parse", "uuid"},
 	{"pytest", "requests", "playwright"},
 }

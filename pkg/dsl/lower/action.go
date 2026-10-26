@@ -2,7 +2,9 @@ package lower
 
 import (
 	"fmt"
+	"mime"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"artemis/pkg/dsl/ast"
@@ -23,7 +25,11 @@ type Request struct {
 	Headers []*Param
 	Query   []*Param
 	Body    ast.Expr
-	Line    int
+	// Form and Multipart are a form's fields, in source order. The checker
+	// lets a request write one of body, form and multipart.
+	Form      []*Param
+	Multipart []*Param
+	Line      int
 
 	// secretNames are the bindings declared `secret` and in scope for this
 	// step. Model consults them, rather than lowering deciding, because a
@@ -111,11 +117,42 @@ func (a *Act) Model(env *eval.Env) (models.Act, error) {
 	out.Target = target
 
 	if a.Value != nil {
-		if out.Value, err = text(a.Value, env); err != nil {
+		v, err := eval.Eval(a.Value, env)
+		if err != nil {
 			return out, fmt.Errorf("%s %q: value: %w", a.Name, target, err)
+		}
+		if files, ok := filesOf(v); ok && a.Name == "upload" {
+			out.Files = files
+		} else {
+			// A file anywhere but upload is its path, as it is in text.
+			out.Value = eval.Render(v)
 		}
 	}
 	return out, nil
+}
+
+// filesOf reads an upload's value as files: one file(), or an array of them.
+// Anything else -- a string, an array with a string in it -- is not, and keeps
+// the meaning a string upload always had.
+func filesOf(v any) ([]string, bool) {
+	switch t := v.(type) {
+	case eval.File:
+		return []string{t.Abs}, true
+	case []any:
+		if len(t) == 0 {
+			return nil, false
+		}
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			f, ok := e.(eval.File)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, f.Abs)
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 // browserModel evaluates every act of a browser step, in source order.
@@ -204,14 +241,102 @@ func (r *Request) Model(env *eval.Env) (models.Request, models.Secrets, error) {
 	// The body is the evaluated expression rendered, so an object literal
 	// arrives as compact JSON rather than as text with values spliced into it --
 	// which is the failure mode where a captured object reached a body by
-	// concatenation. A step with no body sends an empty one.
+	// concatenation. A file is the one value that is not rendered: its bytes
+	// are the body, read when it is sent. A step with no body sends an empty one.
 	if r.Body != nil {
-		if out.Body, err = text(r.Body, env); err != nil {
+		v, err := eval.Eval(r.Body, env)
+		if err != nil {
 			return out, marks, fmt.Errorf("body: %w", err)
+		}
+		switch {
+		case isFile(v):
+			f := v.(eval.File)
+			out.BodyFile = f.Abs
+			if !hasHeader(out.Headers, "Content-Type") {
+				if out.Headers == nil {
+					out.Headers = map[string]string{}
+				}
+				out.Headers["Content-Type"] = contentType(f.Abs)
+			}
+		case eval.ContainsFile(v):
+			return out, marks, fmt.Errorf("body: %w", eval.ErrFileInJSON)
+		default:
+			out.Body = eval.Render(v)
 		}
 		marks.Body, marks.BodyPaths = bodyMarks(r.Body, r.secretNames)
 	}
+
+	if err := r.parts(&out, &marks, env); err != nil {
+		return out, marks, err
+	}
 	return out, marks, nil
+}
+
+// parts evaluates a `form` or `multipart` block's fields into out.Parts.
+//
+// A file is a part of its own in a multipart form -- its name, its bytes, a
+// type from its extension -- and a mistake in a urlencoded one, which has no
+// way to carry a file: the error says which to write.
+func (r *Request) parts(out *models.Request, marks *models.Secrets, env *eval.Env) error {
+	fields, kind := r.Form, "form"
+	if len(r.Multipart) > 0 {
+		fields, kind = r.Multipart, "multipart"
+		out.Multipart = true
+	}
+	for i, p := range fields {
+		name, err := p.name(env)
+		if err != nil {
+			return fmt.Errorf("%s name: %w", kind, err)
+		}
+		v, err := eval.Eval(p.Value, env)
+		if err != nil {
+			return fmt.Errorf("%s %q: %w", kind, name, err)
+		}
+		part := models.Part{Name: name}
+		switch {
+		case isFile(v) && kind == "multipart":
+			part.File = v.(eval.File).Abs
+		case isFile(v):
+			return fmt.Errorf("form %q: a urlencoded form cannot carry a file; send it as a multipart field: multipart %q = file(...)", name, name)
+		case eval.ContainsFile(v):
+			return fmt.Errorf("%s %q: %w", kind, name, eval.ErrFileInJSON)
+		default:
+			part.Value = eval.Render(v)
+		}
+		out.Parts = append(out.Parts, part)
+		if taint.Secret(p.Value, r.secretNames) {
+			if marks.Parts == nil {
+				marks.Parts = map[int]bool{}
+			}
+			marks.Parts[i] = true
+		}
+	}
+	return nil
+}
+
+func isFile(v any) bool {
+	_, ok := v.(eval.File)
+	return ok
+}
+
+// hasHeader reports whether the step wrote a header, by any capitalisation.
+func hasHeader(h map[string]string, name string) bool {
+	for k := range h {
+		if strings.EqualFold(k, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// contentType is a file's type from its extension, and octet-stream for one
+// mime does not know: what a body or a part is labelled when the step did not
+// say.
+func contentType(path string) string {
+	if t := mime.TypeByExtension(filepath.Ext(path)); t != "" {
+		return t
+	}
+	return "application/octet-stream"
 }
 
 // bodyMarks decides how much of a body a report must withhold.
@@ -339,8 +464,17 @@ func (r *Run) Model(env *eval.Env) (models.Exec, models.Secrets, error) {
 	if out.Cwd, err = text(r.Cwd, env); err != nil {
 		return out, marks, fmt.Errorf("cwd: %w", err)
 	}
-	if out.Stdin, err = text(r.Stdin, env); err != nil {
-		return out, marks, fmt.Errorf("stdin: %w", err)
+	if r.Stdin != nil {
+		v, err := eval.Eval(r.Stdin, env)
+		if err != nil {
+			return out, marks, fmt.Errorf("stdin: %w", err)
+		}
+		if f, ok := v.(eval.File); ok {
+			// A file's bytes are the command's input, read when it runs.
+			out.StdinFile = f.Abs
+		} else {
+			out.Stdin = eval.Render(v)
+		}
 	}
 	if out.Args, err = args(r.Args, env); err != nil {
 		return out, marks, err
@@ -421,6 +555,10 @@ func request(r *ast.Request) *Request {
 			out.Query = append(out.Query, p)
 		case "body":
 			out.Body = f.Value
+		case "form":
+			out.Form = append(out.Form, p)
+		case "multipart":
+			out.Multipart = append(out.Multipart, p)
 		}
 		// Any other name is an unknown field the checker reported.
 	}

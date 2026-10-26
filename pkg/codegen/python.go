@@ -175,7 +175,10 @@ func header(source string) string {
 		"#   - stdout and stderr are not truncated; artemis caps them for its report;\n" +
 		"#   - a variable with no value raises at the point of use. `artemis run`\n" +
 		"#     reports all of them before the first step; an exported module has no\n" +
-		"#     such moment.\n"
+		"#     such moment;\n" +
+		"#   - a file json(), csv() or file() names is found from the directory the\n" +
+		"#     test runs in, by the .art file's path as it was given to `artemis\n" +
+		"#     build`; a file sent as a body has no Content-Type the step did not write.\n"
 }
 
 // scenario emits one test function.
@@ -403,12 +406,32 @@ func (f *pyFile) request(st *lower.Step, indent int) error {
 	if r.Body != nil {
 		// data= and not json=: the interpreter sends the body as the rendered
 		// expression and sets no header the scenario did not write, and json=
-		// would add a Content-Type of its own.
-		body, err := f.value(r.Body)
+		// would add a Content-Type of its own. A string literal is sent as it
+		// is; anything else goes through art_body, which sends a file's bytes.
+		body, err := f.expr(r.Body, precOr)
 		if err != nil {
 			return fmt.Errorf("body: %w", err)
 		}
+		if !staticString(r.Body) {
+			body = f.use(helperBody) + "(" + body + ")"
+		}
 		args = append(args, "data="+body)
+	}
+	if len(r.Form) > 0 {
+		// A list of pairs, which requests urlencodes in order, so a repeated
+		// name keeps both values as it does under the interpreter.
+		pairs, err := f.pairs(r.Form, func(v string) string { return f.use(helperRender) + "(" + v + ")" })
+		if err != nil {
+			return fmt.Errorf("form: %w", err)
+		}
+		args = append(args, "data=["+pairs+"]")
+	}
+	if len(r.Multipart) > 0 {
+		pairs, err := f.pairs(r.Multipart, func(v string) string { return f.use(helperPart) + "(" + v + ")" })
+		if err != nil {
+			return fmt.Errorf("multipart: %w", err)
+		}
+		args = append(args, "files=["+pairs+"]")
 	}
 	if st.Timeout != nil {
 		secs, err := f.seconds(st.Timeout)
@@ -433,6 +456,24 @@ func (f *pyFile) request(st *lower.Step, indent int) error {
 		f.line(indent, "cookies = "+f.use(helperCookies)+"(resp)")
 	}
 	return nil
+}
+
+// pairs emits a form's fields as `(name, value)` tuples, each value through
+// wrap.
+func (f *pyFile) pairs(ps []*lower.Param, wrap func(string) string) (string, error) {
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		name, err := f.value(p.Key)
+		if err != nil {
+			return "", err
+		}
+		value, err := f.expr(p.Value, precOr)
+		if err != nil {
+			return "", err
+		}
+		out = append(out, "("+name+", "+wrap(value)+")")
+	}
+	return strings.Join(out, ", "), nil
 }
 
 // params emits the `"name": value` pairs of a header block.
@@ -519,6 +560,11 @@ func (f *pyFile) run(st *lower.Step, indent int) error {
 		stdin, err := f.value(r.Stdin)
 		if err != nil {
 			return fmt.Errorf("stdin: %w", err)
+		}
+		if !staticString(r.Stdin) {
+			// art_stdin rather than art_render: a file's text is the input.
+			src, _ := f.expr(r.Stdin, precOr)
+			stdin = f.use(helperStdin) + "(" + src + ")"
 		}
 		args = append(args, "input="+stdin)
 	}
@@ -660,8 +706,17 @@ func (f *pyFile) act(a *lower.Act) (string, error) {
 		v, err := two()
 		return "page.select_option(" + target + ", value=" + v + ")", err
 	case "upload":
-		v, err := two()
-		return "page.set_input_files(" + target + ", " + v + ")", err
+		if staticString(a.Value) {
+			v, err := two()
+			return "page.set_input_files(" + target + ", " + v + ")", err
+		}
+		// A file, or a list of them, is attached by its path; art_files
+		// decides at run time, as the interpreter does.
+		v, err := f.expr(a.Value, precOr)
+		if err != nil {
+			return "", fmt.Errorf("line %d: upload: %w", a.Line, err)
+		}
+		return "page.set_input_files(" + target + ", " + f.use(helperFiles) + "(" + v + "))", nil
 	case "wait":
 		ms, err := f.millis(a.Target)
 		if err != nil {

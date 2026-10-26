@@ -195,6 +195,17 @@ const (
 	DropAfterExpect          Code = "drop-after-expect"
 	SecretArgument           Code = "secret-argument"
 	RootCapture              Code = "root-capture"
+
+	// A json(), csv() or file() whose literal path names nothing, or names a
+	// data file that does not parse. Settled when the file compiles, because
+	// the data is in the scenario's own repository.
+	DataFileMissing Code = "data-file-missing"
+	DataNotJSON     Code = "data-not-json"
+	DataNotCSV      Code = "data-not-csv"
+
+	// BodyConflict is a request with a body two ways: `body` and `form`, or
+	// `form` and `multipart`.
+	BodyConflict Code = "body-conflict"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -254,6 +265,10 @@ var registry = []CodeInfo{
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
 	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
 	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
+	{DataFileMissing, Error, "json(), csv() or file() names a path where there is no file"},
+	{DataNotJSON, Error, "json() names a file that is not JSON"},
+	{DataNotCSV, Error, "csv() names a file that is not CSV"},
+	{BodyConflict, Error, "a request says what its body is more than one way"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

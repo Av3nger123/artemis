@@ -21,7 +21,12 @@
 //     Name yours something else;
 //   - a scenario's cookies are kept by name: two cookies of one name for two
 //     paths keep the later one, where artemis keeps both, and a redirect
-//     fetch follows does not send or keep them.
+//     fetch follows does not send or keep them;
+//   - a file json(), csv() or file() names is found from the directory the
+//     test runs in, by the .art file's path as it was given to `artemis
+//     build`; a file sent as a body has no Content-Type the step did not write.
+
+import { readFileSync } from "node:fs";
 
 import { expect, test } from "vitest";
 
@@ -34,6 +39,7 @@ function art_render(value) {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
+  if (value.art_path !== undefined) return value.art_path;
   return JSON.stringify(value);
 }
 
@@ -253,6 +259,15 @@ async function art_fetch(jar, url, options) {
   return resp;
 }
 
+function art_body(value) {
+  // A request body: a file's bytes, or the value rendered as the interpreter
+  // renders it -- an object as compact JSON.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  return art_render(value);
+}
+
 async function art_retry(options, attempt) {
   // `retry { times, delay }`: one call of the attempt per iteration, with the
   // delay between two of them, and the last failure rethrown.
@@ -284,7 +299,7 @@ test("the orders api", async () => {
     resp = await art_fetch(jar, `${art_render(base)}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${art_render(art_env("TOKEN"))}` },
-      body: art_render({ "sku": "ART-1", "qty": 2, "gift": true, "note": null }),
+      body: art_body({ "sku": "ART-1", "qty": 2, "gift": true, "note": null }),
       signal: AbortSignal.timeout(10000),
     });
     raw = await resp.text();
@@ -312,7 +327,7 @@ test("the orders api", async () => {
   // step "replace it", line 30
   resp = await art_fetch(jar, `${art_render(base)}/orders/${art_render(id)}`, {
     method: "PUT",
-    body: art_render({ "sku": "ART-2", "qty": 1 }),
+    body: art_body({ "sku": "ART-2", "qty": 1 }),
   });
   raw = await resp.text();
   status = resp.status;
@@ -323,7 +338,7 @@ test("the orders api", async () => {
   // step "amend it", line 37
   resp = await art_fetch(jar, `${art_render(base)}/orders/${art_render(id)}`, {
     method: "PATCH",
-    body: art_render({ "qty": 4 }),
+    body: art_body({ "qty": 4 }),
   });
   raw = await resp.text();
   status = resp.status;

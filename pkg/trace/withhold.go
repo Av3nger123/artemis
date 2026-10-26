@@ -2,6 +2,7 @@ package trace
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -38,6 +39,26 @@ func sent(step models.Step) map[string]any {
 		if step.Request.Body != "" {
 			out["body"] = body(step.Request.Body, s)
 		}
+		if step.Request.BodyFile != "" {
+			out["body_file"] = fileSent(step.Request.BodyFile)
+		}
+		if len(step.Request.Parts) > 0 {
+			parts := make([]any, len(step.Request.Parts))
+			for i, p := range step.Request.Parts {
+				part := map[string]any{"name": p.Name}
+				if p.File != "" {
+					part["file"] = fileSent(p.File)
+				} else {
+					part["value"] = hide(p.Value, s.Parts[i])
+				}
+				parts[i] = part
+			}
+			key := "form"
+			if step.Request.Multipart {
+				key = "multipart"
+			}
+			out[key] = parts
+		}
 		return out
 
 	case "terminal":
@@ -50,6 +71,9 @@ func sent(step models.Step) map[string]any {
 		}
 		if step.Exec.Stdin != "" {
 			out["stdin"] = hide(step.Exec.Stdin, s.Stdin)
+		}
+		if step.Exec.StdinFile != "" {
+			out["stdin_file"] = fileSent(step.Exec.StdinFile)
 		}
 		if len(step.Exec.Env) > 0 {
 			env := make(map[string]any, len(step.Exec.Env))
@@ -256,6 +280,17 @@ func replaceSegments(v any, segments []string) any {
 func unescapePointer(s string) string {
 	s = strings.ReplaceAll(s, "~1", "/")
 	return strings.ReplaceAll(s, "~0", "~")
+}
+
+// fileSent is a file a step sent, as a trace records it: where it is and how
+// big, never what is in it. A fixture can be a megabyte of image, and a trace is
+// for reading.
+func fileSent(path string) map[string]any {
+	out := map[string]any{"path": path}
+	if info, err := os.Stat(path); err == nil {
+		out["bytes"] = info.Size()
+	}
+	return out
 }
 
 // hide returns Redacted when the mark says so, and the value otherwise.

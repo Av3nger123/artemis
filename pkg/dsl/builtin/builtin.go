@@ -46,6 +46,9 @@ const (
 	TypePattern
 	// TypeAny is any value, passed through as it is.
 	TypeAny
+	// TypeBytes is text, or a file() whose contents are read in its place:
+	// what base64() and the hashes take.
+	TypeBytes
 )
 
 // Param is one parameter: what it wants, in the words a diagnostic uses, which
@@ -104,6 +107,12 @@ var (
 
 	// Format is now()'s format name.
 	Format = Param{Want: "a time format", Kinds: []token.Kind{token.String}, Type: TypeString, OneOf: TimeFormats}
+
+	// Bytes is text, or a file whose contents stand in for it.
+	Bytes = Param{Want: "a string or a file", Kinds: []token.Kind{token.String}, Type: TypeBytes}
+
+	// Path is a file's path, relative to the file the call is written in.
+	Path = Param{Want: "a path", Kinds: []token.Kind{token.String}, Type: TypeString}
 )
 
 // Fn is one builtin.
@@ -120,6 +129,10 @@ type Fn struct {
 	// Signature is what a call looks like, for the hint under an arity or a
 	// wrong-kind diagnostic.
 	Signature string
+	// Static is a builtin that reads a file the scenario's own repository
+	// holds, so a literal path is checked when the file compiles -- it exists,
+	// and parses -- rather than when a step reaches it.
+	Static bool
 }
 
 // Max is the most arguments a call may pass.
@@ -145,15 +158,15 @@ var table = []Fn{
 		Signature: `random_string(12)`},
 
 	// Encoding and hashing, for a header an API wants built rather than typed.
-	{Name: "base64", Params: []Param{String}, Min: 1, Scope: Everywhere,
-		Signature: `base64("user:password")`},
+	{Name: "base64", Params: []Param{Bytes}, Min: 1, Scope: Everywhere,
+		Signature: `base64("user:password") or base64(file("logo.png"))`},
 	{Name: "base64_decode", Params: []Param{String}, Min: 1, Scope: Everywhere,
 		Signature: `base64_decode(body.content)`},
 	{Name: "url_encode", Params: []Param{String}, Min: 1, Scope: Everywhere,
 		Signature: `url_encode("a b&c")`},
-	{Name: "sha256", Params: []Param{String}, Min: 1, Scope: Everywhere,
+	{Name: "sha256", Params: []Param{Bytes}, Min: 1, Scope: Everywhere,
 		Signature: `sha256(raw)`},
-	{Name: "hmac_sha256", Params: []Param{String, String}, Min: 2, Scope: Everywhere,
+	{Name: "hmac_sha256", Params: []Param{String, Bytes}, Min: 2, Scope: Everywhere,
 		Signature: `hmac_sha256(key, raw)`},
 	{Name: "jwt_claims", Params: []Param{String}, Min: 1, Scope: Everywhere,
 		Signature: `jwt_claims(token)`},
@@ -169,6 +182,14 @@ var table = []Fn{
 		Signature: `number(row.quantity)`},
 	{Name: "string", Params: []Param{Value}, Min: 1, Scope: Everywhere,
 		Signature: `string(body.id)`},
+
+	// Data and files, each found relative to the file the call is written in.
+	{Name: "json", Params: []Param{Path}, Min: 1, Scope: Everywhere, Static: true,
+		Signature: `json("data/users.json")`},
+	{Name: "csv", Params: []Param{Path}, Min: 1, Scope: Everywhere, Static: true,
+		Signature: `csv("data/users.csv")`},
+	{Name: "file", Params: []Param{Path}, Min: 1, Scope: Everywhere, Static: true,
+		Signature: `file("fixtures/avatar.png")`},
 
 	{Name: "text", Params: []Param{String}, Min: 1, Scope: Page,
 		Signature: `text("[role=status]")`},

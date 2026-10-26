@@ -190,3 +190,19 @@ func without(roots, drop []string) []string {
 	}
 	return out
 }
+
+// A file as stdin is the file's bytes, streamed to the command: what `stdin =
+// file("seed.sql")` gives psql.
+func TestAFileIsTheCommandsStdin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seed.sql")
+	if err := os.WriteFile(path, []byte("select 1;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	roots, err := observe(t, models.Step{Name: "cat", Exec: models.Exec{Command: "cat", StdinFile: path}})
+	if err != nil {
+		t.Fatalf("Observe() error = %v", err)
+	}
+	if roots[RootStdout] != "select 1;\n" {
+		t.Errorf("stdout = %q, want the file's text", roots[RootStdout])
+	}
+}

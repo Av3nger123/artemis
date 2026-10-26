@@ -82,6 +82,11 @@ func act(d driver, a models.Act) error {
 	case ActSelect:
 		return d.Select(a.Target, a.Value)
 	case ActUpload:
+		// file() values arrive as Files, already absolute; a string is the
+		// path as written, which Playwright resolves as it always has.
+		if len(a.Files) > 0 {
+			return d.Upload(a.Target, a.Files...)
+		}
 		return d.Upload(a.Target, a.Value)
 	case ActPress:
 		return d.Press(a.Target)

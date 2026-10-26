@@ -63,9 +63,11 @@ var (
 	requestBlock = blockSpec{
 		what: "a request block",
 		fields: map[string]fieldSpec{
-			"header": {key: true, kind: kindAny},
-			"query":  {key: true, kind: kindAny},
-			"body":   {kind: kindAny},
+			"header":    {key: true, kind: kindAny},
+			"query":     {key: true, kind: kindAny},
+			"body":      {kind: kindAny},
+			"form":      {key: true, kind: kindAny},
+			"multipart": {key: true, kind: kindAny},
 		},
 		names: token.RequestFields,
 	}
@@ -130,6 +132,35 @@ var configBlocks = map[string]blockSpec{
 func (c *checker) request(r *ast.Request, v *view) {
 	c.expr(r.URL, v)
 	c.block(r.Block, requestBlock, v)
+	c.oneBody(r.Block)
+}
+
+// oneBody rejects a request that says what its body is two ways: a `body`, a
+// `form` and a `multipart` each are a whole body, and which one won would be a
+// rule nobody reading the step could see. The second one written is reported,
+// naming the first.
+func (c *checker) oneBody(b *ast.Block) {
+	if b == nil {
+		return
+	}
+	first := ""
+	for _, s := range b.Fields {
+		f, ok := s.(*ast.Field)
+		if !ok || f == nil || f.Name.Kind != token.Ident {
+			continue
+		}
+		switch name := f.Name.Value; name {
+		case "body", "form", "multipart":
+			switch {
+			case first == "":
+				first = name
+			case first != name:
+				c.bag.Error(f.Name.Span, diag.BodyConflict,
+					"this request already has a body from %q, and %q would be a second one", first, name).
+					Hintf("a request sends one of: body = ..., form fields, multipart fields")
+			}
+		}
+	}
 }
 
 // run checks a terminal step's action.

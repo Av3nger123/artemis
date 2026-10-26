@@ -56,15 +56,25 @@ const (
 	jsHelperFetch      = "art_fetch"
 	jsHelperSetCookies = "art_set_cookies"
 	jsHelperCookies    = "art_cookies"
-	jsHelperText       = "art_text"
-	jsHelperValue      = "art_value"
-	jsHelperAttr       = "art_attr"
-	jsHelperExit       = "art_exit"
-	jsHelperArgv       = "art_argv"
-	jsHelperGoto       = "art_goto"
-	jsHelperRetry      = "art_retry"
-	jsHelperWithin     = "art_within"
-	jsHelperBrowser    = "art_browser"
+
+	// Data and files.
+	jsHelperFile     = "art_file"
+	jsHelperReadJSON = "art_read_json"
+	jsHelperReadCSV  = "art_read_csv"
+	jsHelperBytes    = "art_bytes"
+	jsHelperBody     = "art_body"
+	jsHelperForm     = "art_form"
+	jsHelperStdin    = "art_stdin"
+	jsHelperFiles    = "art_files"
+	jsHelperText     = "art_text"
+	jsHelperValue    = "art_value"
+	jsHelperAttr     = "art_attr"
+	jsHelperExit     = "art_exit"
+	jsHelperArgv     = "art_argv"
+	jsHelperGoto     = "art_goto"
+	jsHelperRetry    = "art_retry"
+	jsHelperWithin   = "art_within"
+	jsHelperBrowser  = "art_browser"
 )
 
 // jsHelper is one emitted definition: its JavaScript source, the imported
@@ -94,6 +104,7 @@ var jsHelpers = []jsHelper{{
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") return String(value);
+  if (value.art_path !== undefined) return value.art_path;
   return JSON.stringify(value);
 }
 `,
@@ -261,13 +272,14 @@ var jsHelpers = []jsHelper{{
   if (typeof value === "boolean") return "boolean";
   if (typeof value === "string") return "string";
   if (typeof value === "number") return "number";
+  if (value.art_path !== undefined) return "file";
   if (Array.isArray(value)) return "array";
   if (typeof value === "object") return "object";
   return "unknown";
 }
 
 function art_is(value, want) {
-  // ` + "`expr is <type>`" + `, over the six JSON type names.
+  // ` + "`expr is <type>`" + `, over the six JSON type names and file.
   return art_type(value) === want;
 }
 `,
@@ -425,10 +437,10 @@ function art_is(value, want) {
 `,
 }, {
 	name:  jsHelperBase64,
-	needs: []string{jsHelperStr},
+	needs: []string{jsHelperBytes},
 	src: `function art_base64(text) {
-  // ` + "`base64(text)`" + `: standard base64, padded.
-  return Buffer.from(art_str("base64", text), "utf8").toString("base64");
+  // ` + "`base64(text)`" + `: standard base64, padded, of text or of a file's bytes.
+  return art_bytes("base64", text).toString("base64");
 }
 `,
 }, {
@@ -460,21 +472,22 @@ function art_is(value, want) {
 }, {
 	name:    jsHelperSHA256,
 	imports: []string{"node:crypto.createHash"},
-	needs:   []string{jsHelperStr},
+	needs:   []string{jsHelperBytes},
 	src: `function art_sha256(text) {
-  // ` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, in lower-case hex.
-  return createHash("sha256").update(art_str("sha256", text), "utf8").digest("hex");
+  // ` + "`sha256(text)`" + `: the digest of the text's UTF-8 bytes, or of a file's, in
+  // lower-case hex.
+  return createHash("sha256").update(art_bytes("sha256", text)).digest("hex");
 }
 `,
 }, {
 	name:    jsHelperHMACSHA256,
 	imports: []string{"node:crypto.createHmac"},
-	needs:   []string{jsHelperStr},
+	needs:   []string{jsHelperStr, jsHelperBytes},
 	src: `function art_hmac_sha256(key, text) {
-  // ` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text under the key, in
-  // lower-case hex.
+  // ` + "`hmac_sha256(key, text)`" + `: the HMAC-SHA256 of the text, or of a file's bytes,
+  // under the key, in lower-case hex.
   return createHmac("sha256", art_str("hmac_sha256", key))
-    .update(art_str("hmac_sha256", text), "utf8")
+    .update(art_bytes("hmac_sha256", text))
     .digest("hex");
 }
 `,
@@ -662,7 +675,158 @@ function art_is(value, want) {
 }
 `,
 }, {
+	name:    jsHelperFile,
+	imports: []string{"node:fs.statSync", "node:path.resolve"},
+	src: `function art_file(path) {
+  // ` + "`file(path)`" + `: the file at path, by its path and not its contents. Where a
+  // step sends content the file's bytes are sent; anywhere else it is its
+  // absolute path -- eval.File's rule.
+  let found = null;
+  try {
+    found = statSync(path);
+  } catch {
+    // reported below, with the path the scenario wrote
+  }
+  if (found === null || !found.isFile()) throw new Error(` + "`file(): there is no file ${path}`" + `);
+  return { art_path: resolve(path) };
+}
+`,
+}, {
+	name:    jsHelperReadJSON,
+	imports: []string{"node:fs.readFileSync"},
+	src: `function art_read_json(path) {
+  // ` + "`json(path)`" + `: the value a JSON file holds.
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+`,
+}, {
+	name:    jsHelperReadCSV,
+	imports: []string{"node:fs.readFileSync"},
+	src: `function art_read_csv(path) {
+  // ` + "`csv(path)`" + `: a CSV file as an array of objects, the first row naming the
+  // columns and every cell a string -- RFC 4180: quotes, doubled quotes and
+  // line breaks inside quotes. A row with more or fewer cells than the header
+  // is an error, and so is a column named twice.
+  const text = readFileSync(path, "utf8");
+  const rows = [];
+  const state = { row: [], cell: "", quoted: false };
+  const endCell = () => {
+    state.row.push(state.cell);
+    state.cell = "";
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (state.quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        state.cell += '"';
+        i++;
+      } else if (c === '"') state.quoted = false;
+      else state.cell += c;
+    } else if (c === '"') state.quoted = true;
+    else if (c === ",") endCell();
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      endCell();
+      rows.push(state.row);
+      state.row = [];
+    } else state.cell += c;
+  }
+  if (state.cell !== "" || state.row.length > 0) {
+    endCell();
+    rows.push(state.row);
+  }
+  if (rows.length === 0) return [];
+  const header = rows[0];
+  if (new Set(header).size !== header.length) throw new Error(` + "`csv(): ${path} names a column twice`" + `);
+  return rows.slice(1).map((cells, i) => {
+    if (cells.length !== header.length) {
+      throw new Error(
+        ` + "`csv(): ${path} line ${i + 2} has ${cells.length} cells, and the header ${header.length}`" + `,
+      );
+    }
+    return Object.fromEntries(header.map((name, j) => [name, cells[j]]));
+  });
+}
+`,
+}, {
+	name:    jsHelperBytes,
+	imports: []string{"node:fs.readFileSync"},
+	src: `function art_bytes(name, value) {
+  // What base64() and the hashes read: text's UTF-8 bytes, or a file's.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  if (typeof value !== "string") {
+    throw new TypeError(` + "`${name}()'s argument must be a string or a file, got ${JSON.stringify(value)}`" + `);
+  }
+  return Buffer.from(value, "utf8");
+}
+`,
+}, {
+	name:    jsHelperBody,
+	imports: []string{"node:fs.readFileSync"},
+	needs:   []string{jsHelperRender},
+	src: `function art_body(value) {
+  // A request body: a file's bytes, or the value rendered as the interpreter
+  // renders it -- an object as compact JSON.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path);
+  }
+  return art_render(value);
+}
+`,
+}, {
+	name:    jsHelperForm,
+	imports: []string{"node:fs.readFileSync", "node:path.basename", "node:path.extname"},
+	needs:   []string{jsHelperRender},
+	src: `function art_form(fields) {
+  // A multipart body: a text field per value, and per file a part with its base
+  // name, its bytes and a type from its extension.
+  const types = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    ".webp": "image/webp", ".svg": "image/svg+xml", ".pdf": "application/pdf",
+    ".json": "application/json", ".txt": "text/plain; charset=utf-8", ".csv": "text/csv; charset=utf-8",
+    ".html": "text/html; charset=utf-8", ".xml": "text/xml; charset=utf-8",
+  };
+  const form = new FormData();
+  for (const [name, value] of fields) {
+    if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+      const type = types[extname(value.art_path).toLowerCase()] ?? "application/octet-stream";
+      form.append(name, new Blob([readFileSync(value.art_path)], { type }), basename(value.art_path));
+    } else {
+      form.append(name, art_render(value));
+    }
+  }
+  return form;
+}
+`,
+}, {
+	name:    jsHelperStdin,
+	imports: []string{"node:fs.readFileSync"},
+	needs:   []string{jsHelperRender},
+	src: `function art_stdin(value) {
+  // A command's input: a file's text, or the value rendered.
+  if (value !== null && typeof value === "object" && value.art_path !== undefined) {
+    return readFileSync(value.art_path, "utf8");
+  }
+  return art_render(value);
+}
+`,
+}, {
+	name:  jsHelperFiles,
+	needs: []string{jsHelperRender},
+	src: `function art_files(value) {
+  // What an upload attaches: a file's path, a list of files' paths, or a path
+  // written as a string.
+  const isFile = (item) => item !== null && typeof item === "object" && item.art_path !== undefined;
+  if (isFile(value)) return value.art_path;
+  if (Array.isArray(value) && value.length > 0 && value.every(isFile)) return value.map((item) => item.art_path);
+  return art_render(value);
+}
+`,
+}, {
 	name: jsHelperText,
+
 	src: `async function art_text(page, selector) {
   // ` + "`text(sel)`" + `: the first match's text content, or null for no match.
   //
@@ -832,7 +996,7 @@ var jsByName = func() map[string]jsHelper {
 // vitest's for a module with no browser step, and @playwright/test's for one
 // with. See jsFile.module.
 var jsImportGroups = [][]string{
-	{"node:child_process", "node:crypto"},
+	{"node:child_process", "node:crypto", "node:fs", "node:path"},
 	{"vitest", "@playwright/test"},
 }
 
@@ -842,6 +1006,8 @@ var jsImportGroups = [][]string{
 var jsImportable = words(
 	"node:child_process.spawnSync",
 	"node:crypto.randomUUID", "node:crypto.createHash", "node:crypto.createHmac",
+	"node:fs.readFileSync", "node:fs.statSync",
+	"node:path.resolve", "node:path.basename", "node:path.extname", "node:path.join",
 	"vitest.test", "vitest.expect", "vitest.onTestFinished",
 	"@playwright/test.chromium", "@playwright/test.expect",
 )

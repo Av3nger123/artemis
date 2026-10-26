@@ -41,7 +41,7 @@ type driver interface {
 	// machine artemis is running on.
 	Fill(selector, value string) error
 	Select(selector, value string) error
-	Upload(selector, path string) error
+	Upload(selector string, paths ...string) error
 
 	// Press sends one key to whatever has focus, so it takes a key and no
 	// selector -- the one action of the eight whose argument is neither a

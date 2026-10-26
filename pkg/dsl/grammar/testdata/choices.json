@@ -107,6 +107,15 @@
           "value": "string"
         },
         {
+          "value": "json"
+        },
+        {
+          "value": "csv"
+        },
+        {
+          "value": "file"
+        },
+        {
           "value": "text"
         },
         {
@@ -240,6 +249,26 @@
         {
           "value": "bad-value",
           "doc": "a value is the wrong kind for the position it is in",
+          "severity": "error"
+        },
+        {
+          "value": "body-conflict",
+          "doc": "a request says what its body is more than one way",
+          "severity": "error"
+        },
+        {
+          "value": "data-file-missing",
+          "doc": "json(), csv() or file() names a path where there is no file",
+          "severity": "error"
+        },
+        {
+          "value": "data-not-csv",
+          "doc": "csv() names a file that is not CSV",
+          "severity": "error"
+        },
+        {
+          "value": "data-not-json",
+          "doc": "json() names a file that is not JSON",
           "severity": "error"
         },
         {
@@ -508,6 +537,16 @@
         {
           "value": "body",
           "valueKind": "any"
+        },
+        {
+          "value": "form",
+          "valueKind": "any",
+          "needsKey": true
+        },
+        {
+          "value": "multipart",
+          "valueKind": "any",
+          "needsKey": true
         }
       ]
     },
@@ -684,7 +723,10 @@
             "from_json",
             "len",
             "number",
-            "string"
+            "string",
+            "json",
+            "csv",
+            "file"
           ]
         },
         {
@@ -712,7 +754,10 @@
             "from_json",
             "len",
             "number",
-            "string"
+            "string",
+            "json",
+            "csv",
+            "file"
           ]
         },
         {
@@ -739,6 +784,9 @@
             "len",
             "number",
             "string",
+            "json",
+            "csv",
+            "file",
             "text",
             "value",
             "attr",
@@ -774,6 +822,9 @@
         },
         {
           "value": "null"
+        },
+        {
+          "value": "file"
         }
       ]
     },

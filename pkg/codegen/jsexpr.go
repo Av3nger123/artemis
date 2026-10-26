@@ -493,6 +493,9 @@ func (f *jsFile) call(c *ast.Call) (jsExpr, error) {
 			srcs[i] = a.src
 		}
 		return src(f.use("art_"+name) + "(" + strings.Join(srcs, ", ") + ")"), nil
+	case "json", "csv", "file":
+		helper := map[string]string{"json": jsHelperReadJSON, "csv": jsHelperReadCSV, "file": jsHelperFile}[name]
+		return src(f.use(helper) + "(" + f.dataPath(c, args[0].src) + ")"), nil
 	case "text":
 		return asyncSrc(f.use(jsHelperText) + "(page, " + args[0].src + ")"), nil
 	case "value":
@@ -805,4 +808,19 @@ func (f *jsFile) pageMember(x ast.Expr) (string, bool) {
 		return "", false
 	}
 	return m.Name.Value, true
+}
+
+// dataPath is a data builtin's path as the generated test opens it: a literal
+// joined to the .art file's directory here, and anything else joined at run
+// time.
+func (f *jsFile) dataPath(c *ast.Call, arg string) string {
+	dir := dataDir(c)
+	if path, ok := literalPath(c, dir); ok {
+		return jsQuote(path)
+	}
+	if dir == "" {
+		return arg
+	}
+	f.need("node:path.join")
+	return "join(" + jsQuote(dir) + ", " + arg + ")"
 }

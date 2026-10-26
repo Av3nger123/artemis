@@ -74,6 +74,7 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 		d.UsedFrom = res.Chain(d.Span)
 		bag.Add(d)
 	}
+	checkData(res.File, l, bag, res.Chain)
 	sources := map[string]string{file: src}
 	for k, v := range res.Sources {
 		sources[k] = v

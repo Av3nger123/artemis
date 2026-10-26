@@ -21,11 +21,15 @@
 package fixture
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
+	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -64,6 +68,12 @@ const (
 	// PathSession answers with the Cookie header it was sent, as plain text,
 	// or "none": what a jar sent is then a `raw` an expect can compare.
 	PathSession = "/session"
+
+	// PathEcho answers with JSON describing the request it got: its method,
+	// Content-Type and body length, the body as text unless it was a form, a
+	// form's fields, and each uploaded file's name, size and type. What a step
+	// sent is then a `body` an expect can read.
+	PathEcho = "/echo"
 )
 
 // SessionCookie is the cookie PathLogin sets, as a scenario names it.
@@ -110,6 +120,7 @@ func Handler() http.Handler {
 	mux.HandleFunc(PathNever, never)
 	mux.HandleFunc(PathLogin, login)
 	mux.HandleFunc(PathSession, session)
+	mux.HandleFunc(PathEcho, echo)
 	// Last, and on "/": ServeMux treats "/" as a catch-all, so a typo in a
 	// test's path serves the form rather than a 404 the browser reports as a
 	// blank page. The form is the page a scenario starts on anyway.
@@ -235,4 +246,49 @@ func session(w http.ResponseWriter, r *http.Request) {
 		got = "none"
 	}
 	fmt.Fprint(w, got)
+}
+
+// echo describes the request it was sent, as JSON.
+func echo(w http.ResponseWriter, r *http.Request) {
+	out := map[string]any{
+		"method":       r.Method,
+		"content_type": r.Header.Get("Content-Type"),
+		"form":         map[string]any{},
+		"files":        map[string]any{},
+	}
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	switch mediaType {
+	case "multipart/form-data":
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		for name, values := range r.MultipartForm.Value {
+			out["form"].(map[string]any)[name] = values[0]
+		}
+		for name, headers := range r.MultipartForm.File {
+			h := headers[0]
+			out["files"].(map[string]any)[name] = map[string]any{
+				"filename": h.Filename, "size": h.Size, "type": h.Header.Get("Content-Type"),
+			}
+		}
+	case "application/x-www-form-urlencoded":
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		for name, values := range r.PostForm {
+			out["form"].(map[string]any)[name] = strings.Join(values, ",")
+		}
+	default:
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		out["body"] = string(b)
+		out["length"] = len(b)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
 }

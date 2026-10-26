@@ -345,7 +345,9 @@ step "create an order" {
 | the URL | `<verb> <expr>` | Required, and the first thing in the block. Any expression that renders to a string |
 | `header` | `header <expr> = <expr>` | Repeatable. The name is a string expression, as is the value. A repeated name keeps the last value |
 | `query` | `query <expr> = <expr>` | Repeatable. Appended to the URL's query string and escaped. A non-string value renders by the [rendering rules](#how-a-value-renders) |
-| `body` | `body = <expr>` | At most one. An object or array literal is serialised to JSON; a string is sent as it is |
+| `body` | `body = <expr>` | At most one. An object or array literal is serialised to JSON; a string is sent as it is; a [`file()`](#data-and-files) is sent as its bytes |
+| `form` | `form <expr> = <expr>` | Repeatable. A urlencoded form field, in source order |
+| `multipart` | `multipart <expr> = <expr>` | Repeatable. A `multipart/form-data` field: text, or a [`file()`](#data-and-files) sent as a file part |
 
 A verb with no block -- `get "${url}/health"` -- sends no headers of its own and
 no body, which is what you want for a health check.
@@ -381,6 +383,31 @@ A string body is still accepted, for a payload that is not JSON:
 body = "name=alice&roles=admin"
 ```
 
+A form is fields rather than a body. `form` sends them urlencoded and
+`multipart` as `multipart/form-data`, where a field may be a file:
+
+```art
+step "sign in" {
+  post "https://example.com/login" {
+    form "user" = "alice"
+    form "password" = "s3cret"
+  }
+  expect status == 200
+}
+
+step "upload an avatar" {
+  post "https://example.com/me/avatar" {
+    multipart "avatar" = file("fixtures/avatar.png")
+    multipart "caption" = "hello"
+  }
+  expect status == 201
+}
+```
+
+A request has one body, so `body`, `form` and `multipart` exclude one another:
+writing two of them is the compile error `body-conflict`. A file in a `form` is
+a step error naming `multipart`, because a urlencoded form cannot carry one.
+
 ---
 
 ## `terminal` steps
@@ -404,7 +431,7 @@ step "the tag exists" {
 | the command | `run <expr>` | Required, and the first thing in the block. The program to execute |
 | `args` | `args = [<expr>, ...]` | At most one. Each entry arrives at the command exactly as written |
 | `cwd` | `cwd = <expr>` | At most one. Relative to where artemis was run from, **not** to the scenario file |
-| `stdin` | `stdin = <expr>` | At most one. Text written to the command's standard input |
+| `stdin` | `stdin = <expr>` | At most one. Text written to the command's standard input, or a [`file()`](#data-and-files) whose bytes are |
 | `env` | `env { <NAME> = <expr>, ... }` | At most one. Variables added to the command's environment |
 
 **There is no shell.** The command is executed directly with its arguments: no
@@ -500,7 +527,7 @@ The block is **required** -- a browser step with no actions does nothing at all
 | `select` | `select "#plan" = "pro"` | Chooses an option of a `<select>`, by the option's value |
 | `press` | `press "Enter"` | Sends one key to whatever has focus |
 | `hover` | `hover ".plan-menu"` | Moves the pointer over the first match |
-| `upload` | `upload "#avatar" = "me.png"` | Attaches a file to a file input |
+| `upload` | `upload "#avatar" = file("me.png")` | Attaches a [`file()`](#data-and-files), or a list of them, to a file input. A string is a path as the browser resolves it |
 | `wait` | `wait "1s"` | Waits for a fixed duration |
 
 Three of them -- `fill`, `select` and `upload` -- take a value after an `=`; the
@@ -1185,8 +1212,8 @@ error -- nothing knows the shape of the response until it arrives. It is an
 | `not <expr>` | The expression is false | never |
 | `and`, `or` | Both sides, or either side | never |
 
-The six type names for `is`: `string`, `number`, `boolean`, `object`, `array`,
-`null`.
+The seven type names for `is`: `string`, `number`, `boolean`, `object`, `array`,
+`null`, and `file` -- the type of a value [`file()`](#data-and-files) makes.
 
 ```art
 expect status == 200
@@ -1374,6 +1401,68 @@ draw alike. A run that
 drew a random value and failed prints its seed, and `artemis run --seed <n>`
 draws the same values again. The [JSON report](#the-json-report) carries it as
 `seed`. `now()` reads the clock and is not reproducible; assert on its shape.
+
+### Data and files
+
+```art
+scenario "import the users" {
+  var url   = env("API_URL")
+  var users = json("data/users.json")
+  var plans = csv("data/plans.csv")
+
+  step "upload the sheet" {
+    post "${url}/imports" {
+      multipart "sheet" = file("data/users.csv")
+    }
+    expect status == 202
+    expect body.count == len(users)
+  }
+
+  step "seed the database" {
+    run "psql" {
+      args  = ["-v", "ON_ERROR_STOP=1"]
+      stdin = file("fixtures/seed.sql")
+    }
+    expect exit_code == 0
+  }
+}
+```
+
+| Builtin | Returns |
+| --- | --- |
+| `json(path)` | The value a JSON file holds |
+| `csv(path)` | A CSV file as an array of objects: the first row names the columns, each later row is an object of those names to its cells, and every cell is a string |
+| `file(path)` | The file, as a value of type `file` |
+
+A path is relative to **the file it is written in**: `json("data/users.json")`
+in `suite/users/login.art` reads `suite/users/data/users.json`, and a `file()`
+inside a collection's request is found next to the collection, not next to the
+scenario that used it. An absolute path is itself.
+
+A literal path is read **when the file compiles**, because the data is in the
+same repository as the scenario: a path that names nothing is the compile error
+`data-file-missing`, a JSON file that does not parse is `data-not-json` with its
+line and column, and a CSV file with a row of the wrong width or a column named
+twice is `data-not-csv`. A path built at run time -- `json(env("DATA"))` -- is
+read when the step reaches it, and the same faults are errored assertions.
+
+A `file` is a path, not its contents. **Where a step sends content, a file sends
+its bytes; everywhere else it is its absolute path:**
+
+| Written as | What is sent |
+| --- | --- |
+| `body = file(p)` | The file's bytes, labelled with a `Content-Type` from its extension unless a `header` sets one |
+| `multipart "k" = file(p)` | A file part, with the file's name and a type from its extension |
+| `stdin = file(p)` | The file's bytes, as the command's standard input |
+| `upload "#x" = file(p)`, `[file(a), file(b)]` | The file, or the files, attached to the input |
+| `base64(file(p))`, `sha256(file(p))`, `hmac_sha256(k, file(p))` | Computed over the file's bytes |
+| `args = ["-f", file(p)]`, `"${file(p)}"` | The absolute path |
+
+A file cannot go inside a JSON body -- `body = {"logo": file(p)}` is a step error
+that names the two ways to send one: as a `multipart` part, or its contents as
+`base64(file(p))`. `is file` asks whether a value is one, and two files are
+equal when they are the same path. A trace records a file it sent by its path
+and size, never its contents.
 
 ### How a value renders
 

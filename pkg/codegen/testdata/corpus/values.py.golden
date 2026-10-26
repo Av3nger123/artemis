@@ -12,7 +12,10 @@
 #   - stdout and stderr are not truncated; artemis caps them for its report;
 #   - a variable with no value raises at the point of use. `artemis run`
 #     reports all of them before the first step; an exported module has no
-#     such moment.
+#     such moment;
+#   - a file json(), csv() or file() names is found from the directory the
+#     test runs in, by the .art file's path as it was given to `artemis
+#     build`; a file sent as a body has no Content-Type the step did not write.
 
 import base64
 import datetime
@@ -36,6 +39,8 @@ def art_render(value):
         return "null"
     if isinstance(value, str):
         return value
+    if hasattr(value, "art_path"):
+        return value.art_path
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float) and value.is_integer():
@@ -131,8 +136,8 @@ def art_random_string(length):
 
 
 def art_base64(text):
-    """`base64(text)`: standard base64, padded."""
-    return base64.b64encode(art_str("base64", text).encode("utf-8")).decode("ascii")
+    """`base64(text)`: standard base64, padded, of text or of a file's bytes."""
+    return base64.b64encode(art_bytes("base64", text)).decode("ascii")
 
 
 def art_base64_decode(text):
@@ -151,15 +156,16 @@ def art_url_encode(text):
 
 
 def art_sha256(text):
-    """`sha256(text)`: the digest of the text's UTF-8 bytes, in lower-case hex."""
-    return hashlib.sha256(art_str("sha256", text).encode("utf-8")).hexdigest()
+    """`sha256(text)`: the digest of the text's UTF-8 bytes, or of a file's, in
+    lower-case hex."""
+    return hashlib.sha256(art_bytes("sha256", text)).hexdigest()
 
 
 def art_hmac_sha256(key, text):
-    """`hmac_sha256(key, text)`: the HMAC-SHA256 of the text under the key, in
-    lower-case hex."""
+    """`hmac_sha256(key, text)`: the HMAC-SHA256 of the text, or of a file's bytes,
+    under the key, in lower-case hex."""
     return hmac.new(art_str("hmac_sha256", key).encode("utf-8"),
-                    art_str("hmac_sha256", text).encode("utf-8"), hashlib.sha256).hexdigest()
+                    art_bytes("hmac_sha256", text), hashlib.sha256).hexdigest()
 
 
 def art_jwt_claims(token):
@@ -231,6 +237,25 @@ def art_string(value):
     return art_render(value)
 
 
+def art_bytes(name, value):
+    """What base64() and the hashes read: text's UTF-8 bytes, or a file's."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, "rb") as data:
+            return data.read()
+    if not isinstance(value, str):
+        raise TypeError("%s()'s argument must be a string or a file, got %r" % (name, value))
+    return value.encode("utf-8")
+
+
+def art_body(value):
+    """A request body: a file's bytes, or the value rendered as the interpreter
+    renders it -- an object as compact JSON."""
+    if hasattr(value, "art_path"):
+        with open(value.art_path, "rb") as data:
+            return data.read()
+    return art_render(value)
+
+
 # scenario "values", line 4
 def test_values():
     id = art_uuid()
@@ -245,7 +270,7 @@ def test_values():
         "https://example.test/orders",
         headers={"Authorization": f"Basic {art_render(basic)}", "X-Signature": art_render(art_hmac_sha256("key", art_to_json({"id": id})))},
         params=[("q", art_render(art_url_encode("a b")))],
-        data=art_render({"id": id, "at": when, "pick": pick, "word": word, "digest": art_sha256(word)}),
+        data=art_body({"id": id, "at": when, "pick": pick, "word": word, "digest": art_sha256(word)}),
     )
     status, body, raw, headers = (
         resp.status_code, art_json(resp), resp.text, resp.headers)

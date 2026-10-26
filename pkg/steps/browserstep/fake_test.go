@@ -184,8 +184,8 @@ func (f *fakePage) Select(selector, value string) error {
 	return f.err("Select")
 }
 
-func (f *fakePage) Upload(selector, path string) error {
-	f.record("upload %s = %s", selector, path)
+func (f *fakePage) Upload(selector string, paths ...string) error {
+	f.record("upload %s = %s", selector, strings.Join(paths, ", "))
 	return f.err("Upload")
 }
 
