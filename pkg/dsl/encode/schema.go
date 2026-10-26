@@ -97,7 +97,7 @@ type groupSchema struct {
 }
 
 var groupSchemas = []groupSchema{
-	{"declaration", []string{kindScenario, kindImport, kindCollection}},
+	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
 	{"forClause", []string{kindFor}},
 	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase}},
 	{"phaseBody", []string{kindStep, kindUse}},
@@ -227,6 +227,10 @@ var nodeSchemas = []nodeSchema{
 	{Kind: kindScenario, Doc: "`scenario \"name\" { ... }`", Fields: []fieldSchema{
 		recoveredName,
 		optChild("for", "forClause"),
+		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindSuite, Doc: "`suite { ... }`, the one block of a suite.art: setup, teardown and vars every scenario in its folder and below shares", Fields: []fieldSchema{
 		list("body", "scenarioBody"),
 		spanField, commentsField,
 	}},

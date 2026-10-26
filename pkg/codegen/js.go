@@ -51,6 +51,9 @@ func (JS) Generate(tree *ast.File) ([]GeneratedFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := refuseSuites(tree, scenarios); err != nil {
+		return nil, err
+	}
 
 	source := SourceName(tree)
 	if source == "" {

@@ -312,6 +312,11 @@
           "severity": "error"
         },
         {
+          "value": "duplicate-suite-name",
+          "doc": "a suite exports a name a suite above it already exports",
+          "severity": "error"
+        },
+        {
           "value": "for-no-rows",
           "doc": "a for clause's data has no rows",
           "severity": "error"
@@ -434,6 +439,21 @@
         {
           "value": "setup-after-step",
           "doc": "a setup block is below a step it would run before",
+          "severity": "error"
+        },
+        {
+          "value": "suite-file-name",
+          "doc": "a suite block is in a file not named suite.art",
+          "severity": "error"
+        },
+        {
+          "value": "suite-has-scenario",
+          "doc": "a suite file holds a scenario, or a second suite block",
+          "severity": "error"
+        },
+        {
+          "value": "suite-has-step",
+          "doc": "a suite block holds a step or a use outside setup and teardown",
           "severity": "error"
         },
         {

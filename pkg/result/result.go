@@ -269,6 +269,9 @@ type ScenarioResult struct {
 	// Row is the row of data a data-driven scenario was made from, and nil
 	// for every other scenario.
 	Row *Row
+	// Kind is "suite" for a suite.art's setup or teardown, which the run
+	// reports beside the scenarios it was for, and empty for a scenario.
+	Kind string
 }
 
 // Row is a data-driven scenario's row: where its data came from and its place

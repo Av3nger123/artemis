@@ -36,6 +36,9 @@ func (p *parser) parseFile() *ast.File {
 		case p.atWord("scenario"):
 			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseScenario())
+		case p.atWord("suite") && p.peekKindAt(1, token.LBrace):
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseSuite())
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected \"import\", \"collection\" or \"scenario\", found %s", describe(p.peek())).
@@ -139,6 +142,17 @@ func template(toks []token.Token) token.Token {
 		t.Value = t.Text[1 : len(t.Text)-1]
 	}
 	return t
+}
+
+// parseSuite is `suite { ... }`: a folder's setup, teardown and vars, shared by
+// every scenario below it. It is a Scenario whose keyword is `suite` and which
+// has no name -- it is named by its folder -- so it is expanded, checked and
+// lowered by everything a scenario is, setup and teardown included.
+func (p *parser) parseSuite() ast.Decl {
+	s := &ast.Scenario{Keyword: p.next()}
+	s.LBrace = p.next() // the caller saw it
+	s.Body, s.RBrace = p.parseScenarioBody(s.LBrace)
+	return s
 }
 
 // parseScenarioBody reads declarations until the closing brace.

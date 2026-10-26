@@ -70,6 +70,20 @@ func decl(v value) (ast.Decl, error) {
 		return useDecl(f)
 	case kindPhase:
 		return phaseDecl(f)
+	case kindSuite:
+		s := &ast.Scenario{
+			Keyword: syn(token.Ident, "suite"),
+			LBrace:  syn(token.LBrace, "{"),
+			RBrace:  syn(token.RBrace, "}"),
+		}
+		body, err := f.list("body")
+		if err != nil {
+			return nil, err
+		}
+		if s.Body, err = decls(body); err != nil {
+			return nil, err
+		}
+		return s, braced(f, &s.Keyword, &s.LBrace, &s.RBrace)
 	}
 	return nil, badKind(f, kind, "a declaration")
 }

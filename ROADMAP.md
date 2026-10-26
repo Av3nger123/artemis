@@ -28,6 +28,15 @@ names from data rows. Each PR documents its part in `SPEC.md`.
 
 ## Next
 
+### Suites in `artemis build`
+
+`artemis build` exports one file's scenarios, and a `suite.art` runs once for a
+whole folder, so a scenario that reads `suite.<name>` is refused today rather
+than exported with nothing behind the name. The export is a pytest
+`conftest.py` with a session-scoped fixture per suite and a vitest
+`globalSetup`, built from the same suite file; what it needs from `build` is
+an output that is a directory of modules rather than one.
+
 ### `db` steps
 
 A step type that runs a query and binds its rows, beside `api`, `terminal` and

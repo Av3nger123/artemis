@@ -7,7 +7,8 @@
     "declaration": [
       "scenario",
       "import",
-      "collection"
+      "collection",
+      "suite"
     ],
     "forClause": [
       "for"
@@ -272,6 +273,27 @@
           "accepts": "forClause",
           "optional": true
         },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "scenarioBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "suite",
+      "doc": "`suite { ... }`, the one block of a suite.art: setup, teardown and vars every scenario in its folder and below shares",
+      "fields": [
         {
           "name": "body",
           "type": "node[]",

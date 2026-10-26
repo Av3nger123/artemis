@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
@@ -246,7 +247,9 @@ func discover(path string) ([]string, error) {
 			}
 			return nil
 		}
-		if isScenarioFile(d.Name()) {
+		// A suite.art is a folder's setup and teardown, not a scenario
+		// file: it runs with the scenarios under it.
+		if isScenarioFile(d.Name()) && !front.IsSuiteFile(p) {
 			files = append(files, p)
 		}
 		return nil
@@ -311,6 +314,11 @@ type runtimeEnv struct {
 	// run at once under --jobs.
 	seed uint64
 	drew atomic.Bool
+	// suites are the run's suite.art files by path, and suiteOfFile the
+	// innermost one each scenario file is under. See suite.go.
+	suites      map[string]*suiteState
+	suiteOfFile map[string]*suiteState
+
 	// root is the path `run` was given, which a scenario's file is named
 	// relative to when its generator is seeded: `artemis run suite` from the
 	// repository and `artemis run .` from inside suite/ must draw the same
@@ -392,10 +400,20 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	}
 
 	var loaded []compiled
+	var scenarioFiles []string
 	for _, a := range attempts {
 		if a.ok {
 			loaded = append(loaded, a.compiled)
+			scenarioFiles = append(scenarioFiles, a.file)
 		}
+	}
+	// The suite.art files above the scenarios, compiled once each. Their
+	// env() needs join the check before the run, and one that would not
+	// compile is reported as the errored file it is, first.
+	suiteLoaded, brokenSuites := rt.planSuites(scenarioFiles, diagOut)
+	loaded = append(loaded, suiteLoaded...)
+	for _, b := range brokenSuites {
+		failScenario(run, rep, rt.events, b.file, b.err)
 	}
 	// nil is os.LookupEnv: the real process environment, which is where the
 	// .env file was loaded to. A seam here would have had no caller -- the
@@ -417,6 +435,12 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// More than one job: every runnable file runs into its own result tree and
 	// its own buffer, and the ordered loop below drains them. See runParallel
 	// for why the output is buffered rather than streamed.
+	// Every suite's setup, once and before any scenario: the scenarios under
+	// it read what it left.
+	if runnable {
+		rt.setUpSuites(context.Background(), run, rep)
+	}
+
 	var parallel []*fileOutcome
 	if runnable && rt.workers() > 1 {
 		parallel = runParallel(context.Background(), rt, attempts)
@@ -440,6 +464,10 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			continue
 		}
 		parallel[i].drainInto(run, rep)
+	}
+	// And every suite's teardown, once every scenario under it is done.
+	if runnable {
+		rt.tearDownSuites(context.Background(), run, rep)
 	}
 	run.Finish()
 	// Finish derives Status from the scenarios, and a gated run can hold

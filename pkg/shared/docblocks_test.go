@@ -95,7 +95,7 @@ func isArtFile(b docBlock) bool {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		for _, opener := range []string{"scenario ", "import ", "collection "} {
+		for _, opener := range []string{"scenario ", "import ", "collection ", "suite {"} {
 			if strings.HasPrefix(line, opener) {
 				return true
 			}
@@ -105,14 +105,16 @@ func isArtFile(b docBlock) bool {
 	return false
 }
 
-// collectionPath is the path a documented collection file names in its first
-// line -- `# collections/auth.art` -- and "" for any other block. It is how
-// the documents say which file an example is, so that an example importing
-// "collections/auth.art" can be compiled against the block that is that file.
+// collectionPath is the path a documented collection or suite file names in
+// its first line -- `# collections/auth.art`, `# suite/suite.art` -- and "" for
+// any other block. It is how the documents say which file an example is, so
+// that an example importing "collections/auth.art", or under "suite/", can be
+// compiled against the block that is that file.
 func collectionPath(b docBlock) string {
 	first, _, _ := strings.Cut(b.body, "\n")
 	name, ok := strings.CutPrefix(strings.TrimSpace(first), "# ")
-	if !ok || !strings.HasPrefix(name, "collections/") || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
+	named := strings.HasPrefix(name, "collections/") || strings.HasPrefix(name, "suite/")
+	if !ok || !named || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
 		return ""
 	}
 	return name

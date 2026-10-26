@@ -13,6 +13,7 @@ import (
 const (
 	kindScenario   = "scenario"
 	kindFor        = "for"
+	kindSuite      = "suite"
 	kindConfig     = "config"
 	kindVar        = "var"
 	kindStep       = "step"
@@ -151,6 +152,13 @@ func (e *enc) expr(n ast.Node) *obj {
 }
 
 func (e *enc) scenario(s *ast.Scenario) *obj {
+	if s.Keyword.Value == "suite" {
+		// A suite has no name -- its folder names it -- and no for clause.
+		return start(kindSuite, s).
+			set("body", e.list(toNodes(s.Body))).
+			span().
+			comments(toks(s.Keyword), s.LBrace, s.RBrace).done()
+	}
 	var forObj *obj
 	if s.For != nil {
 		forObj = e.forClause(s.For)

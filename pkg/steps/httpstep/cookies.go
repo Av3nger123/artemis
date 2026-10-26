@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
+	"sync"
 	"time"
 )
 
@@ -31,15 +33,56 @@ func jarOf(ctx context.Context) http.CookieJar {
 	return jar
 }
 
+// Jar is a scenario's cookie jar: net/http's, remembering what it was given so
+// it can be copied. A suite logs in once and every scenario under it starts
+// with a copy of the suite's cookies -- a copy, so what one scenario's
+// responses set reaches neither the suite nor its neighbours.
+type Jar struct {
+	jar *cookiejar.Jar
+	mu  sync.Mutex
+	set []setCall
+}
+
+type setCall struct {
+	u       *url.URL
+	cookies []*http.Cookie
+}
+
 // NewJar is an empty jar for one scenario.
 //
 // It has no public suffix list, so a response may set a cookie for a whole
 // registrable domain's parent -- which a browser refuses for `.com` and this
 // accepts. A test suite talks to the services it names, and a list of every
 // public suffix is a dependency for a protection those services do not need.
-func NewJar() http.CookieJar {
+func NewJar() *Jar {
 	jar, _ := cookiejar.New(nil) // nil options cannot fail
-	return jar
+	return &Jar{jar: jar}
+}
+
+// SetCookies stores cookies as net/http's jar does, and remembers them.
+func (j *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.jar.SetCookies(u, cookies)
+	j.set = append(j.set, setCall{u: u, cookies: cookies})
+}
+
+// Cookies are the cookies to send to u.
+func (j *Jar) Cookies(u *url.URL) []*http.Cookie { return j.jar.Cookies(u) }
+
+// Clone is a new jar holding what j holds: every SetCookies replayed in order,
+// so an expired or replaced cookie is gone from the copy as it is from j.
+func (j *Jar) Clone() *Jar {
+	out := NewJar()
+	if j == nil {
+		return out
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for _, c := range j.set {
+		out.SetCookies(c.u, c.cookies)
+	}
+	return out
 }
 
 // clientFor is the client one request is sent with: the shared one, with the

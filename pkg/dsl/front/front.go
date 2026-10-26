@@ -68,9 +68,11 @@ type Unit struct {
 // use lines that brought it in as UsedFrom.
 func CompileWith(file, src string, l expand.Loader) *Unit {
 	tree, bag := parser.Parse(file, src)
+	pre, outer := prelude(file, l)
+	checkSuiteFile(file, tree, outer, bag)
 	res, eb := expand.Expand(tree, l)
 	bag.Merge(eb)
-	info, checked := check.CheckChained(res.File, res.Chain)
+	info, checked := check.CheckWith(res.File, res.Chain, pre)
 	for _, d := range checked.All() {
 		d.UsedFrom = res.Chain(d.Span)
 		bag.Add(d)

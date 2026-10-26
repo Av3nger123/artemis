@@ -14,6 +14,7 @@ duplicate-binding	error	a capture or var reuses a name a var or an earlier captu
 duplicate-import-name	error	two imports give their collections the same name
 duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-row-name	error	two rows of a data-driven scenario name it alike
+duplicate-suite-name	error	a suite exports a name a suite above it already exports
 for-no-rows	error	a for clause's data has no rows
 for-source-not-array	error	a for clause's data is not an array of rows
 for-source-not-static	error	a for clause reads rows that are not known before the run
@@ -39,6 +40,9 @@ scenario-in-collection-file	error	a file holding a collection also holds a scena
 second-collection	error	a file holds more than one collection
 secret-argument	error	an argument to a secret parameter is not itself secret
 setup-after-step	error	a setup block is below a step it would run before
+suite-file-name	error	a suite block is in a file not named suite.art
+suite-has-scenario	error	a suite file holds a scenario, or a second suite block
+suite-has-step	error	a suite block holds a step or a use outside setup and teardown
 teardown-before-step	error	a teardown block is above a step it would run after
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"

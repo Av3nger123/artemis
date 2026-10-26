@@ -273,6 +273,69 @@ with the reason in `error`, and setup and teardown steps carry `"phase":
 "setup"` or `"phase": "teardown"`. The console prints them as `setup: make a
 cart`, and JUnit names them `[setup] make a cart`.
 
+### Suites: `suite.art`
+
+```art
+# suite/suite.art
+suite {
+  var url = env("API_URL")
+
+  setup {
+    step "log in" {
+      post "${url}/login" {
+        body = {"user": env("ADMIN"), "password": env("ADMIN_PW")}
+      }
+      expect status == 200
+      capture token = body.token
+    }
+  }
+
+  teardown {
+    step "log out" {
+      post "${url}/logout" {
+        header "Authorization" = "Bearer ${token}"
+      }
+    }
+  }
+}
+```
+
+```art
+# suite/orders/create.art
+scenario "create an order" {
+  step "create" {
+    post "${suite.url}/orders" {
+      header "Authorization" = "Bearer ${suite.token}"
+    }
+    expect status == 201
+  }
+}
+```
+
+A file named `suite.art` holds one `suite { ... }` block -- vars, `config`, and
+a [`setup` and `teardown`](#setup-and-teardown) -- for **every scenario in its
+folder and every folder below it**. Its setup runs **once per run**, before any
+scenario under it, and its teardown once, after all of them. Every scenario
+under it reads what the suite set up through one name, `suite`: its vars and
+its setup's captures, as `suite.url`, `suite.token`. `suite`'s members are a
+closed set, like [`page`](#what-a-browser-step-binds)'s, so `suite.tokn` is a
+compile error with a did-you-mean, and `suite.token` cannot collide with a name
+the scenario declares.
+
+| | |
+| --- | --- |
+| Which suites apply | Every `suite.art` from the scenario file's folder up to the working directory. An inner suite's setup runs after its parent's and reads it as `suite.<name>` too; its names join the parent's, and a name both give is `duplicate-suite-name` |
+| Cookies | A suite's api steps keep a [cookie jar](#cookies), and every scenario under it starts with a copy of it: a suite that logs in with a cookie logs every scenario in. A copy, so what one scenario's responses set reaches no other |
+| A suite's setup fails | No scenario under it runs: each is reported with its steps skipped, naming the suite. The suite's teardown still runs |
+| In the report | The setup and the teardown are each an entry in `scenarios`, named `suite setup` and `suite teardown`, with the suite file as `file` and `"kind": "suite"` |
+| Secrets | A `secret var` or a `secret` capture of a suite makes `suite` secret: a report withholds every value read through it |
+| What it may hold | A suite runs setup and teardown, not steps of its own (`suite-has-step`). A suite block belongs in a file named `suite.art` (`suite-file-name`), and a `suite.art` holds the suite and no scenario (`suite-has-scenario`) |
+
+`artemis run suite/` never runs `suite.art` as a scenario file; it runs with the
+scenarios under it. `artemis build` does not export a suite yet, and refuses a
+scenario that reads `suite`, naming it, rather than export a test with nothing
+behind the name.
+
 ### `config`
 
 **Spec decision.** `config` takes a subject and settings for it. There are two:
@@ -2055,6 +2118,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `counts` | run | Totals per level, each a `{total, passed, failed, errored, skipped}` tally, so nobody walks the tree to say "2 of 5 assertions failed" |
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
+| `kind` | scenario | `"suite"` for a [suite's](#suites-suiteart) setup or teardown. **Omitted** on a scenario |
 | `row` | scenario | For a [data-driven scenario](#data-driven-scenarios), the row it was made from: `{"source": "users.json", "index": 0}`, where `source` is the file its rows were read from, or `"rows"` for an array written out. **Absent** on every other scenario |
 | `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
 | `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |

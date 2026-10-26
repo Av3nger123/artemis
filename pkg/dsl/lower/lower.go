@@ -271,6 +271,12 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 		out.Row = &Row{Source: sc.Row.Source, Index: sc.Row.Index}
 	}
 	secrets := secretVars(sc)
+	if info.SuiteSecret() {
+		// Conservative: one secret among the suite's names withholds every
+		// value read through suite, since which member an expression reads
+		// is only a path, and the taint walk follows names.
+		secrets["suite"] = true
+	}
 	captured := map[string]bool{}
 	for _, d := range sc.Body {
 		switch d := d.(type) {

@@ -160,6 +160,7 @@ parameters and its response. The rules are in
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
+- A `suite.art` per folder: one login, once per run, for every scenario below it -- its values read as `suite.token` and its cookies copied into each scenario
 - `setup` and `teardown` blocks: teardown runs after every scenario, pass or fail, and skips the cleanup of anything a failed step never made
 - Data-driven scenarios: `scenario "login as ${user.role}" for user in json("users.json")` is one scenario per row, each reported on its own
 - Data and files: `json()` and `csv()` read test data and `file()` names a fixture, each checked when the file compiles; a file is sent as a body, a `multipart` part, a command's `stdin` or a browser `upload`, and `form` sends a urlencoded form

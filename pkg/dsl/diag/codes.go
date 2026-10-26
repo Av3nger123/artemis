@@ -218,6 +218,12 @@ const (
 	SetupAfterStep     Code = "setup-after-step"
 	TeardownBeforeStep Code = "teardown-before-step"
 	DuplicatePhase     Code = "duplicate-phase"
+
+	// suite.art: a folder's suite, and the rules it is under.
+	SuiteFileName      Code = "suite-file-name"
+	SuiteHasScenario   Code = "suite-has-scenario"
+	SuiteHasStep       Code = "suite-has-step"
+	DuplicateSuiteName Code = "duplicate-suite-name"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -289,6 +295,10 @@ var registry = []CodeInfo{
 	{SetupAfterStep, Error, "a setup block is below a step it would run before"},
 	{TeardownBeforeStep, Error, "a teardown block is above a step it would run after"},
 	{DuplicatePhase, Error, "a scenario has two setup blocks or two teardown blocks"},
+	{SuiteFileName, Error, "a suite block is in a file not named suite.art"},
+	{SuiteHasScenario, Error, "a suite file holds a scenario, or a second suite block"},
+	{SuiteHasStep, Error, "a suite block holds a step or a use outside setup and teardown"},
+	{DuplicateSuiteName, Error, "a suite exports a name a suite above it already exports"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

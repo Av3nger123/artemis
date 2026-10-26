@@ -6,6 +6,7 @@ import (
 
 	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/lower"
+	"artemis/pkg/dsl/parser"
 )
 
 // Every builtin the language has needs a spelling in both targets, or `artemis
@@ -73,5 +74,28 @@ func TestArityReadsTheTable(t *testing.T) {
 	}
 	if ok, _, _ := arity("nope", 1); ok {
 		t.Error("arity() accepted a name that is not a builtin")
+	}
+}
+
+// A scenario that reads suite.<name>, and a suite.art itself, are refused with
+// their line rather than exported as a module that fails on its first use of a
+// name nothing defines.
+func TestSuitesAreNotExportedYet(t *testing.T) {
+	for _, src := range []string{
+		"suite {\n  var url = \"x\"\n}\n",
+		"scenario \"s\" {\n  step \"s\" {\n    get \"${suite.url}/x\"\n  }\n}\n",
+	} {
+		// Parsed, not checked: `suite` is a name only a suite above the file
+		// gives, and the refusal is what is under test.
+		tree, _ := parser.Parse("suite.art", src)
+		for name, gen := range map[string]func() error{
+			"python": func() error { _, err := Python{}.Generate(tree); return err },
+			"js":     func() error { _, err := JS{}.Generate(tree); return err },
+		} {
+			err := gen()
+			if err == nil || !strings.Contains(err.Error(), "does not export") {
+				t.Errorf("%s: %q: got %v, want a refusal", name, src, err)
+			}
+		}
 	}
 }

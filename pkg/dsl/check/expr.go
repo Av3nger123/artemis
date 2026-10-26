@@ -179,6 +179,11 @@ func (c *checker) member(m *ast.Member, v *view) {
 		return
 	}
 	members, closed := memberRoots[root.Name()]
+	if root.Name() == "suite" && c.prelude.Suite != nil {
+		// What the suites above export is a closed set, like a page's: a
+		// misspelt suite.tokn is caught here rather than at run time.
+		members, closed = c.prelude.Suite, true
+	}
 	if !closed || m.Name.Kind != token.Ident {
 		return
 	}

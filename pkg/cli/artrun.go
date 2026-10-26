@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -163,9 +162,50 @@ func firstError(diags []diag.Diagnostic) error {
 
 // executeArtScenario runs every step of one lowered scenario and appends the
 // outcome to run, so a run can hold a scenario per file -- and a file can hold
-// more than one.
+// more than one. A scenario under a suite.art starts from what the suite's
+// setup left: `suite` bound to its values, and a copy of its cookies.
 func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
+	in := scenarioIn{}
+	if st := rt.suiteFor(file); st != nil {
+		in.skip = st.failed
+		in.preset = map[string]any{"suite": st.view()}
+		in.jar = st.jar
+		in.cloneJar = true
+	}
+	execute(ctx, rt, sc, file, run, rep, in)
+}
+
+// scenarioIn is how a scenario starts, when that is not from nothing.
+type scenarioIn struct {
+	// preset are values in scope before the vars are bound: `suite`, for a
+	// scenario under a suite.
+	preset map[string]any
+	// bound is a scope already bound, whose vars are not bound again: a
+	// suite's teardown resumes the scope its setup ended with.
+	bound executor.Scope
+	// jar is the cookie jar to start from, nil for a new one; cloneJar starts
+	// from a copy of it, so the scenario's cookies stay its own.
+	jar      *httpstep.Jar
+	cloneJar bool
+	// skip, when it is not empty, is why no step of the scenario runs: a
+	// suite above it whose setup did not pass.
+	skip string
+	// kind is "suite" for a suite's setup or teardown, which a report marks.
+	kind string
+}
+
+// scenarioOut is what a scenario ended with: what a suite's setup hands to the
+// scenarios under it, and to its own teardown.
+type scenarioOut struct {
+	scope  executor.Scope
+	jar    *httpstep.Jar
+	passed bool
+}
+
+// execute runs one scenario from in. See executeArtScenario.
+func execute(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console, in scenarioIn) scenarioOut {
 	scenario := run.NewScenario(sc.Name, file)
+	scenario.Kind = in.kind
 	if sc.Row != nil {
 		scenario.Row = &result.Row{Source: sc.Row.Source, Index: sc.Row.Index}
 	}
@@ -178,6 +218,22 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	defer rt.events.ScenarioEnd(scenario)
 	logger.Logger.Info(fmt.Sprintf("Testing started for the collection: %s", sc.Name))
 
+	// A suite above that did not set up leaves this scenario nothing to stand
+	// on: every step is skipped, naming the suite, and nothing is bound or
+	// sent.
+	if in.skip != "" {
+		for _, steps := range [][]*lower.Step{sc.Setup, sc.Steps, sc.Teardown} {
+			for _, st := range steps {
+				r := scenario.NewStep(st.Name)
+				r.Line, r.File = st.Line, st.File
+				r.Skip(in.skip)
+				rep.Step(r)
+			}
+		}
+		scenario.Finish(0)
+		return scenarioOut{}
+	}
+
 	// The scenario's declared variables, with whatever the steps capture
 	// written over the top as the run goes on. Bind evaluates them in source
 	// order, so `var b = a` sees `a` only when `a` is above it.
@@ -185,7 +241,13 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 	// Nothing substitutes {{env.NAME}} here and nothing needs to: the process
 	// environment is reached through `env("NAME")`, which is an expression the
 	// evaluator resolves like any other.
-	scope := executor.NewScope()
+	scope := in.bound
+	if scope == nil {
+		scope = executor.NewScope()
+		for name, v := range in.preset {
+			scope.Set(name, v)
+		}
+	}
 	// The scenario's generator: uuid(), now() and the random builtins draw
 	// from it in its vars and its steps alike, seeded so that --seed draws
 	// the same values again.
@@ -195,14 +257,16 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 			rt.drew.Store(true)
 		}
 	}()
-	if err := sc.Bind(scope, gen); err != nil {
-		// A scenario whose variables do not resolve has nothing worth running,
-		// and it gets no steps -- which is the shape of a file that would not
-		// load, and is reported the same way.
-		scenario.Fail(0, err)
-		rep.ScenarioFailed(scenario)
-		logger.Logger.Error("Could not bind a scenario's variables", "file", file, "error", err.Error())
-		return
+	if in.bound == nil {
+		if err := sc.Bind(scope, gen); err != nil {
+			// A scenario whose variables do not resolve has nothing worth
+			// running, and it gets no steps -- which is the shape of a file
+			// that would not load, and is reported the same way.
+			scenario.Fail(0, err)
+			rep.ScenarioFailed(scenario)
+			logger.Logger.Error("Could not bind a scenario's variables", "file", file, "error", err.Error())
+			return scenarioOut{}
+		}
 	}
 
 	// `config browser`, resolved against the vars just bound: `viewport =
@@ -216,24 +280,34 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		scenario.Fail(0, err)
 		rep.ScenarioFailed(scenario)
 		logger.Logger.Error("Could not resolve a scenario's browser config", "file", file, "error", err.Error())
-		return
+		return scenarioOut{}
 	}
 
 	// `config http`: a cookie jar for the scenario's api steps unless it said
 	// cookies = false. Made here, per scenario, so one scenario's session
-	// never reaches another's requests.
+	// never reaches another's requests -- or copied from the suite's, so it
+	// starts logged in and still keeps what it is given to itself.
 	httpCfg, err := sc.HTTP.Resolve(&eval.Env{Vars: scope.Vars(), Gen: gen})
 	if err != nil {
 		scenario.Fail(0, err)
 		rep.ScenarioFailed(scenario)
 		logger.Logger.Error("Could not resolve a scenario's http config", "file", file, "error", err.Error())
-		return
+		return scenarioOut{}
 	}
-	var jar http.CookieJar
+	var jar *httpstep.Jar
 	if httpCfg.Cookies {
-		jar = httpstep.NewJar()
+		switch {
+		case in.jar != nil && in.cloneJar:
+			jar = in.jar.Clone()
+		case in.jar != nil:
+			jar = in.jar
+		default:
+			jar = httpstep.NewJar()
+		}
+		ctx = httpstep.WithJar(ctx, jar)
+	} else {
+		ctx = httpstep.WithJar(ctx, nil)
 	}
-	ctx = httpstep.WithJar(ctx, jar)
 
 	scenarioStart := time.Now()
 	// The scenario boundary: one browser for the scenario, opened lazily on
@@ -313,6 +387,7 @@ func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario,
 		logger.Logger.Error("Could not close a scenario's browser", "file", file, "error", closeErr.Error())
 	}
 	logger.Logger.Info("Testing ended")
+	return scenarioOut{scope: scope, jar: jar, passed: scenario.Status == result.StatusPass}
 }
 
 // stepNames is the names of a scenario's steps in the order they run -- setup,
