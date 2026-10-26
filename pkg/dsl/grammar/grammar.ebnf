@@ -9,14 +9,22 @@ RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
-Scenario      = "scenario" String [ ForClause ] "{" { TagsDecl | ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl } "}" ;
+Scenario      = "scenario" String [ ForClause ] "{" { TagsDecl | ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl | Flow } "}" ;
 (* suite.art: one block for a folder, shared by every scenario below it. *)
 Suite         = "suite" "{" { TagsDecl | ConfigDecl | VarDecl | PhaseDecl } "}" ;
 (* Lower-case words, written out: a run selects before it evaluates. *)
 TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
 (* setup runs before the scenario's steps and teardown after them, so setup is
    written above the first step and teardown below the last. *)
-PhaseDecl     = ( "setup" | "teardown" ) "{" { StepDecl | UseDecl } "}" ;
+PhaseDecl     = ( "setup" | "teardown" ) "{" { StepDecl | UseDecl | Flow } "}" ;
+
+Flow          = "parallel" FlowBody
+              | "if" Expr FlowBody { "else" "if" Expr FlowBody } [ "else" FlowBody ]
+              | "switch" Expr "{" { "case" Expr FlowBody } [ "default" FlowBody ] "}"
+              | "try" FlowBody [ "catch" FlowBody ] [ "finally" FlowBody ]
+              | "repeat" { RepeatOption } FlowBody "until" Expr ;
+RepeatOption  = ( "every" | "within" | "max" ) Expr ;
+FlowBody      = "{" { StepDecl | UseDecl | Flow } "}" ;
 (* One scenario per row: the name may interpolate the row, and nothing else. *)
 ForClause     = "for" [ "secret" ] Ident "in" Expr ;
 UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;

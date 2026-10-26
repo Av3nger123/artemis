@@ -88,9 +88,12 @@ func Choices() ChoicePoints {
 			"declaration": words(
 				"The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
 				token.Blocks),
-			"stepType": stepTypes(),
-			"method":   words("The HTTP verbs. A step whose action opens with one is an api step.", token.Methods),
-			"action":   words("The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step, db is a db step.", token.Actions),
+			"stepType":     stepTypes(),
+			"method":       words("The HTTP verbs. A step whose action opens with one is an api step.", token.Methods),
+			"action":       words("The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step, db is a db step.", token.Actions),
+			"flow":         words("The words that open a control-flow block where a step could be written.", token.Flows),
+			"flowClause":   words("The words of the clauses that follow a block's first: else, case, default, catch, finally, until.", token.FlowClauses),
+			"repeatOption": words("A repeat's pace and bounds: every, within, max.", token.RepeatOptions),
 			"stepStatement": words(
 				"The statements legal in a step after its action block.",
 				token.StepStatements),

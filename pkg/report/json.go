@@ -125,7 +125,10 @@ type jsonStep struct {
 	// Phase is "setup" or "teardown" for a step of a scenario's setup or
 	// teardown block, and omitted for one of its own steps -- so a scenario
 	// with neither writes the document it always did.
-	Phase      string  `json:"phase,omitempty"`
+	Phase string `json:"phase,omitempty"`
+	// Round is which round of a repeat the step is from: the last that ran.
+	// Omitted on a step outside a repeat.
+	Round      int     `json:"round,omitempty"`
 	Status     string  `json:"status"`
 	DurationMS float64 `json:"duration_ms"`
 	Attempts   int     `json:"attempts"`
@@ -311,6 +314,7 @@ func fromStep(step *result.StepResult) jsonStep {
 	out := jsonStep{
 		Name:       step.Name,
 		Phase:      step.Phase,
+		Round:      step.Round,
 		Status:     step.Status.String(),
 		DurationMS: millis(step.Duration),
 		Attempts:   step.Attempts,

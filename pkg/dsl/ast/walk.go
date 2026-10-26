@@ -55,6 +55,20 @@ func Children(n Node) []Node {
 		return nodes(n.Source)
 	case *PhaseDecl:
 		return decls(n.Body)
+	case *FlowDecl:
+		out := make([]Node, 0, len(n.Clauses)+1)
+		for _, c := range n.Clauses {
+			out = append(out, c)
+		}
+		return append(out, nodes(n.Cond)...)
+	case *Clause:
+		out := nodes(n.Expr)
+		for _, o := range n.Options {
+			out = append(out, o)
+		}
+		return append(out, decls(n.Body)...)
+	case *Option:
+		return nodes(n.Value)
 	case *TagsDecl:
 		return nodes(n.Value)
 	case *ConfigDecl:

@@ -191,6 +191,11 @@ func text(v any) (string, bool) {
 	return "", false
 }
 
+// Equal is ==, by the rules an expect compares with: numbers by value however
+// they are written, arrays and objects element by element. A switch matches
+// its cases with it.
+func Equal(a, b any) bool { return equal(a, b) }
+
 // equal compares two values, symmetrically.
 //
 // pkg/shared/assert's equalValues is asymmetric: it is written as expectation

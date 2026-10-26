@@ -99,8 +99,11 @@ type groupSchema struct {
 var groupSchemas = []groupSchema{
 	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
 	{"forClause", []string{kindFor}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags}},
-	{"phaseBody", []string{kindStep, kindUse}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindFlow}},
+	{"phaseBody", []string{kindStep, kindUse, kindFlow}},
+	{"flowBody", []string{kindStep, kindUse, kindFlow, kindClause, kindVar}},
+	{"clause", []string{kindClause}},
+	{"option", []string{kindOption}},
 	{"action", []string{kindRequest, kindRun, kindBrowser, kindDB}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
 	{"blockField", []string{kindField}},
@@ -242,6 +245,24 @@ var nodeSchemas = []nodeSchema{
 		word("phase", "`setup` or `teardown`"),
 		list("body", "phaseBody"),
 		spanField, commentsField,
+	}},
+	{Kind: kindFlow, Doc: "a control-flow block -- `parallel`, `if`, `switch`, `try` or `repeat` -- named by its first clause's keyword", Fields: []fieldSchema{
+		list("clauses", "clause"),
+		optChild("until", "expression"),
+		spanField, commentsField,
+	}},
+	{Kind: kindClause, Doc: "one clause of a block: `if cond { ... }`, `else { ... }`, `case \"pro\" { ... }`, `catch { ... }`, `repeat max 30 { ... }`", Fields: []fieldSchema{
+		word("keyword", "parallel, if, else, switch, case, default, try, catch, finally or repeat"),
+		{Name: "elseIf", Type: "boolean", Optional: true, Doc: "an `else if`. Absent means false"},
+		optChild("expr", "expression"),
+		list("options", "option"),
+		list("body", "flowBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindOption, Doc: "a repeat's `every \"2s\"`, `within \"2m\"` or `max 30`", Fields: []fieldSchema{
+		word("name", "every, within or max"),
+		child("value", "expression"),
+		spanField,
 	}},
 	{Kind: kindFor, Doc: "`for user in json(\"users.json\")`: one scenario per row of data", Fields: []fieldSchema{
 		{Name: "secret", Type: "boolean", Optional: true,

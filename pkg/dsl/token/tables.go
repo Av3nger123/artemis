@@ -44,6 +44,17 @@ var (
 	// holds, `use` among them.
 	Blocks = []string{"import", "collection", "scenario", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
 
+	// Flows are the words that open a control-flow block where a step could
+	// be written, and FlowClauses the words of the clauses that follow one:
+	// else and else if, a switch's case and default, a try's catch and
+	// finally, a repeat's until.
+	Flows       = []string{"parallel", "if", "switch", "try", "repeat"}
+	FlowClauses = []string{"else", "case", "default", "catch", "finally", "until"}
+
+	// RepeatOptions are a repeat's pace and bounds: `every "2s"`, `within
+	// "2m"`, `max 30`.
+	RepeatOptions = []string{"every", "within", "max"}
+
 	// StepStatements are the statements legal in a step after its action.
 	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}
 

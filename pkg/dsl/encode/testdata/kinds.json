@@ -1536,6 +1536,954 @@
     {
       "kind": "scenario",
       "name": {
+        "text": "\"blocks\"",
+        "value": "blocks"
+      },
+      "body": [
+        {
+          "kind": "flow",
+          "clauses": [
+            {
+              "kind": "clause",
+              "keyword": "parallel",
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"a\"",
+                    "value": "a"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 56,
+                        "col": 11,
+                        "endLine": 56,
+                        "endCol": 17,
+                        "offset": 1407
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 56,
+                      "col": 7,
+                      "endLine": 56,
+                      "endCol": 17,
+                      "offset": 1403
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 55,
+                    "col": 5,
+                    "endLine": 57,
+                    "endCol": 6,
+                    "offset": 1386
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 54,
+                "col": 3,
+                "endLine": 58,
+                "endCol": 4,
+                "offset": 1371
+              }
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 54,
+            "col": 3,
+            "endLine": 58,
+            "endCol": 4,
+            "offset": 1371
+          }
+        },
+        {
+          "kind": "flow",
+          "clauses": [
+            {
+              "kind": "clause",
+              "keyword": "if",
+              "expr": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "1",
+                  "value": "1",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 60,
+                    "col": 6,
+                    "endLine": 60,
+                    "endCol": 7,
+                    "offset": 1430
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "1",
+                  "value": "1",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 60,
+                    "col": 11,
+                    "endLine": 60,
+                    "endCol": 12,
+                    "offset": 1435
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 60,
+                  "col": 6,
+                  "endLine": 60,
+                  "endCol": 12,
+                  "offset": 1430
+                }
+              },
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"b\"",
+                    "value": "b"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 62,
+                        "col": 11,
+                        "endLine": 62,
+                        "endCol": 17,
+                        "offset": 1464
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 62,
+                      "col": 7,
+                      "endLine": 62,
+                      "endCol": 17,
+                      "offset": 1460
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 61,
+                    "col": 5,
+                    "endLine": 63,
+                    "endCol": 6,
+                    "offset": 1443
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 60,
+                "col": 3,
+                "endLine": 64,
+                "endCol": 4,
+                "offset": 1427
+              },
+              "comments": {
+                "blankAbove": true
+              }
+            },
+            {
+              "kind": "clause",
+              "keyword": "else",
+              "elseIf": true,
+              "expr": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "1",
+                  "value": "1",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 64,
+                    "col": 13,
+                    "endLine": 64,
+                    "endCol": 14,
+                    "offset": 1489
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "2",
+                  "value": "2",
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 64,
+                    "col": 18,
+                    "endLine": 64,
+                    "endCol": 19,
+                    "offset": 1494
+                  }
+                },
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 64,
+                  "col": 13,
+                  "endLine": 64,
+                  "endCol": 19,
+                  "offset": 1489
+                }
+              },
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"c\"",
+                    "value": "c"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 66,
+                        "col": 11,
+                        "endLine": 66,
+                        "endCol": 17,
+                        "offset": 1523
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 66,
+                      "col": 7,
+                      "endLine": 66,
+                      "endCol": 17,
+                      "offset": 1519
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 65,
+                    "col": 5,
+                    "endLine": 67,
+                    "endCol": 6,
+                    "offset": 1502
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 64,
+                "col": 5,
+                "endLine": 68,
+                "endCol": 4,
+                "offset": 1481
+              }
+            },
+            {
+              "kind": "clause",
+              "keyword": "else",
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"d\"",
+                    "value": "d"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 70,
+                        "col": 11,
+                        "endLine": 70,
+                        "endCol": 17,
+                        "offset": 1572
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 70,
+                      "col": 7,
+                      "endLine": 70,
+                      "endCol": 17,
+                      "offset": 1568
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 69,
+                    "col": 5,
+                    "endLine": 71,
+                    "endCol": 6,
+                    "offset": 1551
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 68,
+                "col": 5,
+                "endLine": 72,
+                "endCol": 4,
+                "offset": 1540
+              }
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 60,
+            "col": 3,
+            "endLine": 72,
+            "endCol": 4,
+            "offset": 1427
+          }
+        },
+        {
+          "kind": "flow",
+          "clauses": [
+            {
+              "kind": "clause",
+              "keyword": "switch",
+              "expr": {
+                "kind": "literal",
+                "literal": "number",
+                "text": "1",
+                "value": "1",
+                "span": {
+                  "file": "testdata/kinds.art",
+                  "line": 74,
+                  "col": 10,
+                  "endLine": 74,
+                  "endCol": 11,
+                  "offset": 1599
+                }
+              },
+              "body": [
+                {
+                  "kind": "clause",
+                  "keyword": "case",
+                  "expr": {
+                    "kind": "literal",
+                    "literal": "number",
+                    "text": "1",
+                    "value": "1",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 75,
+                      "col": 10,
+                      "endLine": 75,
+                      "endCol": 11,
+                      "offset": 1612
+                    }
+                  },
+                  "body": [
+                    {
+                      "kind": "step",
+                      "name": {
+                        "text": "\"e\"",
+                        "value": "e"
+                      },
+                      "action": {
+                        "kind": "run",
+                        "command": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"true\"",
+                          "value": "true",
+                          "span": {
+                            "file": "testdata/kinds.art",
+                            "line": 77,
+                            "col": 13,
+                            "endLine": 77,
+                            "endCol": 19,
+                            "offset": 1645
+                          }
+                        },
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 77,
+                          "col": 9,
+                          "endLine": 77,
+                          "endCol": 19,
+                          "offset": 1641
+                        }
+                      },
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 76,
+                        "col": 7,
+                        "endLine": 78,
+                        "endCol": 8,
+                        "offset": 1622
+                      },
+                      "stepType": "terminal",
+                      "scope": [
+                        "exit_code",
+                        "stdout",
+                        "stderr",
+                        "duration_ms"
+                      ]
+                    }
+                  ],
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 75,
+                    "col": 5,
+                    "endLine": 79,
+                    "endCol": 6,
+                    "offset": 1607
+                  }
+                },
+                {
+                  "kind": "clause",
+                  "keyword": "default",
+                  "body": [
+                    {
+                      "kind": "step",
+                      "name": {
+                        "text": "\"f\"",
+                        "value": "f"
+                      },
+                      "action": {
+                        "kind": "run",
+                        "command": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"true\"",
+                          "value": "true",
+                          "span": {
+                            "file": "testdata/kinds.art",
+                            "line": 82,
+                            "col": 13,
+                            "endLine": 82,
+                            "endCol": 19,
+                            "offset": 1709
+                          }
+                        },
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 82,
+                          "col": 9,
+                          "endLine": 82,
+                          "endCol": 19,
+                          "offset": 1705
+                        }
+                      },
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 81,
+                        "col": 7,
+                        "endLine": 83,
+                        "endCol": 8,
+                        "offset": 1686
+                      },
+                      "stepType": "terminal",
+                      "scope": [
+                        "exit_code",
+                        "stdout",
+                        "stderr",
+                        "duration_ms"
+                      ]
+                    }
+                  ],
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 80,
+                    "col": 5,
+                    "endLine": 84,
+                    "endCol": 6,
+                    "offset": 1670
+                  }
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 74,
+                "col": 3,
+                "endLine": 85,
+                "endCol": 4,
+                "offset": 1592
+              },
+              "comments": {
+                "blankAbove": true
+              }
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 74,
+            "col": 3,
+            "endLine": 85,
+            "endCol": 4,
+            "offset": 1592
+          }
+        },
+        {
+          "kind": "flow",
+          "clauses": [
+            {
+              "kind": "clause",
+              "keyword": "try",
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"g\"",
+                    "value": "g"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 89,
+                        "col": 11,
+                        "endLine": 89,
+                        "endCol": 17,
+                        "offset": 1768
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 89,
+                      "col": 7,
+                      "endLine": 89,
+                      "endCol": 17,
+                      "offset": 1764
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 88,
+                    "col": 5,
+                    "endLine": 90,
+                    "endCol": 6,
+                    "offset": 1747
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 87,
+                "col": 3,
+                "endLine": 91,
+                "endCol": 4,
+                "offset": 1737
+              },
+              "comments": {
+                "blankAbove": true
+              }
+            },
+            {
+              "kind": "clause",
+              "keyword": "catch",
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"h\"",
+                    "value": "h"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 93,
+                        "col": 11,
+                        "endLine": 93,
+                        "endCol": 17,
+                        "offset": 1818
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 93,
+                      "col": 7,
+                      "endLine": 93,
+                      "endCol": 17,
+                      "offset": 1814
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 92,
+                    "col": 5,
+                    "endLine": 94,
+                    "endCol": 6,
+                    "offset": 1797
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 91,
+                "col": 5,
+                "endLine": 95,
+                "endCol": 4,
+                "offset": 1785
+              }
+            },
+            {
+              "kind": "clause",
+              "keyword": "finally",
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"i\"",
+                    "value": "i"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"true\"",
+                      "value": "true",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 97,
+                        "col": 11,
+                        "endLine": 97,
+                        "endCol": 17,
+                        "offset": 1870
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 97,
+                      "col": 7,
+                      "endLine": 97,
+                      "endCol": 17,
+                      "offset": 1866
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 96,
+                    "col": 5,
+                    "endLine": 98,
+                    "endCol": 6,
+                    "offset": 1849
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 95,
+                "col": 5,
+                "endLine": 99,
+                "endCol": 4,
+                "offset": 1835
+              }
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 87,
+            "col": 3,
+            "endLine": 99,
+            "endCol": 4,
+            "offset": 1737
+          }
+        },
+        {
+          "kind": "flow",
+          "clauses": [
+            {
+              "kind": "clause",
+              "keyword": "repeat",
+              "options": [
+                {
+                  "kind": "option",
+                  "name": "every",
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"1s\"",
+                    "value": "1s",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 101,
+                      "col": 16,
+                      "endLine": 101,
+                      "endCol": 20,
+                      "offset": 1903
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 101,
+                    "col": 10,
+                    "endLine": 101,
+                    "endCol": 20,
+                    "offset": 1897
+                  }
+                },
+                {
+                  "kind": "option",
+                  "name": "max",
+                  "value": {
+                    "kind": "literal",
+                    "literal": "number",
+                    "text": "3",
+                    "value": "3",
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 101,
+                      "col": 25,
+                      "endLine": 101,
+                      "endCol": 26,
+                      "offset": 1912
+                    }
+                  },
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 101,
+                    "col": 21,
+                    "endLine": 101,
+                    "endCol": 26,
+                    "offset": 1908
+                  }
+                }
+              ],
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"j\"",
+                    "value": "j"
+                  },
+                  "action": {
+                    "kind": "run",
+                    "command": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"echo\"",
+                      "value": "echo",
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 103,
+                        "col": 11,
+                        "endLine": 103,
+                        "endCol": 17,
+                        "offset": 1941
+                      }
+                    },
+                    "span": {
+                      "file": "testdata/kinds.art",
+                      "line": 103,
+                      "col": 7,
+                      "endLine": 103,
+                      "endCol": 17,
+                      "offset": 1937
+                    }
+                  },
+                  "body": [
+                    {
+                      "kind": "capture",
+                      "name": "out",
+                      "value": {
+                        "kind": "ident",
+                        "name": "stdout",
+                        "span": {
+                          "file": "testdata/kinds.art",
+                          "line": 104,
+                          "col": 21,
+                          "endLine": 104,
+                          "endCol": 27,
+                          "offset": 1968
+                        }
+                      },
+                      "span": {
+                        "file": "testdata/kinds.art",
+                        "line": 104,
+                        "col": 7,
+                        "endLine": 104,
+                        "endCol": 27,
+                        "offset": 1954
+                      }
+                    }
+                  ],
+                  "span": {
+                    "file": "testdata/kinds.art",
+                    "line": 102,
+                    "col": 5,
+                    "endLine": 105,
+                    "endCol": 6,
+                    "offset": 1920
+                  },
+                  "stepType": "terminal",
+                  "scope": [
+                    "exit_code",
+                    "stdout",
+                    "stderr",
+                    "duration_ms"
+                  ]
+                }
+              ],
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 101,
+                "col": 3,
+                "endLine": 106,
+                "endCol": 4,
+                "offset": 1890
+              },
+              "comments": {
+                "blankAbove": true
+              }
+            }
+          ],
+          "until": {
+            "kind": "binary",
+            "op": "==",
+            "x": {
+              "kind": "ident",
+              "name": "out",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 106,
+                "col": 11,
+                "endLine": 106,
+                "endCol": 14,
+                "offset": 1991
+              }
+            },
+            "y": {
+              "kind": "literal",
+              "literal": "string",
+              "text": "\"done\"",
+              "value": "done",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 106,
+                "col": 18,
+                "endLine": 106,
+                "endCol": 24,
+                "offset": 1998
+              }
+            },
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 106,
+              "col": 11,
+              "endLine": 106,
+              "endCol": 24,
+              "offset": 1991
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 101,
+            "col": 3,
+            "endLine": 106,
+            "endCol": 24,
+            "offset": 1890
+          }
+        }
+      ],
+      "span": {
+        "file": "testdata/kinds.art",
+        "line": 53,
+        "col": 1,
+        "endLine": 107,
+        "endCol": 2,
+        "offset": 1349
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
         "text": "\"row ${n}\"",
         "value": "row ${n}"
       },
@@ -1553,11 +2501,11 @@
               "value": "1",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 53,
+                "line": 109,
                 "col": 38,
-                "endLine": 53,
+                "endLine": 109,
                 "endCol": 39,
-                "offset": 1386
+                "offset": 2045
               }
             },
             {
@@ -1567,30 +2515,30 @@
               "value": "2",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 53,
+                "line": 109,
                 "col": 41,
-                "endLine": 53,
+                "endLine": 109,
                 "endCol": 42,
-                "offset": 1389
+                "offset": 2048
               }
             }
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 53,
+            "line": 109,
             "col": 37,
-            "endLine": 53,
+            "endLine": 109,
             "endCol": 43,
-            "offset": 1385
+            "offset": 2044
           }
         },
         "span": {
           "file": "testdata/kinds.art",
-          "line": 53,
+          "line": 109,
           "col": 21,
-          "endLine": 53,
+          "endLine": 109,
           "endCol": 43,
-          "offset": 1369
+          "offset": 2028
         }
       },
       "body": [
@@ -1606,30 +2554,30 @@
                 "value": "smoke",
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 54,
+                  "line": 110,
                   "col": 11,
-                  "endLine": 54,
+                  "endLine": 110,
                   "endCol": 18,
-                  "offset": 1404
+                  "offset": 2063
                 }
               }
             ],
             "span": {
               "file": "testdata/kinds.art",
-              "line": 54,
+              "line": 110,
               "col": 10,
-              "endLine": 54,
+              "endLine": 110,
               "endCol": 19,
-              "offset": 1403
+              "offset": 2062
             }
           },
           "span": {
             "file": "testdata/kinds.art",
-            "line": 54,
+            "line": 110,
             "col": 3,
-            "endLine": 54,
+            "endLine": 110,
             "endCol": 19,
-            "offset": 1396
+            "offset": 2055
           }
         },
         {
@@ -1651,29 +2599,29 @@
                   "value": "true",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 58,
+                    "line": 114,
                     "col": 11,
-                    "endLine": 58,
+                    "endLine": 114,
                     "endCol": 17,
-                    "offset": 1454
+                    "offset": 2113
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 58,
+                  "line": 114,
                   "col": 7,
-                  "endLine": 58,
+                  "endLine": 114,
                   "endCol": 17,
-                  "offset": 1450
+                  "offset": 2109
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 57,
+                "line": 113,
                 "col": 5,
-                "endLine": 59,
+                "endLine": 115,
                 "endCol": 6,
-                "offset": 1428
+                "offset": 2087
               },
               "stepType": "terminal",
               "scope": [
@@ -1686,11 +2634,11 @@
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 56,
+            "line": 112,
             "col": 3,
-            "endLine": 60,
+            "endLine": 116,
             "endCol": 4,
-            "offset": 1416
+            "offset": 2075
           },
           "comments": {
             "blankAbove": true
@@ -1711,29 +2659,29 @@
               "value": "echo",
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 63,
+                "line": 119,
                 "col": 9,
-                "endLine": 63,
+                "endLine": 119,
                 "endCol": 15,
-                "offset": 1493
+                "offset": 2152
               }
             },
             "span": {
               "file": "testdata/kinds.art",
-              "line": 63,
+              "line": 119,
               "col": 5,
-              "endLine": 63,
+              "endLine": 119,
               "endCol": 15,
-              "offset": 1489
+              "offset": 2148
             }
           },
           "span": {
             "file": "testdata/kinds.art",
-            "line": 62,
+            "line": 118,
             "col": 3,
-            "endLine": 64,
+            "endLine": 120,
             "endCol": 4,
-            "offset": 1474
+            "offset": 2133
           },
           "stepType": "terminal",
           "scope": [
@@ -1765,29 +2713,29 @@
                   "value": "true",
                   "span": {
                     "file": "testdata/kinds.art",
-                    "line": 68,
+                    "line": 124,
                     "col": 11,
-                    "endLine": 68,
+                    "endLine": 124,
                     "endCol": 17,
-                    "offset": 1547
+                    "offset": 2206
                   }
                 },
                 "span": {
                   "file": "testdata/kinds.art",
-                  "line": 68,
+                  "line": 124,
                   "col": 7,
-                  "endLine": 68,
+                  "endLine": 124,
                   "endCol": 17,
-                  "offset": 1543
+                  "offset": 2202
                 }
               },
               "span": {
                 "file": "testdata/kinds.art",
-                "line": 67,
+                "line": 123,
                 "col": 5,
-                "endLine": 69,
+                "endLine": 125,
                 "endCol": 6,
-                "offset": 1522
+                "offset": 2181
               },
               "stepType": "terminal",
               "scope": [
@@ -1800,11 +2748,11 @@
           ],
           "span": {
             "file": "testdata/kinds.art",
-            "line": 66,
+            "line": 122,
             "col": 3,
-            "endLine": 70,
+            "endLine": 126,
             "endCol": 4,
-            "offset": 1507
+            "offset": 2166
           },
           "comments": {
             "blankAbove": true
@@ -1813,11 +2761,11 @@
       ],
       "span": {
         "file": "testdata/kinds.art",
-        "line": 53,
+        "line": 109,
         "col": 1,
-        "endLine": 71,
+        "endLine": 127,
         "endCol": 2,
-        "offset": 1349
+        "offset": 2008
       },
       "comments": {
         "blankAbove": true

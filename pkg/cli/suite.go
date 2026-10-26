@@ -140,6 +140,8 @@ func (rt *runtimeEnv) setUpSuites(ctx context.Context, run *result.RunResult, re
 			Browser: st.block.Browser,
 			HTTP:    st.block.HTTP,
 			Setup:   st.block.Setup,
+
+			SetupFlow: st.block.SetupFlow,
 		}
 		in := scenarioIn{kind: "suite"}
 		values := map[string]any{}
@@ -180,6 +182,8 @@ func (rt *runtimeEnv) tearDownSuites(ctx context.Context, run *result.RunResult,
 			Browser:  st.block.Browser,
 			HTTP:     st.block.HTTP,
 			Teardown: st.block.Teardown,
+
+			TeardownFlow: st.block.TeardownFlow,
 		}
 		execute(ctx, rt, sc, st.file, run, rep, scenarioIn{kind: "suite", bound: st.scope, jar: st.jar})
 	}

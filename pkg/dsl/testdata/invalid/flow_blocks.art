@@ -1,0 +1,76 @@
+# The control-flow blocks' own mistakes, each in a scenario of its own.
+
+scenario "a sibling's capture" {
+  parallel {
+    step "cart" {
+      post "https://example.com/carts"
+      capture cart_id = body.id
+    }
+    step "pay" {
+      post "https://example.com/carts/${cart_id}/pay"
+    }
+  }
+}
+
+scenario "two branches, one name" {
+  parallel {
+    step "a" {
+      get "https://example.com/a"
+      capture id = body.id
+    }
+    step "b" {
+      get "https://example.com/b"
+      capture id = body.id
+    }
+  }
+}
+
+scenario "only one branch captures" {
+  var plan = "pro"
+
+  if plan == "pro" {
+    step "pro" {
+      get "https://example.com/pro"
+      capture seat = body.seat
+    }
+  }
+
+  step "after" {
+    get "https://example.com/seats/${seat}"
+  }
+
+  teardown {
+    step "cleanup reads it" {
+      delete "https://example.com/seats/${seat}"
+    }
+  }
+}
+
+scenario "a repeat with no bound" {
+  repeat every "2s" {
+    step "poll" {
+      get "https://example.com/job"
+      capture state = body.state
+    }
+  } until state == "done"
+}
+
+scenario "a bad max" {
+  repeat max 0 {
+    step "poll" {
+      get "https://example.com/job"
+      capture state = body.state
+    }
+  } until state == "done"
+}
+
+scenario "two pages at once" {
+  parallel {
+    step "one" {
+      browser { goto "https://example.com/a" }
+    }
+    step "two" {
+      browser { goto "https://example.com/b" }
+    }
+  }
+}

@@ -128,11 +128,12 @@ scenario "orders" {
 | `secret` | `secret var ...`, `secret capture ...` | A binding whose value no report prints |
 | `step` | `step "<name>" { ... }` | One action and what to expect of it |
 | `use` | `use <collection>.<item> { ... }` | Steps written once in a collection, expanded in place -- see [Collections](#collections) |
+| a block | `parallel { ... }`, `if`, `switch`, `try`, `repeat` | Steps that run at the same time, on a condition, under try, or in a loop -- see [Blocks](#blocks) |
 
-Steps run in the order they are written, one after another, and a scenario's
-steps are never run in parallel: a step reads what the steps above it captured,
-so the order is the meaning. The language has no way to ask for anything else --
-`parallel` is a reserved word and not a feature.
+Steps run in the order they are written, one after another: a step reads what
+the steps above it captured, so the order is the meaning. A block is how a
+scenario asks for anything else -- steps at the same time, on a condition, or
+until something holds -- and it says so where it is written.
 
 Whole scenario *files* are a different question, and one the language does not
 answer. `artemis run --jobs N` runs N of them at once; see
@@ -789,8 +790,8 @@ artemis run suite/ --jobs 6      # six files at once
 artemis run suite/               # one at a time, the default
 ```
 
-This is a property of the runner and not of the language. There is no `parallel`
-block, and `parallel` stays a reserved word.
+This is a property of the runner. Steps of one scenario at the same time are
+the language's: a [`parallel`](#blocks) block.
 
 The order of a report does not change. A scenario keeps the place its file had in
 discovery order, however early or late that file finished, so a golden file and a
@@ -1035,6 +1036,136 @@ document by an `_id` a step captured -- `{"$date": "2026-10-26T09:30:15Z"}` a
 date, `{"$numberDecimal": "19.99"}` a decimal, `{"$numberLong": "42"}` a 64-bit
 integer. A reply reads the other way: an ObjectId is its hex string, a date an
 RFC 3339 time, a decimal a number by the rule above.
+
+---
+
+## Blocks
+
+```art
+scenario "checkout" {
+  var url = env("API_URL")
+
+  step "log in" {
+    post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
+    capture token = body.token
+  }
+
+  parallel {
+    step "cart" {
+      post "${url}/carts" { header "Authorization" = "Bearer ${token}" }
+      capture cart_id = body.id
+    }
+    step "profile" {
+      get "${url}/me" { header "Authorization" = "Bearer ${token}" }
+      capture tier = body.tier
+    }
+  }
+
+  if tier == "gold" {
+    step "perks" {
+      get "${url}/perks"
+      expect len(body) > 0
+    }
+  } else {
+    step "upsell" {
+      get "${url}/upsell"
+      expect status == 200
+    }
+  }
+
+  try {
+    step "pay" {
+      post "${url}/carts/${cart_id}/pay"
+      expect status == 201
+      capture order_id = body.id
+    }
+  } catch {
+    step "refund" {
+      post "${url}/carts/${cart_id}/refund"
+    }
+  } finally {
+    step "unlock" {
+      delete "${url}/carts/${cart_id}/lock"
+    }
+  }
+
+  repeat every "2s" within "2m" {
+    step "order status" {
+      get "${url}/orders/${order_id}"
+      capture state = body.state
+    }
+  } until state == "shipped" or state == "failed"
+
+  step "shipped" {
+    get "${url}/orders/${order_id}"
+    expect body.state == "shipped"
+  }
+}
+```
+
+A scenario's steps run one after another. A **block** runs the steps inside it
+another way, and holds steps, `use` lines and other blocks; it can be written
+wherever a step can, setup and teardown included.
+
+| Block | Form | What runs |
+| --- | --- | --- |
+| `parallel` | `parallel { ... }` | Every item inside -- a step, or a block -- **at the same time**. The block ends when all of them have (the join) |
+| `if` | `if <cond> { ... } else if <cond> { ... } else { ... }` | The first branch whose condition holds; none, when none does and there is no `else` |
+| `switch` | `switch <expr> { case <value> { ... } default { ... } }` | The first `case` whose value equals the subject by `==`'s rules, else the `default` |
+| `try` | `try { ... } catch { ... } finally { ... }` | The try's steps until one does not pass; then the `catch`, when one did not; then the `finally`, whatever happened. Either of catch and finally may be left out, not both |
+| `repeat` | `repeat [every <d>] [within <d>] [max <n>] { ... } until <cond>` | The body, a round at a time, until the condition holds after a round |
+
+A condition, a subject, a case value and a repeat's options read the vars and
+the captures above the block; a block has no observation of its own, so
+`status` is not in scope in one. A condition that is not `true` or `false` is a
+step error, reported where the block is.
+
+### What each block reports
+
+Every step of the scenario is in the report, run or not, in the order it is
+written -- whatever order parallel branches finished in -- so a report reads top
+to bottom like the file.
+
+| | |
+| --- | --- |
+| A branch not taken | Its steps are skipped, saying which branch ran instead: `not taken: the if at line 18 ran if tier == "gold"` |
+| A failed step in a try | The rest of the try is skipped, naming it; the catch runs. A **catch is compensation, not a cure**: the step that failed still fails the scenario |
+| A failed step anywhere else | The steps after it run, as they do outside a block |
+| A parallel branch | Its steps run one after another, as a scenario's do; a failure in one branch does not stop the others |
+| A repeat | Only its **last round** is reported, each step with `"round": n` in the [JSON report](#the-json-report) and `(round n)` on the console -- the rule [`retry`](#retry) follows for attempts. A round with a step that did not pass ends the loop |
+| A repeat that runs out | A step error named for its condition, giving the bound and what the condition read last: `until state == "shipped" never held within 2m0s (60 rounds); state was "packed"` |
+
+### Polling
+
+`repeat` is how a scenario polls. `every` is the pause between rounds -- never
+before the first -- and `within` and `max` are its bounds: **at least one is
+required**, so a condition that never holds cannot run a scenario forever, and
+a repeat with neither is the compile error `repeat-unbounded`. With both, the
+first to run out ends it.
+
+`retry` still polls a single step whose assertions should come to hold. A
+repeat is for what retry cannot do: several steps a round, a stop condition that
+is not an assertion -- `until state == "shipped" or state == "failed"`, so the
+step after it can assert which -- and a bound in time rather than in tries.
+
+### What a block lets the steps after it read
+
+The [scope rule](#what-is-in-scope) -- a capture is in scope below the step
+that makes it -- follows what each block guarantees:
+
+| Block | Inside it | After it |
+| --- | --- | --- |
+| `parallel` | Each branch sees the captures above the block and **none of its siblings'**, which may not exist yet: reading one is `parallel-sibling-capture`. Two branches capturing one name is `parallel-capture-clash` | Every branch's captures |
+| `if`, `switch` | Each branch sees the captures above it | A capture **every** branch makes, which needs an `else` or a `default`. One only some branches make may not exist, and reading it is `capture-maybe-unbound` -- except in teardown or a finally, where a step whose capture is missing is skipped, as teardown already does |
+| `try` | The try's steps as a sequence; the catch and finally see the try's | The try's and the finally's captures; a catch's, as an `if` branch's |
+| `repeat` | The body as a sequence; a capture is written again every round | The last round's captures. The body runs at least once |
+
+Two branches of a parallel block cannot both drive the browser: a scenario has
+one page, and two steps cannot drive it at once (`parallel-browser`). The cookie
+jar, database connections and traces are shared safely. Each branch draws its
+[random values](#making-and-converting-values) from a generator of its own,
+seeded from the run's seed and the branch, so `--seed` draws the same values
+whatever order branches finished in.
 
 ---
 
@@ -2054,12 +2185,17 @@ if  else  for  in  while  parallel  group  fn  return  import  use  let
 setup  teardown  ai
 ```
 
+`if`, `else` and `parallel` open [blocks](#blocks); `switch`, `case`, `default`,
+`try`, `catch`, `finally`, `repeat`, `until`, `every` and `max` are positional
+keywords of the same blocks and are not reserved.
+
 | Word | Purpose |
 | --- | --- |
 | `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
 | `use` | Expands a collection's request in place: `use auth.login { ... }` |
 | `tags` | A scenario's or a suite's tags: `tags = ["smoke"]` -- see [tags](#tags). Positional, not reserved |
 | `setup`, `teardown` | Steps that run before a scenario's own, and after them whatever happened -- see [setup and teardown](#setup-and-teardown) |
+| `if`, `else`, `parallel` | Open a [block](#blocks): `if cond { ... } else { ... }`, `parallel { ... }` |
 | `for`, `in` | Make a scenario one per row of data: `scenario "..." for user in json("users.json") { ... }` -- see [data-driven scenarios](#data-driven-scenarios) |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
@@ -2093,7 +2229,14 @@ RequestDecl = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params      = "(" [ Param { "," Param } ] ")" ;
 Param       = [ "secret" ] Ident [ "=" Expr ] ;
 
-Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
+Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl | Flow } "}" ;
+Flow        = "parallel" FlowBody
+            | "if" Expr FlowBody { "else" "if" Expr FlowBody } [ "else" FlowBody ]
+            | "switch" Expr "{" { "case" Expr FlowBody } [ "default" FlowBody ] "}"
+            | "try" FlowBody [ "catch" FlowBody ] [ "finally" FlowBody ]
+            | "repeat" { RepeatOption } FlowBody "until" Expr ;
+RepeatOption = ( "every" | "within" | "max" ) Expr ;
+FlowBody    = "{" { StepDecl | UseDecl | Flow } "}" ;
 UseDecl     = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
 ItemRef     = Ident "." Ident ;
 UseLine     = Ident "=" Expr
@@ -2332,6 +2475,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. Not nanoseconds, and not the seconds the JUnit report uses |
 | `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. A step is skipped when a [setup](#setup-and-teardown) step before it did not pass, or when it is a teardown step reading a capture no step made; its `error` says which |
 | `phase` | step | `"setup"` or `"teardown"` for a step of a scenario's [setup or teardown](#setup-and-teardown) block. **Omitted** on the scenario's own steps |
+| `round` | step | For a step of a [`repeat`](#blocks) block, which round its result is from: the last that ran. **Omitted** on every other step |
 | `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary |
 | `error` | run | Why the run could not proceed at all, and `""` for every run that reached its scenarios. An environment error is the one thing that sets it |
 | `seed` | run | The seed the run's `uuid()`, `random_int()` and `random_string()` drew from, and absent when no scenario called one. Passed back as `artemis run --seed <n>`, it draws the same values |
@@ -2425,10 +2569,10 @@ adding one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
+| **More control flow** | `while` and `group` stay reserved. Looping is a bounded [`repeat`](#polling), and running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
 | **Functions** | `fn`, `return`, `let`. Reserved words. A general-purpose language -- a test framework an AI assistant can translate a scenario into -- is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
-| **Parallelism** | Scenarios and steps run one after another, in the order they are written |
+| **Parallelism outside a block** | A scenario's steps run one after another unless a [`parallel`](#blocks) block says otherwise; scenarios in one file run in order, and files at once only with `--jobs` |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |
 | **Request and response detail in a report** | Neither report carries a body or a header |
 | **YAML** | Not a runtime format. See below |

@@ -50,6 +50,9 @@ const (
 	kindRequestDecl = "requestDecl"
 	kindUse         = "use"
 	kindPhase       = "phase"
+	kindFlow        = "flow"
+	kindClause      = "clause"
+	kindOption      = "option"
 	kindBodySet     = "bodySet"
 	kindDrop        = "drop"
 )
@@ -112,6 +115,10 @@ func (e *enc) node(n ast.Node) *obj {
 			set("body", e.list(toNodes(v.Body))).
 			span().
 			comments(toks(v.Keyword), v.LBrace, v.RBrace).done()
+	case *ast.FlowDecl:
+		return e.flow(v)
+	case *ast.Clause:
+		return e.clause(v)
 	case *ast.BodySet:
 		return e.bodySet(v)
 	case *ast.Drop:
@@ -181,6 +188,42 @@ func (e *enc) scenario(s *ast.Scenario) *obj {
 }
 
 // forClause is a data-driven scenario's `for [secret] <var> in <source>`.
+// flow is a control-flow block: its clauses in order, and a repeat's until.
+func (e *enc) flow(f *ast.FlowDecl) *obj {
+	clauses := make([]ast.Node, 0, len(f.Clauses))
+	for _, c := range f.Clauses {
+		clauses = append(clauses, c)
+	}
+	return start(kindFlow, f).
+		set("clauses", e.list(clauses)).
+		set("until", e.node(f.Cond)).
+		span().
+		comments(append(toks(f.Until), nodeToks(f.Cond)...), zero, zero).done()
+}
+
+// clause is one clause of a block: its keyword, whether it is an `else if`,
+// its expression, a repeat's options, and its body.
+func (e *enc) clause(c *ast.Clause) *obj {
+	opts := make([]any, 0, len(c.Options))
+	for _, o := range c.Options {
+		opts = append(opts, start(kindOption, o).
+			set("name", o.Name.Text).
+			set("value", e.node(o.Value)).
+			span().done())
+	}
+	if len(opts) == 0 {
+		opts = nil
+	}
+	return start(kindClause, c).
+		set("keyword", c.Keyword.Text).
+		set("elseIf", c.If.Text != "").
+		set("expr", e.node(c.Expr)).
+		set("options", opts).
+		set("body", e.list(toNodes(c.Body))).
+		span().
+		comments(append(toks(c.Keyword, c.If), nodeToks(c.Expr)...), c.LBrace, c.RBrace).done()
+}
+
 func (e *enc) forClause(f *ast.ForClause) *obj {
 	return start(kindFor, f).
 		set("secret", f.Secret.Text != "").

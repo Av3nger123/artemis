@@ -1,0 +1,42 @@
+=== terminal
+flow_blocks.art:10:41: "cart_id" is captured by the branch at line 5, which runs at the same time as this one
+   10 |       post "https://example.com/carts/${cart_id}/pay"
+      |                                         ^^^^^^^
+   hint: read it after the parallel block, or put both steps in one branch
+
+flow_blocks.art:23:15: "id" is captured by two branches of this parallel block, which run at once
+   23 |       capture id = body.id
+      |               ^^
+   hint: the other is at line 19; give one of them another name
+
+flow_blocks.art:39:38: "seat" is captured in only some branches of the if at line 31, so it may not exist here
+   39 |     get "https://example.com/seats/${seat}"
+      |                                      ^^^^
+   hint: capture it in every branch, give the block an else or a default that does, or read it inside the branch
+
+flow_blocks.art:50:3: this repeat has no bound, so a condition that never holds would run it forever
+   50 |   repeat every "2s" {
+      |   ^^^^^^
+   hint: repeat every "2s" within "2m" { ... } until ...
+
+flow_blocks.art:59:14: max is how many rounds a repeat may run, a whole number above 0
+   59 |   repeat max 0 {
+      |              ^
+   hint: max 30
+
+flow_blocks.art:72:5: a second branch of this parallel block drives the browser, and a scenario has one page
+   72 |     step "two" {
+      |     ^^^^^^^^^^^^
+   73 |       browser { goto "https://example.com/b" }
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   74 |     }
+      |     ^
+   hint: move the browser steps into one branch, or out of the parallel block
+
+=== codes
+parallel-sibling-capture	error	10:41-10:48
+parallel-capture-clash	error	23:15-23:17
+capture-maybe-unbound	error	39:38-39:42
+repeat-unbounded	error	50:3-50:9
+bad-value	error	59:14-59:15
+parallel-browser	error	72:5-74:6

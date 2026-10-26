@@ -337,18 +337,17 @@ func (c *checker) scenario(s *ast.Scenario) {
 			c.varDecl(d, sc)
 		case *ast.StepDecl:
 			c.step(d, sc)
+		case *ast.FlowDecl:
+			c.flow(d, sc)
 		case *ast.PhaseDecl:
 			// A phase's steps are walked where the phase is written, which
 			// is where they run: setup's captures are in scope for every
-			// step below, and teardown sees everything above it.
-			for _, inner := range d.Body {
-				switch inner := inner.(type) {
-				case *ast.StepDecl:
-					c.step(inner, sc)
-				case *ast.VarDecl:
-					c.varDecl(inner, sc)
-				}
-			}
+			// step below, and teardown sees everything above it -- what only
+			// some branches captured included, since a teardown step whose
+			// capture is missing is skipped.
+			sc.cleanup = d.Keyword.Value == ast.PhaseTeardown
+			c.items(d.Body, sc)
+			sc.cleanup = false
 		}
 		// *ast.Bad and anything else: the parser has already reported it.
 	}
@@ -417,11 +416,15 @@ func (c *checker) phases(s *ast.Scenario) {
 	stepSeen := false
 	for _, d := range s.Body {
 		switch d := d.(type) {
-		case *ast.StepDecl:
+		case *ast.StepDecl, *ast.FlowDecl:
+			name := "a block"
+			if st, ok := d.(*ast.StepDecl); ok {
+				name = fmt.Sprintf("the step %q", st.Name.Value)
+			}
 			stepSeen = true
 			if teardown != nil {
 				c.bag.Error(teardown.Keyword.Span, diag.TeardownBeforeStep,
-					"teardown is above the step %q, and it runs after every step", d.Name.Value).
+					"teardown is above %s, and it runs after every step", name).
 					Hintf("move teardown { ... } below the scenario's last step")
 				teardown = &ast.PhaseDecl{} // reported once
 			}

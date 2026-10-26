@@ -88,6 +88,8 @@ func (c *canon) decl(d ast.Decl) {
 		c.step(v)
 	case *ast.PhaseDecl:
 		c.phase(v)
+	case *ast.FlowDecl:
+		c.flow(v)
 	case *ast.TagsDecl:
 		c.line(v.Tokens(nil), assign(v.Keyword.Text, v.Assign, c.expr(v.Value)))
 	case *ast.Import:
@@ -129,7 +131,7 @@ func (c *canon) scenario(s *ast.Scenario) {
 		// is not a file anyone wants to read. The first item in the body is
 		// against the brace and gets nothing.
 		switch d.(type) {
-		case *ast.StepDecl, *ast.PhaseDecl:
+		case *ast.StepDecl, *ast.PhaseDecl, *ast.FlowDecl:
 			if i > 0 {
 				c.w.blank()
 			}

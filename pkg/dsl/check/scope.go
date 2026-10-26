@@ -158,6 +158,18 @@ type scope struct {
 	first map[string]binding
 	file  string
 	at    int // the index in the scenario body of the declaration being walked
+
+	// maybe are captures only some branches of an if or a switch make: name
+	// to the block that made them. A step after the block may not read one --
+	// it may not exist -- unless it is cleanup, which skips when it does not.
+	maybe map[string]string
+	// cleanup is whether the steps being walked are teardown or a finally,
+	// whose reads of a maybe-capture are allowed.
+	cleanup bool
+	// siblings are the captures of the other branches of the parallel block
+	// being walked, by name, to the line of the branch: a step cannot read one,
+	// since that branch runs at the same time.
+	siblings map[string]int
 }
 
 // binding is one name's first binding: what bound it and its name token.
@@ -167,7 +179,29 @@ type binding struct {
 	order int // its declaration's index in the scenario body
 }
 
-func newScope() *scope { return &scope{first: map[string]binding{}} }
+func newScope() *scope { return &scope{first: map[string]binding{}, maybe: map[string]string{}} }
+
+// fork is a copy of the scope for one branch of a block: what the branch
+// binds stays in the copy until the block decides what the scope after it
+// holds.
+func (s *scope) fork() *scope {
+	cp := *s
+	cp.vars = append([]string(nil), s.vars...)
+	cp.captures = append([]string(nil), s.captures...)
+	cp.first = make(map[string]binding, len(s.first))
+	for k, v := range s.first {
+		cp.first[k] = v
+	}
+	cp.maybe = make(map[string]string, len(s.maybe))
+	for k, v := range s.maybe {
+		cp.maybe[k] = v
+	}
+	cp.siblings = make(map[string]int, len(s.siblings))
+	for k, v := range s.siblings {
+		cp.siblings[k] = v
+	}
+	return &cp
+}
 
 // bind records tok, declared at body index order, as its name's first
 // binding, unless the name has one.
@@ -197,14 +231,21 @@ type view struct {
 	roots    []string
 	vars     []string
 	captures []string
+	maybe    map[string]string
+	siblings map[string]int
 }
 
 // view builds the resolution view for a position of type t. Unknown means a
 // var's value, which binds no roots at all -- only env() and the vars above.
 func (s *scope) view(t StepType) *view {
-	v := &view{typ: t, roots: Roots(t)}
+	v := &view{typ: t, roots: Roots(t), maybe: s.maybe, siblings: s.siblings}
 	v.vars = append(v.vars, s.vars...)
 	v.captures = append(v.captures, s.captures...)
+	if s.cleanup {
+		for name := range s.maybe {
+			v.captures = append(v.captures, name)
+		}
+	}
 	return v
 }
 
@@ -255,6 +296,18 @@ func (v *view) hint() string { return scopeHints[v.typ] }
 // `statu` example); anything else means they named something that does not
 // exist (unknown-identifier).
 func (c *checker) notFound(span token.Span, name string, v *view) {
+	if line, ok := v.siblings[name]; ok {
+		c.bag.Error(span, diag.ParallelSiblingCapture,
+			"%q is captured by the branch at line %d, which runs at the same time as this one", name, line).
+			Hintf("read it after the parallel block, or put both steps in one branch")
+		return
+	}
+	if where, ok := v.maybe[name]; ok {
+		c.bag.Error(span, diag.CaptureMaybeUnbound,
+			"%q is captured in only some branches of %s, so it may not exist here", name, where).
+			Hintf("capture it in every branch, give the block an else or a default that does, or read it inside the branch")
+		return
+	}
 	if t, ok := allRoots[name]; ok && t != v.typ {
 		c.bag.Error(span, diag.NotInScope,
 			"%q is not in scope in %s", name, v.where()).

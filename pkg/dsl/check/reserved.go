@@ -17,20 +17,20 @@ import (
 // is what stops a word being added to the language's reserved list and
 // arriving here as an empty sentence.
 var purposes = map[string]string{
-	"if":       "reserved for a future conditional form",
-	"else":     "reserved for a future conditional form",
+	"if":       "opens a conditional block: if cond { ... } else { ... }",
+	"else":     "continues a conditional block: if cond { ... } else { ... }",
 	"for":      "reserved for a future loop form",
 	"in":       "reserved for a future loop form",
 	"while":    "reserved for a future loop form",
-	"parallel": "reserved for a future parallel-execution form",
+	"parallel": "opens a block whose steps run at the same time: parallel { ... }",
 	"group":    "reserved for a future step-grouping form",
 	"fn":       "reserved for a future function form",
 	"return":   "reserved for a future function form",
 	"import":   "imports a collection file: import \"collections/auth.art\"",
 	"use":      "expands a collection's request in place: use auth.login { ... }",
 	"let":      "reserved for a future local-binding form",
-	"setup":    "reserved for a future setup and teardown form",
-	"teardown": "reserved for a future setup and teardown form",
+	"setup":    "opens the steps that run before a scenario's own: setup { ... }",
+	"teardown": "opens the steps that run after a scenario's own: teardown { ... }",
 
 	// `ai` is the one word reserved for something the design explicitly
 	// declines to build. See notes.

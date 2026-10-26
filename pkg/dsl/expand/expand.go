@@ -145,17 +145,33 @@ func needsExpansion(tree *ast.File) bool {
 			if v.For != nil {
 				return true
 			}
-			for _, b := range v.Body {
-				if _, ok := b.(*ast.UseDecl); ok {
+			if hasUse(v.Body) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasUse reports whether decls hold a use, at any depth of phase or block.
+func hasUse(decls []ast.Decl) bool {
+	for _, d := range decls {
+		switch v := d.(type) {
+		case *ast.UseDecl:
+			return true
+		case *ast.PhaseDecl:
+			if hasUse(v.Body) {
+				return true
+			}
+		case *ast.FlowDecl:
+			for _, c := range v.Clauses {
+				if hasUse(c.Body) {
 					return true
 				}
-				if phase, ok := b.(*ast.PhaseDecl); ok {
-					for _, pb := range phase.Body {
-						if _, ok := pb.(*ast.UseDecl); ok {
-							return true
-						}
-					}
-				}
+			}
+		case *ast.Clause:
+			if hasUse(v.Body) {
+				return true
 			}
 		}
 	}
@@ -194,6 +210,15 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 			out = append(out, &cp)
 			continue
 		}
+		if flow, ok := d.(*ast.FlowDecl); ok {
+			cp := *flow
+			cp.Clauses = make([]*ast.Clause, len(flow.Clauses))
+			for i, c := range flow.Clauses {
+				cp.Clauses[i] = e.clauseIn(u, c, sc)
+			}
+			out = append(out, &cp)
+			continue
+		}
 		if use, ok := d.(*ast.UseDecl); ok {
 			steps := e.expandUse(u, use, sc.at(nil, out))
 			out = append(out, *sc.hoisted...)
@@ -204,6 +229,31 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 		out = append(out, d)
 	}
 	return out
+}
+
+// clauseIn is a block's clause with each use in its body expanded -- and, for
+// a switch, in each of its cases.
+func (e *expander) clauseIn(u *unit, c *ast.Clause, sc *scope) *ast.Clause {
+	cp := *c
+	body := make([]ast.Decl, 0, len(c.Body))
+	var plain []ast.Decl
+	flush := func() {
+		if len(plain) > 0 {
+			body = append(body, e.bodyIn(u, plain, sc)...)
+			plain = nil
+		}
+	}
+	for _, d := range c.Body {
+		if inner, ok := d.(*ast.Clause); ok {
+			flush()
+			body = append(body, e.clauseIn(u, inner, sc))
+			continue
+		}
+		plain = append(plain, d)
+	}
+	flush()
+	cp.Body = body
+	return &cp
 }
 
 // imports loads every file u imports.

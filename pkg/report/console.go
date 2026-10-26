@@ -107,6 +107,10 @@ func (c *Console) Step(step *result.StepResult) {
 	if step.Attempts > 1 {
 		fmt.Fprintf(c.out, "  (%d attempts)", step.Attempts)
 	}
+	if step.Round > 1 {
+		// A repeat reports its last round only, so say which one it was.
+		fmt.Fprintf(c.out, "  (round %d)", step.Round)
+	}
 	fmt.Fprintln(c.out)
 
 	if step.Error != "" {

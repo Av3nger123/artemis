@@ -30,6 +30,10 @@ names from data rows. `SPEC.md` documents each.
    binding `rows`, `affected` and `result`; one pool per URL per run. A default
    build carries the PostgreSQL, MySQL and SQLite drivers and `make build-full`
    every one. CI runs the server tests against all six in service containers.
+6. **Blocks.** `parallel`, `if`/`else`, `switch`, `try`/`catch`/`finally` and
+   a bounded `repeat ... until` for polling, anywhere a step can be written;
+   the checker holds each branch to the captures it can rely on, and the report
+   stays in source order whatever order parallel branches finished in.
 
 ## Removed
 
@@ -46,30 +50,15 @@ run` is how a `.art` file runs.
 Not designed, not committed to. Each says what it would take and what it is
 worth, so the decision can be made later with the reasoning in hand.
 
-### Graph workflows
+### The workflow editor in Forge
 
-Scenarios as nodes and their dependencies as edges, instead of one ordered list
-per file: a graph that runs independent branches at once, fans out from one
-setup into many checks, and routes on what an earlier node produced.
-
-Authored as code first -- `.art` stays the source of truth, and a graph is
-something the compiler builds from it -- with a visual workflow editor in Forge
-that reads and writes the same files, the way `artemis ast` already turns a file
-into a tree and back.
-
-Two places a graph could live, and they are not equally cheap:
-
-- **Between scenarios.** Suites (item 2 above) are the first edge: a suite's
-  setup runs before every scenario under it and its teardown after. Letting a
-  scenario name the scenarios it depends on generalises that into a graph, and
-  the scheduler that runs it is `--jobs` with ordering. This is where to start.
-- **Inside a scenario.** Most of a scenario's graph already exists implicitly: a
-  step that reads another's capture depends on it. What the captures do not show
-  is a side effect -- a `post` followed by a `get` of what it created -- so
-  running steps in parallel needs those edges written by hand, and costs the
-  property the language protects today: a run that does the same thing every time
-  and a failure that reads top to bottom. Worth doing only after the scenario-level
-  graph has shown what people actually need.
+A scenario's blocks -- parallel, if, switch, try, repeat -- are a graph the
+compiler already builds. What is left is drawing it: an `artemis graph x.art`
+that prints it as mermaid, dot or JSON, and a workflow editor in Forge that
+renders the JSON and edits the blocks back through `artemis ast --from-json`, so
+the `.art` file stays the source of truth. A block can only nest, so a step that
+waits on one parallel branch and not its sibling cannot be written; an `after`
+clause on a step would be the escape hatch if that turns out to be needed.
 
 ### Compile cache
 
