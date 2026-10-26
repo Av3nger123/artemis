@@ -172,7 +172,7 @@ parameters and its response. The rules are in
 - `--report json` and `--report junit`: the whole outcome of a run as one document, for a CI job or an agent to read
 - `--events ndjson`: the run as it happens, one JSON object per line, for a program showing it live
 - `browser` steps on Playwright, with per-assertion waiting and a screenshot of any page that failed
-- `db` steps against PostgreSQL, MySQL and SQLite: run SQL with typed `args`, assert on `rows` and `affected`, seed from an SQL file in `setup`
+- `db` steps against PostgreSQL, MySQL, SQLite, SQL Server and Oracle: run SQL with typed `args`, assert on `rows` and `affected`, seed from an SQL file in `setup`
 - A canonical formatter (`artemis fmt`), a syntax tree as JSON in both directions (`artemis ast`), and the grammar itself as text or as machine-readable choice points (`artemis grammar`)
 - A one-way export to pytest or vitest (`artemis build --lang=python|js`), for a team whose tests live in another language
 - One-shot conversion in: a Postman collection with `artemis generate`, an old YAML scenario with `artemis migrate`
@@ -1365,7 +1365,8 @@ each stream is kept up to.
 
 An API that answered 201 has said it saved the order; a `db` step checks that
 it did. The action is `db` and the connection URL, whose scheme picks the
-database -- `postgres://`, `mysql://` or `sqlite:` -- and the block holds the
+database -- `postgres://`, `mysql://`, `sqlite:`, `sqlserver://` or `oracle://`
+-- and the block holds the
 SQL and the values bound to its placeholders:
 
 ```art
@@ -1410,8 +1411,9 @@ scenario "an order is saved as paid" {
 `rows` is the query's rows, each an object keyed by column name, and `affected`
 is how many rows a statement changed. SQL goes to the database as written, so
 its placeholders are the database's own: `$1` for PostgreSQL, `?` for MySQL and
-SQLite. An SQL file run with no `args` is a script, every statement in it, which
-is how the setup above seeds the database. A connection is opened once per run
+SQLite, `@p1` for SQL Server, `:1` for Oracle. An SQL file run with no `args` is
+a script, every statement in it -- split at `GO` lines on SQL Server and the
+SQL*Plus way on Oracle -- which is how the setup above seeds the database. A connection is opened once per run
 and shared by every step that names the same URL, and a trace never prints the
 password in it. [SPEC.md's *`db` steps*](SPEC.md#db-steps) specifies how each
 column type reads.
@@ -1479,8 +1481,8 @@ command makes -- so it stays an input the command can read.
 
 ## Not yet
 
-- **More databases.** `db` steps run SQL against PostgreSQL, MySQL and SQLite.
-  SQL Server, Oracle, MongoDB and Redis are next; see `ROADMAP.md`. `artemis
+- **More databases.** `db` steps run SQL against PostgreSQL, MySQL, SQLite, SQL
+  Server and Oracle. MongoDB and Redis are next; see `ROADMAP.md`. `artemis
   build` refuses a scenario with a db step until it can export one.
 - **Control flow and functions.** `if`, loops, `parallel`, `group` and `fn`
   are reserved words, not features. Reusing a request is

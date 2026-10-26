@@ -911,6 +911,8 @@ scenario "an order lands in the database" {
 | `postgres://`, `postgresql://` | PostgreSQL, and what speaks its protocol: CockroachDB, Supabase, Neon, Timescale |
 | `mysql://` | MySQL, and what speaks its protocol: MariaDB, TiDB, PlanetScale |
 | `sqlite:` | SQLite: `sqlite:app.db`, `sqlite:///abs/app.db`, `sqlite::memory:`. A relative path is relative to where artemis was run, like a `run` step's `cwd` |
+| `sqlserver://` | SQL Server and Azure SQL: `sqlserver://user:pw@host:1433?database=shop`. The URL's path names an instance, not a database |
+| `oracle://` | Oracle: `oracle://user:pw@host:1521/SERVICE` |
 
 A connection is a value, so it lives where a credential does: a `secret var`, a
 [suite](#suites-suiteart)'s var read as `suite.db`, an `env()` call. A URL written
@@ -919,7 +921,7 @@ with the fix -- and one from a variable when the step runs.
 
 **SQL is sent as written.** Artemis never rewrites a statement, so its
 placeholders are the database's own: `$1` for PostgreSQL, `?` for MySQL and
-SQLite. An `args` value keeps its type -- a whole number is bound as an
+SQLite, `@p1` for SQL Server, `:1` for Oracle. An `args` value keeps its type -- a whole number is bound as an
 integer, a string as text, `null` as SQL `NULL` -- because a placeholder is
 compared against a typed column. An object or an array is bound as its JSON
 text, for a `json` column; a `file()` is bound as its bytes.
@@ -942,15 +944,30 @@ A row's values arrive as the scenario would have written them:
 | `date` | `"2026-10-26"` |
 | `timestamp`, `datetime` | an RFC 3339 time in UTC |
 | `json`, `jsonb` | the value it holds |
-| `bytea`, `blob` | base64 |
+| `bytea`, `blob`, `varbinary`, `raw` | base64 |
+| SQL Server `uniqueidentifier` | its usual text, `6f1c0c5e-6c3c-...` |
+
+A `date` with a time of day -- Oracle's `DATE` holds one -- is a time like any
+other. MySQL's `BOOLEAN` is a `TINYINT(1)` and reads as `1` or `0`, and Oracle
+returns an unquoted column name in capitals: `SELECT id` is `rows[0].ID`, and
+`SELECT id AS "id"` is `rows[0].id`.
 
 **A query or a statement.** A database cannot be asked which a statement is
 before it runs, and running one twice would repeat its writes, so its first
 keyword decides: `SELECT`, `WITH`, `SHOW`, `EXPLAIN`, `VALUES`, `PRAGMA`,
-`DESCRIBE` and `TABLE`, or a `RETURNING` clause, are queried for `rows`;
-anything else is executed for `affected`. An SQL file with no `args` is a
-**script**: every statement in it runs, in order, which is how a database is
-seeded.
+`DESCRIBE` and `TABLE` -- and on SQL Server `EXEC` -- are queried for `rows`, as
+is a write with a `RETURNING` clause, or on SQL Server an `OUTPUT inserted.` /
+`deleted.` one; anything else is executed for `affected`. Oracle's `RETURNING ...
+INTO` binds out-parameters and returns no rows, so it is a statement there.
+
+An SQL file with no `args` is a **script**: every statement in it runs, in
+order, which is how a database is seeded, and `affected` is their total. A
+script is read the way the database's own command-line tool reads one: on SQL
+Server a line holding only `GO` ends a batch, as in `sqlcmd` and SSMS; on Oracle
+a statement ends with a `;` at the end of a line and a PL/SQL block with a line
+holding only `/`, as in SQL*Plus. A failing statement stops the script and is
+named by its place in it. On Oracle a single statement's trailing `;`, which the
+database would reject, is dropped.
 
 | | |
 | --- | --- |
@@ -2357,7 +2374,7 @@ adding one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **`db` steps beyond SQL** | MongoDB and Redis, SQL Server and Oracle are planned; see `ROADMAP.md`. `artemis build` refuses a scenario with a db step, naming it, until both targets can open a database |
+| **`db` steps beyond SQL** | MongoDB and Redis are planned; see `ROADMAP.md`. `artemis build` refuses a scenario with a db step, naming it, until both targets can open a database |
 | **Control flow** | `if`, `else`, loops, `parallel`, `group`. Reserved words, not features. Running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
 | **Functions** | `fn`, `return`, `let`. Reserved words. `artemis build --lang=...` is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |

@@ -4,27 +4,34 @@ import (
 	"database/sql"
 	"errors"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib" // registers "pgx"
-	_ "modernc.org/sqlite"             // registers "sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"  // registers "pgx"
+	_ "github.com/microsoft/go-mssqldb" // registers "sqlserver"
+	_ "github.com/sijms/go-ora/v2"      // registers "oracle"
+	_ "modernc.org/sqlite"              // registers "sqlite"
 )
 
-// The databases phase one ships. Each is a dialect row and a Register call;
-// token.DBSchemes lists the same schemes, and a test holds the two equal.
+// The databases a db step can reach. Each is a dialect row and a Register
+// call; token.DBSchemes lists the same schemes, and a test holds the two equal.
 
 var postgres = dialect{
 	name:   "postgres",
 	driver: "pgx",
 	// pgx reads postgres:// and postgresql:// URLs itself.
-	dsn: func(u string) (string, error) { return u, nil },
+	dsn:       asIs,
+	returning: returningClause,
 }
 
 var mySQL = dialect{
 	name:   "mysql",
 	driver: "mysql",
 	dsn:    mysqlDSN,
+	// MySQL has no RETURNING and MariaDB does: classifying it as a query
+	// costs MySQL nothing, since there it is a syntax error either way.
+	returning: returningClause,
 }
 
 var sqlite = dialect{
@@ -34,7 +41,29 @@ var sqlite = dialect{
 	// One connection: a :memory: database is one per connection, so a second
 	// would be an empty database, and a file is written by one writer at a
 	// time anyway.
-	tune: func(db *sql.DB) { db.SetMaxOpenConns(1) },
+	tune:      func(db *sql.DB) { db.SetMaxOpenConns(1) },
+	returning: returningClause,
+}
+
+// sqlServer reads its own sqlserver://user:pw@host:1433?database=shop URLs;
+// the path of one names an instance, not a database.
+var sqlServer = dialect{
+	name:      "sqlserver",
+	driver:    "sqlserver",
+	dsn:       asIs,
+	returning: regexp.MustCompile(`(?i)\bOUTPUT\s+(INSERTED|DELETED|\$ACTION)\b`),
+	// A procedure is usually called to read what it selects.
+	queries: []string{"EXEC", "EXECUTE"},
+	split:   splitBatches,
+}
+
+// oracle reads its own oracle://user:pw@host:1521/service URLs.
+var oracle = dialect{
+	name:   "oracle",
+	driver: "oracle",
+	dsn:    asIs,
+	split:  splitOracle,
+	tidy:   tidyOracle,
 }
 
 func init() {
@@ -42,6 +71,82 @@ func init() {
 	Register("postgresql", sqlDriver{postgres})
 	Register("mysql", sqlDriver{mySQL})
 	Register("sqlite", sqlDriver{sqlite})
+	Register("sqlserver", sqlDriver{sqlServer})
+	Register("oracle", sqlDriver{oracle})
+}
+
+// asIs is the DSN of a driver that reads the step's URL itself.
+func asIs(u string) (string, error) { return u, nil }
+
+// batchSeparator is a line holding only GO: the batch separator of sqlcmd and
+// SQL Server Management Studio, which the server itself never sees.
+var batchSeparator = regexp.MustCompile(`(?im)^[ \t]*GO[ \t]*;?[ \t]*\r?$`)
+
+// splitBatches cuts a SQL Server script at its GO lines, as sqlcmd does, so a
+// script written for SSMS runs unchanged. A script with none is one batch.
+func splitBatches(script string) []string {
+	var out []string
+	for _, b := range batchSeparator.Split(script, -1) {
+		if strings.TrimSpace(b) != "" {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// plsqlStart is how a PL/SQL block begins: one that holds semicolons of its
+// own, so it ends at a line holding only a slash, as SQL*Plus has it.
+var plsqlStart = regexp.MustCompile(`(?i)^(DECLARE|BEGIN|CREATE\s+(OR\s+REPLACE\s+)?((NON)?EDITIONABLE\s+)?(FUNCTION|PROCEDURE|PACKAGE|TRIGGER|TYPE))\b`)
+
+// splitOracle cuts an Oracle script the way SQL*Plus reads one: a statement
+// ends with a semicolon at the end of a line, which is not sent, and a PL/SQL
+// block ends at a line holding only "/". Oracle takes one statement per call.
+func splitOracle(script string) []string {
+	var out, cur []string
+	plsql := false
+	flush := func() {
+		stmt := strings.TrimSpace(strings.Join(cur, "\n"))
+		if !plsql {
+			stmt = strings.TrimSpace(strings.TrimSuffix(stmt, ";"))
+		}
+		if stmt != "" {
+			out = append(out, stmt)
+		}
+		cur = nil
+	}
+	for _, line := range strings.Split(script, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if len(cur) == 0 {
+			if trimmed == "" || trimmed == "/" || strings.HasPrefix(trimmed, "--") {
+				continue
+			}
+			plsql = plsqlStart.MatchString(trimmed)
+		}
+		if plsql {
+			if trimmed == "/" {
+				flush()
+				continue
+			}
+			cur = append(cur, line)
+			continue
+		}
+		cur = append(cur, line)
+		if strings.HasSuffix(trimmed, ";") {
+			flush()
+		}
+	}
+	flush()
+	return out
+}
+
+// tidyOracle drops the semicolon a statement is habitually ended with, which
+// Oracle rejects outside PL/SQL -- where the END; is part of the block.
+func tidyOracle(text string) string {
+	t := strings.TrimSpace(text)
+	if plsqlStart.MatchString(t) {
+		return text
+	}
+	return strings.TrimSpace(strings.TrimSuffix(t, ";"))
 }
 
 // mysqlDSN turns mysql://user:pw@host:3306/db?param=v into the driver's own

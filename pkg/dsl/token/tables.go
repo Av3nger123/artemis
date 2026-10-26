@@ -60,7 +60,7 @@ var (
 	// DBSchemes are the connection URL schemes a db step has a driver for,
 	// which is what a literal URL is checked against. pkg/steps/dbstep
 	// registers exactly these, and a test holds the two lists equal.
-	DBSchemes = []string{"postgres", "postgresql", "mysql", "sqlite"}
+	DBSchemes = []string{"postgres", "postgresql", "mysql", "sqlite", "sqlserver", "oracle"}
 
 	// RetryFields are the fields of a `retry` block.
 	RetryFields = []string{"times", "delay"}

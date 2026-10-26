@@ -232,6 +232,12 @@
         },
         {
           "value": "sqlite"
+        },
+        {
+          "value": "sqlserver"
+        },
+        {
+          "value": "oracle"
         }
       ]
     },

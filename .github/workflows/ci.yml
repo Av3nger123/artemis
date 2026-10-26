@@ -43,6 +43,25 @@ jobs:
         options: >-
           --health-cmd "mysqladmin ping -uapp -pp@ss:w/rd --silent"
           --health-interval 2s --health-timeout 5s --health-retries 60
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Art3mis!Pass"
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Art3mis!Pass' -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 5s --health-timeout 5s --health-retries 40
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: Art3misSys
+          APP_USER: app
+          APP_USER_PASSWORD: Art3misApp
+        ports: ["1521:1521"]
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 5s --health-timeout 5s --health-retries 60
     steps:
       - uses: actions/checkout@v4
 
@@ -106,6 +125,8 @@ jobs:
         env:
           ARTEMIS_TEST_POSTGRES_URL: postgres://app:p%40ss%3Aw%2Frd@localhost:5432/shop?sslmode=disable
           ARTEMIS_TEST_MYSQL_URL: mysql://app:p%40ss%3Aw%2Frd@127.0.0.1:3306/shop
+          ARTEMIS_TEST_SQLSERVER_URL: sqlserver://sa:Art3mis%21Pass@localhost:1433?database=master
+          ARTEMIS_TEST_ORACLE_URL: oracle://app:Art3misApp@localhost:1521/FREEPDB1
         run: go test -race -coverprofile=coverage.out ./...
 
       - name: coverage

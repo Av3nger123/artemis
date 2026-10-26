@@ -2,6 +2,7 @@ package dbstep
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,7 +22,11 @@ func TestValueMapping(t *testing.T) {
 		{"float", "FLOAT8", 1.5, 1.5},
 		{"bool", "BOOL", true, true},
 		{"timestamp in UTC", "TIMESTAMPTZ", ts, "2026-10-26T04:00:15Z"},
-		{"date as a date", "DATE", ts, "2026-10-26"},
+		{"date as a date", "DATE", time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC), "2026-10-26"},
+		{"an oracle date with a time", "DATE", ts, "2026-10-26T04:00:15Z"},
+		{"sql server guid", "UNIQUEIDENTIFIER", []byte{0x5e, 0x0c, 0x1c, 0x6f, 0x3c, 0x6c, 0x8e, 0x4c, 0x9f, 0x39, 0x0a, 0x4f, 0x1f, 0x7f, 0x2b, 0x1d}, "6f1c0c5e-6c3c-4c8e-9f39-0a4f1f7f2b1d"},
+		{"money", "MONEY", []byte("19.9900"), 19.99},
+		{"oracle number", "NUMBER", "42", 42.0},
 		{"exact decimal", "NUMERIC", "12.50", 12.5},
 		{"inexact decimal stays text", "DECIMAL(30,2)", "123456789012345678901.25", "123456789012345678901.25"},
 		{"jsonb", "JSONB", `{"a": [1, true]}`, map[string]any{"a": []any{1.0, true}}},
@@ -61,9 +66,70 @@ func TestIsQuery(t *testing.T) {
 		"-- only a comment":                               false,
 	}
 	for sql, want := range cases {
-		if got := isQuery(sql); got != want {
+		if got := postgres.isQuery(sql); got != want {
 			t.Errorf("isQuery(%q) = %v, want %v", sql, got, want)
 		}
+	}
+	for d, cases := range map[string]map[string]bool{
+		"sqlserver": {
+			"INSERT INTO t (v) OUTPUT inserted.id VALUES (@p1)": true,
+			"UPDATE jobs SET output = 1":                        false,
+			"EXEC list_orders @p1":                              true,
+			"INSERT INTO t VALUES (1) RETURNING id":             false,
+		},
+		"oracle": {
+			"INSERT INTO t VALUES (1) RETURNING id INTO :2": false,
+			"SELECT 1 FROM dual":                            true,
+		},
+	} {
+		dl := map[string]dialect{"sqlserver": sqlServer, "oracle": oracle}[d]
+		for sql, want := range cases {
+			if got := dl.isQuery(sql); got != want {
+				t.Errorf("%s: isQuery(%q) = %v, want %v", d, sql, got, want)
+			}
+		}
+	}
+}
+
+func TestSplitBatches(t *testing.T) {
+	script := "CREATE TABLE t (x int)\nGO\n\nINSERT INTO t VALUES (1)\ngo  \nINSERT INTO t VALUES (2)\n-- GOing on\nGO\n"
+	got := splitBatches(script)
+	if len(got) != 3 || !strings.Contains(got[2], "GOing on") {
+		t.Errorf("batches = %q, want three, the comment kept in the third", got)
+	}
+}
+
+func TestSplitOracle(t *testing.T) {
+	script := `-- seed
+CREATE TABLE t (x NUMBER);
+INSERT INTO t
+  VALUES (1);
+CREATE OR REPLACE PROCEDURE bump AS
+BEGIN
+  UPDATE t SET x = x + 1;
+END;
+/
+BEGIN
+  bump;
+END;
+/
+INSERT INTO t VALUES (2)
+`
+	want := []string{
+		"CREATE TABLE t (x NUMBER)",
+		"INSERT INTO t\n  VALUES (1)",
+		"CREATE OR REPLACE PROCEDURE bump AS\nBEGIN\n  UPDATE t SET x = x + 1;\nEND;",
+		"BEGIN\n  bump;\nEND;",
+		"INSERT INTO t VALUES (2)",
+	}
+	if got := splitOracle(script); !reflect.DeepEqual(got, want) {
+		t.Errorf("splitOracle =\n%q\nwant\n%q", got, want)
+	}
+	if got := tidyOracle("SELECT 1 FROM dual;"); got != "SELECT 1 FROM dual" {
+		t.Errorf("tidyOracle = %q", got)
+	}
+	if got := tidyOracle("BEGIN bump; END;"); got != "BEGIN bump; END;" {
+		t.Errorf("tidyOracle kept a block's END; = %q", got)
 	}
 }
 

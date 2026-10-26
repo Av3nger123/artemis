@@ -39,17 +39,15 @@ an output that is a directory of modules rather than one.
 
 ### `db` steps, the rest
 
-Phase one shipped `db <url> { sql, args }` against PostgreSQL, MySQL and SQLite,
-with `rows` and `affected`, a pool per URL per run, and traces that never print
-a password; CI runs the server tests against PostgreSQL and MySQL service
+`db <url> { sql, args }` runs against PostgreSQL, MySQL, SQLite, SQL Server and
+Oracle, with `rows` and `affected`, a pool per URL per run, and traces that never
+print a password; CI runs the server tests against all four servers in service
 containers. What is left, in order:
 
-1. **SQL Server and Oracle.** A dialect row each in `pkg/steps/dbstep` (pure-Go
-   drivers, so the binary stays static), plus `OUTPUT` in the query classifier.
-2. **MongoDB and Redis.** A `command` field -- a command document for Mongo, an
+1. **MongoDB and Redis.** A `command` field -- a command document for Mongo, an
    argv for Redis -- and a `result` root for the reply; Mongo's cursor fills
    `rows`.
-3. **`artemis build`.** Export db steps to pytest and vitest through an
+2. **`artemis build`.** Export db steps to pytest and vitest through an
    `art_db(url)` helper that picks a client by scheme, held to the interpreter by
    a conformance file: SQLite in-process, the others against service containers.
 

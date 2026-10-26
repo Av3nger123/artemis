@@ -46,11 +46,16 @@ func value(dbType string, raw any) any {
 	case float32:
 		return float64(v)
 	case time.Time:
-		if typ == "DATE" {
+		// A date is a day. Oracle's DATE also holds a time of day, so one
+		// that has one is a time like any other.
+		if typ == "DATE" && v.Hour() == 0 && v.Minute() == 0 && v.Second() == 0 && v.Nanosecond() == 0 {
 			return v.Format("2006-01-02")
 		}
 		return v.UTC().Format(time.RFC3339Nano)
 	case []byte:
+		if typ == "UNIQUEIDENTIFIER" && len(v) == 16 {
+			return guid(v)
+		}
 		if binaryTypes[typ] || !utf8.Valid(v) {
 			return base64.StdEncoding.EncodeToString(v)
 		}
@@ -80,7 +85,7 @@ func text(typ, s string) any {
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return f
 		}
-	case typ == "NUMERIC" || typ == "DECIMAL" || typ == "NEWDECIMAL":
+	case decimalTypes[typ]:
 		return decimal(s)
 	}
 	return s
@@ -125,6 +130,25 @@ func baseType(t string) string {
 	return strings.TrimSpace(t)
 }
 
+// guid is a SQL Server UNIQUEIDENTIFIER in the form it is written: the server
+// stores its first three groups little-endian, so they are reversed.
+func guid(b []byte) string {
+	order := []int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
+	var sb strings.Builder
+	for _, i := range order {
+		if i < 0 {
+			sb.WriteByte('-')
+			continue
+		}
+		fmt.Fprintf(&sb, "%02x", b[i])
+	}
+	return sb.String()
+}
+
+var decimalTypes = map[string]bool{
+	"NUMERIC": true, "DECIMAL": true, "NEWDECIMAL": true, "NUMBER": true, "MONEY": true, "SMALLMONEY": true,
+}
+
 var integerTypes = map[string]bool{
 	"INT": true, "INTEGER": true, "INT2": true, "INT4": true, "INT8": true,
 	"TINYINT": true, "SMALLINT": true, "MEDIUMINT": true, "BIGINT": true, "YEAR": true,
@@ -132,9 +156,10 @@ var integerTypes = map[string]bool{
 
 var floatTypes = map[string]bool{
 	"FLOAT": true, "FLOAT4": true, "FLOAT8": true, "DOUBLE": true, "REAL": true,
+	"BINARY_FLOAT": true, "BINARY_DOUBLE": true,
 }
 
 var binaryTypes = map[string]bool{
 	"BYTEA": true, "BLOB": true, "TINYBLOB": true, "MEDIUMBLOB": true, "LONGBLOB": true,
-	"BINARY": true, "VARBINARY": true,
+	"BINARY": true, "VARBINARY": true, "IMAGE": true, "RAW": true, "LONG RAW": true,
 }

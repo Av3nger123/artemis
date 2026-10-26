@@ -20,6 +20,19 @@ type dialect struct {
 	dsn func(rawURL string) (string, error)
 	// tune adjusts the pool once it is open, or is nil.
 	tune func(*sql.DB)
+
+	// returning is the clause that makes a write return rows -- RETURNING,
+	// SQL Server's OUTPUT -- or nil where none does: Oracle's RETURNING ...
+	// INTO binds out-parameters and returns no rows.
+	returning *regexp.Regexp
+	// queries are first keywords beyond queryWords that return rows here,
+	// such as SQL Server's EXEC of a procedure that selects.
+	queries []string
+	// split cuts a script into the statements the database takes one at a
+	// time, or is nil for a database that runs a whole script in one call.
+	split func(script string) []string
+	// tidy adjusts a single statement before it is sent, or is nil.
+	tidy func(text string) string
 }
 
 // sqlDriver opens one dialect's connections.
@@ -57,19 +70,53 @@ func (c *sqlConn) Close() error { return c.db.Close() }
 // SQL runs st: a script whole, a query for its rows, a statement for its
 // count. See the package doc for which is which.
 func (c *sqlConn) SQL(ctx context.Context, st Statement, args []any) (Result, error) {
-	if st.Script || !isQuery(st.Text) {
-		res, err := c.db.ExecContext(ctx, st.Text, args...)
-		if err != nil {
-			return Result{}, fmt.Errorf("%s: %w", c.d.name, err)
-		}
-		out := Result{Rows: []any{}}
-		if n, err := res.RowsAffected(); err == nil {
-			f := float64(n)
-			out.Affected = &f
-		}
-		return out, nil
+	if c.d.tidy != nil && !st.Script {
+		st.Text = c.d.tidy(st.Text)
+	}
+	switch {
+	case st.Script && c.d.split != nil:
+		return c.script(ctx, c.d.split(st.Text))
+	case st.Script || !c.d.isQuery(st.Text):
+		return c.exec(ctx, st.Text, args)
 	}
 	return c.query(ctx, st.Text, args)
+}
+
+// exec runs a statement for the count of rows it changed.
+func (c *sqlConn) exec(ctx context.Context, text string, args []any) (Result, error) {
+	res, err := c.db.ExecContext(ctx, text, args...)
+	if err != nil {
+		return Result{}, fmt.Errorf("%s: %w", c.d.name, err)
+	}
+	out := Result{Rows: []any{}}
+	if n, err := res.RowsAffected(); err == nil {
+		f := float64(n)
+		out.Affected = &f
+	}
+	return out, nil
+}
+
+// script runs a script's statements one at a time, in order, stopping at the
+// first that fails and naming it by its place. affected is their sum.
+func (c *sqlConn) script(ctx context.Context, statements []string) (Result, error) {
+	total := 0.0
+	known := true
+	for i, text := range statements {
+		res, err := c.exec(ctx, text, nil)
+		if err != nil {
+			return Result{}, fmt.Errorf("statement %d of the script: %w", i+1, err)
+		}
+		if res.Affected == nil {
+			known = false
+		} else {
+			total += *res.Affected
+		}
+	}
+	out := Result{Rows: []any{}}
+	if known {
+		out.Affected = &total
+	}
+	return out, nil
 }
 
 // query reads every row a query returns, each as an object of its columns.
@@ -133,13 +180,22 @@ var queryWords = map[string]bool{
 	"PRAGMA": true, "DESCRIBE": true, "DESC": true, "TABLE": true,
 }
 
-// returning is the clause that makes a write return rows.
-var returning = regexp.MustCompile(`(?i)\bRETURNING\b`)
+// returningClause is the RETURNING of PostgreSQL, SQLite and MariaDB.
+var returningClause = regexp.MustCompile(`(?i)\bRETURNING\b`)
 
-// isQuery reports whether text returns rows, by its first keyword or a
-// RETURNING clause, so it is run once, the right way.
-func isQuery(text string) bool {
-	return queryWords[firstWord(text)] || returning.MatchString(text)
+// isQuery reports whether text returns rows here, by its first keyword or the
+// dialect's returning clause, so it is run once, the right way.
+func (d dialect) isQuery(text string) bool {
+	first := firstWord(text)
+	if queryWords[first] {
+		return true
+	}
+	for _, w := range d.queries {
+		if w == first {
+			return true
+		}
+	}
+	return d.returning != nil && d.returning.MatchString(text)
 }
 
 // firstWord is the statement's first keyword, upper-cased, past any leading
