@@ -235,6 +235,13 @@ const (
 	UnknownDBScheme     Code = "unknown-db-scheme"
 	DBStatementConflict Code = "db-statement-conflict"
 	DBStatementKind     Code = "db-statement-kind"
+
+	// Control-flow blocks: parallel, if, switch, try and repeat.
+	CaptureMaybeUnbound    Code = "capture-maybe-unbound"
+	ParallelCaptureClash   Code = "parallel-capture-clash"
+	ParallelSiblingCapture Code = "parallel-sibling-capture"
+	ParallelBrowser        Code = "parallel-browser"
+	RepeatUnbounded        Code = "repeat-unbounded"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -316,6 +323,11 @@ var registry = []CodeInfo{
 	{DBArgsWithoutSQL, Error, "a db step binds args with no sql to bind them to"},
 	{DBStatementConflict, Error, "a db step has both sql and a command"},
 	{DBStatementKind, Error, "a db step sends sql to a database that takes a command, or the other way round"},
+	{CaptureMaybeUnbound, Error, "a step reads a capture that only some branches of an if or a switch make"},
+	{ParallelCaptureClash, Error, "two branches of a parallel block capture the same name"},
+	{ParallelSiblingCapture, Error, "a branch of a parallel block reads a capture another branch makes at the same time"},
+	{ParallelBrowser, Error, "two branches of a parallel block drive the browser, which has one page"},
+	{RepeatUnbounded, Error, "a repeat has neither within nor max, so nothing stops it"},
 	{UnknownDBScheme, Error, "a db step's connection URL names a database artemis has no driver for"},
 }
 

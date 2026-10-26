@@ -70,6 +70,10 @@ func decl(v value) (ast.Decl, error) {
 		return useDecl(f)
 	case kindPhase:
 		return phaseDecl(f)
+	case kindFlow:
+		return flowDecl(f)
+	case kindClause:
+		return clause(f)
 	case kindTags:
 		d := &ast.TagsDecl{Keyword: syn(token.Ident, "tags"), Assign: syn(token.Assign, "=")}
 		var err error
@@ -140,6 +144,93 @@ func phaseDecl(f fields) (*ast.PhaseDecl, error) {
 		return nil, err
 	}
 	return d, braced(f, &d.Keyword, &d.LBrace, &d.RBrace)
+}
+
+// flowDecl builds a control-flow block from its clauses and a repeat's until.
+func flowDecl(f fields) (*ast.FlowDecl, error) {
+	d := &ast.FlowDecl{}
+	items, err := f.list("clauses")
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		o, err := it.object()
+		if err != nil {
+			return nil, err
+		}
+		c, err := clause(o)
+		if err != nil {
+			return nil, err
+		}
+		d.Clauses = append(d.Clauses, c)
+	}
+	if d.Cond, err = exprOf(f, "until", false); err != nil {
+		return nil, err
+	}
+	if d.Cond != nil {
+		d.Until = syn(token.Ident, "until")
+		return d, plain(f, &d.Until)
+	}
+	return d, nil
+}
+
+// clause builds one clause of a block.
+func clause(f fields) (*ast.Clause, error) {
+	kw, err := f.str("keyword")
+	if err != nil {
+		return nil, err
+	}
+	c := &ast.Clause{
+		Keyword: syn(token.Ident, kw),
+		LBrace:  syn(token.LBrace, "{"),
+		RBrace:  syn(token.RBrace, "}"),
+	}
+	elseIf, err := f.flag("elseIf")
+	if err != nil {
+		return nil, err
+	}
+	if elseIf {
+		c.If = syn(token.Ident, "if")
+	}
+	if c.Expr, err = exprOf(f, "expr", false); err != nil {
+		return nil, err
+	}
+	opts, err := f.list("options")
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range opts {
+		o, err := it.object()
+		if err != nil {
+			return nil, err
+		}
+		opt, err := option(o)
+		if err != nil {
+			return nil, err
+		}
+		c.Options = append(c.Options, opt)
+	}
+	body, err := f.list("body")
+	if err != nil {
+		return nil, err
+	}
+	if c.Body, err = decls(body); err != nil {
+		return nil, err
+	}
+	return c, braced(f, &c.Keyword, &c.LBrace, &c.RBrace)
+}
+
+// option builds a repeat's `every "2s"`, `within "2m"` or `max 30`.
+func option(f fields) (*ast.Option, error) {
+	name, err := f.str("name")
+	if err != nil {
+		return nil, err
+	}
+	o := &ast.Option{Name: syn(token.Ident, name)}
+	if o.Value, err = exprOf(f, "value", true); err != nil {
+		return nil, err
+	}
+	return o, nil
 }
 
 // forClause reads a scenario's optional for clause.

@@ -273,3 +273,101 @@ func (t *TagsDecl) Tokens(dst []token.Token) []token.Token {
 
 func (t *TagsDecl) Span() token.Span { return spanOf(t) }
 func (t *TagsDecl) decl()            {}
+
+// FlowDecl is a control-flow block: the steps inside it run in parallel, on a
+// condition, as a switch, under try, or in a loop. Which one is its first
+// clause's keyword:
+//
+//	parallel { step ... step ... }
+//	if cond { ... } else if cond { ... } else { ... }
+//	switch subject { case value { ... } default { ... } }
+//	try { ... } catch { ... } finally { ... }
+//	repeat every "2s" within "2m" max 30 { ... } until cond
+//
+// One node for five shapes, because they are one shape: clauses, each a
+// keyword, an optional expression and a body of declarations -- steps, uses
+// and further blocks. A switch's own body holds its case and default clauses.
+// Until and Cond are a repeat's closing condition, written after its brace.
+type FlowDecl struct {
+	Clauses []*Clause
+	Until   token.Token // until; zero but for repeat
+	Cond    Expr        // the until condition; nil but for repeat
+}
+
+// Flow kinds, the keyword a FlowDecl's first clause opens with.
+const (
+	FlowParallel = "parallel"
+	FlowIf       = "if"
+	FlowSwitch   = "switch"
+	FlowTry      = "try"
+	FlowRepeat   = "repeat"
+)
+
+// Kind is which block this is: FlowParallel, FlowIf, FlowSwitch, FlowTry or
+// FlowRepeat, or "" for a block with no clause.
+func (f *FlowDecl) Kind() string {
+	if len(f.Clauses) == 0 {
+		return ""
+	}
+	return f.Clauses[0].Keyword.Value
+}
+
+func (f *FlowDecl) Tokens(dst []token.Token) []token.Token {
+	for _, c := range f.Clauses {
+		dst = appendNode(dst, c)
+	}
+	dst = appendTok(dst, f.Until)
+	return appendNode(dst, f.Cond)
+}
+
+func (f *FlowDecl) Span() token.Span { return spanOf(f) }
+func (f *FlowDecl) decl()            {}
+
+// Clause is one part of a FlowDecl: `if cond { ... }`, `else if cond { ...
+// }`, `else { ... }`, `case "pro" { ... }`, `catch { ... }`, `repeat every
+// "2s" max 30 { ... }`.
+//
+// Keyword is parallel, if, else, switch, case, default, try, catch, finally or
+// repeat. If is the `if` of an `else if`. Expr is an if's condition, a switch's
+// subject or a case's value. Options are a repeat's every, within and max.
+// A Clause is a Decl because a switch's body holds its cases.
+type Clause struct {
+	Keyword token.Token
+	If      token.Token // the if of `else if`; zero otherwise
+	Expr    Expr
+	Options []*Option
+	LBrace  token.Token
+	Body    []Decl
+	RBrace  token.Token
+}
+
+func (c *Clause) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, c.Keyword)
+	dst = appendTok(dst, c.If)
+	dst = appendNode(dst, c.Expr)
+	for _, o := range c.Options {
+		dst = appendNode(dst, o)
+	}
+	dst = appendTok(dst, c.LBrace)
+	for _, d := range c.Body {
+		dst = appendNode(dst, d)
+	}
+	return appendTok(dst, c.RBrace)
+}
+
+func (c *Clause) Span() token.Span { return spanOf(c) }
+func (c *Clause) decl()            {}
+
+// Option is one of a repeat's bounds or its pace: `every "2s"`, `within
+// "2m"`, `max 30`.
+type Option struct {
+	Name  token.Token
+	Value Expr
+}
+
+func (o *Option) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, o.Name)
+	return appendNode(dst, o.Value)
+}
+
+func (o *Option) Span() token.Span { return spanOf(o) }

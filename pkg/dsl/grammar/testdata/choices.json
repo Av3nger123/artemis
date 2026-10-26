@@ -351,6 +351,11 @@
           "severity": "error"
         },
         {
+          "value": "capture-maybe-unbound",
+          "doc": "a step reads a capture that only some branches of an if or a switch make",
+          "severity": "error"
+        },
+        {
           "value": "data-file-missing",
           "doc": "json(), csv() or file() names a path where there is no file",
           "severity": "error"
@@ -521,6 +526,26 @@
           "severity": "error"
         },
         {
+          "value": "parallel-browser",
+          "doc": "two branches of a parallel block drive the browser, which has one page",
+          "severity": "error"
+        },
+        {
+          "value": "parallel-capture-clash",
+          "doc": "two branches of a parallel block capture the same name",
+          "severity": "error"
+        },
+        {
+          "value": "parallel-sibling-capture",
+          "doc": "a branch of a parallel block reads a capture another branch makes at the same time",
+          "severity": "error"
+        },
+        {
+          "value": "repeat-unbounded",
+          "doc": "a repeat has neither within nor max, so nothing stops it",
+          "severity": "error"
+        },
+        {
           "value": "reserved-param",
           "doc": "a parameter is named like a use-block override word, so no use can pass it",
           "severity": "error"
@@ -674,6 +699,49 @@
         }
       ]
     },
+    "flow": {
+      "doc": "The words that open a control-flow block where a step could be written.",
+      "values": [
+        {
+          "value": "parallel"
+        },
+        {
+          "value": "if"
+        },
+        {
+          "value": "switch"
+        },
+        {
+          "value": "try"
+        },
+        {
+          "value": "repeat"
+        }
+      ]
+    },
+    "flowClause": {
+      "doc": "The words of the clauses that follow a block's first: else, case, default, catch, finally, until.",
+      "values": [
+        {
+          "value": "else"
+        },
+        {
+          "value": "case"
+        },
+        {
+          "value": "default"
+        },
+        {
+          "value": "catch"
+        },
+        {
+          "value": "finally"
+        },
+        {
+          "value": "until"
+        }
+      ]
+    },
     "method": {
       "doc": "The HTTP verbs. A step whose action opens with one is an api step.",
       "values": [
@@ -697,6 +765,20 @@
         },
         {
           "value": "options"
+        }
+      ]
+    },
+    "repeatOption": {
+      "doc": "A repeat's pace and bounds: every, within, max.",
+      "values": [
+        {
+          "value": "every"
+        },
+        {
+          "value": "within"
+        },
+        {
+          "value": "max"
         }
       ]
     },
@@ -734,11 +816,11 @@
       "values": [
         {
           "value": "if",
-          "purpose": "reserved for a future conditional form"
+          "purpose": "opens a conditional block: if cond { ... } else { ... }"
         },
         {
           "value": "else",
-          "purpose": "reserved for a future conditional form"
+          "purpose": "continues a conditional block: if cond { ... } else { ... }"
         },
         {
           "value": "for",
@@ -754,7 +836,7 @@
         },
         {
           "value": "parallel",
-          "purpose": "reserved for a future parallel-execution form"
+          "purpose": "opens a block whose steps run at the same time: parallel { ... }"
         },
         {
           "value": "group",
@@ -782,11 +864,11 @@
         },
         {
           "value": "setup",
-          "purpose": "reserved for a future setup and teardown form"
+          "purpose": "opens the steps that run before a scenario's own: setup { ... }"
         },
         {
           "value": "teardown",
-          "purpose": "reserved for a future setup and teardown form"
+          "purpose": "opens the steps that run after a scenario's own: teardown { ... }"
         },
         {
           "value": "ai",

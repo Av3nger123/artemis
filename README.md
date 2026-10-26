@@ -162,6 +162,7 @@ parameters and its response. The rules are in
 - Values captured from one step and used in the next, keeping their JSON type
 - A `suite.art` per folder: one login, once per run, for every scenario below it -- its values read as `suite.token` and its cookies copied into each scenario
 - `setup` and `teardown` blocks: teardown runs after every scenario, pass or fail, and skips the cleanup of anything a failed step never made
+- Blocks inside a scenario: `parallel`, `if`/`else`, `switch`, `try`/`catch`/`finally`, and `repeat ... until` for polling, bounded by `within` or `max`
 - Tags and selection: `--tags "smoke and not slow"`, `--grep`, and `artemis list` to see what a run would run
 - Data-driven scenarios: `scenario "login as ${user.role}" for user in json("users.json")` is one scenario per row, each reported on its own
 - Data and files: `json()` and `csv()` read test data and `file()` names a fixture, each checked when the file compiles; a file is sent as a body, a `multipart` part, a command's `stdin` or a browser `upload`, and `form` sends a urlencoded form
@@ -1306,6 +1307,58 @@ what a failed command is diagnosed from.
 [SPEC.md's *`terminal` steps*](SPEC.md#terminal-steps) specifies every field of
 the `run` block -- `args`, `cwd`, `stdin`, `env` -- and the 1 MiB per attempt
 each stream is kept up to.
+
+## Parallel steps, branches and polling
+
+A scenario's steps run in order. A block runs the steps inside it another way:
+
+```art
+scenario "an import finishes" {
+  var url = env("API_URL")
+
+  parallel {
+    step "upload the users" {
+      post "${url}/imports" { multipart "file" = file("fixtures/users.csv") }
+      capture users_job = body.id
+    }
+    step "upload the orders" {
+      post "${url}/imports" { multipart "file" = file("fixtures/orders.csv") }
+      capture orders_job = body.id
+    }
+  }
+
+  repeat every "2s" within "5m" {
+    step "users status" {
+      get "${url}/imports/${users_job}"
+      capture users = body.state
+    }
+    step "orders status" {
+      get "${url}/imports/${orders_job}"
+      capture orders = body.state
+    }
+  } until users != "running" and orders != "running"
+
+  if users == "done" {
+    step "users are there" {
+      get "${url}/users?limit=1"
+      expect len(body) == 1
+    }
+  } else {
+    step "the import says why" {
+      get "${url}/imports/${users_job}/errors"
+      expect len(body) > 0
+    }
+  }
+}
+```
+
+`parallel` runs its steps at the same time and waits for all of them; `if` and
+`switch` run one branch; `try { } catch { } finally { }` runs compensation when a
+step fails and cleanup either way; `repeat` polls a round at a time until its
+condition holds, and needs a `within` or a `max` so it cannot run forever. The
+report stays in the order the file is written, and a repeat reports its last
+round. [SPEC.md's *Blocks*](SPEC.md#blocks) has the rules, including what each
+block lets the steps after it read.
 
 ## Checking what landed in the database
 

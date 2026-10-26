@@ -157,6 +157,9 @@ type StepResult struct {
 	// Phase is PhaseSetup or PhaseTeardown for a step of the scenario's setup
 	// or teardown, and empty for one of its own steps.
 	Phase string
+	// Round is which round of a repeat block this step's result is from --
+	// the last one it ran -- and 0 for a step outside a repeat.
+	Round int
 	// Status is derived from the assertions by Finish, or set outright by Fail
 	// and Skip.
 	Status Status

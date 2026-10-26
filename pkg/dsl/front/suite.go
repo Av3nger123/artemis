@@ -221,17 +221,13 @@ func exportsOf(s *ast.Scenario) exported {
 			if b.Keyword.Value != ast.PhaseSetup {
 				continue
 			}
-			for _, inner := range b.Body {
-				step, ok := inner.(*ast.StepDecl)
-				if !ok {
-					continue
+			// Every capture of setup, a block's included, in the order
+			// written.
+			ast.Inspect(b, func(n ast.Node) {
+				if c, ok := n.(*ast.Capture); ok {
+					add(c.Name.Value, c.Secret.Text != "", c)
 				}
-				for _, st := range step.Body {
-					if c, ok := st.(*ast.Capture); ok {
-						add(c.Name.Value, c.Secret.Text != "", c)
-					}
-				}
-			}
+			})
 		}
 	}
 	return out

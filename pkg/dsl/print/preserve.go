@@ -193,6 +193,25 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.LBrace)
 		p.list(decls(v.Body), c)
 		p.tok(v.RBrace)
+	case *ast.FlowDecl:
+		for _, cl := range v.Clauses {
+			p.node(cl, c)
+		}
+		p.tok(v.Until)
+		p.node(v.Cond, c)
+	case *ast.Clause:
+		p.tok(v.Keyword)
+		p.tok(v.If)
+		p.node(v.Expr, c)
+		for _, o := range v.Options {
+			p.node(o, c)
+		}
+		p.tok(v.LBrace)
+		p.list(decls(v.Body), c)
+		p.tok(v.RBrace)
+	case *ast.Option:
+		p.tok(v.Name)
+		p.node(v.Value, c)
 	case *ast.TagsDecl:
 		p.tok(v.Keyword)
 		p.tok(v.Assign)
@@ -377,6 +396,7 @@ func (p *pres) descend(n ast.Node, c ctx) {
 func lineOriented(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl, *ast.PhaseDecl, *ast.TagsDecl,
+		*ast.FlowDecl, *ast.Clause,
 		*ast.Request, *ast.Run, *ast.DB, *ast.Browser, *ast.BrowserAct,
 		*ast.Field, *ast.Expect, *ast.Capture,
 		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.UseDecl,

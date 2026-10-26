@@ -5,6 +5,7 @@ bad-row-name	error	a data-driven scenario's name reads something other than its 
 bad-tag	error	a tag is not a lower-case word written out as a string, or is listed twice
 bad-value	error	a value is the wrong kind for the position it is in
 body-conflict	error	a request says what its body is more than one way
+capture-maybe-unbound	error	a step reads a capture that only some branches of an if or a switch make
 data-file-missing	error	json(), csv() or file() names a path where there is no file
 data-not-csv	error	csv() names a file that is not CSV
 data-not-json	error	json() names a file that is not JSON
@@ -39,6 +40,10 @@ missing-separator	error	two statements run together with no newline or comma bet
 nesting-too-deep	error	a file nests deeper than the parser will descend
 non-associative-operator	error	a comparison operator is chained with another
 not-in-scope	error	a name is not bound in this step's type
+parallel-browser	error	two branches of a parallel block drive the browser, which has one page
+parallel-capture-clash	error	two branches of a parallel block capture the same name
+parallel-sibling-capture	error	a branch of a parallel block reads a capture another branch makes at the same time
+repeat-unbounded	error	a repeat has neither within nor max, so nothing stops it
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-word	error	a word reserved for a later tier is used as a name
 root-capture	error	a collection's template captures under the name of a step's observation, such as body

@@ -50,6 +50,62 @@ scenario "kinds" {
   }
 }
 
+scenario "blocks" {
+  parallel {
+    step "a" {
+      run "true"
+    }
+  }
+
+  if 1 == 1 {
+    step "b" {
+      run "true"
+    }
+  } else if 1 == 2 {
+    step "c" {
+      run "true"
+    }
+  } else {
+    step "d" {
+      run "true"
+    }
+  }
+
+  switch 1 {
+    case 1 {
+      step "e" {
+        run "true"
+      }
+    }
+    default {
+      step "f" {
+        run "true"
+      }
+    }
+  }
+
+  try {
+    step "g" {
+      run "true"
+    }
+  } catch {
+    step "h" {
+      run "true"
+    }
+  } finally {
+    step "i" {
+      run "true"
+    }
+  }
+
+  repeat every "1s" max 3 {
+    step "j" {
+      run "echo"
+      capture out = stdout
+    }
+  } until out == "done"
+}
+
 scenario "row ${n}" for secret n in [1, 2] {
   tags = ["smoke"]
 

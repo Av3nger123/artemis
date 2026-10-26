@@ -19,11 +19,26 @@
       "step",
       "use",
       "phase",
-      "tags"
+      "tags",
+      "flow"
     ],
     "phaseBody": [
       "step",
-      "use"
+      "use",
+      "flow"
+    ],
+    "flowBody": [
+      "step",
+      "use",
+      "flow",
+      "clause",
+      "var"
+    ],
+    "clause": [
+      "clause"
+    ],
+    "option": [
+      "option"
     ],
     "action": [
       "request",
@@ -358,6 +373,99 @@
           "name": "comments",
           "type": "comments",
           "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "flow",
+      "doc": "a control-flow block -- `parallel`, `if`, `switch`, `try` or `repeat` -- named by its first clause's keyword",
+      "fields": [
+        {
+          "name": "clauses",
+          "type": "node[]",
+          "accepts": "clause",
+          "optional": true
+        },
+        {
+          "name": "until",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "clause",
+      "doc": "one clause of a block: `if cond { ... }`, `else { ... }`, `case \"pro\" { ... }`, `catch { ... }`, `repeat max 30 { ... }`",
+      "fields": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "doc": "parallel, if, else, switch, case, default, try, catch, finally or repeat"
+        },
+        {
+          "name": "elseIf",
+          "type": "boolean",
+          "optional": true,
+          "doc": "an `else if`. Absent means false"
+        },
+        {
+          "name": "expr",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true
+        },
+        {
+          "name": "options",
+          "type": "node[]",
+          "accepts": "option",
+          "optional": true
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "flowBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "option",
+      "doc": "a repeat's `every \"2s\"`, `within \"2m\"` or `max 30`",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "every, within or max"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
+        },
+        {
+          "name": "span",
+          "type": "span"
         }
       ]
     },

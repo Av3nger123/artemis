@@ -94,6 +94,9 @@ func TestEveryGroupKindIsAcceptedThere(t *testing.T) {
 		"useLine":        func(f fields) error { _, err := useLine(f); return err },
 		"forClause":      func(f fields) error { _, err := forNode(f); return err },
 		"phaseBody":      func(f fields) error { _, err := decl(asValue(f)); return err },
+		"flowBody":       func(f fields) error { _, err := decl(asValue(f)); return err },
+		"clause":         func(f fields) error { _, err := clause(f); return err },
+		"option":         func(f fields) error { _, err := option(f); return err },
 	}
 	for _, g := range groupSchemas {
 		build, ok := builders[g.Name]

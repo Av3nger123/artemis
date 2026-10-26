@@ -104,6 +104,12 @@ type Scenario struct {
 	// runs after them whatever happened.
 	Setup    []*Step
 	Teardown []*Step
+
+	// SetupFlow, Flow and TeardownFlow are the same three as the runner walks
+	// them: steps and the blocks that hold steps, in source order. Steps,
+	// Setup and Teardown are every step of each at any depth, for what
+	// lists or counts steps rather than runs them.
+	SetupFlow, Flow, TeardownFlow []Node
 }
 
 // Row is where a data-driven scenario's row came from: the file its data was
@@ -286,7 +292,7 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 		// is only a path, and the taint walk follows names.
 		secrets["suite"] = true
 	}
-	captured := map[string]bool{}
+	l := &lowerer{info: info, secrets: secrets, captured: map[string]bool{}, sc: out, file: sc.Keyword.Span.File}
 	for _, d := range sc.Body {
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
@@ -314,18 +320,12 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				Value: d.Value,
 				Line:  d.Name.Span.Line,
 			})
-		case *ast.StepDecl:
-			st, err := step(d, info, secrets)
+		case *ast.StepDecl, *ast.FlowDecl:
+			nodes, err := l.body([]ast.Decl{d})
 			if err != nil {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)
 			}
-			st.relativeTo(sc.Keyword.Span.File)
-			st.Needs = needs(d, captured)
-			out.Steps = append(out.Steps, st)
-			// After the step, never before it: a capture is not in scope for
-			// the step that writes it.
-			addSecretCaptures(secrets, st)
-			addCaptured(captured, st)
+			out.Flow = append(out.Flow, nodes...)
 		case *ast.TagsDecl:
 			if arr, ok := d.Value.(*ast.Array); ok {
 				for _, el := range arr.Elems {
@@ -335,32 +335,19 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				}
 			}
 		case *ast.PhaseDecl:
-			for _, inner := range d.Body {
-				switch inner := inner.(type) {
-				case *ast.VarDecl:
-					// A use's hoisted var, bound with the scenario's own.
-					if inner.Name.Kind == token.Ident {
-						out.Vars = append(out.Vars, &Var{Name: inner.Name.Value, Value: inner.Value, Line: inner.Name.Span.Line})
-					}
-				case *ast.StepDecl:
-					st, err := step(inner, info, secrets)
-					if err != nil {
-						return nil, fmt.Errorf("scenario %q: %s: %w", out.Name, d.Keyword.Value, err)
-					}
-					st.relativeTo(sc.Keyword.Span.File)
-					st.Needs = needs(inner, captured)
-					if d.Keyword.Value == ast.PhaseSetup {
-						out.Setup = append(out.Setup, st)
-					} else {
-						out.Teardown = append(out.Teardown, st)
-					}
-					addSecretCaptures(secrets, st)
-					addCaptured(captured, st)
-				}
+			nodes, err := l.body(d.Body)
+			if err != nil {
+				return nil, fmt.Errorf("scenario %q: %s: %w", out.Name, d.Keyword.Value, err)
+			}
+			if d.Keyword.Value == ast.PhaseSetup {
+				out.SetupFlow = append(out.SetupFlow, nodes...)
+			} else {
+				out.TeardownFlow = append(out.TeardownFlow, nodes...)
 			}
 		}
 		// *ast.Bad and anything else: already reported by the parser.
 	}
+	out.Setup, out.Steps, out.Teardown = Steps(out.SetupFlow), Steps(out.Flow), Steps(out.TeardownFlow)
 	return out, nil
 }
 
