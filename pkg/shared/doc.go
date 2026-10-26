@@ -1,7 +1,8 @@
 // Package shared is what is left of the YAML-era front end: the documentation
-// tests that hold README.md and SPEC.md to the code, and nothing else.
+// tests that hold README.md, the guides under docs/ and SPEC.md to the code, and
+// nothing else.
 //
-// Both documents are written in the DSL, so both are compiled: every fenced
+// They are written in the DSL, so they are compiled: every fenced
 // `art` block goes through the real front end -- pkg/dsl/front, which parses,
 // expands uses against SPEC.md's documented collections, and checks -- and a
 // whole file has to name-check as well as parse. The

@@ -12,4 +12,6 @@
 /*.log
 /*.env
 /coverage.out
-/docs
+
+# Local working notes. The rest of docs/ is the user guide, and is committed.
+/docs/superpowers

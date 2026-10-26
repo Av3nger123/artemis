@@ -8,9 +8,14 @@
 //
 // A static analysis of a data flow is normally an approximation, because a value
 // can arrive through one of two branches and the compiler cannot know which one
-// ran. This language has no branch: `if`, `else`, `for`, `while` and `parallel`
-// are reserved words and not features -- see token.Reserved and README.md's "Not
-// yet" -- so the provenance of every value is a property of the text.
+// ran. In this language the provenance of a value is still a property of the
+// text. A name is bound once, except by the alternatives of an if, a switch or a
+// try, and pkg/dsl/lower walks a scenario in source order adding each secret
+// capture to one set it never removes from -- so a name any alternative captures
+// secretly is secret for every step after the block. That is the union of the
+// branches: it can withhold a value the branch that ran did not make secret, and
+// never leaves one out. A parallel branch cannot read what its siblings capture,
+// so it gives a value no second way in.
 //
 // So a taint carried on a run-time value would be no more precise than this,
 // and it would need a new type inside the domain pkg/eval/value.go calls JSON's,
