@@ -20,8 +20,16 @@ COVERPROFILE=coverage.out
 
 all: vet lint test build
 
+# db steps reach PostgreSQL, MySQL and SQLite in every build. The SQL Server,
+# Oracle, MongoDB and Redis drivers add about 28 MB between them, so they are
+# behind build tags -- db_sqlserver, db_oracle, db_mongodb, db_redis, or
+# db_all for every one -- and build-full is the binary with all of them. A step
+# naming a database the binary was built without says which tag it needs.
 build:
 	$(GOBUILD) -o $(BINARY_NAME) $(MAIN_PATH)
+
+build-full:
+	$(GOBUILD) -tags db_all -o $(BINARY_NAME) $(MAIN_PATH)
 
 # pkg/codegen's execution-parity tests run the generated pytest and the generated
 # vitest against the same fixture server the interpreter's tests use. Each skips
@@ -33,7 +41,7 @@ test:
 
 # -race catches what a single-threaded run never will; this is what CI runs.
 test-race:
-	$(GOTEST) -race ./...
+	$(GOTEST) -race -tags db_all ./...
 
 # The tests that need a real browser: pkg/steps/browserstep's driver over
 # Chromium, pkg/cli's whole run against the local fixture server, and
@@ -117,4 +125,4 @@ clean:
 	$(GOCLEAN)
 	rm -f $(BINARY_NAME) $(COVERPROFILE)
 
-.PHONY: all build test test-race test-browser test-browser-repeat cover golden vet fmt fmt-check lint lint-strict clean
+.PHONY: all build build-full test test-race test-browser test-browser-repeat cover golden vet fmt fmt-check lint lint-strict clean

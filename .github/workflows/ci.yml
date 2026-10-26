@@ -86,11 +86,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Both builds: the default, with PostgreSQL, MySQL and SQLite, and the
+      # full one with every database driver behind its build tag. Vet and the
+      # tests run on the full one, so no driver goes untested.
       - name: go build
-        run: go build ./...
+        run: go build ./... && go build -tags db_all ./...
 
       - name: go vet
-        run: go vet ./...
+        run: go vet -tags db_all ./...
 
       # pkg/codegen's execution-parity tests run the *generated* pytest and the
       # *generated* vitest against the same fixture server the interpreter's
@@ -144,7 +147,7 @@ jobs:
           ARTEMIS_TEST_ORACLE_URL: oracle://app:Art3misApp@localhost:1521/FREEPDB1
           ARTEMIS_TEST_MONGO_URL: mongodb://app:p%40ss%3Aw%2Frd@localhost:27017/shop?authSource=admin
           ARTEMIS_TEST_REDIS_URL: redis://localhost:6379/0
-        run: go test -race -coverprofile=coverage.out ./...
+        run: go test -race -tags db_all -coverprofile=coverage.out ./...
 
       - name: coverage
         run: go tool cover -func=coverage.out | tail -1
@@ -172,4 +175,4 @@ jobs:
           # Pinned to the version .golangci.yml is written for. An unpinned
           # linter turns someone else's release into a red build here.
           version: v2.14.0
-          args: --timeout=5m
+          args: --timeout=5m --build-tags=db_all

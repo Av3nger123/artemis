@@ -39,12 +39,28 @@ func TestObservedRootsMatchTheChecker(t *testing.T) {
 }
 
 // The checker checks a literal URL against token.DBSchemes, so a scheme it
-// accepts has to be one a driver is registered under, and the other way round.
+// accepts has to be one a driver is registered under or one this build left
+// out on purpose, and the other way round.
 func TestSchemesMatchTheChecker(t *testing.T) {
 	want := append([]string(nil), token.DBSchemes...)
 	sort.Strings(want)
-	if got := Schemes(); fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("registered schemes = %v, want token.DBSchemes = %v", got, want)
+	got := append(Schemes(), Unbuilt()...)
+	sort.Strings(got)
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("registered %v and unbuilt %v schemes, want token.DBSchemes = %v", Schemes(), Unbuilt(), want)
+	}
+}
+
+// A scheme the build left out is a step error that says how to build it in.
+func TestAnUnbuiltSchemeSaysHowToBuildIt(t *testing.T) {
+	unbuilt := Unbuilt()
+	if len(unbuilt) == 0 {
+		t.Skip("this build has every driver")
+	}
+	_, err := Executor{}.Observe(context.Background(), models.Step{Type: StepType, DB: models.DB{
+		URL: unbuilt[0] + "://localhost/x", Command: []any{"PING"}, SQL: "SELECT 1"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "built without") || !strings.Contains(err.Error(), "-tags db_") {
+		t.Errorf("error = %v, want one naming the build tag", err)
 	}
 }
 

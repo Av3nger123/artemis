@@ -128,6 +128,7 @@ func TestAgainstServers(t *testing.T) {
 			if url == "" {
 				t.Skipf("%s is not set", c.env)
 			}
+			skipUnbuilt(t, url)
 			p := NewPools()
 			defer p.Close()
 			ctx := WithPools(context.Background(), p)
@@ -197,6 +198,7 @@ func TestAWrongPasswordIsNamedWithoutIt(t *testing.T) {
 			if url == "" {
 				t.Skipf("%s is not set", env)
 			}
+			skipUnbuilt(t, url)
 			if !strings.Contains(url, "@") {
 				t.Skipf("%s has no credentials to get wrong", env)
 			}
@@ -209,5 +211,16 @@ func TestAWrongPasswordIsNamedWithoutIt(t *testing.T) {
 				t.Errorf("error %q prints the password", err)
 			}
 		})
+	}
+}
+
+// skipUnbuilt skips a test of a database this build has no driver for.
+func skipUnbuilt(t *testing.T, url string) {
+	t.Helper()
+	scheme, _, _ := strings.Cut(url, ":")
+	for _, s := range Unbuilt() {
+		if s == scheme {
+			t.Skipf("this build has no %s driver; run with -tags db_all", scheme)
+		}
 	}
 }

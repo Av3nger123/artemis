@@ -921,6 +921,11 @@ does not take -- `sql` to `mongodb://` -- is `db-statement-kind`.
 | `mongodb://`, `mongodb+srv://` | MongoDB: `mongodb://user:pw@host:27017/shop?authSource=admin`. The path names the database, and is required |
 | `redis://`, `rediss://` | Redis and Valkey: `redis://:pw@host:6379/0`, `rediss://` over TLS |
 
+PostgreSQL, MySQL and SQLite are in every build of artemis. SQL Server, Oracle,
+MongoDB and Redis are in a full build -- `make build-full`, or `go build -tags
+db_all` -- because their drivers add about 28 MB; a step naming one a binary was
+built without is a step error naming the build tag that adds it.
+
 A connection is a value, so it lives where a credential does: a `secret var`, a
 [suite](#suites-suiteart)'s var read as `suite.db`, an `env()` call. A URL written
 out is checked when the file compiles -- `postgress://` is `unknown-db-scheme`

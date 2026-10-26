@@ -1,3 +1,5 @@
+//go:build db_redis || db_all
+
 package dbstep
 
 import (

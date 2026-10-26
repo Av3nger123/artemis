@@ -8,14 +8,15 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"  // registers "pgx"
-	_ "github.com/microsoft/go-mssqldb" // registers "sqlserver"
-	_ "github.com/sijms/go-ora/v2"      // registers "oracle"
-	_ "modernc.org/sqlite"              // registers "sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers "pgx"
+	_ "modernc.org/sqlite"             // registers "sqlite"
 )
 
 // The databases a db step can reach. Each is a dialect row and a Register
-// call; token.DBSchemes lists the same schemes, and a test holds the two equal.
+// call. PostgreSQL, MySQL and SQLite are in every build; SQL Server and Oracle
+// register from files of their own, under build tags -- see optional.go -- and
+// their dialect rows are here, with no driver behind them, so what they mean
+// is tested in every build.
 
 var postgres = dialect{
 	name:   "postgres",
@@ -71,8 +72,6 @@ func init() {
 	Register("postgresql", sqlDriver{postgres})
 	Register("mysql", sqlDriver{mySQL})
 	Register("sqlite", sqlDriver{sqlite})
-	Register("sqlserver", sqlDriver{sqlServer})
-	Register("oracle", sqlDriver{oracle})
 }
 
 // asIs is the DSN of a driver that reads the step's URL itself.

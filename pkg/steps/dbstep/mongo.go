@@ -1,3 +1,5 @@
+//go:build db_mongodb || db_all
+
 package dbstep
 
 import (

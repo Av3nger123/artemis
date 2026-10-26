@@ -1418,6 +1418,9 @@ and shared by every step that names the same URL, and a trace never prints the
 password in it. [SPEC.md's *`db` steps*](SPEC.md#db-steps) specifies how each
 column type reads.
 
+`make build` includes PostgreSQL, MySQL and SQLite; `make build-full`, which
+`install.sh` uses, adds SQL Server, Oracle, MongoDB and Redis.
+
 MongoDB and Redis take their own commands instead of SQL -- a command document
 as `db.runCommand()` takes it, the words `redis-cli` takes -- and the reply is
 `result`:

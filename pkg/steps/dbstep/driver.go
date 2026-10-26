@@ -95,6 +95,9 @@ func driverFor(rawURL string) (Driver, error) {
 	if found && ok {
 		return d, nil
 	}
+	if err := unbuiltError(scheme); found && err != nil {
+		return nil, err
+	}
 	return nil, fmt.Errorf("artemis has no database driver for %s; a db URL starts with one of: %s",
 		Redact(rawURL), strings.Join(Schemes(), ":, ")+":")
 }
