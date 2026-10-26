@@ -51,7 +51,11 @@ GO_LICENSES=github.com/google/go-licenses/v2@v2.0.1
 
 release:
 	rm -rf $(DIST) && mkdir -p $(DIST)
-	GOOS=darwin GOFLAGS=-tags=db_all $(GOCMD) run $(GO_LICENSES) save $(MAIN_PATH) \
+	# go-licenses is built for the machine running it, and only then told the
+	# release's GOOS: `GOOS=darwin go run` would build the tool itself for macOS,
+	# which a Linux runner cannot execute.
+	GOBIN=$(abspath $(DIST))/bin $(GOCMD) install $(GO_LICENSES)
+	GOOS=darwin GOFLAGS=-tags=db_all $(DIST)/bin/go-licenses save $(MAIN_PATH) \
 		--save_path $(DIST)/THIRD_PARTY_LICENSES --ignore artemis
 	for arch in arm64 amd64; do \
 		GOOS=darwin GOARCH=$$arch CGO_ENABLED=0 $(GOBUILD) -trimpath -tags db_all \
