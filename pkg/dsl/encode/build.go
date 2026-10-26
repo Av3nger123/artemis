@@ -82,6 +82,9 @@ func scenario(f fields) (*ast.Scenario, error) {
 	if s.Name, err = nameTok(f, "name"); err != nil {
 		return nil, err
 	}
+	if s.For, err = forClause(f); err != nil {
+		return nil, err
+	}
 	body, err := f.list("body")
 	if err != nil {
 		return nil, err
@@ -90,6 +93,39 @@ func scenario(f fields) (*ast.Scenario, error) {
 		return nil, err
 	}
 	return s, braced(f, &s.Keyword, &s.LBrace, &s.RBrace)
+}
+
+// forClause reads a scenario's optional for clause.
+func forClause(f fields) (*ast.ForClause, error) {
+	o, present, err := f.child("for")
+	if err != nil || !present {
+		return nil, err
+	}
+	return forNode(o)
+}
+
+// forNode builds a for clause from its own node.
+func forNode(o fields) (*ast.ForClause, error) {
+	name, err := o.str("var")
+	if err != nil {
+		return nil, err
+	}
+	secret, err := o.flag("secret")
+	if err != nil {
+		return nil, err
+	}
+	c := &ast.ForClause{
+		Keyword: syn(token.Ident, "for"),
+		Var:     syn(token.Ident, name),
+		In:      syn(token.Ident, "in"),
+	}
+	if secret {
+		c.Secret = syn(token.Ident, "secret")
+	}
+	if c.Source, err = exprOf(o, "source", true); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func config(f fields) (*ast.ConfigDecl, error) {

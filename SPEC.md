@@ -1464,6 +1464,39 @@ that names the two ways to send one: as a `multipart` part, or its contents as
 equal when they are the same path. A trace records a file it sent by its path
 and size, never its contents.
 
+### Data-driven scenarios
+
+```art
+scenario "login as ${user.role}" for user in json("data/users.json") {
+  var url = env("API_URL")
+
+  step "log in" {
+    post "${url}/login" {
+      body = {"email": user.email, "password": user.password}
+    }
+    expect status == user.expect_status
+  }
+}
+```
+
+A `for` clause makes a scenario **one scenario per row** of its data. Each row's
+scenario opens with `var user = <that row>`, so the steps read it like any var,
+and runs, passes and fails on its own: two rows are two lines on the console and
+two entries in the report, each saying which [`row`](#the-json-report) it is.
+
+The rows are made when the file compiles, so they have to be known before the
+run: an array written out, or `json()` or `csv()` of a path written out,
+optionally followed by a member or an index (`json("data.json").admins`).
+`artemis expand` prints every row's scenario, and the checker checks each one --
+a mistake every row shares is reported once.
+
+| | |
+| --- | --- |
+| The name | May interpolate the row -- `"login as ${user.role}"` -- and nothing else: not a var, and not a call, so a name is something the report can repeat. A name that does not interpolate gets the row's number: `"smoke [1]"`, `"smoke [2]"`. Two rows that name their scenario alike are the compile error `duplicate-row-name` |
+| The rows | An array. Data that is not one is `for-source-not-array`; an empty one is `for-no-rows`, because a run of nothing would pass; a source known only at run time -- `json(env("DATA"))` -- is `for-source-not-static` |
+| `for secret` | `for secret user in ...` makes each row's var a [`secret`](#secret) one, for rows that hold credentials |
+| Types | A JSON row keeps its types. A CSV row's every cell is a string: compare with a string, or convert with [`number()`](#making-and-converting-values) |
+
 ### How a value renders
 
 Wherever a value becomes text -- inside a `"${ }"`, in a query parameter -- it
@@ -1692,6 +1725,7 @@ setup  teardown  ai
 | --- | --- |
 | `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
 | `use` | Expands a collection's request in place: `use auth.login { ... }` |
+| `for`, `in` | Make a scenario one per row of data: `scenario "..." for user in json("users.json") { ... }` -- see [data-driven scenarios](#data-driven-scenarios) |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
 implemented** and will not parse. A CI gate's most valuable property is
@@ -1966,6 +2000,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `counts` | run | Totals per level, each a `{total, passed, failed, errored, skipped}` tally, so nobody walks the tree to say "2 of 5 assertions failed" |
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
+| `row` | scenario | For a [data-driven scenario](#data-driven-scenarios), the row it was made from: `{"source": "users.json", "index": 0}`, where `source` is the file its rows were read from, or `"rows"` for an array written out. **Absent** on every other scenario |
 | `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
 | `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |
 | `error` | scenario, step, assertion, failure | Why it could not run, or `""`. A scenario's error is a file that would not compile, and such a scenario has no steps |

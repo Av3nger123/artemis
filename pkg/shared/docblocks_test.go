@@ -147,9 +147,10 @@ func docCollections(t *testing.T) expand.MapLoader {
 // docLoader is docCollections for the files an example imports, and a stand-in
 // for every data file it reads: json() and csv() in a document name files the
 // document does not show, and what they hold is beside the point of the
-// example. A .json path serves an empty array and a .csv path a header row, so
-// the example compiles exactly as it would beside real data; whether a path
-// names a file at all is pkg/dsl/front's test, not the documents'.
+// example. A .json path serves one row holding the fields the documents'
+// examples read, and a .csv path a header and a row, so a data-driven example
+// has a row to make and compiles exactly as it would beside real data; whether
+// a path names a file at all is pkg/dsl/front's test, not the documents'.
 type docLoader struct{ collections expand.MapLoader }
 
 func (d docLoader) Load(from, p string) (string, string, error) {
@@ -158,12 +159,16 @@ func (d docLoader) Load(from, p string) (string, string, error) {
 	}
 	switch {
 	case strings.HasSuffix(p, ".json"):
-		return p, "[]", nil
+		return p, docRow, nil
 	case strings.HasSuffix(p, ".csv"):
-		return p, "name\n", nil
+		return p, "name,plan\nalice,pro\n", nil
 	}
 	return p, "", nil
 }
+
+// docRow is the one row a documented JSON file holds.
+const docRow = `[{"id": 1, "name": "alice", "role": "admin", "email": "alice@example.com",
+  "password": "s3cret", "plan": "pro", "expect_status": 200}]`
 
 // frontEnd is the whole front end over one documented file -- parse, expand
 // its uses against the documented collections, name-check -- with every bag

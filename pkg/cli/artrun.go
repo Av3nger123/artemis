@@ -165,6 +165,9 @@ func firstError(diags []diag.Diagnostic) error {
 // more than one.
 func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(sc.Name, file)
+	if sc.Row != nil {
+		scenario.Row = &result.Row{Source: sc.Row.Source, Index: sc.Row.Index}
+	}
 	rep.Scenario(scenario)
 	rt.events.ScenarioStart(scenario, stepNames(sc))
 	// Deferred, so every way out of here -- vars that will not bind, a config

@@ -12,6 +12,7 @@ import (
 // lists them, and a kind spelled three times could be spelled three ways.
 const (
 	kindScenario   = "scenario"
+	kindFor        = "for"
 	kindConfig     = "config"
 	kindVar        = "var"
 	kindStep       = "step"
@@ -143,11 +144,26 @@ func (e *enc) expr(n ast.Node) *obj {
 }
 
 func (e *enc) scenario(s *ast.Scenario) *obj {
+	var forObj *obj
+	if s.For != nil {
+		forObj = e.forClause(s.For)
+	}
 	return start(kindScenario, s).
 		set("name", nameObj(s.Name)).
+		set("for", forObj).
 		set("body", e.list(toNodes(s.Body))).
 		span().
 		comments(toks(s.Keyword, s.Name), s.LBrace, s.RBrace).done()
+}
+
+// forClause is a data-driven scenario's `for [secret] <var> in <source>`.
+func (e *enc) forClause(f *ast.ForClause) *obj {
+	return start(kindFor, f).
+		set("secret", f.Secret.Text != "").
+		set("var", f.Var.Text).
+		set("source", e.node(f.Source)).
+		span().
+		comments(f.Tokens(nil), zero, zero).done()
 }
 
 func (e *enc) config(d *ast.ConfigDecl) *obj {

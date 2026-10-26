@@ -1,6 +1,7 @@
 action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-override	error	a line in a use block is not an argument or an override that applies
+bad-row-name	error	a data-driven scenario's name reads something other than its row
 bad-value	error	a value is the wrong kind for the position it is in
 body-conflict	error	a request says what its body is more than one way
 data-file-missing	error	json(), csv() or file() names a path where there is no file
@@ -11,6 +12,10 @@ duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
 duplicate-import-name	error	two imports give their collections the same name
+duplicate-row-name	error	two rows of a data-driven scenario name it alike
+for-no-rows	error	a for clause's data has no rows
+for-source-not-array	error	a for clause's data is not an array of rows
+for-source-not-static	error	a for clause reads rows that are not known before the run
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
 import-needs-name	error	an import has no "as" and its file's name cannot be what a use names it by

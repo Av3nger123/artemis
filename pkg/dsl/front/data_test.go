@@ -64,3 +64,25 @@ func TestNoLoaderReadsNoData(t *testing.T) {
 		t.Errorf("Compile read data with no loader: %v", bag.All())
 	}
 }
+
+// A mistake in a data-driven scenario's body is the same mistake in every row,
+// and is reported once rather than once per row.
+func TestARowsMistakeIsReportedOnce(t *testing.T) {
+	src := `scenario "s" for n in [1, 2, 3] {
+  step "s" {
+    run "echo"
+    expect statu == 0
+  }
+}
+`
+	unit := CompileWith("s.art", src, expand.MapLoader{})
+	n := 0
+	for _, d := range unit.Bag.All() {
+		if d.Code == diag.UnknownField || d.Code == diag.UnknownIdentifier || d.Code == diag.NotInScope {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("the mistake was reported %d times, want once: %v", n, unit.Bag.All())
+	}
+}

@@ -110,6 +110,13 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 		case *ast.Scenario:
 			cp := *v
 			cp.Body = e.body(root, v.Body)
+			if cp.For != nil {
+				// After the uses, so each row is a copy of the scenario as
+				// it runs; a scenario whose rows could not be made is
+				// dropped, its fault already reported.
+				out.Scenarios = append(out.Scenarios, e.rows(&cp)...)
+				continue
+			}
 			out.Scenarios = append(out.Scenarios, &cp)
 		default:
 			out.Scenarios = append(out.Scenarios, d)
@@ -135,6 +142,9 @@ func needsExpansion(tree *ast.File) bool {
 		case *ast.Import, *ast.Collection:
 			return true
 		case *ast.Scenario:
+			if v.For != nil {
+				return true
+			}
 			for _, b := range v.Body {
 				if _, ok := b.(*ast.UseDecl); ok {
 					return true
@@ -408,9 +418,11 @@ func synth(kind token.Kind, text, value string, at token.Span) token.Token {
 	return token.Token{Kind: kind, Text: text, Value: value, Span: at}
 }
 
-// quote is name as a string literal's source.
+// quote is name as a string literal's source: the escapes the lexer reads
+// back, so a row's text -- which may hold a quote, a dollar or a newline --
+// round-trips through `artemis expand`.
 func quote(name string) string {
-	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`)
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
 	return `"` + r.Replace(name) + `"`
 }
 

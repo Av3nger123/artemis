@@ -105,11 +105,16 @@ func (c *canon) decl(d ast.Decl) {
 // nothing.
 func (c *canon) scenario(s *ast.Scenario) {
 	head := join(" ", s.Keyword.Text, s.Name.Text)
+	headToks := toks(s.Keyword, s.Name)
+	if f := s.For; f != nil {
+		head = join(" ", head, f.Keyword.Text, f.Secret.Text, f.Var.Text, f.In.Text, c.expr(f.Source))
+		headToks = f.Tokens(headToks)
+	}
 	if len(s.Body) == 0 && !hasComment(s) {
-		c.line(toks(s.Keyword, s.Name, s.LBrace, s.RBrace), join(" ", head, braces(s.LBrace, s.RBrace)))
+		c.line(append(headToks, s.LBrace, s.RBrace), join(" ", head, braces(s.LBrace, s.RBrace)))
 		return
 	}
-	c.line(toks(s.Keyword, s.Name, s.LBrace), join(" ", head, s.LBrace.Text))
+	c.line(append(headToks, s.LBrace), join(" ", head, s.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
 	for i, d := range s.Body {

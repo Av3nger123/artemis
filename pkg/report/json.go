@@ -99,11 +99,19 @@ type jsonScenario struct {
 // stream's scenario-end carries: by then every step has already arrived on its
 // own step-end. Embedded in jsonScenario for the same reason as jsonRunSummary.
 type jsonScenarioSummary struct {
-	Name       string  `json:"name"`
-	File       string  `json:"file"`
-	Status     string  `json:"status"`
-	DurationMS float64 `json:"duration_ms"`
-	Error      string  `json:"error"`
+	Name       string   `json:"name"`
+	File       string   `json:"file"`
+	Row        *jsonRow `json:"row,omitempty"`
+	Status     string   `json:"status"`
+	DurationMS float64  `json:"duration_ms"`
+	Error      string   `json:"error"`
+}
+
+// jsonRow is a data-driven scenario's row. Absent for every other scenario,
+// so a report of a suite that has none is the document it always was.
+type jsonRow struct {
+	Source string `json:"source"`
+	Index  int    `json:"index"`
 }
 
 type jsonStep struct {
@@ -274,13 +282,17 @@ func fromScenario(sc *result.ScenarioResult) jsonScenario {
 
 // fromScenarioSummary is the scenario's own keys, without its steps.
 func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
-	return jsonScenarioSummary{
+	out := jsonScenarioSummary{
 		Name:       sc.Name,
 		File:       sc.File,
 		Status:     sc.Status.String(),
 		DurationMS: millis(sc.Duration),
 		Error:      sc.Error,
 	}
+	if sc.Row != nil {
+		out.Row = &jsonRow{Source: sc.Row.Source, Index: sc.Row.Index}
+	}
+	return out
 }
 
 func fromStep(step *result.StepResult) jsonStep {

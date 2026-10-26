@@ -9,7 +9,9 @@ RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
-Scenario      = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
+Scenario      = "scenario" String [ ForClause ] "{" { ConfigDecl | VarDecl | StepDecl | UseDecl } "}" ;
+(* One scenario per row: the name may interpolate the row, and nothing else. *)
+ForClause     = "for" [ "secret" ] Ident "in" Expr ;
 UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
 ItemRef       = Ident "." Ident ;
 UseLine       = Ident "=" Expr

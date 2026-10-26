@@ -98,6 +98,7 @@ type groupSchema struct {
 
 var groupSchemas = []groupSchema{
 	{"declaration", []string{kindScenario, kindImport, kindCollection}},
+	{"forClause", []string{kindFor}},
 	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse}},
 	{"action", []string{kindRequest, kindRun, kindBrowser}},
 	{"stepStatement", []string{kindExpect, kindCapture, kindField}},
@@ -224,7 +225,15 @@ var (
 var nodeSchemas = []nodeSchema{
 	{Kind: kindScenario, Doc: "`scenario \"name\" { ... }`", Fields: []fieldSchema{
 		recoveredName,
+		optChild("for", "forClause"),
 		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindFor, Doc: "`for user in json(\"users.json\")`: one scenario per row of data", Fields: []fieldSchema{
+		{Name: "secret", Type: "boolean", Optional: true,
+			Doc: "the `secret` modifier: each row's values are withheld from every report. Absent means false"},
+		word("var", "the name each row is bound to"),
+		child("source", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindConfig, Doc: "`config browser { headless = true }`", Fields: []fieldSchema{

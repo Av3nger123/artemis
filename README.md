@@ -160,6 +160,7 @@ parameters and its response. The rules are in
 - Two step types today: `api` for an HTTP call, `terminal` for a command. One action block per step, and the block is the type
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
+- Data-driven scenarios: `scenario "login as ${user.role}" for user in json("users.json")` is one scenario per row, each reported on its own
 - Data and files: `json()` and `csv()` read test data and `file()` names a fixture, each checked when the file compiles; a file is sent as a body, a `multipart` part, a command's `stdin` or a browser `upload`, and `form` sends a urlencoded form
 - A cookie jar per scenario, so an API that keeps its session in a cookie is tested by logging in once; `cookies` to assert what a response set, and `duration_ms` on every step to assert how long it took
 - Test data made up where it is needed -- `uuid()`, `now()`, `random_string()` -- reproducible with `--seed`, and builtins for base64, hashes, HMAC signatures, JWT claims and JSON

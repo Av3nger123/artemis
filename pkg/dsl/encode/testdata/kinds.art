@@ -41,3 +41,9 @@ scenario "kinds" {
     expect text("[role=status]") contains "Pro"
   }
 }
+
+scenario "row ${n}" for secret n in [1, 2] {
+  step "s" {
+    run "echo"
+  }
+}

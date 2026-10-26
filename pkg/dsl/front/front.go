@@ -19,6 +19,7 @@ import (
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/token"
 )
 
 // Ext is the DSL's extension. It is what `artemis parse` dispatches on, the
@@ -75,6 +76,7 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 		bag.Add(d)
 	}
 	checkData(res.File, l, bag, res.Chain)
+	bag = once(bag)
 	sources := map[string]string{file: src}
 	for k, v := range res.Sources {
 		sources[k] = v
@@ -99,4 +101,27 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 func Compile(file, src string) (*ast.File, *check.Info, *diag.Bag) {
 	u := CompileWith(file, src, nil)
 	return u.Tree, u.Info, u.Bag
+}
+
+// once is bag with each diagnostic once. A data-driven scenario is checked as
+// one scenario per row, and a mistake in its body is the same mistake in every
+// row -- the same span, code and words -- so fifty rows would report it fifty
+// times. A diagnostic that differs, because a row's own value made it, stays.
+func once(bag *diag.Bag) *diag.Bag {
+	type key struct {
+		span    token.Span
+		code    diag.Code
+		message string
+	}
+	seen := map[key]bool{}
+	out := diag.New()
+	for _, d := range bag.All() {
+		k := key{d.Span, d.Code, d.Message}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out.Add(d)
+	}
+	return out
 }

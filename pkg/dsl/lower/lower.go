@@ -72,6 +72,10 @@ type Scenario struct {
 	// Line is the line the `scenario` keyword sits on.
 	Line int
 
+	// Row is the row of data this scenario was made from, for a scenario
+	// written with a for clause, and nil for every other.
+	Row *Row
+
 	// Browser is the scenario's `config browser`, or nil when it wrote none.
 	Browser *BrowserConfig
 
@@ -85,6 +89,13 @@ type Scenario struct {
 
 	// Steps are the scenario's steps in source order.
 	Steps []*Step
+}
+
+// Row is where a data-driven scenario's row came from: the file its data was
+// read from, or "rows" for an array written out, and the row's place in it.
+type Row struct {
+	Source string
+	Index  int
 }
 
 // Var is one `var name = expr`.
@@ -249,6 +260,9 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 	out := &Scenario{
 		Name: sc.Name.Value,
 		Line: sc.Keyword.Span.Line,
+	}
+	if sc.Row != nil {
+		out.Row = &Row{Source: sc.Row.Source, Index: sc.Row.Index}
 	}
 	secrets := secretVars(sc)
 	for _, d := range sc.Body {

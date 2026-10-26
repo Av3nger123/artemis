@@ -176,9 +176,18 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.Scenario:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
+		if v.For != nil {
+			p.node(v.For, c)
+		}
 		p.tok(v.LBrace)
 		p.list(decls(v.Body), c)
 		p.tok(v.RBrace)
+	case *ast.ForClause:
+		p.tok(v.Keyword)
+		p.tok(v.Secret)
+		p.tok(v.Var)
+		p.tok(v.In)
+		p.node(v.Source, c)
 	case *ast.ConfigDecl:
 		p.tok(v.Keyword)
 		p.tok(v.Subject)

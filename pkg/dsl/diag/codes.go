@@ -206,6 +206,13 @@ const (
 	// BodyConflict is a request with a body two ways: `body` and `form`, or
 	// `form` and `multipart`.
 	BodyConflict Code = "body-conflict"
+
+	// A data-driven scenario's for clause, and the rows it makes.
+	ForSourceNotStatic Code = "for-source-not-static"
+	ForSourceNotArray  Code = "for-source-not-array"
+	ForNoRows          Code = "for-no-rows"
+	DuplicateRowName   Code = "duplicate-row-name"
+	BadRowName         Code = "bad-row-name"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -269,6 +276,11 @@ var registry = []CodeInfo{
 	{DataNotJSON, Error, "json() names a file that is not JSON"},
 	{DataNotCSV, Error, "csv() names a file that is not CSV"},
 	{BodyConflict, Error, "a request says what its body is more than one way"},
+	{ForSourceNotStatic, Error, "a for clause reads rows that are not known before the run"},
+	{ForSourceNotArray, Error, "a for clause's data is not an array of rows"},
+	{ForNoRows, Error, "a for clause's data has no rows"},
+	{DuplicateRowName, Error, "two rows of a data-driven scenario name it alike"},
+	{BadRowName, Error, "a data-driven scenario's name reads something other than its row"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

@@ -1334,6 +1334,127 @@
           }
         ]
       }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"row ${n}\"",
+        "value": "row ${n}"
+      },
+      "for": {
+        "kind": "for",
+        "secret": true,
+        "var": "n",
+        "source": {
+          "kind": "array",
+          "elems": [
+            {
+              "kind": "literal",
+              "literal": "number",
+              "text": "1",
+              "value": "1",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 45,
+                "col": 38,
+                "endLine": 45,
+                "endCol": 39,
+                "offset": 1245
+              }
+            },
+            {
+              "kind": "literal",
+              "literal": "number",
+              "text": "2",
+              "value": "2",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 45,
+                "col": 41,
+                "endLine": 45,
+                "endCol": 42,
+                "offset": 1248
+              }
+            }
+          ],
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 45,
+            "col": 37,
+            "endLine": 45,
+            "endCol": 43,
+            "offset": 1244
+          }
+        },
+        "span": {
+          "file": "testdata/kinds.art",
+          "line": 45,
+          "col": 21,
+          "endLine": 45,
+          "endCol": 43,
+          "offset": 1228
+        }
+      },
+      "body": [
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"s\"",
+            "value": "s"
+          },
+          "action": {
+            "kind": "run",
+            "command": {
+              "kind": "literal",
+              "literal": "string",
+              "text": "\"echo\"",
+              "value": "echo",
+              "span": {
+                "file": "testdata/kinds.art",
+                "line": 47,
+                "col": 9,
+                "endLine": 47,
+                "endCol": 15,
+                "offset": 1274
+              }
+            },
+            "span": {
+              "file": "testdata/kinds.art",
+              "line": 47,
+              "col": 5,
+              "endLine": 47,
+              "endCol": 15,
+              "offset": 1270
+            }
+          },
+          "span": {
+            "file": "testdata/kinds.art",
+            "line": 46,
+            "col": 3,
+            "endLine": 48,
+            "endCol": 4,
+            "offset": 1255
+          },
+          "stepType": "terminal",
+          "scope": [
+            "exit_code",
+            "stdout",
+            "stderr",
+            "duration_ms"
+          ]
+        }
+      ],
+      "span": {
+        "file": "testdata/kinds.art",
+        "line": 45,
+        "col": 1,
+        "endLine": 49,
+        "endCol": 2,
+        "offset": 1208
+      },
+      "comments": {
+        "blankAbove": true
+      }
     }
   ]
 }

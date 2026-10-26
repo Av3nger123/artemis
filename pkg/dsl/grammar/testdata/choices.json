@@ -247,6 +247,11 @@
           "severity": "error"
         },
         {
+          "value": "bad-row-name",
+          "doc": "a data-driven scenario's name reads something other than its row",
+          "severity": "error"
+        },
+        {
           "value": "bad-value",
           "doc": "a value is the wrong kind for the position it is in",
           "severity": "error"
@@ -294,6 +299,26 @@
         {
           "value": "duplicate-import-name",
           "doc": "two imports give their collections the same name",
+          "severity": "error"
+        },
+        {
+          "value": "duplicate-row-name",
+          "doc": "two rows of a data-driven scenario name it alike",
+          "severity": "error"
+        },
+        {
+          "value": "for-no-rows",
+          "doc": "a for clause's data has no rows",
+          "severity": "error"
+        },
+        {
+          "value": "for-source-not-array",
+          "doc": "a for clause's data is not an array of rows",
+          "severity": "error"
+        },
+        {
+          "value": "for-source-not-static",
+          "doc": "a for clause reads rows that are not known before the run",
           "severity": "error"
         },
         {

@@ -9,6 +9,9 @@
       "import",
       "collection"
     ],
+    "forClause": [
+      "for"
+    ],
     "scenarioBody": [
       "config",
       "var",
@@ -259,10 +262,49 @@
           "doc": "absent only in a file the parser recovered past; Decode requires it"
         },
         {
+          "name": "for",
+          "type": "node",
+          "accepts": "forClause",
+          "optional": true
+        },
+        {
           "name": "body",
           "type": "node[]",
           "accepts": "scenarioBody",
           "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "for",
+      "doc": "`for user in json(\"users.json\")`: one scenario per row of data",
+      "fields": [
+        {
+          "name": "secret",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `secret` modifier: each row's values are withheld from every report. Absent means false"
+        },
+        {
+          "name": "var",
+          "type": "string",
+          "doc": "the name each row is bound to"
+        },
+        {
+          "name": "source",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
         },
         {
           "name": "span",
