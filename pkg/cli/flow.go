@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"sort"
@@ -38,6 +39,14 @@ type flowRun struct {
 	scope    executor.Scope
 	gen      *eval.Gen
 
+	// unset is the names a step failed to write, each with the step that
+	// failed. The write unset the name in scope, so this is what a later read
+	// is told: the step to go and look at, not just that the name is missing.
+	// A name leaves it when a later step writes it. It goes where the scope
+	// goes: shared with a repeat's rounds, copied into each parallel branch and
+	// merged back with the branch's scope.
+	unset map[string]string
+
 	// live is whether a step's events go out as it runs. A buffered run's go
 	// out when the parent takes its steps.
 	live bool
@@ -50,15 +59,15 @@ type flowRun struct {
 }
 
 // child is a run whose steps are held until the parent takes them: a
-// parallel branch's, over its own copy of the scope, or a repeat round's,
-// over the parent's.
-func (f *flowRun) child(scope executor.Scope, gen *eval.Gen) (*flowRun, *bytes.Buffer) {
+// parallel branch's, over its own copy of the scope and of unset, or a repeat
+// round's, over the parent's.
+func (f *flowRun) child(scope executor.Scope, unset map[string]string, gen *eval.Gen) (*flowRun, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	return &flowRun{
 		ctx: f.ctx, rt: f.rt, sc: f.sc, file: f.file,
 		scenario: &result.ScenarioResult{Name: f.scenario.Name, File: f.scenario.File},
 		rep:      report.NewConsole(buf),
-		scope:    scope, gen: gen, index: f.index, round: f.round,
+		scope:    scope, unset: unset, gen: gen, index: f.index, round: f.round,
 	}, buf
 }
 
@@ -80,7 +89,9 @@ func (f *flowRun) adopt(c *flowRun, out *bytes.Buffer) {
 
 // step runs one step -- or records why it did not run -- and reports it.
 // cleanup is teardown's and a finally's rule: a step that reads a capture no
-// step made has nothing to clean up, and is skipped.
+// step made has nothing to clean up, and is skipped. Outside cleanup, a step
+// that reads a name an earlier step failed to write is not run: it fails,
+// naming that step, rather than sending a request without the value.
 func (f *flowRun) step(phase string, st *lower.Step, skip string, cleanup bool) *result.StepResult {
 	if f.live {
 		f.rt.events.StepStart(f.scenario, *f.index, st.Name)
@@ -91,13 +102,21 @@ func (f *flowRun) step(phase string, st *lower.Step, skip string, cleanup bool) 
 	// reader can go (ART-12). And the file that line is in, when a use brought
 	// the step in from a collection.
 	r.Line, r.File, r.Phase, r.Round = st.Line, st.File, phase, f.round
-	switch missing := missingNeeds(st, f.scope); {
+	missing := missingNeeds(st, f.scope)
+	switch failed := f.failedWrites(missing); {
 	case skip != "":
 		r.Skip(skip)
 	case cleanup && len(missing) > 0:
-		r.Skip(fmt.Sprintf("needs %s, which no step before it captured", strings.Join(missing, ", ")))
+		r.Skip(fmt.Sprintf("needs %s, which no step before it wrote", strings.Join(missing, ", ")))
+	case len(failed) > 0:
+		r.Fail(0, errors.New(strings.Join(failed, "; ")))
+		// A step that did not run wrote nothing, so its own step vars fail
+		// too, and a step after it that reads one is told it was this one.
+		unwrite(st, f.scope)
+		f.wrote(st)
 	default:
 		runArtStep(f.ctx, f.rt, f.sc.Name, st, f.scope, f.gen, r)
+		f.wrote(st)
 	}
 	logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, r.Duration))
 	// Every step that was reached gets a line, including one artemis could not
@@ -108,6 +127,33 @@ func (f *flowRun) step(phase string, st *lower.Step, skip string, cleanup bool) 
 		*f.index++
 	}
 	return r
+}
+
+// failedWrites is the error text for each of missing that a step failed to
+// write, naming that step. A name that is missing for another reason -- no
+// step has written it yet -- is not one of them; the step runs and says so
+// itself, as it always has.
+func (f *flowRun) failedWrites(missing []string) []string {
+	var out []string
+	for _, name := range missing {
+		if by, ok := f.unset[name]; ok {
+			out = append(out, fmt.Sprintf("reads %s, which step %q failed to write", name, by))
+		}
+	}
+	return out
+}
+
+// wrote records what st's writes left behind: a name st writes that the scope
+// no longer holds is one st failed to write, and one the scope holds is
+// written, whatever an earlier step did to it.
+func (f *flowRun) wrote(st *lower.Step) {
+	for _, c := range st.Captures {
+		if _, ok := f.scope.Get(c.Name); ok {
+			delete(f.unset, c.Name)
+			continue
+		}
+		f.unset[c.Name] = st.Name
+	}
 }
 
 // errored records a step that stands for a block whose own expression could
@@ -181,13 +227,13 @@ func (f *flowRun) flow(fl *lower.Flow, phase, skip string, cleanup bool) outcome
 		return outcome{ok: true}
 	}
 	switch fl.Kind {
-	case ast.FlowParallel:
+	case ast.BlockParallel:
 		return f.parallel(fl, phase, cleanup)
-	case ast.FlowIf, ast.FlowSwitch:
+	case ast.BlockIf, ast.BlockSwitch:
 		return f.choose(fl, phase, cleanup)
-	case ast.FlowTry:
+	case ast.BlockTry:
 		return f.try(fl, phase, cleanup)
-	case ast.FlowRepeat:
+	case ast.BlockRepeat:
 		return f.repeat(fl, phase, cleanup)
 	}
 	return outcome{ok: true}
@@ -207,7 +253,7 @@ func (f *flowRun) parallel(fl *lower.Flow, phase string, cleanup bool) outcome {
 	var wg sync.WaitGroup
 	for i, b := range fl.Branches {
 		gen := eval.NewGen(f.rt.seed, f.rt.seedKey(f.file), fmt.Sprintf("%s\x00parallel %d branch %d", f.sc.Name, fl.Line, i))
-		c, buf := f.child(maps.Clone(f.scope), gen)
+		c, buf := f.child(maps.Clone(f.scope), maps.Clone(f.unset), gen)
 		runs[i] = &branchRun{run: c, buf: buf}
 		wg.Add(1)
 		go func(br *branchRun, body []lower.Node) {
@@ -228,7 +274,33 @@ func (f *flowRun) parallel(fl *lower.Flow, phase string, cleanup bool) outcome {
 		}
 		out.add(br.got)
 	}
+	// Then what each branch failed to write. Not in the loop above: every
+	// branch's copy still holds the value a name had before the block, so a
+	// later branch's copy would put back a value an earlier branch unset.
+	for i, br := range runs {
+		f.mergeWrites(br.run, fl.Branches[i].Body)
+	}
 	return out
+}
+
+// mergeWrites takes into this run what a parallel branch's steps did to the
+// names they write: unset in the branch is unset here, naming the step, and
+// written in the branch is written here. Only the names the branch's own steps
+// write, because the checker has made sure no two branches write one name, so
+// the branch that writes a name is the one that knows what became of it.
+func (f *flowRun) mergeWrites(br *flowRun, body []lower.Node) {
+	for _, st := range lower.Steps(body) {
+		for _, c := range st.Captures {
+			if _, ok := br.scope.Get(c.Name); ok {
+				delete(f.unset, c.Name)
+				continue
+			}
+			f.scope.Unset(c.Name)
+			if by, ok := br.unset[c.Name]; ok {
+				f.unset[c.Name] = by
+			}
+		}
+	}
 }
 
 // choose runs the one branch of an if or a switch that applies and records
@@ -237,7 +309,7 @@ func (f *flowRun) choose(fl *lower.Flow, phase string, cleanup bool) outcome {
 	env := &eval.Env{Vars: f.scope.Vars(), Gen: f.gen}
 	what := "if"
 	var subject any
-	if fl.Kind == ast.FlowSwitch {
+	if fl.Kind == ast.BlockSwitch {
 		what = "switch"
 		v, err := eval.Eval(fl.Subject, env)
 		if err != nil {
@@ -256,7 +328,7 @@ func (f *flowRun) choose(fl *lower.Flow, phase string, cleanup bool) outcome {
 		if err != nil {
 			return f.unchosen(fl, phase, what, fmt.Errorf("%s %s: %w", b.Keyword, b.CondText, err))
 		}
-		if fl.Kind == ast.FlowSwitch {
+		if fl.Kind == ast.BlockSwitch {
 			if eval.Equal(subject, v) {
 				taken = i
 				break
@@ -370,7 +442,7 @@ func (f *flowRun) rounds(fl *lower.Flow, phase string, cleanup bool, every, with
 	var got outcome
 	for round := 1; ; round++ {
 		f.round = round
-		last, lastBuf = f.child(f.scope, f.gen)
+		last, lastBuf = f.child(f.scope, f.unset, f.gen)
 		got = last.nodes(body, phase, "", cleanup, func(failed string) string {
 			return fmt.Sprintf("%q did not pass, so the rest of round %d was skipped", failed, round)
 		})

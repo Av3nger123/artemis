@@ -38,24 +38,23 @@ func TestRunOneRequestOfACollection(t *testing.T) {
 	if !strings.Contains(out, `"auth.login"`) {
 		t.Errorf("the report has no auth.login step:\n%s", out)
 	}
-	if strings.Contains(out, "s3cret") || strings.Contains(stderr, "s3cret") {
-		t.Error("a secret parameter leaked into the report")
-	}
 	// The response a client shows comes from the step's trace.
 	shot, err := os.ReadFile(filepath.Join(traces, "auth-login-auth-login.json"))
 	if err != nil {
 		entries, _ := os.ReadDir(traces)
 		t.Fatalf("no trace for the request: %v (the folder holds %v)", err, entries)
 	}
-	if !strings.Contains(string(shot), `"status"`) || strings.Contains(string(shot), "s3cret") {
-		t.Errorf("the trace has no status, or holds the secret:\n%s", shot)
+	if !strings.Contains(string(shot), `"status"`) {
+		t.Errorf("the trace has no status:\n%s", shot)
 	}
+	// Nothing in the language marks a value secret any more, so the list of
+	// secret names is there and empty.
 	got := readCaptures(t, captures)
 	if got.Values["token"] != "t" {
 		t.Errorf("token = %v, want t", got.Values["token"])
 	}
-	if len(got.Secret) != 1 || got.Secret[0] != "token" {
-		t.Errorf("secret = %v, want [token]", got.Secret)
+	if got.Secret == nil || len(got.Secret) != 0 {
+		t.Errorf("secret = %#v, want []", got.Secret)
 	}
 	info, err := os.Stat(captures)
 	if err != nil {
@@ -166,7 +165,7 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 // file is.
 func TestAstAndParseReadAFileAsIfItWereElsewhere(t *testing.T) {
 	draft := filepath.Join(t.TempDir(), "draft.art")
-	src := "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
+	src := "import \"auth.art\"\n\nflow s {\n  step \"login\" = auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
 	if err := os.WriteFile(draft, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}

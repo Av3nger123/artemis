@@ -86,12 +86,12 @@ func Choices() ChoicePoints {
 		SchemaVersion: SchemaVersion,
 		Choices: map[string]Choice{
 			"declaration": words(
-				"The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
+				"The declarations of a file -- import, collection, scenario, flow -- and those a flow's body holds.",
 				token.Blocks),
 			"stepType":     stepTypes(),
 			"method":       words("The HTTP verbs. A step whose action opens with one is an api step.", token.Methods),
 			"action":       words("The action-block openers that are not an HTTP verb: run is a terminal step, browser is a browser step, db is a db step.", token.Actions),
-			"flow":         words("The words that open a control-flow block where a step could be written.", token.Flows),
+			"flow":         words("The words that open a control-flow block where a step could be written.", token.BlockWords),
 			"flowClause":   words("The words of the clauses that follow a block's first: else, case, default, catch, finally, until.", token.FlowClauses),
 			"repeatOption": words("A repeat's pace and bounds: every, within, max.", token.RepeatOptions),
 			"stepStatement": words(
@@ -103,9 +103,9 @@ func Choices() ChoicePoints {
 			"typeName":           words("The right-hand side of is.", token.TypeNames),
 			"builtin":            words("The functions callable in an expression. Which are in scope depends on the step type; see stepType.", builtin.Names()),
 			"configSubject":      words("The subjects of a config declaration.", token.ConfigBlocks),
-			"collectionItem":     words("What a collection body holds: requests.", token.CollectionItems),
+			"collectionItem":     words("What a collection body holds, one keyword per item type: request (an api action), command (run) and query (db).", token.CollectionItems),
 			"useLine":            words("The words that open an override line in a use block. Any other identifier opening a line there is an argument.", token.UseLines),
-			"dropTarget":         words("What a drop line in a use block removes from the template: drop expects or drop captures.", token.DropTargets),
+			"dropTarget":         words("What a drop line in a use block removes from the template: drop expects its expects, drop captures or drop vars its outputs.", token.DropTargets),
 			"requestField":       fields("The fields of an api step's action block.", "request"),
 			"runField":           fields("The fields of a run block.", "run"),
 			"dbField":            fields("The fields of a db block.", "db"),

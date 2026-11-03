@@ -4,10 +4,27 @@ import (
 	"errors"
 	"testing"
 
+	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/expand"
-	"artemis/pkg/dsl/front"
+	"artemis/pkg/dsl/parser"
 	"artemis/pkg/eval"
 )
+
+// expanded is files["main.art"] parsed, expanded through files and checked:
+// the plain scenarios lowering reads, which a scenario file expands to.
+func expanded(t *testing.T, files expand.MapLoader) (*ast.File, *check.Info) {
+	t.Helper()
+	tree, bag := parser.Parse("main.art", files["main.art"])
+	res, eb := expand.Expand(tree, files)
+	bag.Merge(eb)
+	info, cb := check.CheckChained(res.File, res.Chain)
+	bag.Merge(cb)
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	return res.File, info
+}
 
 // A step a use brought in was written in the collection's file, so its line
 // -- and its expects' and captures' lines -- are lines of that file, and say
@@ -18,11 +35,8 @@ func TestAnExpandedStepNamesTheFileItWasWrittenIn(t *testing.T) {
 		"c.art":    "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n    capture tok = body.t\n  }\n}\n",
 		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r\n  step \"own\" {\n    get \"y\"\n    expect status == 200\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", files["main.art"], files)
-	if u.Bag.HasErrors() {
-		t.Fatal(u.Bag.All())
-	}
-	scs, err := File(u.Expanded, u.Info)
+	tree, info := expanded(t, files)
+	scs, err := File(tree, info)
 	if err != nil {
 		t.Fatal(err)
 	}

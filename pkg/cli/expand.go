@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/print"
 	"artemis/pkg/dsl/token"
@@ -14,22 +16,25 @@ import (
 
 var expandCmd = &cobra.Command{
 	Use:   "expand <file.art> [-o <out.art>] [--force]",
-	Short: "Print a scenario file with every use replaced by the steps it stands for",
-	Long: `Read a scenario file, resolve its imports from disk, and print the scenario
-that will actually run: no import, no collection and no use, only steps.
+	Short: "Print what a scenario file runs: each scenario as its flow, every item call as its step",
+	Long: `Read a scenario file, resolve its flow and imports from disk, and print what
+will actually run: each scenario as its flow with the scenario's values in its
+vars, no import, no collection and no item call, only steps.
 
-	artemis expand checkout.art                    # to stdout
-	artemis expand checkout.art -o checkout.flat.art
+	artemis expand scenarios/checkout.art                      # to stdout
+	artemis expand scenarios/checkout.art -o checkout.flat.art
 
-Each step a use brought in carries a comment saying where it came from: the
-request, the line it is declared on, and the use line that brought it
-in. A secret parameter's argument is a 'secret var' just above the steps that
-read it.
+Each step carries a comment saying where it came from: the item or the flow,
+the line it is declared on, and the line that brought it in.
+
+The output is for reading. It is written as a scenario that holds its steps,
+which is a form artemis no longer compiles, so it is not a file to run.
 
 The file is checked first, exactly as 'artemis run' checks it, and nothing is
-printed or written for a file with errors. Without -o the scenario goes to
-stdout. With -o, a file that is already there is an error rather than an
-overwrite; --force replaces it.`,
+printed or written for a file with errors. A flow file is refused, naming the
+scenario files that run it, and so is a file with no scenario in it. Without
+-o the result goes to stdout. With -o, a file that is already there is an
+error rather than an overwrite; --force replaces it.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runExpand,
 }
@@ -58,6 +63,10 @@ func runExpand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if isFlow, err := flowNotExpandable(path, cmd.ErrOrStderr()); isFlow {
+		return err
+	}
+
 	f, err := readArt(path)
 	if err != nil {
 		return err
@@ -67,6 +76,9 @@ func runExpand(cmd *cobra.Command, args []string) error {
 	}
 	if err := f.err(); err != nil {
 		return err
+	}
+	if !hasScenario(f.unit.Expanded) {
+		return fmt.Errorf("%s holds no scenario to expand; artemis expand reads a scenario file, whose first line is flow \"<path to the flow>\"", path)
 	}
 
 	text := print.Canonical(withOrigins(f.unit))
@@ -80,18 +92,51 @@ func runExpand(cmd *cobra.Command, args []string) error {
 	return writeFormatted(out, text)
 }
 
+// flowNotExpandable reports path when it is a flow file, as run does: a flow
+// has no values of its own to expand with, so the diagnostic names the
+// scenario files that run it. isFlow is false for any other file, and for one
+// that cannot be read, which readArt reports.
+func flowNotExpandable(path string, diagOut io.Writer) (isFlow bool, err error) {
+	src, readErr := os.ReadFile(path) //nolint:gosec // the path is the one the user named
+	if readErr != nil {
+		return false, nil
+	}
+	d, isFlow := flowFileDiag(path, string(src), ".")
+	if !isFlow {
+		return false, nil
+	}
+	d.Message = fmt.Sprintf("%s is a flow; expand a scenario file that names it", path)
+	files := diag.NewFiles()
+	files.Add(path, string(src))
+	if err := diag.Terminal(diagOut, files, []diag.Diagnostic{d}); err != nil {
+		return true, err
+	}
+	return true, firstError([]diag.Diagnostic{d})
+}
+
+// hasScenario reports whether tree holds a scenario: a collection file
+// compiles clean and expands to nothing a reader could want printed.
+func hasScenario(tree *ast.File) bool {
+	for _, d := range tree.Scenarios {
+		if _, ok := d.(*ast.Scenario); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // withOrigins is the expanded tree laid out for a reader, with a comment above
-// every step a use brought in:
+// every step an item call brought in, at any depth -- in setup, teardown and
+// every block:
 //
-//	# from auth.login (auth.art:2) via checkout.art:6
+//	# from auth.login (auth.art:2) via flows/checkout.art:6
 //
 // The step's name token carries the Via of the innermost use that copied it
-// in, so that use's item is what `from` names; `via` names the scenario's own
-// use line, at the root of the chain. A step written in the scenario itself
-// has Via 0 and gets nothing.
-//
-// A run of hoisted secret vars that follows a step gets a blank line above
-// it, so it reads as part of the use below it and not of the step above.
+// in, so that use's item is what `from` names, and `via` is the line that
+// called it. A scenario a scenario file made of a flow gets one above itself,
+// naming the flow and the scenario's own line; the flow's own steps, which
+// that scenario's use stamped, get nothing more. A step written in a plain
+// scenario has Via 0 and gets nothing.
 //
 // Trivia is replaced with a new slice and never appended to: ast.Clone shares
 // trivia with the collection's tree, and an append into its spare capacity
@@ -102,26 +147,35 @@ func withOrigins(u *front.Unit) *ast.File {
 		if !ok {
 			continue
 		}
-		for i, b := range sc.Body {
-			switch s := b.(type) {
-			case *ast.StepDecl:
-				if text, ok := origin(u, s.Name.Span.Via); ok {
-					s.Keyword.Leading = withComment(s.Keyword.Leading, text)
-				}
-			case *ast.VarDecl:
-				if i == 0 || s.Name.Span.Via == 0 || s.Secret.Text == "" {
-					continue
-				}
-				if _, afterStep := sc.Body[i-1].(*ast.StepDecl); afterStep {
-					s.Secret.Leading = []token.Trivia{
-						{Kind: token.Newline, Text: "\n"},
-						{Kind: token.Newline, Text: "\n"},
-					}
-				}
-			}
+		flowUse := 0
+		if sc.Flow != "" {
+			flowUse = useAt(u, sc.Name.Span)
 		}
+		if text, ok := origin(u, flowUse); ok {
+			sc.Keyword.Leading = withComment(sc.Keyword.Leading, text)
+		}
+		ast.Inspect(sc, func(n ast.Node) {
+			s, ok := n.(*ast.StepDecl)
+			if !ok || s == nil || s.Name.Span.Via == flowUse {
+				return
+			}
+			if text, ok := origin(u, s.Name.Span.Via); ok {
+				s.Keyword.Leading = withComment(s.Keyword.Leading, text)
+			}
+		})
 	}
 	return u.Expanded
+}
+
+// useAt is the number of the use whose line is at -- what Span.Via holds for
+// it -- or 0 when there is none.
+func useAt(u *front.Unit, at token.Span) int {
+	for i, use := range u.Uses {
+		if use.Span == at {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // origin is the comment for a step copied in by use number via, and false for

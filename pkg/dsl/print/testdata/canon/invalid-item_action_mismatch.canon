@@ -1,0 +1,10 @@
+# A collection item's keyword is its type, and its action must be one that
+# type holds: a request an HTTP verb, a command run, a query db. A run in a
+# request is a command written under the wrong keyword.
+
+collection "ops" {
+  request migrate {
+    run "make" { args = ["migrate"] }
+    expect exit_code == 0
+  }
+}

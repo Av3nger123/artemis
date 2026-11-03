@@ -9,7 +9,6 @@ import (
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/parser"
-	"artemis/pkg/dsl/print"
 	"artemis/pkg/dsl/token"
 	"artemis/pkg/shared/migrate"
 )
@@ -18,28 +17,37 @@ import (
 // no request: there is nothing to put in a collection.
 var ErrNoRequests = errors.New("the collection holds no requests")
 
-// Files is a generated collection file and the scenario file that uses it.
+// Files is what generate writes: a collection, the flow that calls it, and the
+// scenario file that runs the flow. Collection is empty for the flat output,
+// whose flow writes each step in place.
 type Files struct {
 	Collection string // `collection "<name>" { request ... }`, one request per Postman request
-	Scenario   string // the scenario's vars, then one `use` per request
+	Flow       string // `flow <name> { var ... step ... }`: the Postman variables, then one step per request
+	Scenario   string // `flow "<flow file>"` and one empty scenario titled as the collection is
 }
 
-// CollectionFiles is config as a collection file and a scenario that uses it.
+// CollectionFiles is config as a collection file, a flow that calls it, and a
+// scenario file that runs the flow.
 //
-// Each step becomes one `request`, in the order the steps are in. A collection
-// has no `var`, so each scenario var a request reads becomes a parameter of
-// that request, and the scenario passes the var in by name. The request body is
-// the step body that migrate.Source writes, so a run of the two files sends
-// what a run of the flat file sends.
+// Each step becomes one `request`, in the order the steps are in. A request
+// declares each Postman variable it reads as a `var` with no value, an input
+// the flow supplies: the flow holds one `var` for each Postman variable, and
+// an item's input with no value of its own is read from the flow's names. The
+// request body is the step body that migrate.Source writes, so a run of the
+// three files sends what a run of the flat output sends.
 //
-// collectionFile is the name the collection will be written under. The
-// collection is titled as the Postman collection is, and the scenario imports
-// it by its base name -- so the two files must be written side by side -- and
-// uses it by the file's name, or by an `as` when that name cannot be a use's.
+// collectionFile and flowFile are the names the collection and the flow will
+// be written under, side by side with the scenario file. The collection is
+// titled as the Postman collection is, and the flow imports it by its base
+// name and calls it by the file's name, or by an `as` when that name cannot be
+// one. The scenario file names the flow by its base name.
 //
 // Two steps may share a name in the flat file; two requests of one collection
 // may not, so the second gets the suffix _2, the third _3, and so on.
-func CollectionFiles(config migrate.Config, comments migrate.Comments, collectionFile string) (Files, error) {
+//
+// The text is written in the canonical form `artemis fmt` gives, rather than
+// printed from a tree, so that it does not wait on the printer.
+func CollectionFiles(config migrate.Config, comments migrate.Comments, collectionFile, flowFile string) (Files, error) {
 	if len(config.Steps) == 0 {
 		return Files{}, ErrNoRequests
 	}
@@ -60,55 +68,174 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		importLine += " as " + coll
 	}
 
-	var items strings.Builder
-	var uses []string
+	var items []string
+	var steps []string
 	taken := map[string]bool{}
 	for _, st := range config.Steps {
 		name := requestName(st.Name, taken)
-		body, reads, err := stepText(st, vars)
+		text, err := stepText(st, vars)
 		if err != nil {
 			return Files{}, err
 		}
-		params := make([]string, len(reads))
-		args := make([]string, len(reads))
-		for i, r := range reads {
-			p := r
+		var item strings.Builder
+		fmt.Fprintf(&item, "  request %s {\n", name)
+		args := make([]string, 0, len(text.reads))
+		for _, r := range text.reads {
+			in := r
 			if token.IsUseLine(r) {
-				// A use block reads these words as overrides, so a
-				// parameter with one of them could never be passed.
-				p = r + "_value"
+				// A step block reads these words as overrides, so an
+				// input with one of them could never be passed, nor read
+				// from the flow under its own name: the step passes it.
+				in = r + "_value"
+				args = append(args, in+" = "+r)
 			}
-			params[i], args[i] = p, p+" = "+r
+			fmt.Fprintf(&item, "    var %s\n", in)
 		}
-		fmt.Fprintf(&items, "  request %s(%s) {\n%s  }\n\n", name, strings.Join(params, ", "), body)
-		use := "  use " + coll + "." + name
+		if len(text.reads) > 0 {
+			item.WriteString("\n")
+		}
+		item.WriteString(text.body)
+		item.WriteString("  }\n")
+		items = append(items, item.String())
+
+		call := fmt.Sprintf("  step %s = %s.%s {", text.name, coll, name)
 		if len(args) > 0 {
-			use += " { " + strings.Join(args, ", ") + " }"
+			call += " " + strings.Join(args, ", ") + " "
 		}
-		uses = append(uses, use)
+		steps = append(steps, call+"}")
 	}
 
-	collSrc := fmt.Sprintf("%s\ncollection %q {\n\n%s}\n", firstLine(comments.File), title, strings.TrimRight(items.String(), "\n")+"\n")
+	collSrc := fmt.Sprintf("collection %s {\n%s}\n", quoteTitle(title), strings.Join(items, "\n"))
+	if c := firstLine(comments.File); c != "" {
+		collSrc = c + "\n" + collSrc
+	}
 
-	head, err := migrate.Source(migrate.Config{Name: config.Name, Type: config.Type, Variables: config.Variables}, comments)
+	head, err := migrate.Source(migrate.Config{Name: title, Type: config.Type, Variables: config.Variables}, comments)
 	if err != nil {
 		return Files{}, err
 	}
-	i := strings.LastIndex(head, "}")
-	if i < 0 {
-		return Files{}, fmt.Errorf("the scenario head has no closing brace:\n%s", head)
+	flow, scenarioLine, err := asFlow(head, flowName(title), steps, false)
+	if err != nil {
+		return Files{}, err
 	}
-	scenSrc := fmt.Sprintf("%s\n\n%s\n%s\n}\n", importLine, strings.TrimRight(head[:i], "\n"), strings.Join(uses, "\n"))
+	return Files{
+		Collection: collSrc,
+		Flow:       importLine + "\n\n" + flow,
+		Scenario:   scenarioFile(firstLine(comments.File), flowFile, scenarioLine),
+	}, nil
+}
 
-	collOut, err := canonical("collection", collSrc)
+// FlatFiles is config as a flow that writes each request in place as a step,
+// and a scenario file that runs it. flowFile is the name the flow will be
+// written under, beside the scenario file. Files.Collection is empty.
+func FlatFiles(config migrate.Config, comments migrate.Comments, flowFile string) (Files, error) {
+	src, err := migrate.Source(config, comments)
 	if err != nil {
 		return Files{}, err
 	}
-	scenOut, err := canonical("scenario", scenSrc)
+	title := config.Name
+	if title == "" {
+		title, _ = parser.ImportName(flowFile)
+		title = strings.TrimSuffix(title, ".flow")
+	}
+	flow, scenarioLine, err := asFlow(src, flowName(title), nil, true)
 	if err != nil {
 		return Files{}, err
 	}
-	return Files{Collection: collOut, Scenario: scenOut}, nil
+	return Files{Flow: flow, Scenario: scenarioFile(firstLine(comments.File), flowFile, scenarioLine)}, nil
+}
+
+// asFlow turns the scenario migrate.Source wrote into a flow named name: the
+// `scenario "<title>" {` line becomes `flow <name> {`, and steps go below
+// what the scenario held, after a blank line. The scenario line comes back
+// with an empty body, `scenario "<title>" {}`, for the scenario file.
+//
+// spaced is a blank line between the steps, which the steps written in place
+// already have.
+func asFlow(src, name string, steps []string, spaced bool) (flow, scenario string, err error) {
+	lines := strings.Split(strings.TrimRight(src, "\n"), "\n")
+	at := -1
+	for i, l := range lines {
+		if strings.HasPrefix(l, "scenario ") {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return "", "", fmt.Errorf("the scenario has no scenario line, which is a bug in artemis:\n%s", src)
+	}
+	head := lines[at]
+	var body []string
+	switch {
+	case strings.HasSuffix(head, " {}") && at == len(lines)-1:
+		head = strings.TrimSuffix(head, " {}")
+	case strings.HasSuffix(head, " {") && lines[len(lines)-1] == "}":
+		head = strings.TrimSuffix(head, " {")
+		body = lines[at+1 : len(lines)-1]
+	default:
+		return "", "", fmt.Errorf("the scenario has an unexpected layout, which is a bug in artemis:\n%s", src)
+	}
+	scenario = head + " {}"
+
+	if len(body) > 0 && len(steps) > 0 {
+		body = append(body, "")
+	}
+	for i, s := range steps {
+		if spaced && i > 0 {
+			body = append(body, "")
+		}
+		body = append(body, s)
+	}
+
+	var b strings.Builder
+	for _, l := range lines[:at] {
+		b.WriteString(l + "\n")
+	}
+	if len(body) == 0 {
+		fmt.Fprintf(&b, "flow %s {}\n", name)
+		return b.String(), scenario, nil
+	}
+	fmt.Fprintf(&b, "flow %s {\n", name)
+	for _, l := range body {
+		b.WriteString(l + "\n")
+	}
+	b.WriteString("}\n")
+	return b.String(), scenario, nil
+}
+
+// scenarioFile is the scenario file that runs the flow at flowFile: its header,
+// then one scenario that sets nothing, so every var keeps its default.
+func scenarioFile(comment, flowFile, scenario string) string {
+	var b strings.Builder
+	if comment != "" {
+		b.WriteString(comment + "\n")
+	}
+	fmt.Fprintf(&b, "flow %q\n\n%s\n", filepath.Base(flowFile), scenario)
+	return b.String()
+}
+
+// flowName is the collection's title as a flow's name: "Orders API" is
+// orders_api.
+func flowName(title string) string {
+	name := identifier(strings.ToLower(title))
+	for strings.Contains(name, "__") {
+		name = strings.ReplaceAll(name, "__", "_")
+	}
+	if name == "" {
+		return "flow"
+	}
+	return name
+}
+
+// quoteTitle is title as a DSL string, quoted the way migrate.Source quotes a
+// scenario's name.
+func quoteTitle(title string) string {
+	src, err := migrate.Source(migrate.Config{Name: title}, migrate.Comments{})
+	if err != nil {
+		return fmt.Sprintf("%q", title)
+	}
+	line := strings.TrimSuffix(strings.TrimSpace(src), " {}")
+	return strings.TrimPrefix(line, "scenario ")
 }
 
 // requestName is a step name as a request name that no earlier request in
@@ -130,16 +257,23 @@ func requestName(step string, taken map[string]bool) string {
 	return name
 }
 
-// stepText is the lines inside the `step` block migrate.Source writes for st,
-// indented for a request, and the vars those lines read, sorted.
-func stepText(st migrate.Step, vars map[string]bool) (string, []string, error) {
+// step is one request's text, read off the step block migrate.Source writes.
+type step struct {
+	name  string   // the step's name as a DSL string, quotes included
+	body  string   // the lines inside the step block, indented for a request
+	reads []string // the vars those lines read, sorted
+}
+
+// stepText is the step block migrate.Source writes for st, as the parts a
+// request and the step that calls it need.
+func stepText(st migrate.Step, vars map[string]bool) (step, error) {
 	src, err := migrate.Source(migrate.Config{Name: "step", Steps: []migrate.Step{st}}, migrate.Comments{})
 	if err != nil {
-		return "", nil, err
+		return step{}, err
 	}
 	tree, bag := parser.Parse("step.art", src)
 	if bag.HasErrors() {
-		return "", nil, fmt.Errorf("request %q does not parse: %v", st.Name, bag.All()[0])
+		return step{}, fmt.Errorf("request %q does not parse: %v", st.Name, bag.All()[0])
 	}
 
 	reads := map[string]bool{}
@@ -163,31 +297,26 @@ func stepText(st migrate.Step, vars map[string]bool) (string, []string, error) {
 	// The printed source is `scenario "step" {`, the step block, then `}`.
 	// The step block's own lines are the ones between its first and last line.
 	lines := strings.Split(strings.TrimRight(src, "\n"), "\n")
-	var step []string
+	var block []string
 	for i, l := range lines {
 		if i == 0 || i == len(lines)-1 {
 			continue
 		}
-		step = append(step, l)
+		block = append(block, l)
 	}
-	if len(step) < 2 || !strings.HasPrefix(strings.TrimSpace(step[0]), "step ") {
-		return "", nil, fmt.Errorf("request %q: unexpected step layout:\n%s", st.Name, src)
+	open := ""
+	if len(block) > 0 {
+		open = strings.TrimSpace(block[0])
+	}
+	if len(block) < 2 || !strings.HasPrefix(open, "step ") || !strings.HasSuffix(open, " {") {
+		return step{}, fmt.Errorf("request %q: unexpected step layout:\n%s", st.Name, src)
 	}
 	var b strings.Builder
-	for _, l := range step[1 : len(step)-1] {
-		b.WriteString("  " + l + "\n")
+	for _, l := range block[1 : len(block)-1] {
+		b.WriteString(l + "\n")
 	}
-	return b.String(), names, nil
-}
-
-// canonical parses src and prints it the way `artemis fmt` does. A parse error
-// is a bug in this package, so it shows the source.
-func canonical(what, src string) (string, error) {
-	tree, bag := parser.Parse(what+".art", src)
-	if bag.HasErrors() {
-		return "", fmt.Errorf("generated %s does not parse, which is a bug in artemis: %v\n%s", what, bag.All()[0], src)
-	}
-	return print.Canonical(tree), nil
+	name := strings.TrimSuffix(strings.TrimPrefix(open, "step "), " {")
+	return step{name: name, body: b.String(), reads: names}, nil
 }
 
 // firstLine is the first line of s.

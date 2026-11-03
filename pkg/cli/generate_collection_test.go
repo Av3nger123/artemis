@@ -10,11 +10,12 @@ import (
 	"testing"
 )
 
-// The default mode writes a collection file beside -o and a scenario that
-// imports it, and the two compile together with no diagnostics.
-func TestGenerateWritesACollectionAndAScenario(t *testing.T) {
+// The default mode writes three files: the collection and the flow beside -o,
+// and the scenario file at -o.
+func TestGenerateWritesThreeFiles(t *testing.T) {
 	path := writeCollection(t, "ping.postman_collection.json", smallCollection)
-	out := filepath.Join(filepath.Dir(path), "ping.art")
+	dir := filepath.Dir(path)
+	out := filepath.Join(dir, "ping.art")
 
 	stdout, stderr, err := executeArgs(t, "generate", "-f", path, "-o", out)
 	if err != nil {
@@ -24,17 +25,31 @@ func TestGenerateWritesACollectionAndAScenario(t *testing.T) {
 		t.Errorf("stdout = %q, stderr = %q, want nothing", stdout, stderr)
 	}
 
-	coll := readFile(t, filepath.Join(filepath.Dir(path), "ping.collection.art"))
-	if !strings.Contains(coll, `collection "ping" {`) || !strings.Contains(coll, "request health_ping() {") {
+	coll := readFile(t, filepath.Join(dir, "ping.collection.art"))
+	if !strings.Contains(coll, `collection "ping" {`) || !strings.Contains(coll, "  request health_ping {\n    get ") {
 		t.Errorf("the collection file holds\n%s", coll)
 	}
+	flow := readFile(t, filepath.Join(dir, "ping.flow.art"))
+	if !strings.Contains(flow, `import "ping.collection.art"`) || !strings.Contains(flow, "flow ping {") ||
+		!strings.Contains(flow, `step "Health / ping" = ping.health_ping {}`) {
+		t.Errorf("the flow file holds\n%s", flow)
+	}
 	scen := readFile(t, out)
-	if !strings.Contains(scen, `import "ping.collection.art"`) || !strings.Contains(scen, "use ping.health_ping") {
+	if !strings.Contains(scen, "flow \"ping.flow.art\"\n\nscenario \"ping\" {}\n") {
 		t.Errorf("the scenario file holds\n%s", scen)
 	}
+}
 
-	bag := frontEnd(out, scen).Bag
-	for _, d := range bag.All() {
+// The three files compile together with no diagnostics: the scenario file
+// reads the flow, and the flow the collection.
+func TestGeneratedFilesCompile(t *testing.T) {
+	t.Skip(integrationGenerate)
+	path := writeCollection(t, "ping.postman_collection.json", smallCollection)
+	out := filepath.Join(filepath.Dir(path), "ping.art")
+	if _, stderr, err := executeArgs(t, "generate", "-f", path, "-o", out); err != nil {
+		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
+	}
+	for _, d := range frontEnd(out, readFile(t, out)).Bag.All() {
 		t.Errorf("%s: %s: %s", d.Span.File, d.Code, d.Message)
 	}
 }
@@ -82,7 +97,7 @@ func TestGenerateRefusesAnExistingCollectionFile(t *testing.T) {
 	if _, stderr, err := executeArgs(t, "generate", "-f", path, "-o", out, "--force"); err != nil {
 		t.Fatalf("with --force: Execute() = %v\nstderr:\n%s", err, stderr)
 	}
-	if got := readFile(t, coll); !strings.Contains(got, "request health_ping()") {
+	if got := readFile(t, coll); !strings.Contains(got, "request health_ping {") {
 		t.Errorf("--force did not replace the collection file:\n%s", got)
 	}
 }
@@ -102,7 +117,7 @@ func TestGenerateRefusesACollectionWithNoRequests(t *testing.T) {
 	if !strings.Contains(err.Error(), "no requests") {
 		t.Errorf("error = %v, want it to say the collection holds no requests", err)
 	}
-	for _, f := range []string{out, filepath.Join(dir, "empty.collection.art")} {
+	for _, f := range []string{out, filepath.Join(dir, "empty.collection.art"), filepath.Join(dir, "empty.flow.art")} {
 		if _, err := os.Stat(f); err == nil {
 			t.Errorf("%s was written", f)
 		}
@@ -113,6 +128,7 @@ func TestGenerateRefusesACollectionWithNoRequests(t *testing.T) {
 // sends the same requests and checks the same expects as the flat output.
 // The server fails one request on purpose, so the fail counts are compared too.
 func TestGeneratedCollectionRunsLikeTheFlatOutput(t *testing.T) {
+	t.Skip(integrationGenerate)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/orders":

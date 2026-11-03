@@ -1,0 +1,8 @@
+=== terminal
+second_flow.art:13:1: this file already has the flow checkout, on line 4
+   13 | flow refund {
+      | ^^^^
+   hint: a flow file holds one flow; put refund in a file of its own
+
+=== codes
+second-flow	error	13:1-13:5

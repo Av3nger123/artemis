@@ -1,4 +1,4 @@
-scenario: regex capture (testdata/art/regex_capture.art)
+scenario: regex capture (testdata/art/scenarios/regex_capture.art)
   ok    read the redirect           <dur>
   ok    read the item back          <dur>
 

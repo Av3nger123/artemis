@@ -32,15 +32,29 @@ type Result struct {
 	File    *ast.File         // only scenarios, vars, configs and steps
 	Uses    []Use             // what Span.Via indexes (Via-1)
 	Sources map[string]string // every file read, by name, for rendering diagnostics
+
+	// Check is what the checker reads in place of File, or nil when that is
+	// File. For a flow file it is the flow as one scenario, the flow's own
+	// standalone check (FlowCheck): File holds no scenario, since a flow runs
+	// only through a scenario file that names it.
+	Check *ast.File
 }
 
-// Chain is the use line that brought a span in. A span written in place has
-// none. A use is only ever written in a scenario, so there is at most one.
+// Chain is the use lines that brought a span in, innermost first. A span
+// written in place has none. A use written in a scenario is one; a step in a
+// flow that calls an item is two, the step and then the scenario that ran
+// the flow, because the step's own span was brought in by that scenario.
 func (r *Result) Chain(s token.Span) []token.Span {
-	if s.Via <= 0 || s.Via > len(r.Uses) {
-		return nil
+	var out []token.Span
+	for via := s.Via; via > 0 && via <= len(r.Uses); {
+		at := r.Uses[via-1].Span
+		out = append(out, at)
+		if at.Via >= via {
+			break // a use is always entered after the one that brought it in
+		}
+		via = at.Via
 	}
-	return []token.Span{r.Uses[s.Via-1].Span}
+	return out
 }
 
 // expander holds one expansion: the files read, the collections they
@@ -55,6 +69,7 @@ type expander struct {
 	literal map[*ast.StepDecl]bool // an expanded step whose body was written as an object literal
 
 	standing map[*ast.Collection]standing // each collection's standalone check
+	flows    map[*ast.Flow]standing       // each flow's standalone check
 	silent   int                          // uses refused without a diagnostic of their own
 }
 
@@ -82,6 +97,15 @@ type dep struct {
 // A file with no import, no collection and no use is returned as is -- the
 // same pointer -- so a caller that never meets the feature sees no change.
 func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
+	return ExpandParsed(tree, l, true)
+}
+
+// ExpandParsed is Expand for a tree whose parse may have failed: parsed is
+// false when the parser reported an error. A scenario file that did not parse
+// does not load its flow, because what the flow would add to the parse error is
+// noise -- and a flow found or not found depends on where the file is read
+// from, which a parse error should not.
+func ExpandParsed(tree *ast.File, l Loader, parsed bool) (*Result, *diag.Bag) {
 	bag := diag.New()
 	res := &Result{File: tree, Sources: map[string]string{}}
 	if !needsExpansion(tree) {
@@ -98,25 +122,33 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 		literal: map[*ast.StepDecl]bool{},
 
 		standing: map[*ast.Collection]standing{},
+		flows:    map[*ast.Flow]standing{},
 	}
-	root := &unit{name: name, tree: tree, ok: true}
+	root := &unit{name: name, tree: tree, ok: parsed}
 	e.imports(root)
 	e.index(root)
 
+	ref := flowRef(tree)
 	out := &ast.File{EOF: tree.EOF}
 	for _, d := range tree.Scenarios {
 		switch v := d.(type) {
+		case *ast.Flow:
+			// A flow runs only through a scenario file that names it; on its
+			// own it is checked, and the parser has reported a second one.
+			if ref == nil && res.Check == nil {
+				res.Check = e.flowFile(root, v)
+			}
 		case *ast.Import, *ast.Collection:
+		case *ast.FlowRef:
+			if v == ref {
+				out.Scenarios = append(out.Scenarios, e.scenarios(root, v)...)
+			}
 		case *ast.Scenario:
+			if ref != nil {
+				continue // data for the flow; scenarios made a scenario of each
+			}
 			cp := *v
 			cp.Body = e.body(root, v.Body)
-			if cp.For != nil {
-				// After the uses, so each row is a copy of the scenario as
-				// it runs; a scenario whose rows could not be made is
-				// dropped, its fault already reported.
-				out.Scenarios = append(out.Scenarios, e.rows(&cp)...)
-				continue
-			}
 			out.Scenarios = append(out.Scenarios, &cp)
 		default:
 			out.Scenarios = append(out.Scenarios, d)
@@ -139,12 +171,9 @@ func Expand(tree *ast.File, l Loader) (*Result, *diag.Bag) {
 func needsExpansion(tree *ast.File) bool {
 	for _, d := range tree.Scenarios {
 		switch v := d.(type) {
-		case *ast.Import, *ast.Collection:
+		case *ast.Import, *ast.Collection, *ast.Flow, *ast.FlowRef:
 			return true
 		case *ast.Scenario:
-			if v.For != nil {
-				return true
-			}
 			if hasUse(v.Body) {
 				return true
 			}
@@ -163,7 +192,7 @@ func hasUse(decls []ast.Decl) bool {
 			if hasUse(v.Body) {
 				return true
 			}
-		case *ast.FlowDecl:
+		case *ast.BlockDecl:
 			for _, c := range v.Clauses {
 				if hasUse(c.Body) {
 					return true
@@ -191,10 +220,7 @@ func fileName(tree *ast.File) string {
 	return "main.art"
 }
 
-// body is a scenario body with each use replaced by its steps. The secret
-// vars a use hoisted sit directly above its
-// steps, in use order: there they see the vars the use's arguments see, and
-// the checker binds them for the steps that read them.
+// body is a scenario body with each use replaced by its steps.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 	return e.bodyIn(u, decls, newScope(decls))
 }
@@ -206,24 +232,21 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 	for _, d := range decls {
 		if phase, ok := d.(*ast.PhaseDecl); ok {
 			cp := *phase
-			cp.Body = e.bodyIn(u, phase.Body, sc)
+			cp.Body = e.bodyIn(u, phase.Body, sc.below(out))
 			out = append(out, &cp)
 			continue
 		}
-		if flow, ok := d.(*ast.FlowDecl); ok {
+		if flow, ok := d.(*ast.BlockDecl); ok {
 			cp := *flow
 			cp.Clauses = make([]*ast.Clause, len(flow.Clauses))
 			for i, c := range flow.Clauses {
-				cp.Clauses[i] = e.clauseIn(u, c, sc)
+				cp.Clauses[i] = e.clauseIn(u, c, sc.below(out))
 			}
 			out = append(out, &cp)
 			continue
 		}
 		if use, ok := d.(*ast.UseDecl); ok {
-			steps := e.expandUse(u, use, sc.at(nil, out))
-			out = append(out, *sc.hoisted...)
-			*sc.hoisted = (*sc.hoisted)[:0]
-			out = append(out, steps...)
+			out = append(out, e.expandUse(u, use, sc.below(out))...)
 			continue
 		}
 		out = append(out, d)
@@ -293,7 +316,13 @@ func (e *expander) load(from string, imp *ast.Import) *unit {
 	if u, ok := e.loaded[name]; ok {
 		return u
 	}
-	tree, pb := parser.Parse(name, src)
+	return e.loadSource(name, src)
+}
+
+// loadSource parses, indexes and records the file name holds, and the files
+// it imports in turn.
+func (e *expander) loadSource(name, src string) *unit {
+	tree, pb := e.parse(name, src)
 	e.bag.Merge(pb)
 	e.res.Sources[name] = src
 	u := &unit{name: name, tree: tree, ok: !pb.HasErrors()}
@@ -304,6 +333,11 @@ func (e *expander) load(from string, imp *ast.Import) *unit {
 	e.loading = e.loading[:len(e.loading)-1]
 	e.index(u)
 	return u
+}
+
+// parse is the tree of the file name, read from src.
+func (e *expander) parse(name, src string) (*ast.File, *diag.Bag) {
+	return parser.Parse(name, src)
 }
 
 // index checks u's shape (shape.go), then fills u's own collections and its
@@ -432,7 +466,7 @@ func keys(m map[string]*ast.Collection) []string {
 // expandUse returns the step one use stands for: its request written out,
 // its parameters bound to the use's arguments, then its override lines
 // applied, then `as` renaming the step's captures. u is the scenario's file,
-// and sc what the use's arguments can read, for secret parameters.
+// and sc the context the use reads a missing input from.
 func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Ref: use.Ref()})
 	via := len(e.res.Uses)
@@ -449,7 +483,7 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, inputs(it), sc, stamp)
 		if !ok {
 			return nil
 		}

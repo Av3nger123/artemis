@@ -1,0 +1,8 @@
+=== terminal
+flow_ref_placement.art:7:1: flow "../flows/checkout.art" must be the first line of the file
+   7 | flow "../flows/checkout.art"
+     | ^^^^
+   hint: move it above everything else; the scenarios below it run the flow it names
+
+=== codes
+flow-ref-placement	error	7:1-7:5

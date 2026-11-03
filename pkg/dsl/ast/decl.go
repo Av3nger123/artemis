@@ -43,16 +43,10 @@ type Scenario struct {
 	Body    []Decl // ConfigDecl, VarDecl, StepDecl, or Bad
 	RBrace  token.Token
 
-	// Row is where an expanded scenario came from: the row of its data it is.
-	// pkg/dsl/expand sets it on each scenario it makes out of one with a for
-	// clause; it is nil everywhere else and has no tokens.
-	Row *RowOrigin
-}
-
-// RowOrigin is the row an expanded scenario was made from.
-type RowOrigin struct {
-	Source string // what the for clause read: "data/users.json", or "rows" for a literal
-	Index  int    // the row's place in the data, from 0
+	// Flow is the name of the flow an expanded scenario runs. pkg/dsl/expand
+	// sets it on each scenario it makes out of a scenario file; it is "" for
+	// any other scenario and has no tokens.
+	Flow string
 }
 
 // ForClause is `for user in json("data/users.json")`, or `for secret user in
@@ -114,6 +108,10 @@ func (c *ConfigDecl) decl()            {}
 
 // VarDecl is `var url = env("API_URL")`, or `secret var pw = env("API_PASSWORD")`.
 type VarDecl struct {
+	// Private is the `private` modifier, and the zero token when it is absent:
+	// a private var is set by nothing outside the flow or item declaring it.
+	Private token.Token
+
 	// Secret is the `secret` modifier, and the zero token when it is absent.
 	//
 	// It is a token rather than a bool because pkg/dsl/print reproduces the
@@ -122,11 +120,16 @@ type VarDecl struct {
 	Secret  token.Token // `secret`, zero when the modifier is absent
 	Keyword token.Token // var
 	Name    token.Token // the Ident being bound
-	Assign  token.Token // =
-	Value   Expr
+	Assign  token.Token // =; zero for a required var, `var user`
+	Value   Expr        // nil for a required var
 }
 
+// Required reports whether the var has no value of its own, so that whoever
+// uses the flow or item declaring it must supply one.
+func (v *VarDecl) Required() bool { return v.Value == nil }
+
 func (v *VarDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, v.Private)
 	dst = appendTok(dst, v.Secret)
 	dst = appendTok(dst, v.Keyword)
 	dst = appendTok(dst, v.Name)
@@ -274,7 +277,7 @@ func (t *TagsDecl) Tokens(dst []token.Token) []token.Token {
 func (t *TagsDecl) Span() token.Span { return spanOf(t) }
 func (t *TagsDecl) decl()            {}
 
-// FlowDecl is a control-flow block: the steps inside it run in parallel, on a
+// BlockDecl is a control-flow block: the steps inside it run in parallel, on a
 // condition, as a switch, under try, or in a loop. Which one is its first
 // clause's keyword:
 //
@@ -288,31 +291,31 @@ func (t *TagsDecl) decl()            {}
 // keyword, an optional expression and a body of declarations -- steps, uses
 // and further blocks. A switch's own body holds its case and default clauses.
 // Until and Cond are a repeat's closing condition, written after its brace.
-type FlowDecl struct {
+type BlockDecl struct {
 	Clauses []*Clause
 	Until   token.Token // until; zero but for repeat
 	Cond    Expr        // the until condition; nil but for repeat
 }
 
-// Flow kinds, the keyword a FlowDecl's first clause opens with.
+// Block kinds, the keyword a BlockDecl's first clause opens with.
 const (
-	FlowParallel = "parallel"
-	FlowIf       = "if"
-	FlowSwitch   = "switch"
-	FlowTry      = "try"
-	FlowRepeat   = "repeat"
+	BlockParallel = "parallel"
+	BlockIf       = "if"
+	BlockSwitch   = "switch"
+	BlockTry      = "try"
+	BlockRepeat   = "repeat"
 )
 
-// Kind is which block this is: FlowParallel, FlowIf, FlowSwitch, FlowTry or
-// FlowRepeat, or "" for a block with no clause.
-func (f *FlowDecl) Kind() string {
+// Kind is which block this is: BlockParallel, BlockIf, BlockSwitch, BlockTry or
+// BlockRepeat, or "" for a block with no clause.
+func (f *BlockDecl) Kind() string {
 	if len(f.Clauses) == 0 {
 		return ""
 	}
 	return f.Clauses[0].Keyword.Value
 }
 
-func (f *FlowDecl) Tokens(dst []token.Token) []token.Token {
+func (f *BlockDecl) Tokens(dst []token.Token) []token.Token {
 	for _, c := range f.Clauses {
 		dst = appendNode(dst, c)
 	}
@@ -320,10 +323,10 @@ func (f *FlowDecl) Tokens(dst []token.Token) []token.Token {
 	return appendNode(dst, f.Cond)
 }
 
-func (f *FlowDecl) Span() token.Span { return spanOf(f) }
-func (f *FlowDecl) decl()            {}
+func (f *BlockDecl) Span() token.Span { return spanOf(f) }
+func (f *BlockDecl) decl()            {}
 
-// Clause is one part of a FlowDecl: `if cond { ... }`, `else if cond { ...
+// Clause is one part of a BlockDecl: `if cond { ... }`, `else if cond { ...
 // }`, `else { ... }`, `case "pro" { ... }`, `catch { ... }`, `repeat every
 // "2s" max 30 { ... }`.
 //

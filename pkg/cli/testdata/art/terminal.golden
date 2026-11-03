@@ -1,13 +1,13 @@
-scenario: api and terminal (testdata/art/terminal.art)
+scenario: api and terminal (testdata/art/terminal/scenarios/terminal_1.art)
   ok    work out the path           <dur>
   ok    read the collection         <dur>
-scenario: a command that fails (testdata/art/terminal.art)
+scenario: a command that fails (testdata/art/terminal/scenarios/terminal_2.art)
   FAIL  exit non-zero               <dur>
          exit_code == 0, got 2
 
 1 failure:
 
-1) testdata/art/terminal.art:34
+1) testdata/art/terminal/flows/terminal_2.art:9
      scenario  a command that fails
      step      exit non-zero
      assert    expect exit_code ==

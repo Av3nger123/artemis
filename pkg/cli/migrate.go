@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	artmigrate "artemis/pkg/dsl/migrate"
 	"artemis/pkg/shared/migrate"
 
 	"github.com/spf13/cobra"
@@ -16,12 +18,25 @@ import (
 const outFlag = "out"
 
 var migrateCmd = &cobra.Command{
-	Use:   "migrate -f <file.yaml> [-o <file.art>]",
-	Short: "Convert a YAML scenario to a .art file, once",
-	Long: `Read a YAML scenario and write the same scenario as Artemis DSL source.
+	Use:   "migrate -f <file.yaml|file.art|dir> -o <dir>",
+	Short: "Convert a YAML scenario, or .art files in the old forms, once",
+	Long: `Read a YAML scenario and write it as a flow and a scenario file, or read
+.art files written in the old forms and write the collections, flows and
+scenario files that replace them.
 
-	artemis migrate -f checkout.yaml              # to stdout
-	artemis migrate -f checkout.yaml -o checkout.art
+	artemis migrate -f checkout.yaml -o new/      # new/flows/checkout.art, new/scenarios/checkout.art
+	artemis migrate -f checkout.art -o new/       # an old .art file
+	artemis migrate -f suite/ -o new/             # every .art file in a folder
+
+Every migration writes several files, so -o names a folder for them, and the
+originals are never changed. The paths written are printed on stdout. A YAML
+scenario b.yaml becomes the flow flows/b.art and the scenario file
+scenarios/b.art. A scenario in a/b.art becomes the flow a/flows/b.art and the
+scenario file a/scenarios/b.art; a collection keeps its path; a suite.art is
+copied into each flow under it and is not written. What changed in meaning --
+each secret removed, each suite whose setup now runs once per scenario -- is
+noted on stderr. The paths under -o are the paths under the folder -f names,
+or under the file's own folder; lay them over the originals to replace them.
 
 This is the one place artemis still reads YAML. The file is checked exactly as
 'artemis parse' checks it -- a strict decode, and every step type validated
@@ -53,57 +68,89 @@ a stream, an unclosed '{{'. Migration will not guess at one.`,
 	},
 }
 
-// migrateFile is the whole command.
-//
-// It refuses a .art file, because migrating one is already done and reprinting
-// it is what `artemis fmt` is for; saying so is better than writing a file
-// somebody then has to diff to discover nothing happened.
+// migrateFile is the whole command: a .art file or a folder goes to
+// migrateArt, and anything else is read as YAML.
 func migrateFile(cmd *cobra.Command, path, out string) error {
-	if isArtFile(path) {
-		return fmt.Errorf("%s is already %s; artemis migrate converts a YAML scenario, and artemis fmt formats a %s file",
-			path, artExt, artExt)
+	if info, err := os.Stat(path); isArtFile(path) || (err == nil && info.IsDir()) {
+		return migrateArt(cmd, path, out)
 	}
-	if out != "" && !isArtFile(out) {
-		return fmt.Errorf("artemis migrate writes %s files; -o %s is not one", artExt, out)
+	return migrateYAML(cmd, path, out)
+}
+
+// migrateYAML migrates one YAML scenario to a flow and a scenario file under
+// out: flows/<stem>.art and scenarios/<stem>.art, laid out as a migrated .art
+// file in the same folder would be. Two steps make it -- the YAML becomes a
+// .art scenario holding its steps, and that becomes the new files as an old
+// .art file does -- and nothing of the first is written.
+func migrateYAML(cmd *cobra.Command, path, out string) error {
+	if out == "" {
+		return fmt.Errorf("migrating %s writes a flow and a scenario file; name a folder for them with -o <dir>", path)
+	}
+	if info, err := os.Stat(out); (err == nil && !info.IsDir()) || isArtFile(out) || isYAMLFile(out) {
+		return fmt.Errorf("-o %s is a file; migrating %s writes a folder holding a flow and a scenario file", out, path)
 	}
 
+	files, notes, err := yamlForms(cmd, path)
+	if err != nil {
+		return err
+	}
+	keys := make([]string, 0, len(files))
+	for k := range files {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		dst := filepath.Join(out, filepath.FromSlash(k))
+		// writeFormatted is fmt -w's writer: beside and renamed over, with the
+		// original's permission bits, so an interrupted migration leaves
+		// either the old file or the whole new one.
+		if err := ensureWritable(dst); err != nil {
+			return err
+		}
+		if err := writeFormatted(dst, files[k]); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), dst)
+	}
+	for _, n := range notes {
+		fmt.Fprintf(cmd.ErrOrStderr(), "note: %s\n", n)
+	}
+	return nil
+}
+
+// yamlForms is the YAML scenario at path as the new forms, by slash path under
+// the folder they are written to, and the notes the conversion made.
+func yamlForms(cmd *cobra.Command, path string) (map[string]string, []string, error) {
 	// The loader that was `artemis parse`'s until ART-40 took YAML off the run
 	// path: strict decoding, plus validation against the step types migration
 	// can translate, so a file it cannot convert is refused before anything is
 	// written.
 	config, err := migrate.ParseYAMLFile(path, migrate.StepTypes)
 	if err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
+		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
 	raw, err := os.ReadFile(path) //nolint:gosec // the path is the one the user named, and ParseYAMLFile has already read it
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	comments := migrate.ReadComments(raw)
 
 	src, err := migrate.Source(config, comments)
 	if err != nil {
-		return fmt.Errorf("migrate %s: %w", path, err)
+		return nil, nil, fmt.Errorf("migrate %s: %w", path, err)
+	}
+	stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	files, notes, err := artmigrate.Files(map[string]string{stem + artExt: src})
+	if err != nil {
+		return nil, nil, fmt.Errorf("migrate %s: %w", path, err)
 	}
 	reportDropped(cmd, path, comments.Dropped)
-
-	if out == "" {
-		_, err := fmt.Fprint(cmd.OutOrStdout(), src)
-		return err
-	}
-	// writeFormatted is fmt -w's writer: beside and renamed over, with the
-	// original's permission bits, so an interrupted migration leaves either the
-	// old file or the whole new one.
-	if err := ensureWritable(out); err != nil {
-		return err
-	}
-	return writeFormatted(out, src)
+	return files, notes, nil
 }
 
-// reportDropped says how many comments did not survive. On stderr, because
-// stdout carries the migrated document and `artemis migrate -f x.yaml >
-// x.art` has to be the file and nothing else.
+// reportDropped says how many comments did not survive. On stderr, with the
+// notes, because stdout carries the paths written and nothing else.
 func reportDropped(cmd *cobra.Command, path string, n int) {
 	if n == 0 {
 		return

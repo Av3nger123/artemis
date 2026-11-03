@@ -70,10 +70,16 @@ func decl(v value) (ast.Decl, error) {
 		return useDecl(f)
 	case kindPhase:
 		return phaseDecl(f)
-	case kindFlow:
+	case kindBlockDecl:
 		return flowDecl(f)
 	case kindClause:
 		return clause(f)
+	case kindFlowDecl:
+		return flowOf(f)
+	case kindFlowRef:
+		return flowRefOf(f)
+	case kindSet:
+		return setOf(f)
 	case kindTags:
 		d := &ast.TagsDecl{Keyword: syn(token.Ident, "tags"), Assign: syn(token.Assign, "=")}
 		var err error
@@ -147,8 +153,8 @@ func phaseDecl(f fields) (*ast.PhaseDecl, error) {
 }
 
 // flowDecl builds a control-flow block from its clauses and a repeat's until.
-func flowDecl(f fields) (*ast.FlowDecl, error) {
-	d := &ast.FlowDecl{}
+func flowDecl(f fields) (*ast.BlockDecl, error) {
+	d := &ast.BlockDecl{}
 	items, err := f.list("clauses")
 	if err != nil {
 		return nil, err
@@ -290,16 +296,26 @@ func varDecl(f fields) (*ast.VarDecl, error) {
 	if err != nil {
 		return nil, err
 	}
+	private, err := f.flag("private")
+	if err != nil {
+		return nil, err
+	}
 	d := &ast.VarDecl{
 		Keyword: syn(token.Ident, "var"),
 		Name:    syn(token.Ident, name),
-		Assign:  syn(token.Assign, "="),
+	}
+	if private {
+		d.Private = syn(token.Ident, "private")
 	}
 	if secret {
 		d.Secret = syn(token.Ident, "secret")
 	}
-	if d.Value, err = exprOf(f, "value", true); err != nil {
+	// No value is a required var, `var user`, which has no "=" either.
+	if d.Value, err = exprOf(f, "value", false); err != nil {
 		return nil, err
+	}
+	if d.Value != nil {
+		d.Assign = syn(token.Assign, "=")
 	}
 	return d, plain(f, &d.Keyword)
 }
@@ -482,8 +498,20 @@ func capture(f fields) (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	keyword, err := f.optStr("keyword")
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case keyword == "":
+		keyword = "capture"
+	case keyword != "capture" && keyword != "var":
+		return nil, fmt.Errorf("%s: keyword is %q, want capture or var", f.path, keyword)
+	case keyword == "var" && secret:
+		return nil, fmt.Errorf("%s: a step var cannot be secret; write it as a secret capture", f.path)
+	}
 	c := &ast.Capture{
-		Keyword: syn(token.Ident, "capture"),
+		Keyword: syn(token.Ident, keyword),
 		Name:    syn(token.Ident, name),
 		Assign:  syn(token.Assign, "="),
 	}

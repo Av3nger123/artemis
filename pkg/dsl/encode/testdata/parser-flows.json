@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 1,
+  "file": "../parser/testdata/flows.art",
+  "scenarios": [
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"flow forms\"",
+        "value": "flow forms"
+      },
+      "body": [
+        {
+          "kind": "var",
+          "name": "sku",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"SKU-1\"",
+            "value": "SKU-1",
+            "span": {
+              "file": "../parser/testdata/flows.art",
+              "line": 6,
+              "col": 13,
+              "endLine": 6,
+              "endCol": 20,
+              "offset": 255
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 6,
+            "col": 3,
+            "endLine": 6,
+            "endCol": 20,
+            "offset": 245
+          }
+        },
+        {
+          "kind": "var",
+          "name": "user",
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 7,
+            "col": 3,
+            "endLine": 7,
+            "endCol": 11,
+            "offset": 265
+          }
+        },
+        {
+          "kind": "var",
+          "private": true,
+          "name": "url",
+          "value": {
+            "kind": "call",
+            "callee": "env",
+            "args": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"API_URL\"",
+                "value": "API_URL",
+                "span": {
+                  "file": "../parser/testdata/flows.art",
+                  "line": 8,
+                  "col": 25,
+                  "endLine": 8,
+                  "endCol": 34,
+                  "offset": 298
+                }
+              }
+            ],
+            "span": {
+              "file": "../parser/testdata/flows.art",
+              "line": 8,
+              "col": 21,
+              "endLine": 8,
+              "endCol": 35,
+              "offset": 294
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 8,
+            "col": 3,
+            "endLine": 8,
+            "endCol": 35,
+            "offset": 276
+          }
+        },
+        {
+          "kind": "var",
+          "name": "private",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"a var may be named private\"",
+            "value": "a var may be named private",
+            "span": {
+              "file": "../parser/testdata/flows.art",
+              "line": 9,
+              "col": 17,
+              "endLine": 9,
+              "endCol": 45,
+              "offset": 325
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 9,
+            "col": 3,
+            "endLine": 9,
+            "endCol": 45,
+            "offset": 311
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"pay\"",
+            "value": "pay"
+          },
+          "action": {
+            "kind": "request",
+            "method": "post",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "url",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 12,
+                      "col": 13,
+                      "endLine": 12,
+                      "endCol": 16,
+                      "offset": 382
+                    }
+                  }
+                }
+              ],
+              "end": "}/pay\"",
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 12,
+                "col": 10,
+                "endLine": 12,
+                "endCol": 22,
+                "offset": 379
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "body",
+                  "value": {
+                    "kind": "object",
+                    "entries": [
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"sku\"",
+                          "value": "sku",
+                          "span": {
+                            "file": "../parser/testdata/flows.art",
+                            "line": 13,
+                            "col": 15,
+                            "endLine": 13,
+                            "endCol": 20,
+                            "offset": 408
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "sku",
+                          "span": {
+                            "file": "../parser/testdata/flows.art",
+                            "line": 13,
+                            "col": 22,
+                            "endLine": 13,
+                            "endCol": 25,
+                            "offset": 415
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"user\"",
+                          "value": "user",
+                          "span": {
+                            "file": "../parser/testdata/flows.art",
+                            "line": 13,
+                            "col": 27,
+                            "endLine": 13,
+                            "endCol": 33,
+                            "offset": 420
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "user",
+                          "span": {
+                            "file": "../parser/testdata/flows.art",
+                            "line": 13,
+                            "col": 35,
+                            "endLine": 13,
+                            "endCol": 39,
+                            "offset": 428
+                          }
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 13,
+                      "col": 14,
+                      "endLine": 13,
+                      "endCol": 40,
+                      "offset": 407
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/flows.art",
+                    "line": 13,
+                    "col": 7,
+                    "endLine": 13,
+                    "endCol": 40,
+                    "offset": 400
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 12,
+                "col": 23,
+                "endLine": 14,
+                "endCol": 6,
+                "offset": 392
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/flows.art",
+              "line": 12,
+              "col": 5,
+              "endLine": 14,
+              "endCol": 6,
+              "offset": 374
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../parser/testdata/flows.art",
+                    "line": 15,
+                    "col": 12,
+                    "endLine": 15,
+                    "endCol": 18,
+                    "offset": 451
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "200",
+                  "value": "200",
+                  "span": {
+                    "file": "../parser/testdata/flows.art",
+                    "line": 15,
+                    "col": 22,
+                    "endLine": 15,
+                    "endCol": 25,
+                    "offset": 461
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/flows.art",
+                  "line": 15,
+                  "col": 12,
+                  "endLine": 15,
+                  "endCol": 25,
+                  "offset": 451
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 15,
+                "col": 5,
+                "endLine": 15,
+                "endCol": 25,
+                "offset": 444
+              },
+              "class": "simple"
+            },
+            {
+              "kind": "capture",
+              "keyword": "var",
+              "name": "pay_status",
+              "value": {
+                "kind": "ident",
+                "name": "status",
+                "span": {
+                  "file": "../parser/testdata/flows.art",
+                  "line": 16,
+                  "col": 22,
+                  "endLine": 16,
+                  "endCol": 28,
+                  "offset": 486
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 16,
+                "col": 5,
+                "endLine": 16,
+                "endCol": 28,
+                "offset": 469
+              }
+            },
+            {
+              "kind": "capture",
+              "name": "order_id",
+              "value": {
+                "kind": "member",
+                "x": {
+                  "kind": "ident",
+                  "name": "body",
+                  "span": {
+                    "file": "../parser/testdata/flows.art",
+                    "line": 17,
+                    "col": 24,
+                    "endLine": 17,
+                    "endCol": 28,
+                    "offset": 516
+                  }
+                },
+                "name": "id",
+                "span": {
+                  "file": "../parser/testdata/flows.art",
+                  "line": 17,
+                  "col": 24,
+                  "endLine": 17,
+                  "endCol": 31,
+                  "offset": 516
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 17,
+                "col": 5,
+                "endLine": 17,
+                "endCol": 31,
+                "offset": 497
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 18,
+            "endCol": 4,
+            "offset": 357
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "cookies",
+            "duration_ms",
+            "sku",
+            "user",
+            "url",
+            "private"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"read the order\"",
+            "value": "read the order"
+          },
+          "action": {
+            "kind": "request",
+            "method": "get",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "url",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 21,
+                      "col": 12,
+                      "endLine": 21,
+                      "endCol": 15,
+                      "offset": 566
+                    }
+                  }
+                },
+                {
+                  "delim": "}/orders/${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "order_id",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 21,
+                      "col": 26,
+                      "endLine": 21,
+                      "endCol": 34,
+                      "offset": 580
+                    }
+                  }
+                },
+                {
+                  "delim": "}?after=${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "pay_status",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 21,
+                      "col": 44,
+                      "endLine": 21,
+                      "endCol": 54,
+                      "offset": 598
+                    }
+                  }
+                }
+              ],
+              "end": "}\"",
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 21,
+                "col": 9,
+                "endLine": 21,
+                "endCol": 56,
+                "offset": 563
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/flows.art",
+              "line": 21,
+              "col": 5,
+              "endLine": 21,
+              "endCol": 56,
+              "offset": 559
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 20,
+            "col": 3,
+            "endLine": 22,
+            "endCol": 4,
+            "offset": 531
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "cookies",
+            "duration_ms",
+            "sku",
+            "user",
+            "url",
+            "private",
+            "pay_status",
+            "order_id"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/flows.art",
+        "line": 5,
+        "col": 1,
+        "endLine": 23,
+        "endCol": 2,
+        "offset": 219
+      },
+      "comments": {
+        "above": [
+          {
+            "text": "# The forms a flow is written with, for the parser, printer and encoder"
+          },
+          {
+            "text": "# corpus. They sit in an ordinary scenario so that each parses on its own; a"
+          },
+          {
+            "text": "# required var is the checker's var-needs-value here, and only that."
+          }
+        ],
+        "blankAbove": true
+      }
+    }
+  ]
+}

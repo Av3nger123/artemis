@@ -1,9 +1,0 @@
-import "broken_coll.art"
-
-scenario "one" {
-  use broken_coll.r
-}
-
-scenario "two" {
-  use broken_coll.r
-}

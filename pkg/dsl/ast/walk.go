@@ -55,7 +55,7 @@ func Children(n Node) []Node {
 		return nodes(n.Source)
 	case *PhaseDecl:
 		return decls(n.Body)
-	case *FlowDecl:
+	case *BlockDecl:
 		out := make([]Node, 0, len(n.Clauses)+1)
 		for _, c := range n.Clauses {
 			out = append(out, c)
@@ -160,7 +160,17 @@ func Children(n Node) []Node {
 	case *Param:
 		return nodes(n.Default)
 	case *RequestDecl:
-		return append(nodes(n.Params), n.items()...)
+		kids := nodes(n.Params)
+		for _, in := range n.Inputs {
+			kids = append(kids, in)
+		}
+		return append(kids, n.items()...)
+	case *Flow:
+		return decls(n.Body)
+	case *FlowRef:
+		return nil
+	case *Set:
+		return nodes(n.Value)
 	case *UseDecl:
 		return stmts(n.Lines)
 	case *BodySet:

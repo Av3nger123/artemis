@@ -7,13 +7,18 @@ import (
 )
 
 // parseStepStmt is one statement in a step after its action: `expect`,
-// `capture`, or a field -- `timeout = "5s"` and `retry { ... }` are fields of
-// the step, which is why ast.Field is a Stmt.
+// `capture`, `var`, or a field -- `timeout = "5s"` and `retry { ... }` are
+// fields of the step, which is why ast.Field is a Stmt.
+//
+// A `var` here is a capture with the keyword that replaces `capture`: what it
+// binds is read from the step's observation, so the checker, lowering and the
+// runner treat the two alike. No field of a step is named var, so nothing
+// that reached parseField before is lost.
 func (p *parser) parseStepStmt() ast.Stmt {
 	switch {
 	case p.atWord("expect"):
 		return p.parseExpect()
-	case p.atWord("capture"), p.atWord("secret") && p.peekWordAt(1, "capture"):
+	case p.atWord("capture"), p.atWord("var"), p.atWord("secret") && p.peekWordAt(1, "capture"):
 		return p.parseCapture()
 	}
 
@@ -62,7 +67,9 @@ func (p *parser) parseExpect() ast.Stmt {
 	return e
 }
 
-// parseCapture is `[ "secret" ] "capture" <ident> = Expr`.
+// parseCapture is `[ "secret" ] "capture" <ident> = Expr`, or `"var" <ident> =
+// Expr` after a step's action. The keyword token is kept as written, so the
+// round trip and the printers reproduce whichever it was.
 //
 // The name is bound for every later step in the scenario, which the checker
 // adds to their scope; nothing here resolves it.
@@ -73,7 +80,7 @@ func (p *parser) parseCapture() ast.Stmt {
 	}
 	c.Keyword = p.next()
 
-	name, ok := p.expectIdent("a name to capture into")
+	name, ok := p.expectIdent("a name for the step var")
 	if !ok {
 		return p.badFrom(c.Secret, c.Keyword)
 	}
@@ -85,6 +92,6 @@ func (p *parser) parseCapture() ast.Stmt {
 	}
 	c.Assign = assign
 	c.Value = p.parseExpr()
-	c.Comma = p.endStatement("a capture")
+	c.Comma = p.endStatement("a step var")
 	return c
 }

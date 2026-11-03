@@ -14,7 +14,7 @@ func TestResolveRefusesEveryWayOut(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "orders"), 0o755); err != nil {
 		t.Fatalf("making the fixture directory: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "orders", "checkout.art"), []byte("scenario \"x\" {}\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "orders", "checkout.art"), []byte("flow x {}\n"), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "notes.md"), []byte("hello\n"), 0o600); err != nil {
@@ -24,7 +24,7 @@ func TestResolveRefusesEveryWayOut(t *testing.T) {
 	// A symlink inside the workspace that points out of it. The check has to
 	// happen after resolution, or this is the way through.
 	outside := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outside, "escape.art"), []byte("scenario \"x\" {}\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(outside, "escape.art"), []byte("flow x {}\n"), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
 	linked := true

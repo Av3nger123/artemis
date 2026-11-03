@@ -9,7 +9,6 @@ import (
 
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
-	"artemis/pkg/dsl/lower"
 )
 
 // tagsFlag and grepFlag are the flags that select which scenarios a run runs.
@@ -110,18 +109,6 @@ func (s *selector) warnUnknownTags(w io.Writer, known map[string]bool) {
 		}
 		fmt.Fprintln(w, msg)
 	}
-}
-
-// tagsOf is a scenario's tags as a run selects by them: its own and every
-// suite's above it.
-func (rt *runtimeEnv) tagsOf(file string, sc *lower.Scenario) []string {
-	tags := append([]string(nil), sc.Tags...)
-	for st := rt.suiteFor(file); st != nil; st = st.parent {
-		if st.block != nil {
-			tags = append(tags, st.block.Tags...)
-		}
-	}
-	return tags
 }
 
 // tagExpr is a parsed --tags expression.
@@ -242,17 +229,9 @@ func (p *tagParser) unary() (tagExpr, error) {
 // selectScenarios marks which scenario of each file the run runs, warns about
 // a tag no scenario has, and returns the files that compiled with only the
 // environment needs of what was selected -- what the check before the run
-// counts. A suite with no selected scenario under it is marked unused.
+// counts.
 func (rt *runtimeEnv) selectScenarios(attempts []fileAttempt, warn io.Writer) []compiled {
 	known := map[string]bool{}
-	for _, st := range rt.suites {
-		st.used = false
-		if st.block != nil {
-			for _, t := range st.block.Tags {
-				known[t] = true
-			}
-		}
-	}
 	var out []compiled
 	chose := false
 	for i := range attempts {
@@ -264,7 +243,7 @@ func (rt *runtimeEnv) selectScenarios(attempts []fileAttempt, warn io.Writer) []
 		c.selected = make([]bool, len(c.scenarios))
 		var needs []check.EnvNeed
 		for j, sc := range c.scenarios {
-			tags := rt.tagsOf(c.file, sc)
+			tags := sc.Tags
 			for _, t := range tags {
 				known[t] = true
 			}
@@ -274,9 +253,6 @@ func (rt *runtimeEnv) selectScenarios(attempts []fileAttempt, warn io.Writer) []
 			c.selected[j] = true
 			chose = true
 			needs = append(needs, sc.EnvNeeds...)
-			for st := rt.suiteFor(c.file); st != nil; st = st.parent {
-				st.used = true
-			}
 		}
 		out = append(out, compiled{file: c.file, needs: needs})
 	}

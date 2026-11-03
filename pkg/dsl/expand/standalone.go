@@ -59,22 +59,19 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 	if !isRequest {
 		return true
 	}
-	name, params := &it.Name, it.Params
+	name := &it.Name
 
 	uses, bag, silent := e.res.Uses, e.bag, e.silent
 	e.res.Uses, e.bag = nil, diag.New()
 	defer func() { e.res.Uses = uses }()
 
-	vars := paramVars(params)
-	sc := newScope(vars)
+	vars := paramVars(inputs(it))
 	steps := []ast.Decl{requestStep(it, it.Name.Value, nil, identity)}
 
 	e.rootCaptures(item)
 	ok := !e.bag.HasErrors() && e.silent == silent
 	if ok {
-		// Hoisted secret vars go above the steps that read them: the checker
-		// binds a var for what comes after it.
-		body := append(append(vars, *sc.hoisted...), steps...)
+		body := append(vars, steps...)
 		file := &ast.File{Scenarios: []ast.Decl{&ast.Scenario{
 			Keyword: synth(token.Ident, "scenario", "scenario", token.Span{}),
 			Name:    synth(token.String, quote(c.Name.Value+"."+name.Value), c.Name.Value+"."+name.Value, token.Span{}),
@@ -92,30 +89,33 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 		d.Span.Via = 0
 		if d.Code == diag.UnknownIdentifier && len(d.Suggestions) == 0 {
 			// Not a near miss: a name the scenario would have to supply,
-			// which a collection only ever takes as a parameter.
-			d.Hint = "add it as a parameter of " + ref + "\n" + d.Hint
+			// which a collection only ever takes as an input.
+			add := "add it as a parameter of " + ref
+			if it.Params == nil {
+				add = "add it as an input of " + ref + ": a var above the action"
+			}
+			d.Hint = add + "\n" + d.Hint
 		}
 		e.bag.Add(d)
 	}
 	return ok
 }
 
-// paramVars is a var for each parameter, in order: its default as its value,
-// or null for a required one, `secret` carried over. Each is placed at the
-// parameter's name, so a diagnostic on it points at the parameter.
-func paramVars(params *ast.Params) []ast.Decl {
-	if params == nil {
+// paramVars is a var for each input, parameter or var, in order: its default
+// as its value, or null for a required one. Each is
+// placed at the input's name, so a diagnostic on it points at the input.
+func paramVars(list []input) []ast.Decl {
+	if len(list) == 0 {
 		return nil
 	}
-	out := make([]ast.Decl, 0, len(params.List))
-	for _, p := range params.List {
+	out := make([]ast.Decl, 0, len(list))
+	for _, p := range list {
 		at := p.Name.Span
 		var value ast.Expr = &ast.Literal{Tok: synth(token.Null, "null", "", at)}
 		if !isNil(p.Default) {
 			value = ast.Clone(p.Default, identity)
 		}
 		out = append(out, &ast.VarDecl{
-			Secret:  p.Secret,
 			Keyword: synth(token.Ident, "var", "var", at),
 			Name:    p.Name,
 			Assign:  synth(token.Assign, "=", "", at),
@@ -153,7 +153,7 @@ func (e *expander) rootCaptures(item ast.Decl) {
 			if !ok || !observationRoots[c.Name.Value] {
 				continue
 			}
-			e.bag.Error(c.Name.Span, diag.RootCapture, "a collection may not capture %q: it names a step's observation", c.Name.Value).
+			e.bag.Error(c.Name.Span, diag.RootCapture, "an item may not write %q: it names a step's observation", c.Name.Value).
 				Hintf("rename it, e.g. %s_value; a later step's `%s` would be ambiguous", c.Name.Value, c.Name.Value)
 		}
 	}

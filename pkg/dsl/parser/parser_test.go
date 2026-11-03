@@ -633,3 +633,101 @@ func captures(t *testing.T, f *ast.File) []*ast.Capture {
 	}
 	return out
 }
+
+// TestParsePrivateAndRequiredVar is the two new forms of a var: `private var`,
+// which nothing outside its flow or item sets, and `var user`, which has no
+// value of its own and is required.
+func TestParsePrivateAndRequiredVar(t *testing.T) {
+	src := "scenario \"s\" {\n  private var url = env(\"U\")\n  var user\n}\n"
+	file, bag := Parse("t.art", src)
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	body := scenarioBody(t, file)
+	priv := body[0].(*ast.VarDecl)
+	if got := priv.Private.Value; got != "private" {
+		t.Errorf("Private = %q, want %q", got, "private")
+	}
+	if priv.Required() {
+		t.Error("a var with a value is Required")
+	}
+	req := body[1].(*ast.VarDecl)
+	if !req.Required() {
+		t.Error("`var user` is not Required")
+	}
+	if req.Private.Value != "" || req.Assign.Text != "" {
+		t.Errorf("`var user` has Private %q and Assign %q, want both empty", req.Private.Value, req.Assign.Text)
+	}
+	if got := ast.Source(file); got != src {
+		t.Errorf("round trip:\n got %q\nwant %q", got, src)
+	}
+}
+
+// `var private = 1` stays legal: `private` is a modifier only where `var`
+// follows it.
+func TestVarNamedPrivateStaysLegal(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  var private = 1\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	v := scenarioBody(t, file)[0].(*ast.VarDecl)
+	if v.Private.Value != "" {
+		t.Errorf("Private = %q, want empty", v.Private.Value)
+	}
+	if v.Name.Value != "private" {
+		t.Errorf("Name = %q, want %q", v.Name.Value, "private")
+	}
+}
+
+// TestStepVarIsACapture is `var token = body.t` after a step's action: a
+// capture written with the keyword that replaces `capture`.
+func TestStepVarIsACapture(t *testing.T) {
+	src := "scenario \"s\" {\n  step \"one\" {\n    get \"/\"\n    var token = body.t\n  }\n}\n"
+	file, bag := Parse("t.art", src)
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	c, ok := firstStep(t, file).Body[0].(*ast.Capture)
+	if !ok {
+		t.Fatalf("Body[0] is %T, want *ast.Capture", firstStep(t, file).Body[0])
+	}
+	if c.Keyword.Value != "var" || !c.IsVar() {
+		t.Errorf("Keyword = %q, IsVar = %v; want \"var\", true", c.Keyword.Value, c.IsVar())
+	}
+	if c.Name.Value != "token" {
+		t.Errorf("Name = %q, want %q", c.Name.Value, "token")
+	}
+	if got := ast.Source(file); got != src {
+		t.Errorf("round trip:\n got %q\nwant %q", got, src)
+	}
+}
+
+// A capture keeps its own keyword, so IsVar tells the two forms apart.
+func TestStepCaptureIsNotAVar(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  step \"one\" {\n    get \"/\"\n    capture token = body.t\n  }\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	if c := captures(t, file)[0]; c.IsVar() {
+		t.Errorf("a capture is IsVar, Keyword = %q", c.Keyword.Value)
+	}
+}
+
+// A step var above the action is a statement above it, which is the
+// action-first rule's to report, as it is for a capture.
+func TestStepVarBeforeTheActionIsActionNotFirst(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  step \"one\" {\n    var token = 1\n    get \"/\"\n  }\n}\n")
+	got := codes(bag)
+	if len(got) != 1 || got[0] != diag.ActionNotFirst {
+		t.Errorf("codes = %v, want [%s]", got, diag.ActionNotFirst)
+	}
+}
+
+// A required var still ends at its line: a token after the name on the same
+// line is a missing "=", not a var with no value.
+func TestRequiredVarMustEndItsLine(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  var user \"bob\"\n}\n")
+	if got := codes(bag); len(got) == 0 {
+		t.Fatal("want a diagnostic for `var user \"bob\"`")
+	}
+}

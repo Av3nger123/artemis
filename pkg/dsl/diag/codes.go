@@ -102,6 +102,29 @@ const (
 	// ReservedParam is a parameter named like a use-block override word, which
 	// no use could ever pass.
 	ReservedParam Code = "reserved-param"
+
+	// FlowRefPlacement is a scenario file's flow "..." header below the first
+	// line. The header says what every scenario under it runs, so it comes
+	// first.
+	FlowRefPlacement Code = "flow-ref-placement"
+
+	// SecondFlow is a second flow declaration in a flow file, or a second
+	// header, or one of each: a file holds one flow, or names one.
+	SecondFlow Code = "second-flow"
+
+	// FlowFileHolds is a collection or a scenario in a flow file, which holds
+	// one flow and its imports.
+	FlowFileHolds Code = "flow-file-holds"
+
+	// DataOnlyScenario is a step, an expect, a var, a use or a block in a
+	// scenario of a scenario file. Such a scenario changes the flow's data,
+	// never its shape.
+	DataOnlyScenario Code = "data-only-scenario"
+
+	// ItemActionMismatch is a collection item whose action is not the one its
+	// keyword names: `run` in a request, `get` in a command. The keyword is
+	// the item's type, so the two must agree.
+	ItemActionMismatch Code = "item-action-mismatch"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -166,11 +189,16 @@ const (
 	// a `header` with no name before its `=`.
 	BadValue Code = "bad-value"
 
-	// DuplicateBinding is a capture that reuses the name of a var or of an
-	// earlier capture in the same scenario, or a var that reuses an earlier
-	// var's. The span is the second binding's name; the hint says where the
-	// name was bound first.
+	// DuplicateBinding is a var that reuses the name of a var declared in the
+	// same place: two of a scenario's vars, its own or ones a use hoisted. A
+	// capture of a name already bound is not one -- the last write wins. The
+	// span is the second var's name; the hint says where the first is.
 	DuplicateBinding Code = "duplicate-binding"
+
+	// VarNeedsValue is `var user` with no value where nothing can supply one:
+	// a plain scenario. Only a flow's scenarios and an item's callers give a
+	// required var its value.
+	VarNeedsValue Code = "var-needs-value"
 )
 
 // The expander's codes: what is wrong with an import or a use.
@@ -193,8 +221,9 @@ const (
 	DuplicateArgument        Code = "duplicate-argument"
 	BadOverride              Code = "bad-override"
 	DropAfterExpect          Code = "drop-after-expect"
-	SecretArgument           Code = "secret-argument"
 	RootCapture              Code = "root-capture"
+	// A use passes a private var of the item, which takes only its own default.
+	PrivateInput Code = "private-input"
 
 	// A json(), csv() or file() whose literal path names nothing, or names a
 	// data file that does not parse. Settled when the file compiles, because
@@ -207,23 +236,10 @@ const (
 	// `form` and `multipart`.
 	BodyConflict Code = "body-conflict"
 
-	// A data-driven scenario's for clause, and the rows it makes.
-	ForSourceNotStatic Code = "for-source-not-static"
-	ForSourceNotArray  Code = "for-source-not-array"
-	ForNoRows          Code = "for-no-rows"
-	DuplicateRowName   Code = "duplicate-row-name"
-	BadRowName         Code = "bad-row-name"
-
 	// setup and teardown, held to where they run.
 	SetupAfterStep     Code = "setup-after-step"
 	TeardownBeforeStep Code = "teardown-before-step"
 	DuplicatePhase     Code = "duplicate-phase"
-
-	// suite.art: a folder's suite, and the rules it is under.
-	SuiteFileName      Code = "suite-file-name"
-	SuiteHasScenario   Code = "suite-has-scenario"
-	SuiteHasStep       Code = "suite-has-step"
-	DuplicateSuiteName Code = "duplicate-suite-name"
 
 	// A scenario's tags, which a run selects by.
 	BadTag        Code = "bad-tag"
@@ -242,6 +258,58 @@ const (
 	ParallelSiblingCapture Code = "parallel-sibling-capture"
 	ParallelBrowser        Code = "parallel-browser"
 	RepeatUnbounded        Code = "repeat-unbounded"
+
+	// FlowNotRunnable is a flow file named on the command line: a flow runs
+	// only through a scenario file that names it. pkg/cli reports it, because
+	// only a path the user named can be one.
+	FlowNotRunnable Code = "flow-not-runnable"
+)
+
+// A scenario file: the flow its header names, and the values its scenarios
+// give that flow's vars.
+const (
+	FlowNotFound Code = "flow-not-found"
+	NotAFlowFile Code = "not-a-flow-file"
+	// A flow's parameters are the vars at its top, above its first setup,
+	// step or block; only those can be set by a scenario.
+	VarAfterStep           Code = "var-after-step"
+	ReservedTags           Code = "reserved-tags"
+	UnknownParam           Code = "unknown-param"
+	PrivateParam           Code = "private-param"
+	MissingParam           Code = "missing-param"
+	ScenarioValueReadsName Code = "scenario-value-reads-name"
+
+	// skip, a scenario's value that turns off the expects reading a var.
+	SkipRead         Code = "skip-read"
+	SkipMaybeWritten Code = "skip-maybe-written"
+)
+
+// The old forms, each replaced by a form of a flow file, a scenario file or a
+// collection. pkg/dsl/front reports them over the file as written, before
+// expansion, so every command that compiles a file -- run, parse, the MCP
+// server's validate -- says the same about it; the parser still reads them,
+// because artemis migrate rewrites them from the tree. Each hint names the new
+// form and ends by naming artemis migrate.
+const (
+	// OldScenario is a scenario with steps in a file with no flow "..."
+	// header: its steps are now a flow, and its data a scenario file.
+	OldScenario Code = "old-scenario"
+	// OldCapture is capture x = ...: a step writes a name with var after its
+	// action.
+	OldCapture Code = "old-capture"
+	// OldUse is use a.b { ... }: a step calls an item, step "name" = a.b.
+	OldUse Code = "old-use"
+	// OldParams is request r(...): an item's inputs are the vars above its
+	// action.
+	OldParams Code = "old-params"
+	// OldSecret is secret on a var, a capture, a parameter or a for clause.
+	OldSecret Code = "old-secret"
+	// OldSuite is suite { ... }, or any file named suite.art: a folder and
+	// --tags select what runs, and each flow has its own setup.
+	OldSuite Code = "old-suite"
+	// OldFor is a scenario's for clause: each row is now a scenario of its
+	// own in a scenario file.
+	OldFor Code = "old-for"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -273,6 +341,11 @@ var registry = []CodeInfo{
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{ImportPlacement, Error, "an import appears below a collection or a scenario"},
 	{ReservedParam, Error, "a parameter is named like a use-block override word, so no use can pass it"},
+	{FlowRefPlacement, Error, `a scenario file's flow "..." header is not its first line`},
+	{SecondFlow, Error, "a file declares or names a second flow"},
+	{FlowFileHolds, Error, "a flow file holds a collection or a scenario"},
+	{DataOnlyScenario, Error, "a scenario in a scenario file holds a line that is not name = value or tags"},
+	{ItemActionMismatch, Error, "a collection item's action is not the kind its keyword names"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},
@@ -283,7 +356,8 @@ var registry = []CodeInfo{
 	{UnknownType, Error, "the right-hand side of \"is\" is not a type name"},
 	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
 	{BadValue, Error, "a value is the wrong kind for the position it is in"},
-	{DuplicateBinding, Error, "a capture or var reuses a name a var or an earlier capture binds"},
+	{DuplicateBinding, Error, "a var that reuses the name of a var declared in the same place"},
+	{VarNeedsValue, Error, "a var has no value, and nothing can supply one"},
 	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
 	{ImportNotFound, Error, "an imported file cannot be read"},
 	{ImportCycle, Error, "a file imports itself, directly or through other files"},
@@ -299,36 +373,45 @@ var registry = []CodeInfo{
 	{DuplicateArgument, Error, "a use passes the same argument twice"},
 	{BadOverride, Error, "a line in a use block is not an argument or an override that applies"},
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
-	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
-	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
+	{RootCapture, Error, "a collection item writes a step var under the name of a step's observation, such as body"},
+	{PrivateInput, Error, "a use passes a private var of the item, which takes only its own default"},
 	{DataFileMissing, Error, "json(), csv() or file() names a path where there is no file"},
 	{DataNotJSON, Error, "json() names a file that is not JSON"},
 	{DataNotCSV, Error, "csv() names a file that is not CSV"},
 	{BodyConflict, Error, "a request says what its body is more than one way"},
-	{ForSourceNotStatic, Error, "a for clause reads rows that are not known before the run"},
-	{ForSourceNotArray, Error, "a for clause's data is not an array of rows"},
-	{ForNoRows, Error, "a for clause's data has no rows"},
-	{DuplicateRowName, Error, "two rows of a data-driven scenario name it alike"},
-	{BadRowName, Error, "a data-driven scenario's name reads something other than its row"},
 	{SetupAfterStep, Error, "a setup block is below a step it would run before"},
 	{TeardownBeforeStep, Error, "a teardown block is above a step it would run after"},
 	{DuplicatePhase, Error, "a scenario has two setup blocks or two teardown blocks"},
-	{SuiteFileName, Error, "a suite block is in a file not named suite.art"},
-	{SuiteHasScenario, Error, "a suite file holds a scenario, or a second suite block"},
-	{SuiteHasStep, Error, "a suite block holds a step or a use outside setup and teardown"},
-	{DuplicateSuiteName, Error, "a suite exports a name a suite above it already exports"},
 	{BadTag, Error, "a tag is not a lower-case word written out as a string, or is listed twice"},
-	{DuplicateTags, Error, "a scenario or a suite has more than one tags list"},
+	{DuplicateTags, Error, "a scenario has more than one tags list"},
 	{DBNeedsStatement, Error, "a db step has no sql or command to run"},
 	{DBArgsWithoutSQL, Error, "a db step binds args with no sql to bind them to"},
 	{DBStatementConflict, Error, "a db step has both sql and a command"},
 	{DBStatementKind, Error, "a db step sends sql to a database that takes a command, or the other way round"},
-	{CaptureMaybeUnbound, Error, "a step reads a capture that only some branches of an if or a switch make"},
-	{ParallelCaptureClash, Error, "two branches of a parallel block capture the same name"},
-	{ParallelSiblingCapture, Error, "a branch of a parallel block reads a capture another branch makes at the same time"},
+	{CaptureMaybeUnbound, Error, "a step reads a name that only some branches of an if, a switch or a catch write"},
+	{ParallelCaptureClash, Error, "two branches of a parallel block write the same name"},
+	{ParallelSiblingCapture, Error, "a branch of a parallel block reads a name another branch writes at the same time"},
 	{ParallelBrowser, Error, "two branches of a parallel block drive the browser, which has one page"},
 	{RepeatUnbounded, Error, "a repeat has neither within nor max, so nothing stops it"},
 	{UnknownDBScheme, Error, "a db step's connection URL names a database artemis has no driver for"},
+	{FlowNotFound, Error, "a scenario file's flow header names a file that cannot be read"},
+	{NotAFlowFile, Error, "a scenario file's flow header names a file that holds no flow"},
+	{VarAfterStep, Error, "a flow declares a var below its first setup, step or block"},
+	{ReservedTags, Error, "a flow declares a var named tags, which is each scenario's own list"},
+	{UnknownParam, Error, "a scenario sets a name that is not a var at the top of its flow"},
+	{PrivateParam, Error, "a scenario sets a private var of its flow"},
+	{MissingParam, Error, "a scenario does not set a var its flow declares without a value"},
+	{ScenarioValueReadsName, Error, "a scenario's value reads a name, where only literals and builtins are allowed"},
+	{SkipRead, Error, "a var a scenario skips is read somewhere other than an expect or an object field"},
+	{SkipMaybeWritten, Error, "a var a scenario skips is read where only some paths have written it"},
+	{FlowNotRunnable, Error, "a flow file is named on the command line, and a flow runs only through a scenario file"},
+	{OldScenario, Error, "a scenario holds steps in a file with no flow header, the form a flow file and a scenario file replace"},
+	{OldCapture, Error, "a step writes a name with capture, which var after the action replaces"},
+	{OldUse, Error, "a use calls an item, which step \"name\" = <collection>.<item> replaces"},
+	{OldParams, Error, "a collection item declares parameters in parentheses, which vars above its action replace"},
+	{OldSecret, Error, "a var, a capture, a parameter or a for clause is marked secret, which is removed"},
+	{OldSuite, Error, "a file is a suite, which folders, --tags and each flow's own setup replace"},
+	{OldFor, Error, "a scenario reads its rows with for, which a scenario for each row replaces"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

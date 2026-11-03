@@ -1,14 +1,14 @@
 action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-override	error	a line in a use block is not an argument or an override that applies
-bad-row-name	error	a data-driven scenario's name reads something other than its row
 bad-tag	error	a tag is not a lower-case word written out as a string, or is listed twice
 bad-value	error	a value is the wrong kind for the position it is in
 body-conflict	error	a request says what its body is more than one way
-capture-maybe-unbound	error	a step reads a capture that only some branches of an if or a switch make
+capture-maybe-unbound	error	a step reads a name that only some branches of an if, a switch or a catch write
 data-file-missing	error	json(), csv() or file() names a path where there is no file
 data-not-csv	error	csv() names a file that is not CSV
 data-not-json	error	json() names a file that is not JSON
+data-only-scenario	error	a scenario in a scenario file holds a line that is not name = value or tags
 db-args-without-sql	error	a db step binds args with no sql to bind them to
 db-needs-statement	error	a db step has no sql or command to run
 db-statement-conflict	error	a db step has both sql and a command
@@ -16,15 +16,14 @@ db-statement-kind	error	a db step sends sql to a database that takes a command, 
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
-duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
+duplicate-binding	error	a var that reuses the name of a var declared in the same place
 duplicate-import-name	error	two imports give their collections the same name
 duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
-duplicate-row-name	error	two rows of a data-driven scenario name it alike
-duplicate-suite-name	error	a suite exports a name a suite above it already exports
-duplicate-tags	error	a scenario or a suite has more than one tags list
-for-no-rows	error	a for clause's data has no rows
-for-source-not-array	error	a for clause's data is not an array of rows
-for-source-not-static	error	a for clause reads rows that are not known before the run
+duplicate-tags	error	a scenario has more than one tags list
+flow-file-holds	error	a flow file holds a collection or a scenario
+flow-not-found	error	a scenario file's flow header names a file that cannot be read
+flow-not-runnable	error	a flow file is named on the command line, and a flow runs only through a scenario file
+flow-ref-placement	error	a scenario file's flow "..." header is not its first line
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
 import-needs-name	error	an import has no "as" and its file's name cannot be what a use names it by
@@ -34,26 +33,39 @@ import-placement	error	an import appears below a collection or a scenario
 invalid-duration	error	a string in a duration position is not a duration
 invalid-escape	error	a string literal contains an escape the language does not define
 invalid-regex	error	a regex literal does not compile
+item-action-mismatch	error	a collection item's action is not the kind its keyword names
 missing-action	error	a step block contains no action block, so the step has no type
 missing-argument	error	a use does not pass a parameter that has no default
+missing-param	error	a scenario does not set a var its flow declares without a value
 missing-separator	error	two statements run together with no newline or comma between them
 nesting-too-deep	error	a file nests deeper than the parser will descend
 non-associative-operator	error	a comparison operator is chained with another
+not-a-flow-file	error	a scenario file's flow header names a file that holds no flow
 not-in-scope	error	a name is not bound in this step's type
+old-capture	error	a step writes a name with capture, which var after the action replaces
+old-for	error	a scenario reads its rows with for, which a scenario for each row replaces
+old-params	error	a collection item declares parameters in parentheses, which vars above its action replace
+old-scenario	error	a scenario holds steps in a file with no flow header, the form a flow file and a scenario file replace
+old-secret	error	a var, a capture, a parameter or a for clause is marked secret, which is removed
+old-suite	error	a file is a suite, which folders, --tags and each flow's own setup replace
+old-use	error	a use calls an item, which step "name" = <collection>.<item> replaces
 parallel-browser	error	two branches of a parallel block drive the browser, which has one page
-parallel-capture-clash	error	two branches of a parallel block capture the same name
-parallel-sibling-capture	error	a branch of a parallel block reads a capture another branch makes at the same time
+parallel-capture-clash	error	two branches of a parallel block write the same name
+parallel-sibling-capture	error	a branch of a parallel block reads a name another branch writes at the same time
+private-input	error	a use passes a private var of the item, which takes only its own default
+private-param	error	a scenario sets a private var of its flow
 repeat-unbounded	error	a repeat has neither within nor max, so nothing stops it
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
+reserved-tags	error	a flow declares a var named tags, which is each scenario's own list
 reserved-word	error	a word reserved for a later tier is used as a name
-root-capture	error	a collection's template captures under the name of a step's observation, such as body
+root-capture	error	a collection item writes a step var under the name of a step's observation, such as body
 scenario-in-collection-file	error	a file holding a collection also holds a scenario
+scenario-value-reads-name	error	a scenario's value reads a name, where only literals and builtins are allowed
 second-collection	error	a file holds more than one collection
-secret-argument	error	an argument to a secret parameter is not itself secret
+second-flow	error	a file declares or names a second flow
 setup-after-step	error	a setup block is below a step it would run before
-suite-file-name	error	a suite block is in a file not named suite.art
-suite-has-scenario	error	a suite file holds a scenario, or a second suite block
-suite-has-step	error	a suite block holds a step or a use outside setup and teardown
+skip-maybe-written	error	a var a scenario skips is read where only some paths have written it
+skip-read	error	a var a scenario skips is read somewhere other than an expect or an object field
 teardown-before-step	error	a teardown block is above a step it would run after
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"
@@ -67,6 +79,9 @@ unknown-db-scheme	error	a db step's connection URL names a database artemis has 
 unknown-field	error	an identifier names no field of anything in scope
 unknown-identifier	error	a name is bound nowhere in the file
 unknown-item	error	a use names a request its collection does not declare
+unknown-param	error	a scenario sets a name that is not a var at the top of its flow
 unknown-type	error	the right-hand side of "is" is not a type name
 unterminated-regex	error	a regex literal has no closing slash
 unterminated-string	error	a string literal has no closing quote
+var-after-step	error	a flow declares a var below its first setup, step or block
+var-needs-value	error	a var has no value, and nothing can supply one

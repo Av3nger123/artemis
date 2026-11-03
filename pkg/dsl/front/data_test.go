@@ -10,8 +10,8 @@ import (
 
 // A literal path to data is read when the file compiles: one that names nothing
 // and one whose file does not parse are each a diagnostic on the path, and one
-// that is fine says nothing. A path relative to a scenario is relative to its
-// directory.
+// that is fine says nothing. A path is relative to the file it is written in,
+// here the flow's.
 func TestDataIsCheckedWhenTheFileCompiles(t *testing.T) {
 	files := expand.MapLoader{
 		"suite/data/users.json":  `[{"name": "alice"}]`,
@@ -19,8 +19,7 @@ func TestDataIsCheckedWhenTheFileCompiles(t *testing.T) {
 		"suite/data/rows.csv":    "name,role\nalice,admin\nbob\n",
 		"suite/data/good.csv":    "name,role\nalice,admin\n",
 		"suite/fixtures/a.png":   "\x89PNG",
-	}
-	src := `scenario "data" {
+		"suite/data_flow.art": `flow data {
   var users  = json("data/users.json")
   var broken = json("data/broken.json")
   var rows   = csv("data/rows.csv")
@@ -31,7 +30,9 @@ func TestDataIsCheckedWhenTheFileCompiles(t *testing.T) {
 
   step "s" { run "true" }
 }
-`
+`,
+	}
+	src := "flow \"data_flow.art\"\n\nscenario \"data\" { }\n"
 	unit := CompileWith("suite/data.art", src, files)
 	got := map[diag.Code][]string{}
 	for _, d := range unit.Bag.All() {
@@ -55,7 +56,7 @@ func TestDataIsCheckedWhenTheFileCompiles(t *testing.T) {
 // With no loader -- what fmt and a parse with no disk use -- nothing is read
 // and a data path is not a fault.
 func TestNoLoaderReadsNoData(t *testing.T) {
-	_, _, bag := Compile("a.art", `scenario "s" {
+	_, _, bag := Compile("a.art", `flow s {
   var gone = file("missing.png")
   step "s" { run "true" }
 }
@@ -65,17 +66,18 @@ func TestNoLoaderReadsNoData(t *testing.T) {
 	}
 }
 
-// A mistake in a data-driven scenario's body is the same mistake in every row,
-// and is reported once rather than once per row.
-func TestARowsMistakeIsReportedOnce(t *testing.T) {
-	src := `scenario "s" for n in [1, 2, 3] {
+// A mistake in a flow is the same mistake in every scenario that runs it, and
+// is reported once rather than once per scenario.
+func TestAFlowsMistakeIsReportedOnce(t *testing.T) {
+	files := expand.MapLoader{"f.art": `flow f {
   step "s" {
     run "echo"
     expect statu == 0
   }
 }
-`
-	unit := CompileWith("s.art", src, expand.MapLoader{})
+`}
+	src := "flow \"f.art\"\n\nscenario \"a\" { }\nscenario \"b\" { }\nscenario \"c\" { }\n"
+	unit := CompileWith("s.art", src, files)
 	n := 0
 	for _, d := range unit.Bag.All() {
 		if d.Code == diag.UnknownField || d.Code == diag.UnknownIdentifier || d.Code == diag.NotInScope {

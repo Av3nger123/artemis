@@ -1,50 +1,73 @@
-# Coming from Postman or YAML
+# Coming from Postman, YAML or old .art files
 
-Both conversions are one-shot: they read the old file, write `.art` source, and
-never touch the original. Nothing translates on the fly, because a format that
+Every conversion is one-shot: it reads the old file, writes `.art` source, and
+never touches the original. Nothing translates on the fly, because a format that
 is only ever read through a converter is a format nobody has to learn.
 
-Both write through the same printer `artemis fmt` uses, so what comes out is
-already canonically formatted and `artemis fmt` over it changes nothing.
+Each one writes the canonical form `artemis fmt` gives, so `artemis fmt` over
+what comes out changes nothing.
 
 ## A Postman collection
 
 ```sh
-artemis generate -f orders.postman_collection.json -o orders.art         # a collection and a scenario
-artemis generate -f orders.postman_collection.json --flat                # one scenario, to stdout
-artemis generate -f orders.postman_collection.json --flat -o orders.art
+artemis generate -f orders.postman_collection.json -o orders.art          # a collection, a flow and a scenario file
+artemis generate -f orders.postman_collection.json --flat -o orders.art   # a flow and a scenario file
 ```
 
-By default, `generate` writes two files: `orders.collection.art` holds one
-`request` for each Postman request, and `orders.art` imports it and holds one
-`use` line for each request. A request gets one parameter for each scenario
-`var` it reads. This mode needs `-o`, and `--force` replaces each of the two
-files. `--flat` writes one scenario with one `step` for each request instead.
+By default, `generate` writes three files:
 
-The default output has one `request` for each Postman request, in
-`orders.collection.art`, whose collection is titled as the Postman collection
-is. The scenario uses it by the file's name, `orders` -- or, when the `-o`
-name is not a DSL name, imports it `as` one. That name and the request name
-form the name of a step: `orders.orders_admin_list_orders`.
-The scenario `orders.art` holds one `use` line for each request:
+- `orders.collection.art` holds one `request` for each Postman request, in
+  a collection titled as the Postman collection is. A request declares each
+  Postman variable it reads as a `var` with no value: an input the flow
+  supplies.
+- `orders.flow.art` imports the collection and holds the flow. The flow is
+  named after the collection -- `"Orders API"` is `orders_api` -- and has one
+  `var` for each Postman variable, then one step for each request that calls
+  its item: `step "Orders / Admin / list orders" = orders.orders_admin_list_orders {}`.
+  The item's inputs are read from the flow's vars of the same names.
+- `orders.art` is the scenario file. It names the flow and holds one
+  scenario, titled as the collection is, that sets nothing, so every var keeps
+  the value the flow gives it. Run this one: `artemis run orders.art`.
+
+The flow calls the collection by the file's name, `orders` -- or, when the `-o`
+name is not a DSL name, imports it `as` one. `--flat` writes no collection: the
+flow holds each request in place as a step, and the scenario file is the same.
+Both modes need `-o`, which names the scenario file; the other files go beside
+it.
 
 ```text
+# orders.collection.art
+collection "Orders API" {
+  request health_ping {
+    var base_url
+
+    get "${base_url}/ping"
+    expect status == 200
+  }
+}
+
+# orders.flow.art
 import "orders.collection.art"
 
-scenario "Orders API" {
+flow orders_api {
   var base_url = "https://api.example.com"
-  use orders.health_ping { base_url = base_url }
+
+  step "Health / ping" = orders.health_ping {}
 }
+
+# orders.art
+flow "orders.flow.art"
+
+scenario "Orders API" {}
 ```
 
-(`orders.art`, cut short. The file `orders.collection.art` holds `request health_ping(base_url)`.)
+(The three files, cut short.)
 
-The text and the sample below show `--flat` output. In `--flat` output, folders
-nest to any depth and every request becomes one step named by its folder
-path -- `"Orders / Admin / list orders"`. Headers, `url.query` parameters and the
-body's mode are read as the collection wrote them: a raw JSON body becomes an
-object literal, a urlencoded body a string. A disabled header or parameter is
-left out, because the author switched it off.
+Folders nest to any depth, and every request becomes one step named by its
+folder path -- `"Orders / Admin / list orders"`. Headers, `url.query`
+parameters and the body's mode are read as the collection wrote them: a raw
+JSON body becomes an object literal, a urlencoded body a string. A disabled
+header or parameter is left out, because the author switched it off.
 
 Auth at the collection and at the request both become a header: bearer, basic
 with literal credentials, and apikey in a header or the query. A request with a
@@ -55,14 +78,15 @@ says.
 A Postman variable whose key is not a DSL name is renamed -- `base-url` becomes
 `base_url` -- and every placeholder is rewritten to match. A `{{name}}` no
 variable defines becomes `var name = env("NAME")`. Both are noted in the comment
-above the scenario, so nothing is renamed silently. This is `--flat` output:
+above the flow, so nothing is renamed silently. This is the flow `--flat`
+writes:
 
-```art
+```text
 # Generated by artemis generate from kitchen_sink.postman_collection.json.
 # The Postman variable "access-token" is written access_token here, because a DSL name cannot hold "-".
 # The Postman variable "base-url" is written base_url here, because a DSL name cannot hold "-".
 # Read from the environment, because the collection used them without defining them: access_token from ACCESS_TOKEN.
-scenario "Orders API" {
+flow orders_api {
   var base_url = "https://api.example.com"
   var page_size = "10"
   var access_token = env("ACCESS_TOKEN")
@@ -99,8 +123,8 @@ variable like `{{$guid}}`. Pre-request and test scripts are not read at all --
 the DSL has no spelling for arbitrary JavaScript, and it is not going to grow
 one.
 
-With `-o`, a file that is already there is an error rather than an overwrite;
-`--force` replaces it.
+A file that is already there is an error rather than an overwrite, for each of
+the files a mode writes; `--force` replaces them.
 
 ## An old YAML scenario
 
@@ -108,9 +132,11 @@ With `-o`, a file that is already there is an error rather than an overwrite;
 runs it.
 
 ```sh
-artemis migrate -f checkout.yaml                 # to stdout
-artemis migrate -f checkout.yaml -o checkout.art
+artemis migrate -f checkout.yaml -o new/   # new/flows/checkout.art and new/scenarios/checkout.art
 ```
+
+A YAML scenario becomes a flow and a scenario file, so `-o` names a folder for
+them, and the paths written are printed on stdout.
 
 This is the input:
 
@@ -156,11 +182,12 @@ steps:
     timeout: "5s"
 ```
 
-And this is what `artemis migrate -f checkout.yaml` writes:
+And this is what `artemis migrate -f checkout.yaml -o new/` writes:
 
-```art
+```text
+# new/flows/checkout.art
 # The scenario the README documented before the DSL landed.
-scenario "API Collection" {
+flow checkout {
   var url = env("API_URL")
 
   step "Login" {
@@ -170,7 +197,7 @@ scenario "API Collection" {
     }
     expect status == 200
     expect body.data.message == "success"
-    capture token = body.data.access_token
+    var token = body.data.access_token
   }
 
   step "Orders" {
@@ -181,7 +208,16 @@ scenario "API Collection" {
     expect body.data.count > 0
   }
 }
+
+# new/scenarios/checkout.art
+flow "../flows/checkout.art"
+
+scenario "API Collection" {}
 ```
+
+The flow is named after the file, and the scenario after the YAML's `name`.
+The YAML's variables are the flow's vars, at its top, and the scenario sets
+nothing, so each keeps the value the flow gives it.
 
 The YAML file is checked as strictly as it ever was -- a strict decode, and
 every step type validated -- so a scenario artemis would have refused to run is
@@ -197,6 +233,133 @@ from YAML*](../SPEC.md#coming-from-yaml) lists the habits that do not carry over
 and what to write instead.
 
 A YAML scenario may capture one name twice -- a login and a refresh that both
-keep `token` -- and a .art file binds a name once. The second capture is written
-`token_2` (the first free suffix), every later read follows it, and a line in the
-header says so.
+keep `token`. The second capture is written `token_2` (the first free suffix),
+every later read follows it, and a line in the header says so. A flow would
+let the second write replace the first; the rename keeps the two values apart
+as the YAML did.
+
+## Old `.art` files
+
+`.art` files written before flows -- a scenario that holds its steps,
+`capture`, `use`, a collection's params, `secret`, `suite.art` and `for` rows --
+are converted by `artemis migrate` too. One old file becomes several new ones,
+so `-o` names a folder, and the originals are never changed:
+
+```sh
+artemis migrate -f checkout.art -o new/     # one file, and the collections it imports
+artemis migrate -f suite/ -o new/           # every .art file in a folder
+```
+
+The paths under `-o` are the paths under the folder `-f` names, or under the
+file's own folder, so laying `new/` over the originals replaces them:
+
+```text
+suite/suite.art                ->  (copied into each flow under it; not written)
+suite/collections/auth.art     ->  new/collections/auth.art
+suite/orders/create.art        ->  new/orders/flows/create.art
+                                   new/orders/scenarios/create.art
+```
+
+| Old | New |
+| --- | --- |
+| `scenario "x" { ... }` in `a/b.art` | the flow `b` in `a/flows/b.art`, with the vars at its top, and `a/scenarios/b.art` holding `scenario "x" {}` with the old tags. A file of several scenarios makes `b_1`, `b_2`, ... |
+| `capture x = ...` | `var x = ...` after the action |
+| `use a.b as x { ... }` | `step "x" = a.b as x { ... }`, named as the old step was: the alias, or `a.b` |
+| `drop captures` | `drop vars` |
+| `request r(p, q = 1)` | `request r { var p  var q = 1 ... }`; an item whose action is `run` is a `command`, and one whose action is `db` is a `query` |
+| `scenario "..." for row in ...` | one scenario for each row, each setting `row`; the flow declares `var row` with the first row |
+| `suite.art` | its vars, setup and teardown are copied into each flow under it, `suite.x` reads `x`, and its tags go onto each scenario |
+| `secret` | removed |
+| `json()`, `csv()`, `file()` and `import` paths | rewritten for the flow's folder, so they name the same files |
+
+A step fills an item's input from the flow's names before the item's own
+default, where an old `use` took the default. So when a flow binds a name that
+an item input left to its default also has, the step is passed that default
+explicitly, and sends what the old file sent.
+
+What changed in meaning is noted on stderr: each `secret` removed, because a
+report now prints that value; and each suite, because its setup now runs once
+per scenario rather than once per run. A suite var that the scenario declares
+too is an error, because a flow declares a name once: rename one first.
+
+This old file and the collection it imports:
+
+```text
+# checkout.art
+import "collections/auth.art"
+
+scenario "orders need a token" {
+  tags = ["smoke"]
+  var url = env("API_URL")
+  use auth.login { user = "alice", password = env("API_PASSWORD") }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+    capture count = body.data.count
+  }
+}
+
+# collections/auth.art
+collection "auth" {
+
+  request login(user, secret password, base = env("API_URL")) {
+    post "${base}/token" {
+      body = {"username": user, "password": password}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+}
+```
+
+become, under `artemis migrate -f checkout.art -o new/`:
+
+```text
+# new/collections/auth.art
+collection "auth" {
+  request login {
+    var user
+    var password
+    var base = env("API_URL")
+
+    post "${base}/token" { body = {"username": user, "password": password} }
+    expect status == 200
+    var token = body.data.access_token
+  }
+}
+
+# new/flows/checkout.art
+import "../collections/auth.art"
+
+flow checkout {
+  var url = env("API_URL")
+
+  step "auth.login" = auth.login { user = "alice", password = env("API_PASSWORD") }
+
+  step "list the orders" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+    var count = body.data.count
+  }
+}
+
+# new/scenarios/checkout.art
+flow "../flows/checkout.art"
+
+scenario "orders need a token" {
+  tags = ["smoke"]
+}
+```
+
+with two notes on stderr:
+
+```
+note: collections/auth.art:3: secret is removed from the input password of login, and reports no longer withhold its value
+note: collections/auth.art:8: secret is removed from capture token, and reports no longer withhold its value
+```
+
+An old form left in a file `artemis run` reads is a compile error, and its
+hint names this command.

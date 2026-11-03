@@ -198,13 +198,12 @@ func joinPointer(segments []string) string {
 	return "/" + strings.Join(segments, "/")
 }
 
-// secretCaptures is the step's captures that are secret, by the same two rules
-// the scenario walk uses: the author wrote `secret capture`, or the captured
-// expression reads a secret binding.
+// secretCaptures is the step's captures that are secret, by the rule the
+// scenario walk uses: the captured expression reads a secret binding.
 func secretCaptures(st *Step, secrets map[string]bool) []*Capture {
 	var out []*Capture
 	for _, c := range st.Captures {
-		if c.Declared || taint.Secret(c.Value, secrets) {
+		if taint.Secret(c.Value, secrets) {
 			out = append(out, c)
 		}
 	}

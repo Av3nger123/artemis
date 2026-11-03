@@ -99,9 +99,12 @@ type jsonScenario struct {
 // stream's scenario-end carries: by then every step has already arrived on its
 // own step-end. Embedded in jsonScenario for the same reason as jsonRunSummary.
 type jsonScenarioSummary struct {
-	Name string   `json:"name"`
-	File string   `json:"file"`
-	Row  *jsonRow `json:"row,omitempty"`
+	Name string `json:"name"`
+	File string `json:"file"`
+	// Flow is the flow a scenario of a scenario file ran, and omitted for any
+	// other scenario, so a run with no scenario file writes the document it
+	// always did.
+	Flow string `json:"flow,omitempty"`
 	// Kind is "suite" for a suite.art's setup or teardown, and omitted for a
 	// scenario, so a run with no suite writes the document it always did.
 	Kind string `json:"kind,omitempty"`
@@ -111,13 +114,6 @@ type jsonScenarioSummary struct {
 	Status     string   `json:"status"`
 	DurationMS float64  `json:"duration_ms"`
 	Error      string   `json:"error"`
-}
-
-// jsonRow is a data-driven scenario's row. Absent for every other scenario,
-// so a report of a suite that has none is the document it always was.
-type jsonRow struct {
-	Source string `json:"source"`
-	Index  int    `json:"index"`
 }
 
 type jsonStep struct {
@@ -298,14 +294,12 @@ func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
 	out := jsonScenarioSummary{
 		Name:       sc.Name,
 		File:       sc.File,
+		Flow:       sc.Flow,
 		Status:     sc.Status.String(),
 		DurationMS: millis(sc.Duration),
 		Error:      sc.Error,
 		Kind:       sc.Kind,
 		Tags:       sc.Tags,
-	}
-	if sc.Row != nil {
-		out.Row = &jsonRow{Source: sc.Row.Source, Index: sc.Row.Index}
 	}
 	return out
 }

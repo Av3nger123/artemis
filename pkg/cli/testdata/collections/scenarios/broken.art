@@ -1,0 +1,5 @@
+flow "../flows/broken.art"
+
+scenario "one" {}
+
+scenario "two" {}

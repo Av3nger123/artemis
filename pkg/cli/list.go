@@ -37,14 +37,9 @@ makes the command exit non-zero after listing the rest.`,
 type listedScenario struct {
 	File string   `json:"file"`
 	Name string   `json:"name"`
+	Flow string   `json:"flow,omitempty"`
 	Line int      `json:"line"`
 	Tags []string `json:"tags"`
-	Row  *jsonRow `json:"row"`
-}
-
-type jsonRow struct {
-	Source string `json:"source"`
-	Index  int    `json:"index"`
 }
 
 func listScenarios(cmd *cobra.Command, path string) error {
@@ -72,25 +67,21 @@ func listScenarios(cmd *cobra.Command, path string) error {
 		c.file = file
 		loaded = append(loaded, c)
 	}
-	rt.planSuites(filesOf(loaded), io.Discard)
 
 	known := map[string]bool{}
 	listed := []listedScenario{}
 	for _, c := range loaded {
 		for _, sc := range c.scenarios {
-			tags := rt.tagsOf(c.file, sc)
+			tags := sc.Tags
 			for _, t := range tags {
 				known[t] = true
 			}
 			if !sel.selects(sc.Name, tags) {
 				continue
 			}
-			item := listedScenario{File: c.file, Name: sc.Name, Line: sc.Line, Tags: tags}
+			item := listedScenario{File: c.file, Name: sc.Name, Flow: sc.FlowName, Line: sc.Line, Tags: tags}
 			if item.Tags == nil {
 				item.Tags = []string{}
-			}
-			if sc.Row != nil {
-				item.Row = &jsonRow{Source: sc.Row.Source, Index: sc.Row.Index}
 			}
 			listed = append(listed, item)
 		}
@@ -137,12 +128,4 @@ func printListed(w io.Writer, listed []listedScenario) {
 		}
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 	}
-}
-
-func filesOf(cs []compiled) []string {
-	out := make([]string, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, c.file)
-	}
-	return out
 }

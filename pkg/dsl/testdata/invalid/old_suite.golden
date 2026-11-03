@@ -1,0 +1,8 @@
+=== terminal
+old_suite.art:7:1: a suite is removed: a folder and --tags select what runs
+   7 | suite {
+     | ^^^^^
+   hint: copy its vars, setup and teardown into each flow under the folder, and its tags onto each scenario -- artemis migrate -f old_suite.art -o <dir> rewrites it
+
+=== codes
+old-suite	error	7:1-7:6

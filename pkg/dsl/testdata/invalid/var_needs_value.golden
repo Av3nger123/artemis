@@ -1,0 +1,8 @@
+=== terminal
+var_needs_value.art:12:7: var user has no value
+   12 |   var user
+      |       ^^^^
+   hint: give it one, var user = ...; only a flow or a collection item may leave a var without a value
+
+=== codes
+var-needs-value	error	12:7-12:11

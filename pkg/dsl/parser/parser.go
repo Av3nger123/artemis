@@ -89,6 +89,14 @@ type parser struct {
 	// comma between lines is the usual spelling: a missing separator's hint
 	// offers it there.
 	useLines int
+
+	// scenarioFile is set by the file's flow "..." header: from there on a
+	// scenario holds data only. header is that header and flow the file's
+	// flow declaration, each the first one, for the diagnostics that name
+	// them. See flowfile.go.
+	scenarioFile bool
+	header       *ast.FlowRef
+	flow         *ast.Flow
 }
 
 func newParser(toks []token.Token, bag *diag.Bag) *parser {

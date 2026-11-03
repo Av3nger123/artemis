@@ -1,4 +1,4 @@
-scenario: item lifecycle (testdata/art/pass.art)
+scenario: item lifecycle (testdata/art/scenarios/pass.art)
   ok    create item                 <dur>
   ok    read it back                <dur>
 

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"artemis/pkg/dsl/expand"
-	"artemis/pkg/dsl/front"
 	"artemis/pkg/eval"
 	"artemis/pkg/shared/models"
 )
@@ -17,7 +16,7 @@ import (
 // typed column -- where a terminal step's are text. An object is its JSON.
 func TestADBStepLowersWithTypedArgs(t *testing.T) {
 	src := `scenario "s" {
-  secret var url = "sqlite:app.db"
+  var url = "sqlite:app.db"
   var n = 7
 
   step "q" {
@@ -37,8 +36,8 @@ func TestADBStepLowersWithTypedArgs(t *testing.T) {
 	if m.Type != "db" || m.DB.URL != "sqlite:app.db" || !strings.HasPrefix(m.DB.SQL, "SELECT") {
 		t.Errorf("model = %+v", m)
 	}
-	if !m.Secrets.URL || m.Secrets.Args || m.Secrets.SQL {
-		t.Errorf("secrets = %+v, want only the URL marked", m.Secrets)
+	if m.Secrets.URL || m.Secrets.Args || m.Secrets.SQL {
+		t.Errorf("secrets = %+v, want nothing marked", m.Secrets)
 	}
 }
 
@@ -62,11 +61,8 @@ func TestADBStepsSQLFileIsAPath(t *testing.T) {
 func dbModelOf(t *testing.T, src string, vars map[string]any) models.Step {
 	t.Helper()
 	files := expand.MapLoader{"main.art": src, "seed.sql": "CREATE TABLE t (x);"}
-	u := front.CompileWith("main.art", src, files)
-	if u.Bag.HasErrors() {
-		t.Fatal(u.Bag.All())
-	}
-	scs, err := File(u.Expanded, u.Info)
+	tree, info := expanded(t, files)
+	scs, err := File(tree, info)
 	if err != nil {
 		t.Fatal(err)
 	}

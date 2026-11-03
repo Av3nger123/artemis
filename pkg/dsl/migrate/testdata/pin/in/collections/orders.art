@@ -1,0 +1,8 @@
+collection "orders" {
+  request create(sku, qty = 1) {
+    post "https://example.com/orders" {
+      body = {"sku": sku, "qty": qty}
+    }
+    expect status == 201
+  }
+}

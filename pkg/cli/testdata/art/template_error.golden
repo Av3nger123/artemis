@@ -1,14 +1,15 @@
-testdata/art/template_error.art:11:27: unknown name "tokn"
-   11 |       body = {"token": "${tokn}"}
-      |                           ^^^^
+testdata/art/flows/template_error.art:10:58: unknown name "tokn"
+   10 |     post "http://127.0.0.1:PORT/ping" { body = {"token": "${tokn}"} }
+      |                                                          ^^^^
    hint: an api step binds status, body, raw, headers, cookies, duration_ms
-scenario: testdata/art/template_error.art
-  ERROR testdata/art/template_error.art:11:27: unknown name "tokn"
+   used from testdata/art/scenarios/template_error.art:1:1: flow "../flows/template_error.art"
+scenario: testdata/art/scenarios/template_error.art
+  ERROR testdata/art/flows/template_error.art:10:58: unknown name "tokn"
 
 1 failure:
 
-1) testdata/art/template_error.art
-     error     testdata/art/template_error.art:11:27: unknown name "tokn"
+1) testdata/art/scenarios/template_error.art
+     error     testdata/art/flows/template_error.art:10:58: unknown name "tokn"
 
 Scenarios     1  (1 errored)
 Steps         0
@@ -16,4 +17,4 @@ Assertions    0
 FAIL in <dur>
 
 --- exit error ---
-1 scenario could not run: testdata/art/template_error.art:11:27: unknown name "tokn"
+1 scenario could not run: testdata/art/flows/template_error.art:10:58: unknown name "tokn"

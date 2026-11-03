@@ -8,7 +8,8 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// parseFile is `File = { Import } { Collection | Scenario }`.
+// parseFile is `File = { Import } { Collection | Scenario }`, or a flow file
+// or a scenario file, which flowfile.go reads.
 //
 // An empty file is valid and yields a File with no scenarios. Anything at the
 // top level that is none of the three is reported once and recovered past, so
@@ -33,6 +34,12 @@ func (p *parser) parseFile() *ast.File {
 		case p.atWord("collection"):
 			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseCollection())
+		case p.atWord("flow"):
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseFlowHead(len(file.Scenarios) == 0))
+		case p.atWord("scenario") && p.scenarioFile:
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseDataScenario())
 		case p.atWord("scenario"):
 			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseScenario())
@@ -55,6 +62,7 @@ func (p *parser) parseFile() *ast.File {
 		}
 	}
 
+	p.flowFileHolds(file)
 	file.EOF = p.peek()
 	return file
 }
@@ -179,7 +187,8 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 	switch {
 	case p.atWord("config"):
 		return p.parseConfig()
-	case p.atWord("var"), p.atWord("secret") && p.peekWordAt(1, "var"):
+	case p.atWord("var"), p.atWord("secret") && p.peekWordAt(1, "var"),
+		p.atWord("private") && p.peekWordAt(1, "var"):
 		return p.parseVar()
 	case p.atWord("step"):
 		return p.parseStep()
@@ -187,8 +196,8 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 		return p.parseUse()
 	case p.atWord("setup"), p.atWord("teardown"):
 		return p.parsePhase()
-	case p.atFlow():
-		return p.parseFlow()
+	case p.atBlock():
+		return p.parseBlockDecl()
 	case p.atWord("tags") && p.peekKindAt(1, token.Assign):
 		d := &ast.TagsDecl{Keyword: p.next(), Assign: p.next()}
 		d.Value = p.parseExpr()
@@ -228,8 +237,8 @@ func (p *parser) parsePhase() ast.Decl {
 			d.Body = append(d.Body, p.parseStep())
 		case p.atWord("use"):
 			d.Body = append(d.Body, p.parseUse())
-		case p.atFlow():
-			d.Body = append(d.Body, p.parseFlow())
+		case p.atBlock():
+			d.Body = append(d.Body, p.parseBlockDecl())
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected \"step\" or \"use\" in %s, found %s", d.Keyword.Value, describe(p.peek())).
@@ -272,12 +281,20 @@ func (p *parser) parseConfig() ast.Decl {
 	return c
 }
 
-// parseVar is `[ "secret" ] "var" <ident> = Expr`.
+// parseVar is `[ "private" ] [ "secret" ] "var" <ident> [ = Expr ]`.
 //
-// badFrom already drops a zero token, so the optional modifier needs no branch
+// The value is optional only where the line ends after the name: `var user`
+// is a required var, which a flow's scenario or an item's caller supplies,
+// while `var user "bob"` is still a missing "=". The checker rejects a
+// required var where nothing can supply one.
+//
+// badFrom already drops a zero token, so the optional modifiers need no branch
 // on the recovery paths.
 func (p *parser) parseVar() ast.Decl {
 	v := &ast.VarDecl{}
+	if p.atWord("private") {
+		v.Private = p.next()
+	}
 	if p.atWord("secret") {
 		v.Secret = p.next()
 	}
@@ -285,13 +302,16 @@ func (p *parser) parseVar() ast.Decl {
 
 	name, ok := p.expectIdent("a variable name")
 	if !ok {
-		return p.badFrom(v.Secret, v.Keyword)
+		return p.badFrom(v.Private, v.Secret, v.Keyword)
 	}
 	v.Name = name
 
+	if p.atBoundary() {
+		return v
+	}
 	assign, ok := p.expect(token.Assign, "\"=\" and a value")
 	if !ok {
-		return p.badFrom(v.Secret, v.Keyword, v.Name)
+		return p.badFrom(v.Private, v.Secret, v.Keyword, v.Name)
 	}
 	v.Assign = assign
 	v.Value = p.parseExpr()
@@ -307,12 +327,19 @@ func (p *parser) parseVar() ast.Decl {
 // turns a step whose author wrote `expect` above `get` into a cascade of
 // unexpected tokens from the first line onward; this way one mistake produces
 // one diagnostic and the rest of the step still lands in the tree.
+//
+// `step "name" = auth.login { ... }` is the other form, a step that calls a
+// collection item: the "=" after the name decides it, and parseStepCall reads
+// the rest.
 func (p *parser) parseStep() ast.Decl {
 	s := &ast.StepDecl{Keyword: p.next()}
 
 	name, ok := p.expectIdentOrString("a step name in quotes")
 	if !ok {
 		return p.badFrom(s.Keyword)
+	}
+	if p.at(token.Assign) {
+		return p.parseStepCall(s.Keyword, name)
 	}
 
 	body := p.parseStepBody("step", name)
@@ -330,12 +357,22 @@ func (p *parser) parseStep() ast.Decl {
 // missing-action diagnostic points at. It returns nil, having consumed
 // nothing, when there is no "{".
 func (p *parser) parseStepBody(what string, name token.Token) *ast.StepDecl {
+	return p.parseStepBodyWith(what, name, nil)
+}
+
+// parseStepBodyWith is parseStepBody with head, when it is not nil, reading
+// what an item writes between its "{" and its action -- its input vars --
+// before the step's own loop starts.
+func (p *parser) parseStepBodyWith(what string, name token.Token, head func(*ast.StepDecl)) *ast.StepDecl {
 	s := &ast.StepDecl{}
 	open, ok := p.expect(token.LBrace, "\"{\" to open the "+what)
 	if !ok {
 		return nil
 	}
 	s.LBrace = open
+	if head != nil {
+		head(s)
+	}
 
 	var firstAction token.Span // where the action block already seen began
 	sawStmt := false
@@ -351,7 +388,7 @@ func (p *parser) parseStepBody(what string, name token.Token) *ast.StepDecl {
 				if sawStmt {
 					p.errorf(tokenAt(action), diag.ActionNotFirst,
 						"a step's action block must come before its statements").
-						Hintf("move this above the expect, capture, retry and timeout lines")
+						Hintf("move this above the expect, var, retry and timeout lines")
 				}
 			default:
 				p.errorf(tokenAt(action), diag.DuplicateAction,

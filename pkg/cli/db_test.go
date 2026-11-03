@@ -15,8 +15,8 @@ import (
 // dbScenario seeds a database from a script in setup, writes through an api
 // stand-in -- here, a db step -- reads the row back with typed args, and
 // cleans up in teardown: the shape a db step exists for.
-const dbScenario = `scenario "an order lands" {
-  secret var db_url = env("ART_TEST_DB")
+const dbScenario = `flow an_order_lands {
+  var db_url = env("ART_TEST_DB")
   var id = 42
 
   setup {
@@ -43,7 +43,7 @@ const dbScenario = `scenario "an order lands" {
     expect rows[0].total == 12.5
     expect from_json(rows[0].meta).tier == "gold"
     expect duration_ms >= 0
-    capture status = rows[0].status
+    var status = rows[0].status
   }
 
   teardown {
@@ -56,6 +56,8 @@ const dbScenario = `scenario "an order lands" {
     }
   }
 }
+
+scenario "an order lands" {}
 `
 
 const dbSeed = `CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT, total REAL, meta TEXT);
@@ -65,7 +67,7 @@ CREATE TABLE audit (note TEXT);
 func TestArtRunDBStepsEndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "orders.art")
-	os.WriteFile(path, []byte(dbScenario), 0o600)
+	writeSplit(t, path, dbScenario)
 	os.WriteFile(filepath.Join(dir, "seed.sql"), []byte(dbSeed), 0o600)
 	t.Setenv("ART_TEST_DB", "sqlite:"+filepath.Join(dir, "shop.db"))
 
@@ -85,7 +87,7 @@ func TestArtRunDBStepsEndToEnd(t *testing.T) {
 func TestArtRunDBFailuresKeepTheirKinds(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ART_TEST_DB", "sqlite:"+filepath.Join(dir, "shop.db"))
-	run, _ := runArt(t, `scenario "kinds" {
+	run, _ := runArt(t, `flow kinds {
   var url = env("ART_TEST_DB")
 
   step "wrong answer" {
@@ -98,6 +100,8 @@ func TestArtRunDBFailuresKeepTheirKinds(t *testing.T) {
     expect affected == 1
   }
 }
+
+scenario "kinds" {}
 `)
 	steps := run.Scenarios[0].Steps
 	if steps[0].Status != result.StatusFail {
@@ -105,44 +109,6 @@ func TestArtRunDBFailuresKeepTheirKinds(t *testing.T) {
 	}
 	if steps[1].Status != result.StatusError || !strings.Contains(steps[1].Error, "sqlite") {
 		t.Errorf("bad sql: status = %s, error = %q; want an errored step naming the database", steps[1].Status, steps[1].Error)
-	}
-}
-
-// A trace of a db step writes what it sent -- the statement, its args by type
-// -- and withholds the args that read a secret.
-func TestADBTraceWithholdsSecretArgs(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("ART_TEST_DB", "sqlite:"+filepath.Join(dir, "shop.db"))
-	path := writeArt(t, "trace.art", `scenario "trace" {
-  var url = env("ART_TEST_DB")
-  secret var pw = "hunter2"
-
-  step "plain" {
-    db url {
-      sql  = "SELECT ? AS n, ? AS s"
-      args = [7, "x"]
-    }
-  }
-
-  step "secret" {
-    db url {
-      sql  = "SELECT ? AS pw"
-      args = [pw]
-    }
-  }
-}
-`)
-	traces := t.TempDir()
-	if _, stderr, err := runCLI(t, "run", path, "--trace", traces); err != nil {
-		t.Fatalf("run: %v\n%s", err, stderr)
-	}
-	sent := readTrace(t, filepath.Join(traces, "trace-plain.json")).Sent
-	if sent["sql"] != "SELECT ? AS n, ? AS s" || len(sent["args"].([]any)) != 2 || sent["args"].([]any)[0] != 7.0 {
-		t.Errorf("sent = %v, want the sql and the args [7, \"x\"]", sent)
-	}
-	secret, _ := os.ReadFile(filepath.Join(traces, "trace-secret.json"))
-	if bytes.Contains(secret, []byte("hunter2")) {
-		t.Errorf("the trace of a step that bound a secret prints it:\n%s", secret)
 	}
 }
 

@@ -50,7 +50,7 @@ const (
 	kindRequestDecl = "requestDecl"
 	kindUse         = "use"
 	kindPhase       = "phase"
-	kindFlow        = "flow"
+	kindBlockDecl   = "flow" // a block; the value stays "flow" for programs that read the JSON
 	kindClause      = "clause"
 	kindOption      = "option"
 	kindBodySet     = "bodySet"
@@ -115,7 +115,7 @@ func (e *enc) node(n ast.Node) *obj {
 			set("body", e.list(toNodes(v.Body))).
 			span().
 			comments(toks(v.Keyword), v.LBrace, v.RBrace).done()
-	case *ast.FlowDecl:
+	case *ast.BlockDecl:
 		return e.flow(v)
 	case *ast.Clause:
 		return e.clause(v)
@@ -123,6 +123,12 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.bodySet(v)
 	case *ast.Drop:
 		return e.drop(v)
+	case *ast.Flow:
+		return e.flowDecl(v)
+	case *ast.FlowRef:
+		return e.flowRef(v)
+	case *ast.Set:
+		return e.setLine(v)
 	case *ast.Bad:
 		return e.bad(v)
 	}
@@ -189,12 +195,12 @@ func (e *enc) scenario(s *ast.Scenario) *obj {
 
 // forClause is a data-driven scenario's `for [secret] <var> in <source>`.
 // flow is a control-flow block: its clauses in order, and a repeat's until.
-func (e *enc) flow(f *ast.FlowDecl) *obj {
+func (e *enc) flow(f *ast.BlockDecl) *obj {
 	clauses := make([]ast.Node, 0, len(f.Clauses))
 	for _, c := range f.Clauses {
 		clauses = append(clauses, c)
 	}
-	return start(kindFlow, f).
+	return start(kindBlockDecl, f).
 		set("clauses", e.list(clauses)).
 		set("until", e.node(f.Cond)).
 		span().
@@ -245,6 +251,7 @@ func (e *enc) varDecl(d *ast.VarDecl) *obj {
 	// set drops a false flag, so a plain var encodes exactly as it did before
 	// ART-54 and no existing document gains a key.
 	return start(kindVar, d).
+		set("private", d.Private.Text != "").
 		set("secret", d.Secret.Text != "").
 		set("name", d.Name.Text).
 		set("value", e.node(d.Value)).
@@ -353,8 +360,15 @@ func (e *enc) expect(x *ast.Expect) *obj {
 		comments(x.Tokens(nil), zero, zero).done()
 }
 
+// capture carries its keyword only when it is var, so a capture written
+// `capture x = ...` encodes exactly as it did before step vars and no existing
+// document gains a key.
 func (e *enc) capture(c *ast.Capture) *obj {
-	return start(kindCapture, c).
+	o := start(kindCapture, c)
+	if c.IsVar() {
+		o.set("keyword", "var")
+	}
+	return o.
 		set("secret", c.Secret.Text != "").
 		set("name", c.Name.Text).
 		set("value", e.node(c.Value)).

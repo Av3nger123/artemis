@@ -136,10 +136,16 @@
       ]
     },
     "collectionItem": {
-      "doc": "What a collection body holds: requests.",
+      "doc": "What a collection body holds, one keyword per item type: request (an api action), command (run) and query (db).",
       "values": [
         {
           "value": "request"
+        },
+        {
+          "value": "command"
+        },
+        {
+          "value": "query"
         }
       ]
     },
@@ -275,7 +281,7 @@
       ]
     },
     "declaration": {
-      "doc": "The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
+      "doc": "The declarations of a file -- import, collection, scenario, flow -- and those a flow's body holds.",
       "values": [
         {
           "value": "import"
@@ -287,7 +293,7 @@
           "value": "scenario"
         },
         {
-          "value": "suite"
+          "value": "flow"
         },
         {
           "value": "tags"
@@ -300,9 +306,6 @@
         },
         {
           "value": "step"
-        },
-        {
-          "value": "use"
         },
         {
           "value": "setup"
@@ -331,11 +334,6 @@
           "severity": "error"
         },
         {
-          "value": "bad-row-name",
-          "doc": "a data-driven scenario's name reads something other than its row",
-          "severity": "error"
-        },
-        {
           "value": "bad-tag",
           "doc": "a tag is not a lower-case word written out as a string, or is listed twice",
           "severity": "error"
@@ -352,7 +350,7 @@
         },
         {
           "value": "capture-maybe-unbound",
-          "doc": "a step reads a capture that only some branches of an if or a switch make",
+          "doc": "a step reads a name that only some branches of an if, a switch or a catch write",
           "severity": "error"
         },
         {
@@ -368,6 +366,11 @@
         {
           "value": "data-not-json",
           "doc": "json() names a file that is not JSON",
+          "severity": "error"
+        },
+        {
+          "value": "data-only-scenario",
+          "doc": "a scenario in a scenario file holds a line that is not name = value or tags",
           "severity": "error"
         },
         {
@@ -407,7 +410,7 @@
         },
         {
           "value": "duplicate-binding",
-          "doc": "a capture or var reuses a name a var or an earlier capture binds",
+          "doc": "a var that reuses the name of a var declared in the same place",
           "severity": "error"
         },
         {
@@ -421,33 +424,28 @@
           "severity": "error"
         },
         {
-          "value": "duplicate-row-name",
-          "doc": "two rows of a data-driven scenario name it alike",
-          "severity": "error"
-        },
-        {
-          "value": "duplicate-suite-name",
-          "doc": "a suite exports a name a suite above it already exports",
-          "severity": "error"
-        },
-        {
           "value": "duplicate-tags",
-          "doc": "a scenario or a suite has more than one tags list",
+          "doc": "a scenario has more than one tags list",
           "severity": "error"
         },
         {
-          "value": "for-no-rows",
-          "doc": "a for clause's data has no rows",
+          "value": "flow-file-holds",
+          "doc": "a flow file holds a collection or a scenario",
           "severity": "error"
         },
         {
-          "value": "for-source-not-array",
-          "doc": "a for clause's data is not an array of rows",
+          "value": "flow-not-found",
+          "doc": "a scenario file's flow header names a file that cannot be read",
           "severity": "error"
         },
         {
-          "value": "for-source-not-static",
-          "doc": "a for clause reads rows that are not known before the run",
+          "value": "flow-not-runnable",
+          "doc": "a flow file is named on the command line, and a flow runs only through a scenario file",
+          "severity": "error"
+        },
+        {
+          "value": "flow-ref-placement",
+          "doc": "a scenario file's flow \"...\" header is not its first line",
           "severity": "error"
         },
         {
@@ -496,6 +494,11 @@
           "severity": "error"
         },
         {
+          "value": "item-action-mismatch",
+          "doc": "a collection item's action is not the kind its keyword names",
+          "severity": "error"
+        },
+        {
           "value": "missing-action",
           "doc": "a step block contains no action block, so the step has no type",
           "severity": "error"
@@ -503,6 +506,11 @@
         {
           "value": "missing-argument",
           "doc": "a use does not pass a parameter that has no default",
+          "severity": "error"
+        },
+        {
+          "value": "missing-param",
+          "doc": "a scenario does not set a var its flow declares without a value",
           "severity": "error"
         },
         {
@@ -521,8 +529,48 @@
           "severity": "error"
         },
         {
+          "value": "not-a-flow-file",
+          "doc": "a scenario file's flow header names a file that holds no flow",
+          "severity": "error"
+        },
+        {
           "value": "not-in-scope",
           "doc": "a name is not bound in this step's type",
+          "severity": "error"
+        },
+        {
+          "value": "old-capture",
+          "doc": "a step writes a name with capture, which var after the action replaces",
+          "severity": "error"
+        },
+        {
+          "value": "old-for",
+          "doc": "a scenario reads its rows with for, which a scenario for each row replaces",
+          "severity": "error"
+        },
+        {
+          "value": "old-params",
+          "doc": "a collection item declares parameters in parentheses, which vars above its action replace",
+          "severity": "error"
+        },
+        {
+          "value": "old-scenario",
+          "doc": "a scenario holds steps in a file with no flow header, the form a flow file and a scenario file replace",
+          "severity": "error"
+        },
+        {
+          "value": "old-secret",
+          "doc": "a var, a capture, a parameter or a for clause is marked secret, which is removed",
+          "severity": "error"
+        },
+        {
+          "value": "old-suite",
+          "doc": "a file is a suite, which folders, --tags and each flow's own setup replace",
+          "severity": "error"
+        },
+        {
+          "value": "old-use",
+          "doc": "a use calls an item, which step \"name\" = <collection>.<item> replaces",
           "severity": "error"
         },
         {
@@ -532,12 +580,22 @@
         },
         {
           "value": "parallel-capture-clash",
-          "doc": "two branches of a parallel block capture the same name",
+          "doc": "two branches of a parallel block write the same name",
           "severity": "error"
         },
         {
           "value": "parallel-sibling-capture",
-          "doc": "a branch of a parallel block reads a capture another branch makes at the same time",
+          "doc": "a branch of a parallel block reads a name another branch writes at the same time",
+          "severity": "error"
+        },
+        {
+          "value": "private-input",
+          "doc": "a use passes a private var of the item, which takes only its own default",
+          "severity": "error"
+        },
+        {
+          "value": "private-param",
+          "doc": "a scenario sets a private var of its flow",
           "severity": "error"
         },
         {
@@ -551,13 +609,18 @@
           "severity": "error"
         },
         {
+          "value": "reserved-tags",
+          "doc": "a flow declares a var named tags, which is each scenario's own list",
+          "severity": "error"
+        },
+        {
           "value": "reserved-word",
           "doc": "a word reserved for a later tier is used as a name",
           "severity": "error"
         },
         {
           "value": "root-capture",
-          "doc": "a collection's template captures under the name of a step's observation, such as body",
+          "doc": "a collection item writes a step var under the name of a step's observation, such as body",
           "severity": "error"
         },
         {
@@ -566,13 +629,18 @@
           "severity": "error"
         },
         {
+          "value": "scenario-value-reads-name",
+          "doc": "a scenario's value reads a name, where only literals and builtins are allowed",
+          "severity": "error"
+        },
+        {
           "value": "second-collection",
           "doc": "a file holds more than one collection",
           "severity": "error"
         },
         {
-          "value": "secret-argument",
-          "doc": "an argument to a secret parameter is not itself secret",
+          "value": "second-flow",
+          "doc": "a file declares or names a second flow",
           "severity": "error"
         },
         {
@@ -581,18 +649,13 @@
           "severity": "error"
         },
         {
-          "value": "suite-file-name",
-          "doc": "a suite block is in a file not named suite.art",
+          "value": "skip-maybe-written",
+          "doc": "a var a scenario skips is read where only some paths have written it",
           "severity": "error"
         },
         {
-          "value": "suite-has-scenario",
-          "doc": "a suite file holds a scenario, or a second suite block",
-          "severity": "error"
-        },
-        {
-          "value": "suite-has-step",
-          "doc": "a suite block holds a step or a use outside setup and teardown",
+          "value": "skip-read",
+          "doc": "a var a scenario skips is read somewhere other than an expect or an object field",
           "severity": "error"
         },
         {
@@ -661,6 +724,11 @@
           "severity": "error"
         },
         {
+          "value": "unknown-param",
+          "doc": "a scenario sets a name that is not a var at the top of its flow",
+          "severity": "error"
+        },
+        {
           "value": "unknown-type",
           "doc": "the right-hand side of \"is\" is not a type name",
           "severity": "error"
@@ -674,17 +742,30 @@
           "value": "unterminated-string",
           "doc": "a string literal has no closing quote",
           "severity": "error"
+        },
+        {
+          "value": "var-after-step",
+          "doc": "a flow declares a var below its first setup, step or block",
+          "severity": "error"
+        },
+        {
+          "value": "var-needs-value",
+          "doc": "a var has no value, and nothing can supply one",
+          "severity": "error"
         }
       ]
     },
     "dropTarget": {
-      "doc": "What a drop line in a use block removes from the template: drop expects or drop captures.",
+      "doc": "What a drop line in a use block removes from the template: drop expects its expects, drop captures or drop vars its outputs.",
       "values": [
         {
           "value": "expects"
         },
         {
           "value": "captures"
+        },
+        {
+          "value": "vars"
         }
       ]
     },
@@ -873,6 +954,10 @@
         {
           "value": "ai",
           "purpose": "reserved for a possible future agentic assertion"
+        },
+        {
+          "value": "skip",
+          "purpose": "a scenario's value that turns off the expects reading a var: total = skip"
         }
       ]
     },
@@ -941,7 +1026,7 @@
           "value": "expect"
         },
         {
-          "value": "capture"
+          "value": "var"
         },
         {
           "value": "retry"

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ import (
 // read from pkg/dsl's fixtures so that a change to those fixtures cannot
 // quietly change what this test means.
 const cleanArt = `# A scenario that checks clean.
-scenario "checkout" {
+flow checkout {
   var url = env("API_URL")
 
   step "login" {
@@ -25,7 +26,7 @@ scenario "checkout" {
       body = {"username": "alice"}
     }
     expect status == 200
-    capture token = body.data.access_token
+    var token = body.data.access_token
   }
 
   step "orders" {
@@ -40,6 +41,8 @@ scenario "checkout" {
     expect body.data.count > 0
   }
 }
+
+scenario "checkout" {}
 `
 
 // manyErrorsArt holds four unrelated faults with well-formed code either side
@@ -47,7 +50,7 @@ scenario "checkout" {
 // is not a declaration, a request field with no value, a chained comparison,
 // and a step with no action block. All four must be reported: a front end that
 // stopped at the first would cost one edit cycle per mistake.
-const manyErrorsArt = `scenario "first" {
+const manyErrorsArt = `flow many {
   var url = env("API_URL")
   nonsense here
   var kept = 1
@@ -60,30 +63,78 @@ const manyErrorsArt = `scenario "first" {
     }
     expect status == 201
   }
-}
 
-scenario "second" {
   step "survives the chain" {
     get "/orders"
     expect body.data.count == 1 == true
-    capture token = body.data.token
+    var token = body.data.token
   }
 
   step "has nothing to run" {
     expect status == 200
   }
 }
+
+scenario "first" {}
 `
 
 // writeArt writes src to a file named name in a fresh temp directory and
 // returns the path.
+//
+// A src that is a flow followed by the scenarios that run it -- the two files
+// a user writes, in one string, so a test reads top to bottom -- is written as
+// those two files: the flow, up to the first line that starts a scenario, goes
+// to <stem>.flow.art beside name, and the scenarios go to name under the
+// header that names it. The flow's lines keep their numbers, so a diagnostic a
+// test asserts on reads as the source it wrote. Any other src is written as
+// it is.
 func writeArt(t *testing.T, name, src string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
-	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSplit(t, path, src)
 	return path
+}
+
+// writeSplit writes src to path, split into a flow file and a scenario file
+// when it is a flow followed by scenarios. See writeArt.
+func writeSplit(t *testing.T, path, src string) {
+	t.Helper()
+	write := func(p, s string) {
+		if err := os.WriteFile(p, []byte(s), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	flow, scenarios, ok := splitFlow(src)
+	if !ok {
+		write(path, src)
+		return
+	}
+	base := filepath.Base(path)
+	flowName := strings.TrimSuffix(base, filepath.Ext(base)) + ".flow" + artExt
+	write(filepath.Join(filepath.Dir(path), flowName), flow)
+	write(path, "flow "+strconv.Quote(flowName)+"\n\n"+scenarios)
+}
+
+// flowOf is the flow file writeArt wrote beside the scenario file at path.
+func flowOf(path string) string {
+	return strings.TrimSuffix(path, filepath.Ext(path)) + ".flow" + artExt
+}
+
+// splitFlow cuts src at the first line that starts a scenario, when a line
+// before it starts a flow: `flow name {`.
+func splitFlow(src string) (flow, scenarios string, ok bool) {
+	sawFlow := false
+	at := 0
+	for _, line := range strings.SplitAfter(src, "\n") {
+		switch {
+		case strings.HasPrefix(line, "flow ") && !strings.HasPrefix(line, `flow "`):
+			sawFlow = true
+		case strings.HasPrefix(line, "scenario ") && sawFlow:
+			return src[:at], src[at:], true
+		}
+		at += len(line)
+	}
+	return "", "", false
 }
 
 // resetFrontEndFlags puts the flags of the commands this file exercises back to
@@ -216,7 +267,7 @@ func TestParseArtRunsNothing(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "ran")
 	path := filepath.Join(dir, "deploy.art")
-	src := `scenario "deploy" {
+	src := `flow deploy {
   step "seed" {
     run "touch" {
       args = ["` + filepath.ToSlash(marker) + `"]
@@ -224,10 +275,10 @@ func TestParseArtRunsNothing(t *testing.T) {
     expect exit_code == 0
   }
 }
+
+scenario "deploy" {}
 `
-	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSplit(t, path, src)
 
 	if _, stderr, err := executeArgs(t, "parse", "-f", path); err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)

@@ -72,9 +72,9 @@ type Scenario struct {
 	// Line is the line the `scenario` keyword sits on.
 	Line int
 
-	// Row is the row of data this scenario was made from, for a scenario
-	// written with a for clause, and nil for every other.
-	Row *Row
+	// FlowName is the name of the flow the scenario runs, for a scenario of a
+	// scenario file, and "" for every other.
+	FlowName string
 
 	// Tags are the scenario's own `tags = [...]`, in the order written. The
 	// suites above it add theirs when the run selects.
@@ -110,13 +110,6 @@ type Scenario struct {
 	// Setup and Teardown are every step of each at any depth, for what
 	// lists or counts steps rather than runs them.
 	SetupFlow, Flow, TeardownFlow []Node
-}
-
-// Row is where a data-driven scenario's row came from: the file its data was
-// read from, or "rows" for an array written out, and the row's place in it.
-type Row struct {
-	Source string
-	Index  int
 }
 
 // Var is one `var name = expr`.
@@ -272,26 +265,19 @@ func File(tree *ast.File, info *check.Info) ([]*Scenario, error) {
 
 // scenario lowers one scenario's body in source order.
 //
-// The source order is what makes the secret set correct. A `secret var` is in
-// scope for every step, so all of them are collected before the first step is
-// lowered. A secret `capture` is in scope for the steps *after* its own, as
-// SPEC.md's scoping rule says, so it joins the set only once its step is done --
-// which is why the set is built here and not in a pass of its own.
+// The source order is what makes the secret set correct: a secret capture is
+// in scope for the steps *after* its own, so it joins the set only once its
+// step is done. Nothing marks a binding secret now that the language has no
+// secret (the spec's Open item, credentials in reports), so the set starts
+// empty; the withholding that reads it stays for the design that will mark
+// one.
 func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 	out := &Scenario{
-		Name: sc.Name.Value,
-		Line: sc.Keyword.Span.Line,
+		Name:     sc.Name.Value,
+		Line:     sc.Keyword.Span.Line,
+		FlowName: sc.Flow,
 	}
-	if sc.Row != nil {
-		out.Row = &Row{Source: sc.Row.Source, Index: sc.Row.Index}
-	}
-	secrets := secretVars(sc)
-	if info.SuiteSecret() {
-		// Conservative: one secret among the suite's names withholds every
-		// value read through suite, since which member an expression reads
-		// is only a path, and the taint walk follows names.
-		secrets["suite"] = true
-	}
+	secrets := map[string]bool{}
 	l := &lowerer{info: info, secrets: secrets, captured: map[string]bool{}, sc: out, file: sc.Keyword.Span.File}
 	for _, d := range sc.Body {
 		switch d := d.(type) {
@@ -320,7 +306,7 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				Value: d.Value,
 				Line:  d.Name.Span.Line,
 			})
-		case *ast.StepDecl, *ast.FlowDecl:
+		case *ast.StepDecl, *ast.BlockDecl:
 			nodes, err := l.body([]ast.Decl{d})
 			if err != nil {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)
@@ -375,33 +361,13 @@ func needs(d *ast.StepDecl, captured map[string]bool) []string {
 	return out
 }
 
-// secretVars is the names of the scenario's `secret var` declarations.
-//
-// Every one of them is in scope for every step, so this runs before the first
-// step is lowered. A var with no name was reported by the parser and is skipped,
-// as the var lowering below skips it.
-func secretVars(sc *ast.Scenario) map[string]bool {
-	out := map[string]bool{}
-	for _, d := range sc.Body {
-		v, ok := d.(*ast.VarDecl)
-		if !ok || v.Secret.Text == "" || v.Name.Kind != token.Ident {
-			continue
-		}
-		out[v.Name.Value] = true
-	}
-	return out
-}
-
-// addSecretCaptures adds the names st captured secretly, for the steps below it.
-//
-// A capture is secret two ways, and both are needed. The author wrote `secret
-// capture`, which is Declared. Or the captured expression itself read a secret
-// binding -- `capture part = match(pw, /x(.)/)` -- which taint.Secret reports,
-// and which has to count: a value derived from a credential is still the
-// credential's to leak.
+// addSecretCaptures adds the names st captured secretly, for the steps below it:
+// a capture whose expression reads a secret binding -- `capture part =
+// match(pw, /x(.)/)` -- which taint.Secret reports, because a value derived
+// from a credential is still the credential's to leak.
 func addSecretCaptures(secrets map[string]bool, st *Step) {
 	for _, c := range st.Captures {
-		if c.Declared || taint.Secret(c.Value, secrets) {
+		if taint.Secret(c.Value, secrets) {
 			secrets[c.Name] = true
 		}
 	}

@@ -4,27 +4,18 @@ import (
 	"maps"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/diag"
-	"artemis/pkg/dsl/taint"
-	"artemis/pkg/dsl/token"
 )
 
-// prefix is what a use's step is named: its alias when it has one, else the
-// ref as the use writes it, "orders.create".
+// prefix is what a use's step is named: the step form's own name, else its
+// alias when it has one, else the ref as the use writes it, "orders.create".
 func prefix(use *ast.UseDecl, item string) string {
+	if use.Name.Text != "" {
+		return use.StepName()
+	}
 	if use.Alias.Text != "" {
 		return use.Alias.Value
 	}
 	return use.Collection.Value + "." + item
-}
-
-// varPrefix is what a hoisted secret var is named after: the use's alias, or
-// the request's bare name.
-func varPrefix(use *ast.UseDecl, item string) string {
-	if use.Alias.Text != "" {
-		return use.Alias.Value
-	}
-	return item
 }
 
 // renameCaptures applies `as alias` to the step one use expanded to: every
@@ -77,96 +68,50 @@ func (e *expander) within(v, via int) bool {
 	return v == via
 }
 
-// scope is what a use's arguments can read, for secret parameters: the
-// scenario's vars (hoisted ones included) and the bindings that are secret
-// above the use.
+// scope is what a use can read: the scenario's vars and the captures above
+// the use, which bind fills a missing input from.
 type scope struct {
-	vars       map[string]bool // every scenario var, hoisted ones included
-	secretVars map[string]bool // the secret ones
-	secrets    map[string]bool // secretVars plus the secret captures above this use
-	hoisted    *[]ast.Decl     // secret vars to append to the scenario body, in use order
+	vars  map[string]bool // every scenario var
+	above map[string]bool // every capture written above this point, at any depth
 }
 
-// newScope is the scope of a scenario body: its vars, and a hoisted list.
+// newScope is the scope of a scenario body: its vars.
 func newScope(decls []ast.Decl) *scope {
-	sc := &scope{vars: map[string]bool{}, secretVars: map[string]bool{}, hoisted: &[]ast.Decl{}}
+	sc := &scope{vars: map[string]bool{}, above: map[string]bool{}}
 	for _, d := range decls {
 		if v, ok := d.(*ast.VarDecl); ok {
 			sc.vars[v.Name.Value] = true
-			if v.Secret.Text != "" {
-				sc.secretVars[v.Name.Value] = true
-			}
 		}
 	}
 	return sc
 }
 
-// at is sc for a use below the given steps, which are written in the same
-// terms as the use: their secret captures are secret there too.
-func (sc *scope) at(base map[string]bool, steps []ast.Decl) *scope {
-	secrets := maps.Clone(sc.secretVars)
-	maps.Copy(secrets, base)
-	for _, d := range steps {
-		s, ok := d.(*ast.StepDecl)
-		if !ok {
-			continue
-		}
-		for _, st := range s.Body {
-			if c, ok := st.(*ast.Capture); ok && c.Secret.Text != "" {
-				secrets[c.Name.Value] = true
-			}
-		}
-	}
+// has reports whether name is in the context at this point: a var of the
+// scenario, which binds it everywhere, or a capture written above, in any
+// step, phase or block branch before this point. A capture in only one branch
+// of an if counts: the name is read as written, and the checker says whether
+// it is bound on every path (capture-maybe-unbound).
+func (sc *scope) has(name string) bool {
+	return sc.vars[name] || sc.above[name]
+}
+
+// below is sc for a body nested under the given decls -- a phase's or a
+// block clause's, or a use's below the steps beside it -- which can read
+// every capture they write.
+func (sc *scope) below(decls []ast.Decl) *scope {
 	cp := *sc
-	cp.secrets = secrets
+	cp.above = maps.Clone(sc.above)
+	captured(decls, cp.above)
 	return &cp
 }
 
-// secretArg is what a secret parameter p stands for at this use, given the
-// expression x bound to it. An x that reads only scenario vars is hoisted
-// into `secret var <prefix>_<param> = x` and the parameter reads that var;
-// one that reads a capture stays as written, and must already be secret.
-//
-// The var is returned for bind to append to the scenario once the whole use
-// has bound; its name is in sc from now on, so a later default can read it.
-func (e *expander) secretArg(sc *scope, p *ast.Param, x ast.Expr, pre, ref string, stamp func(token.Token) token.Token) (ast.Expr, *ast.VarDecl) {
-	if free := firstFree(x, sc.vars); free != "" {
-		if !taint.Secret(x, sc.secrets) {
-			e.bag.Error(x.Span(), diag.SecretArgument, "%s is secret in %s, so its argument must be secret too", p.Name.Value, ref).
-				Hintf("make %s a secret capture", free)
-		}
-		return x, nil
-	}
-	name := pre + "_" + p.Name.Value
-	at := stamp(p.Name).Span
-	v := &ast.VarDecl{
-		Secret:  stamp(p.Secret),
-		Keyword: synth(token.Ident, "var", "var", at),
-		Name:    synth(token.Ident, name, name, at),
-		Assign:  synth(token.Assign, "=", "", at),
-		Value:   x,
-	}
-	sc.vars[name] = true
-	sc.secretVars[name] = true
-	sc.secrets[name] = true
-	return &ast.Ident{Tok: synth(token.Ident, name, name, x.Span())}, v
-}
-
-// firstFree is the first identifier x reads that is not one of vars -- a
-// capture, as far as a secret argument is concerned -- or "" when x reads
-// only vars, literals and builtin calls.
-func firstFree(x ast.Expr, vars map[string]bool) string {
-	free := ""
-	callee := map[*ast.Ident]bool{}
-	ast.Inspect(x, func(n ast.Node) {
-		switch v := n.(type) {
-		case *ast.Call:
-			callee[v.Callee] = true
-		case *ast.Ident:
-			if free == "" && !callee[v] && !vars[v.Tok.Value] {
-				free = v.Tok.Value
+// captured adds to names every capture decls write, at any depth.
+func captured(decls []ast.Decl, names map[string]bool) {
+	for _, d := range decls {
+		ast.Inspect(d, func(n ast.Node) {
+			if c, ok := n.(*ast.Capture); ok {
+				names[c.Name.Value] = true
 			}
-		}
-	})
-	return free
+		})
+	}
 }

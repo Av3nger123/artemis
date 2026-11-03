@@ -1,0 +1,10 @@
+collection "auth" {
+  request login {
+    var user
+    var password
+
+    post "https://example.com/login" { body = {"user": user, "password": password} }
+    expect status == 200
+    var token = body.token
+  }
+}

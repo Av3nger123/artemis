@@ -1,0 +1,3 @@
+flow "../flows/retried.art"
+
+scenario "wait for ready" {}

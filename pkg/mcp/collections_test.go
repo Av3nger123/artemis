@@ -22,15 +22,19 @@ func writeFile(t *testing.T, root, rel, src string) {
 	}
 }
 
-const collSrc = "collection \"c\" {\n  request r() {\n    get \"x\"\n    expect status == 200\n  }\n  request q() {\n    get \"y\"\n  }\n}\n"
+const collSrc = "collection \"c\" {\n  request r {\n    get \"x\"\n    expect status == 200\n  }\n  request q {\n    get \"y\"\n  }\n}\n"
+
+// flowSrc is a flow that calls c.r, for a scenario file to name.
+const flowSrc = "import \"c.art\"\n\nflow f {\n  step \"c.r\" = c.r {}\n}\n"
 
 func TestValidateResolvesImportsInsideTheWorkspace(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "c.art", collSrc)
+	writeFile(t, root, "f.art", flowSrc)
 	cs := connect(t, root)
 	got := validate(t, cs, map[string]any{
 		"file":   "main.art",
-		"source": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r\n}\n",
+		"source": "flow \"f.art\"\n\nscenario \"s\" {}\n",
 	})
 	if got["ok"] != true {
 		t.Fatalf("got %+v", got)
@@ -41,7 +45,7 @@ func TestFormatResolvesImportsAndKeepsTheTree(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "c.art", collSrc)
 	cs := connect(t, root)
-	src := "import \"c.art\"\n\nscenario \"s\" {\n  use c.r\n}\n"
+	src := flowSrc
 	_, got := formatSource(t, cs, src)
 	if got["ok"] != true || got["source"] != src {
 		t.Fatalf("got %+v", got)
@@ -51,7 +55,7 @@ func TestFormatResolvesImportsAndKeepsTheTree(t *testing.T) {
 func TestImportCannotLeaveTheWorkspace(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
-	writeFile(t, root, "keep.art", "scenario \"x\" {}\n")
+	writeFile(t, root, "keep.art", "flow x {}\n")
 	writeFile(t, parent, "outside.art", collSrc)
 	cs := connect(t, root)
 	got := validate(t, cs, map[string]any{
@@ -67,7 +71,7 @@ func TestImportCannotLeaveTheWorkspace(t *testing.T) {
 func TestImportCannotFollowASymlinkOut(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
-	writeFile(t, root, "keep.art", "scenario \"x\" {}\n")
+	writeFile(t, root, "keep.art", "flow x {}\n")
 	writeFile(t, parent, "outside.art", collSrc)
 	if err := os.Symlink(filepath.Join(parent, "outside.art"), filepath.Join(root, "link.art")); err != nil {
 		t.Fatal(err)
@@ -83,7 +87,8 @@ func TestRunRefusesAnImportThatLeavesTheWorkspace(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
 	writeFile(t, parent, "outside.art", collSrc)
-	writeFile(t, root, "main.art", "import \"../outside.art\"\n\nscenario \"s\" {\n  use c.r\n}\n")
+	writeFile(t, root, "f.art", "import \"../outside.art\"\n\nflow f {\n  step \"c.r\" = c.r {}\n}\n")
+	writeFile(t, root, "main.art", "flow \"f.art\"\n\nscenario \"s\" {}\n")
 	cs := connectWithBinary(t, root, buildArtemis(t))
 	res, err := cs.CallTool(context.Background(), callParams("artemis_run", map[string]any{"path": "main.art"}))
 	if err == nil && !res.IsError {
@@ -101,7 +106,7 @@ func TestRunRefusesAnImportThatLeavesTheWorkspace(t *testing.T) {
 func TestListShowsCollections(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "c.art", collSrc)
-	writeFile(t, root, "plain.art", "scenario \"x\" {}\n")
+	writeFile(t, root, "plain.art", "flow x {}\n")
 	cs := connect(t, root)
 	out := toJSON(t, structured(t, call(t, cs, "artemis_list", nil)))
 	if !strings.Contains(out, `"c.r"`) || !strings.Contains(out, `"c.q"`) {
@@ -132,7 +137,7 @@ func callParams(name string, args map[string]any) *mcp.CallToolParams {
 func TestListDoesNotReadASymlinkOutOfTheWorkspace(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
-	writeFile(t, root, "keep.art", "scenario \"x\" {}\n")
+	writeFile(t, root, "keep.art", "flow x {}\n")
 	writeFile(t, parent, "outside.art", "collection \"secret\" {\n  request leak() {\n    get \"x\"\n  }\n}\n")
 	if err := os.Symlink(filepath.Join(parent, "outside.art"), filepath.Join(root, "link.art")); err != nil {
 		t.Fatal(err)
@@ -146,7 +151,7 @@ func TestListDoesNotReadASymlinkOutOfTheWorkspace(t *testing.T) {
 func TestRefusedImportsLeakNoHostPathAndDoNotProbe(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
-	writeFile(t, root, "keep.art", "scenario \"x\" {}\n")
+	writeFile(t, root, "keep.art", "flow x {}\n")
 	writeFile(t, parent, "exists.art", collSrc)
 	cs := connect(t, root)
 	msg := func(imp string) string {

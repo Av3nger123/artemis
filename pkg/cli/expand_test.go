@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"artemis/pkg/dsl/parser"
 )
 
 // checkFileGolden holds got to path, or rewrites path under -update.
@@ -26,7 +28,7 @@ func checkFileGolden(t *testing.T, path, got string) {
 }
 
 func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
-	out, stderr, err := runCLI(t, "expand", "testdata/collections/checkout.art")
+	out, stderr, err := runCLI(t, "expand", "testdata/collections/scenarios/checkout.art")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, stderr)
 	}
@@ -36,12 +38,12 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 	// wrong one.
 	order := []string{
 		`var url = env("API_URL")`,
-		`secret var login_password = "s3cret"`,
-		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/checkout.art:6",
+		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/flows/checkout.art:6",
 		`step "auth.login"`,
-		`secret var bad_password = "wrong"`,
-		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/checkout.art:8",
+		`"password": "s3cret"`,
+		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/flows/checkout.art:8",
 		`step "bad"`,
+		`"password": "wrong"`,
 		"expect status == 401",
 		`step "orders"`,
 	}
@@ -57,15 +59,35 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 	if strings.Contains(bad, "== 200") {
 		t.Errorf("drop expects left the request's expect in step bad:\n%s", bad)
 	}
-	if strings.Contains(bad, "capture") {
-		t.Errorf("drop captures left the request's capture in step bad:\n%s", bad)
+	if strings.Contains(bad, "var token") {
+		t.Errorf("drop vars left the request's var in step bad:\n%s", bad)
 	}
-	if strings.Contains(out, "use ") || strings.Contains(out, "import ") {
-		t.Errorf("the expanded scenario still has a use or an import:\n%s", out)
+	if strings.Contains(out, " = auth.") || strings.Contains(out, "import ") || strings.Contains(out, "flow ") {
+		t.Errorf("the expanded scenario still has an item call, an import or a flow:\n%s", out)
 	}
-	// What expand prints is a scenario artemis accepts on its own.
-	if u := frontEnd("expanded.art", out); u.Bag.HasErrors() {
-		t.Errorf("the expanded scenario does not compile: %v", u.Bag.All())
+	// What expand prints is for reading: a scenario holding its steps, which
+	// parses and is no longer a form artemis compiles.
+	if _, bag := parser.Parse("expanded.art", out); bag.HasErrors() {
+		t.Errorf("the expanded scenario does not parse: %v", bag.All())
+	}
+}
+
+// A flow has no values of its own, so expand refuses one as run does and names
+// the scenario files that run it; a collection file has no scenario at all.
+// Neither prints nothing and exits zero.
+func TestExpandRefusesAFileWithNoScenario(t *testing.T) {
+	out, stderr, err := runCLI(t, "expand", "testdata/collections/flows/checkout.art")
+	if err == nil || out != "" {
+		t.Fatalf("expand of a flow: err %v, stdout %q", err, out)
+	}
+	for _, want := range []string{"is a flow; expand a scenario file that names it", "testdata/collections/scenarios/checkout.art"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr has no %q:\n%s", want, stderr)
+		}
+	}
+	out, _, err = runCLI(t, "expand", "testdata/collections/auth.art")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "holds no scenario to expand") {
+		t.Fatalf("expand of a collection: err %v, stdout %q", err, out)
 	}
 }
 
@@ -75,13 +97,13 @@ func TestExpandRefusesToOverwrite(t *testing.T) {
 	if err := os.WriteFile(out, []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := runCLI(t, "expand", "testdata/collections/checkout.art", "-o", out); err == nil {
+	if _, _, err := runCLI(t, "expand", "testdata/collections/scenarios/checkout.art", "-o", out); err == nil {
 		t.Fatal("want an error without --force")
 	}
 	if b, _ := os.ReadFile(out); string(b) != "keep" { //nolint:gosec // a path this test wrote
 		t.Fatalf("the file was overwritten without --force: %q", b)
 	}
-	if _, stderr, err := runCLI(t, "expand", "testdata/collections/checkout.art", "-o", out, "--force"); err != nil {
+	if _, stderr, err := runCLI(t, "expand", "testdata/collections/scenarios/checkout.art", "-o", out, "--force"); err != nil {
 		t.Fatalf("%v\n%s", err, stderr)
 	}
 	b, _ := os.ReadFile(out) //nolint:gosec // a path this test wrote
@@ -91,7 +113,7 @@ func TestExpandRefusesToOverwrite(t *testing.T) {
 }
 
 func TestExpandReportsABrokenCollection(t *testing.T) {
-	out, stderr, err := runCLI(t, "expand", "testdata/collections/broken.art")
+	out, stderr, err := runCLI(t, "expand", "testdata/collections/scenarios/broken.art")
 	if err == nil {
 		t.Fatal("want a non-zero exit")
 	}

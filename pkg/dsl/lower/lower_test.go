@@ -411,3 +411,30 @@ func TestABadBrowserConfigFromAnExpressionIsAnError(t *testing.T) {
 		t.Errorf("Viewport = %q, want 1280x720", got.Viewport)
 	}
 }
+
+// The flow an expanded scenario runs is carried through lowering, so the report
+// can name it. Expansion is what sets it on the tree; here it is set by hand on
+// a parsed scenario, which is all lowering reads.
+func TestTheFlowNameIsLowered(t *testing.T) {
+	src := "scenario \"full price\" {\n  step \"pay\" {\n    get \"/pay\"\n  }\n}\n" +
+		"scenario \"plain\" {\n  step \"ping\" {\n    get \"/ping\"\n  }\n}\n"
+	tree, bag := parser.Parse("t.art", src)
+	if bag.HasErrors() {
+		t.Fatalf("source does not parse:\n%s", render(src, bag))
+	}
+	tree.Scenarios[0].(*ast.Scenario).Flow = "checkout"
+	info, checked := check.Check(tree)
+	if checked.HasErrors() {
+		t.Fatalf("source does not check:\n%s", render(src, checked))
+	}
+	got, err := File(tree, info)
+	if err != nil {
+		t.Fatalf("File() = %v, want nil", err)
+	}
+	if got[0].FlowName != "checkout" {
+		t.Errorf("FlowName = %q, want checkout", got[0].FlowName)
+	}
+	if got[1].FlowName != "" {
+		t.Errorf("a scenario not made from a scenario file has FlowName = %q, want empty", got[1].FlowName)
+	}
+}

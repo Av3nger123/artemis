@@ -22,7 +22,7 @@ func formatSource(t *testing.T, cs *mcp.ClientSession, src string) (*mcp.CallToo
 // what `artemis fmt` writes and what the file on disk will be.
 func TestFormatReturnsCanonicalSource(t *testing.T) {
 	cs := connect(t, t.TempDir())
-	src := "scenario   \"spaced\"    {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n"
+	src := "flow   spaced    {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n"
 
 	res, got := formatSource(t, cs, src)
 	if got["ok"] != true {
@@ -43,7 +43,7 @@ func TestFormatReturnsCanonicalSource(t *testing.T) {
 // agent that writes this result has written a fmt-clean file.
 func TestFormatIsIdempotent(t *testing.T) {
 	cs := connect(t, t.TempDir())
-	_, once := formatSource(t, cs, "scenario \"x\" {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n")
+	_, once := formatSource(t, cs, "flow x {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n")
 	first, ok := once["source"].(string)
 	if !ok {
 		t.Fatalf("source is not a string: %v", once["source"])

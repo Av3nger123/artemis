@@ -98,20 +98,32 @@ func location(d result.Diagnostic) string {
 
 // subject says what was checked: the kind of check, what it addressed, and the
 // comparison applied -- "body $.status equals", "status_code equals",
-// "capture token json", "stdout contains".
+// "var token body.data.token", "stdout contains".
 //
 // Kind and Path are both printed, unlike in AssertionResult.Describe, which
 // prints whichever it has. A block has room, and "body $.status" says more about
 // which line of the scenario to look at than "$.status" does.
+//
+// A step var that could not be written keeps the kind "capture" in
+// report.json, as SPEC.md's report section has it, and is printed here with
+// the word it is written with: var.
 func subject(a result.AssertionResult) string {
+	kind := a.Kind
+	if kind == kindCapture {
+		kind = "var"
+	}
 	parts := make([]string, 0, 3)
-	for _, p := range []string{a.Kind, a.Path, a.Operator} {
+	for _, p := range []string{kind, a.Path, a.Operator} {
 		if p != "" {
 			parts = append(parts, p)
 		}
 	}
 	return strings.Join(parts, " ")
 }
+
+// kindCapture is the kind a step var that could not be written gives its
+// assertion: lower.KindCapture, which this package does not import.
+const kindCapture = "capture"
 
 // Redacted is what every writer prints in place of a value that came from a
 // binding the scenario declared `secret`. It is result's, so the console's

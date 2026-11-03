@@ -39,9 +39,9 @@ func connectWithBinary(t *testing.T, workspace, bin string) *mcp.ClientSession {
 	return clientSession
 }
 
-// A terminal scenario, so these tests need no server and no network. `run` is
+// A terminal flow, so these tests need no server and no network. `run` is
 // the action block that makes a step a terminal step.
-const passingScenario = `scenario "ok" {
+const passingFlow = `flow ok {
   step "true" {
     run "true"
     expect exit_code == 0
@@ -49,7 +49,7 @@ const passingScenario = `scenario "ok" {
 }
 `
 
-const failingScenario = `scenario "no" {
+const failingFlow = `flow no {
   step "false" {
     run "false"
     expect exit_code == 0
@@ -57,13 +57,32 @@ const failingScenario = `scenario "no" {
 }
 `
 
+// scenarioOf is a scenario file that runs the flow file at flowPath once.
+func scenarioOf(flowPath, title string) string {
+	return "flow \"" + flowPath + "\"\n\nscenario \"" + title + "\" {}\n"
+}
+
+// writePair writes flow to <name>.flow.art in root and a scenario file that
+// runs it to <name>.art.
+func writePair(t *testing.T, root, name, flow string) {
+	t.Helper()
+	for path, src := range map[string]string{
+		name + ".flow.art": flow,
+		name + ".art":      scenarioOf(name+".flow.art", name),
+	} {
+		if err := os.WriteFile(filepath.Join(root, path), []byte(src), 0o600); err != nil {
+			t.Fatalf("writing the fixture: %v", err)
+		}
+	}
+}
+
 func TestWriteChecksFormatsAndWrites(t *testing.T) {
 	root := t.TempDir()
 	cs := connect(t, root)
 
 	got := structured(t, call(t, cs, "artemis_write", map[string]any{
 		"path":   "checkout.art",
-		"source": "scenario    \"checkout\"   {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n",
+		"source": "flow    checkout   {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n",
 	}))
 	if got["ok"] != true || got["written"] != true {
 		t.Fatalf("ok=%v written=%v, want both true; diagnostics: %v", got["ok"], got["written"], got["diagnostics"])
@@ -127,7 +146,7 @@ func TestWriteRefusesPathsOutsideTheWorkspace(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 				Name:      "artemis_write",
-				Arguments: map[string]any{"path": path, "source": passingScenario},
+				Arguments: map[string]any{"path": path, "source": passingFlow},
 			})
 			if err != nil {
 				return // a transport-level refusal is still a refusal
@@ -144,9 +163,7 @@ func TestWriteRefusesPathsOutsideTheWorkspace(t *testing.T) {
 func TestRunReportsAPassingRun(t *testing.T) {
 	bin := buildArtemis(t)
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "ok.art"), []byte(passingScenario), 0o600); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
-	}
+	writePair(t, root, "ok", passingFlow)
 
 	cs := connectWithBinary(t, root, bin)
 	got := structured(t, call(t, cs, "artemis_run", map[string]any{"path": "ok.art"}))
@@ -168,9 +185,7 @@ func TestRunReportsAPassingRun(t *testing.T) {
 func TestRunReportsAFailingRunAsASuccessfulCall(t *testing.T) {
 	bin := buildArtemis(t)
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "no.art"), []byte(failingScenario), 0o600); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
-	}
+	writePair(t, root, "no", failingFlow)
 
 	cs := connectWithBinary(t, root, bin)
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
@@ -200,9 +215,7 @@ func TestRunReportsAFailingRunAsASuccessfulCall(t *testing.T) {
 func TestRunMatchesTheRunCommand(t *testing.T) {
 	bin := buildArtemis(t)
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "ok.art"), []byte(passingScenario), 0o600); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
-	}
+	writePair(t, root, "ok", passingFlow)
 
 	cs := connectWithBinary(t, root, bin)
 	res := call(t, cs, "artemis_run", map[string]any{"path": "ok.art"})
@@ -252,17 +265,21 @@ func TestRunRefusesPathsOutsideTheWorkspace(t *testing.T) {
 	}
 }
 
-// The loop the whole ticket exists for: write a scenario, then run it.
+// The loop the whole ticket exists for: write a flow and a scenario file that
+// runs it, then run it.
 func TestWriteThenRun(t *testing.T) {
 	bin := buildArtemis(t)
 	root := t.TempDir()
 	cs := connectWithBinary(t, root, bin)
 
-	wrote := structured(t, call(t, cs, "artemis_write", map[string]any{
-		"path": "smoke.art", "source": passingScenario,
-	}))
-	if wrote["ok"] != true {
-		t.Fatalf("write failed: %v", wrote)
+	for path, src := range map[string]string{
+		"smoke.flow.art": passingFlow,
+		"smoke.art":      scenarioOf("smoke.flow.art", "smoke"),
+	} {
+		wrote := structured(t, call(t, cs, "artemis_write", map[string]any{"path": path, "source": src}))
+		if wrote["ok"] != true {
+			t.Fatalf("write %s failed: %v", path, wrote)
+		}
 	}
 
 	ran := structured(t, call(t, cs, "artemis_run", map[string]any{"path": "smoke.art"}))

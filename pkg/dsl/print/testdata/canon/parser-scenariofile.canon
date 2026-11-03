@@ -1,0 +1,21 @@
+# A scenario file: the flow it runs on its first line, then one scenario per
+# set of data. A scenario only sets the flow's vars, and tags itself.
+flow "../flows/checkout.art"
+
+scenario "full price" {}
+
+scenario "with a coupon" { quantity = 3  coupon = "TEN" }
+
+scenario "bad coupon" {
+  tags   = ["errors", "payments"]
+  coupon = "NOPE"
+  code   = 422 # the server refuses it
+  total  = skip
+}
+
+scenario "many" {
+  sku      = "SKU-2"
+  quantity = 2
+  coupon   = env("COUPON")
+  code     = 201
+}

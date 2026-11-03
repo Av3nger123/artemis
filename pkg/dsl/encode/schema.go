@@ -97,11 +97,11 @@ type groupSchema struct {
 }
 
 var groupSchemas = []groupSchema{
-	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
+	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite, kindFlowDecl, kindFlowRef}},
 	{"forClause", []string{kindFor}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindFlow}},
-	{"phaseBody", []string{kindStep, kindUse, kindFlow}},
-	{"flowBody", []string{kindStep, kindUse, kindFlow, kindClause, kindVar}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindBlockDecl, kindSet}},
+	{"phaseBody", []string{kindStep, kindUse, kindBlockDecl}},
+	{"flowBody", []string{kindStep, kindUse, kindBlockDecl, kindClause, kindVar}},
 	{"clause", []string{kindClause}},
 	{"option", []string{kindOption}},
 	{"action", []string{kindRequest, kindRun, kindBrowser, kindDB}},
@@ -110,6 +110,7 @@ var groupSchemas = []groupSchema{
 	{"browserAction", []string{kindBrowserAct}},
 	{"block", []string{kindBlock}},
 	{"collectionItem", []string{kindRequestDecl}},
+	{"itemInput", []string{kindVar}},
 	{"param", []string{kindParam}},
 	{"useLine", []string{kindField, kindBodySet, kindDrop, kindExpect}},
 	{"expression", []string{
@@ -246,7 +247,7 @@ var nodeSchemas = []nodeSchema{
 		list("body", "phaseBody"),
 		spanField, commentsField,
 	}},
-	{Kind: kindFlow, Doc: "a control-flow block -- `parallel`, `if`, `switch`, `try` or `repeat` -- named by its first clause's keyword", Fields: []fieldSchema{
+	{Kind: kindBlockDecl, Doc: "a control-flow block -- `parallel`, `if`, `switch`, `try` or `repeat` -- named by its first clause's keyword", Fields: []fieldSchema{
 		list("clauses", "clause"),
 		optChild("until", "expression"),
 		spanField, commentsField,
@@ -276,11 +277,13 @@ var nodeSchemas = []nodeSchema{
 		child("block", "block"),
 		spanField, commentsField,
 	}},
-	{Kind: kindVar, Doc: "`var url = env(\"API_URL\")`", Fields: []fieldSchema{
+	{Kind: kindVar, Doc: "`var url = env(\"API_URL\")`, `private var url = ...`, or `var user` with no value", Fields: []fieldSchema{
+		{Name: "private", Type: "boolean", Optional: true,
+			Doc: "the `private` modifier: nothing outside the flow or item declaring the var sets it. Absent means false"},
 		{Name: "secret", Type: "boolean", Optional: true,
 			Doc: "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"},
 		word("name", "the identifier being bound"),
-		child("value", "expression"),
+		optChild("value", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindStep, Doc: "`step \"login\" { <action> <statement>... }`", Fields: []fieldSchema{
@@ -342,7 +345,9 @@ var nodeSchemas = []nodeSchema{
 				"expression field. Output only"},
 		commentsField,
 	}},
-	{Kind: kindCapture, Doc: "`capture token = body.data.access_token`", Fields: []fieldSchema{
+	{Kind: kindCapture, Doc: "`capture token = body.data.access_token`, or `var token = ...` after a step's action", Fields: []fieldSchema{
+		{Name: "keyword", Type: "string", Optional: true,
+			Doc: "`var` for a capture written `var token = ...`; absent means `capture`"},
 		{Name: "secret", Type: "boolean", Optional: true,
 			Doc: "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"},
 		word("name", "the identifier bound for every later step in the scenario"),
@@ -370,14 +375,21 @@ var nodeSchemas = []nodeSchema{
 		optChild("default", "expression"),
 		spanField,
 	}},
-	{Kind: kindRequestDecl, Doc: "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised", Fields: []fieldSchema{
+	{Kind: kindRequestDecl, Doc: "`request login { var user = \"admin\" <action> <statement>... }`: a collection item, a step's body named and given inputs. `command` and `query` items are this kind too", Fields: []fieldSchema{
+		{Name: "keyword", Type: "string", Optional: true,
+			Doc: "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"},
 		word("name", "the identifier a use names it by"),
-		list("params", "param"),
+		{Name: "params", Type: "node[]", Accepts: "param", Optional: true,
+			Doc: "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"},
+		{Name: "inputs", Type: "node[]", Accepts: "itemInput", Optional: true,
+			Doc: "the var lines above the action: the item's inputs, which a step passes, the flow's context supplies, or a default fills"},
 		child("action", "action"),
 		list("body", "stepStatement"),
 		spanField, commentsField,
 	}},
-	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`", Fields: []fieldSchema{
+	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`", Fields: []fieldSchema{
+		{Name: "name", Type: "name", Optional: true,
+			Doc: "the step form's quoted name, which the expanded step is called; absent for a use"},
 		{Name: "collection", Type: "string", Optional: true,
 			Doc: "the collection before the dot"},
 		word("item", "the request used"),
@@ -390,8 +402,22 @@ var nodeSchemas = []nodeSchema{
 		child("value", "expression"),
 		spanField, commentsField,
 	}},
-	{Kind: kindDrop, Doc: "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed", Fields: []fieldSchema{
-		{Name: "what", Type: "string", InputRequired: true, Doc: "expects or captures: what the line removes"},
+	{Kind: kindDrop, Doc: "`drop expects`, `drop captures` or `drop vars` in a use block: the used item's expects, or its outputs, are removed", Fields: []fieldSchema{
+		{Name: "what", Type: "string", InputRequired: true, Doc: "expects, captures or vars: what the line removes; captures and vars both remove the outputs"},
+		spanField, commentsField,
+	}},
+	{Kind: kindFlowDecl, Doc: "`flow checkout { ... }`: a flow file's one flow, the steps of a test in order and the vars its scenarios set", Fields: []fieldSchema{
+		word("name", "the identifier naming the flow in reports"),
+		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindFlowRef, Doc: "`flow \"../flows/checkout.art\"`: a scenario file's first line, naming the flow its scenarios run", Fields: []fieldSchema{
+		word("path", "the flow file, relative to the scenario file, decoded: escapes resolved, no quotes"),
+		spanField, commentsField,
+	}},
+	{Kind: kindSet, Doc: "`coupon = \"TEN\"` in a scenario of a scenario file: the value it gives one of its flow's vars; the ident `skip` turns off the expects that read it", Fields: []fieldSchema{
+		word("name", "the flow var being set"),
+		child("value", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindIdent, Doc: "a name: a variable, a capture, or a bound root like `status`", Fields: []fieldSchema{

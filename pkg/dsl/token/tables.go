@@ -40,15 +40,15 @@ var (
 	Comparisons = []string{"==", "!=", "<", "<=", ">", ">=", "contains", "matches"}
 
 	// Blocks are the top-level declarations of a file -- `import`,
-	// `collection` and `scenario` -- and the declarations a scenario body
-	// holds, `use` among them.
-	Blocks = []string{"import", "collection", "scenario", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
+	// `collection`, `scenario` and `flow`, which is a flow file's flow or a
+	// scenario file's header -- and the declarations a flow's body holds.
+	Blocks = []string{"import", "collection", "scenario", "flow", "tags", "config", "var", "step", "setup", "teardown"}
 
-	// Flows are the words that open a control-flow block where a step could
+	// BlockWords are the words that open a control-flow block where a step could
 	// be written, and FlowClauses the words of the clauses that follow one:
 	// else and else if, a switch's case and default, a try's catch and
 	// finally, a repeat's until.
-	Flows       = []string{"parallel", "if", "switch", "try", "repeat"}
+	BlockWords  = []string{"parallel", "if", "switch", "try", "repeat"}
 	FlowClauses = []string{"else", "case", "default", "catch", "finally", "until"}
 
 	// RepeatOptions are a repeat's pace and bounds: `every "2s"`, `within
@@ -56,7 +56,7 @@ var (
 	RepeatOptions = []string{"every", "within", "max"}
 
 	// StepStatements are the statements legal in a step after its action.
-	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}
+	StepStatements = []string{"expect", "var", "retry", "timeout", "within"}
 
 	// RequestFields are the fields of an api step's action block.
 	RequestFields = []string{"header", "query", "body", "form", "multipart"}
@@ -90,8 +90,9 @@ var (
 	// place and `artemis grammar --json` has nowhere else to look.
 	StepFields = []string{"timeout", "retry"}
 
-	// CollectionItems are what a collection body holds.
-	CollectionItems = []string{"request"}
+	// CollectionItems are what a collection body holds, one keyword per item
+	// type: a request holds an api action, a command a run, a query a db.
+	CollectionItems = []string{"request", "command", "query"}
 
 	// UseLines are the words that open an override line in a use block. Any
 	// other identifier opening a line there is an argument, which is why a
@@ -99,8 +100,8 @@ var (
 	UseLines = []string{"header", "query", "body", "drop", "expect"}
 
 	// DropTargets are what a use's `drop` line can remove from the template:
-	// `drop expects` its expects, `drop captures` its captures.
-	DropTargets = []string{"expects", "captures"}
+	// `drop expects` its expects, `drop captures` or `drop vars` its outputs.
+	DropTargets = []string{"expects", "captures", "vars"}
 
 	// ConfigBlocks are the subjects of a `config` declaration: the browser a
 	// scenario opens, and how its api steps talk HTTP.
@@ -121,6 +122,7 @@ var (
 	Reserved = []string{
 		"if", "else", "for", "in", "while", "parallel", "group",
 		"fn", "return", "import", "use", "let", "setup", "teardown", "ai",
+		"skip",
 	}
 )
 
@@ -135,6 +137,7 @@ var (
 	reserved       = set(Reserved)
 	useLines       = set(UseLines)
 	dropTargets    = set(DropTargets)
+	collItems      = set(CollectionItems)
 
 	// comparisonKinds and comparisonWords are Comparisons split by how a token
 	// spells each entry: the six symbols arrive with a Kind of their own, the
@@ -186,6 +189,9 @@ func IsUseLine(word string) bool { return useLines[word] }
 
 // IsDropTarget reports whether word may follow `drop` in a use block.
 func IsDropTarget(word string) bool { return dropTargets[word] }
+
+// IsCollectionItem reports whether word opens an item in a collection body.
+func IsCollectionItem(word string) bool { return collItems[word] }
 
 // IsReserved reports whether word is reserved for a later tier of the language.
 func IsReserved(word string) bool { return reserved[word] }

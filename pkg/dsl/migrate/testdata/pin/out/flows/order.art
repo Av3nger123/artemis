@@ -1,0 +1,12 @@
+import "../collections/orders.art"
+
+flow order {
+  var qty = 5
+
+  step "orders.create" = orders.create { sku = "A-1", qty = 1 }
+
+  step "check" {
+    get "https://example.com/stock?qty=${qty}"
+    expect status == 200
+  }
+}

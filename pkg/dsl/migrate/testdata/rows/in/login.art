@@ -1,0 +1,8 @@
+scenario "login as ${user.role}" for user in json("users.json") {
+  step "log in" {
+    post "https://example.com/login" {
+      body = {"email": user.email}
+    }
+    expect status == user.status
+  }
+}

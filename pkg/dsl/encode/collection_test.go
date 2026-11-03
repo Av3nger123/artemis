@@ -59,3 +59,49 @@ func TestUseWithoutABlockDecodesWithoutOne(t *testing.T) {
 		t.Errorf("round trip gave %q, want %q", got, src)
 	}
 }
+
+// TestStepCallSurvivesTheRoundTrip: the step form's name is what tells it
+// from a use, and it decodes with a block even when the block is empty.
+func TestStepCallSurvivesTheRoundTrip(t *testing.T) {
+	src := "scenario \"s\" {\n  step \"log in\" = auth.login as admin {}\n\n  step \"x\" = me {\n    drop vars\n  }\n  use auth.me\n}\n"
+	tree, bag := parser.Parse("u.art", src)
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	doc, err := Encode(tree, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Source(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != src {
+		t.Errorf("round trip gave\n%s\nwant\n%s", got, src)
+	}
+}
+
+// TestItemKeywordAndParenthesesSurvive: an item's type and whether it has a
+// parameter list -- `request r()` against `request r` -- come back as written.
+func TestItemKeywordAndParenthesesSurvive(t *testing.T) {
+	src := "collection \"c\" {\n  request r() {\n    get \"x\"\n  }\n\n  request s {\n    get \"y\"\n  }\n\n" +
+		"  command m {\n    var target = \"migrate\"\n\n    run \"make\" { args = [target] }\n  }\n}\n"
+	tree, bag := parser.Parse("c.art", src)
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	doc, err := Encode(tree, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(doc), `"keyword": "command"`) != 1 || strings.Contains(string(doc), `"keyword": "request"`) {
+		t.Errorf("keyword is written for a command only:\n%s", doc)
+	}
+	got, err := Source(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != src {
+		t.Errorf("round trip gave\n%s\nwant\n%s", got, src)
+	}
+}

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"artemis/pkg/dsl/front"
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
@@ -132,6 +131,12 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	} else if files, err = discover(path); err != nil {
 		return err
 	}
+	named := ""
+	if item == nil && len(files) == 1 && files[0] == path {
+		// discover answers a file it was given as itself, and a folder as
+		// the paths under it.
+		named = path
+	}
 
 	// cmd.OutOrStdout, not os.Stdout: a test captures the run's output by
 	// setting the command's writer.
@@ -162,6 +167,7 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		root:     path,
 		item:     item,
 		captures: captures,
+		named:    named,
 	}
 	if streaming {
 		rt.events = report.NewEvents(out)
@@ -258,9 +264,7 @@ func discover(path string) ([]string, error) {
 			}
 			return nil
 		}
-		// A suite.art is a folder's setup and teardown, not a scenario
-		// file: it runs with the scenarios under it.
-		if isScenarioFile(d.Name()) && !front.IsSuiteFile(p) {
+		if isScenarioFile(d.Name()) {
 			files = append(files, p)
 		}
 		return nil
@@ -331,11 +335,6 @@ type runtimeEnv struct {
 	sel          *selector
 	noneSelected bool
 
-	// suites are the run's suite.art files by path, and suiteOfFile the
-	// innermost one each scenario file is under. See suite.go.
-	suites      map[string]*suiteState
-	suiteOfFile map[string]*suiteState
-
 	// root is the path `run` was given, which a scenario's file is named
 	// relative to when its generator is seeded: `artemis run suite` from the
 	// repository and `artemis run .` from inside suite/ must draw the same
@@ -357,6 +356,11 @@ type runtimeEnv struct {
 	// where --captures collects, nil when it was not asked for.
 	item     *itemRun
 	captures *captureSink
+
+	// named is the file `run` was given by name, and empty for a folder run:
+	// only a file named outright can be a flow file run by mistake, because a
+	// folder run passes over flow files as it does collection files.
+	named string
 }
 
 // runFilesWith is runFiles with the run-wide settings given rather than
@@ -378,9 +382,6 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	}()
 
 	run := result.NewRun()
-	// Before anything compiles: a watcher learns the shape of the run first,
-	// including the files that will turn out not to load.
-	rt.events.RunStart(files)
 
 	// Every file is compiled before any file runs, which is what the check
 	// before the run needs: an absent variable has to be reported before the
@@ -409,6 +410,12 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			continue
 		}
 		diag := &bytes.Buffer{}
+		if file == rt.named {
+			if isFlow, err := flowNotRunnable(file, diag); isFlow {
+				attempts[i] = fileAttempt{compiled: compiled{file: file}, diag: diag, err: err}
+				continue
+			}
+		}
 		c, err := rt.load(file, diag)
 		// loadArtFile answers a zero compiled when the file would not
 		// compile, and every report below needs the path either way.
@@ -416,32 +423,23 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		attempts[i] = fileAttempt{ok: err == nil, compiled: c, err: err, diag: diag}
 	}
 
+	// Before anything runs, and before the gate or a selection has its say: a
+	// watcher learns the shape of the run first, including the files that
+	// turned out not to load. A flow or collection file a folder run found
+	// compiles to no scenario and is not one of them.
+	rt.events.RunStart(scenarioFiles(attempts))
+
 	var loaded []compiled
-	var scenarioFiles []string
 	for _, a := range attempts {
 		if a.ok {
 			loaded = append(loaded, a.compiled)
-			scenarioFiles = append(scenarioFiles, a.file)
 		}
 	}
-	// The suite.art files above the scenarios, compiled once each. Their
-	// env() needs join the check before the run, and one that would not
-	// compile is reported as the errored file it is, first.
-	suiteLoaded, brokenSuites := rt.planSuites(scenarioFiles, diagOut)
-	for _, b := range brokenSuites {
-		failScenario(run, rep, rt.events, b.file, b.err)
-	}
-
-	// --tags and --grep, settled once every file and suite has compiled and
+	// --tags and --grep, settled once every file has compiled and
 	// before anything checks the environment or runs: a smoke run needs the
 	// smoke scenarios' variables, and nothing else's.
 	if rt.sel != nil {
 		loaded = rt.selectScenarios(attempts, diagOut)
-	}
-	for _, c := range suiteLoaded {
-		if st := rt.suites[c.file]; st != nil && st.used {
-			loaded = append(loaded, c)
-		}
 	}
 	// nil is os.LookupEnv: the real process environment, which is where the
 	// .env file was loaded to. A seam here would have had no caller -- the
@@ -461,7 +459,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	runnable := len(faults) == 0 && !rt.noneSelected
 
 	// The run's databases: one pool per connection URL, opened by the first
-	// db step that names it -- in a suite, a scenario or any --jobs worker --
+	// db step that names it -- in a scenario or any --jobs worker --
 	// and closed once the last teardown is done. A run with no db step opens
 	// nothing.
 	pools := dbstep.NewPools()
@@ -470,12 +468,6 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// More than one job: every runnable file runs into its own result tree and
 	// its own buffer, and the ordered loop below drains them. See runParallel
 	// for why the output is buffered rather than streamed.
-	// Every suite's setup, once and before any scenario: the scenarios under
-	// it read what it left.
-	if runnable {
-		rt.setUpSuites(ctx, run, rep)
-	}
-
 	var parallel []*fileOutcome
 	if runnable && rt.workers() > 1 {
 		parallel = runParallel(ctx, rt, attempts)
@@ -499,10 +491,6 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			continue
 		}
 		parallel[i].drainInto(run, rep)
-	}
-	// And every suite's teardown, once every scenario under it is done.
-	if runnable {
-		rt.tearDownSuites(ctx, run, rep)
 	}
 	if err := pools.Close(); err != nil {
 		logger.Logger.Warn("Could not close a database connection", "error", err.Error())
@@ -672,6 +660,20 @@ type fileAttempt struct {
 	// while the attempt is being built; a value here would be copied into the
 	// slice and the diagnostics written to the copy that was thrown away.
 	diag *bytes.Buffer
+}
+
+// scenarioFiles is the files of attempts that run-start lists, in run order:
+// each that holds a scenario, and each that would not load, which is reported
+// as a scenario of its own. A file that loaded with no scenario in it -- a
+// flow or a collection a folder run found -- runs nothing and is left out.
+func scenarioFiles(attempts []fileAttempt) []string {
+	files := make([]string, 0, len(attempts))
+	for _, a := range attempts {
+		if !a.ok || len(a.scenarios) > 0 {
+			files = append(files, a.file)
+		}
+	}
+	return files
 }
 
 // notAScenarioError is what a path artemis will not run says. It names the one

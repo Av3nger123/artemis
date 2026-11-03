@@ -1,0 +1,21 @@
+# The forms a flow is written with, for the parser, printer and encoder
+# corpus. They sit in an ordinary scenario so that each parses on its own; a
+# required var is the checker's var-needs-value here, and only that.
+
+scenario "flow forms" {
+  var sku = "SKU-1"
+  var user
+  private var url = env("API_URL")
+  var private = "a var may be named private"
+
+  step "pay" {
+    post "${url}/pay" { body = {"sku": sku, "user": user} }
+    expect status == 200
+    var pay_status = status
+    capture order_id = body.id
+  }
+
+  step "read the order" {
+    get "${url}/orders/${order_id}?after=${pay_status}"
+  }
+}

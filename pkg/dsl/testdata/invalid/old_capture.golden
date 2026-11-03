@@ -1,0 +1,8 @@
+=== terminal
+old_capture.art:10:5: capture is now var
+   10 |     capture order_id = body.id
+      |     ^^^^^^^
+   hint: write var order_id = ... after the step's action -- artemis migrate -f old_capture.art -o <dir> rewrites it
+
+=== codes
+old-capture	error	10:5-10:12

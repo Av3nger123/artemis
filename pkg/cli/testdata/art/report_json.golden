@@ -1,35 +1,36 @@
-scenario: health (testdata/art/report_json/01_health.art)
+scenario: health (testdata/art/report_json/scenarios/01_health.art)
   ok    ping                        <dur>
-scenario: items (testdata/art/report_json/02_items.art)
+scenario: items (testdata/art/report_json/scenarios/02_items.art)
   FAIL  list items                  <dur>
          body.total > 0, got 0
   FAIL  missing route               <dur>
          status == 200, got 404
-testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+testdata/art/report_json/flows/03_broken.art:6:5: unknown field "timeot"
    6 |     timeot = "5s"
      |     ^^^^^^
    hint: did you mean "timeout"?
-scenario: testdata/art/report_json/03_broken.art
-  ERROR testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+   used from testdata/art/report_json/scenarios/03_broken.art:1:1: flow "../flows/03_broken.art"
+scenario: testdata/art/report_json/scenarios/03_broken.art
+  ERROR testdata/art/report_json/flows/03_broken.art:6:5: unknown field "timeot"
 
 3 failures:
 
-1) testdata/art/report_json/02_items.art:5
+1) testdata/art/report_json/flows/02_items.art:5
      scenario  items
      step      list items
      assert    expect body.total >
      expected  0
      actual    0
 
-2) testdata/art/report_json/02_items.art:10
+2) testdata/art/report_json/flows/02_items.art:10
      scenario  items
      step      missing route
      assert    expect status ==
      expected  200
      actual    404
 
-3) testdata/art/report_json/03_broken.art
-     error     testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+3) testdata/art/report_json/scenarios/03_broken.art
+     error     testdata/art/report_json/flows/03_broken.art:6:5: unknown field "timeot"
 
 Scenarios     3  (1 passed, 1 failed, 1 errored)
 Steps         3  (1 passed, 2 failed)
@@ -68,7 +69,8 @@ FAIL in <dur>
   "scenarios": [
     {
       "name": "health",
-      "file": "testdata/art/report_json/01_health.art",
+      "file": "testdata/art/report_json/scenarios/01_health.art",
+      "flow": "_01_health",
       "status": "pass",
       "duration_ms": 0,
       "error": "",
@@ -79,6 +81,7 @@ FAIL in <dur>
           "duration_ms": 0,
           "attempts": 1,
           "line": 2,
+          "file": "testdata/art/report_json/flows/01_health.art",
           "error": "",
           "screenshot": "",
           "trace": "",
@@ -91,7 +94,8 @@ FAIL in <dur>
               "actual": 200,
               "status": "pass",
               "error": "",
-              "line": 4
+              "line": 4,
+              "file": "testdata/art/report_json/flows/01_health.art"
             },
             {
               "kind": "expect",
@@ -101,7 +105,8 @@ FAIL in <dur>
               "actual": "ok",
               "status": "pass",
               "error": "",
-              "line": 5
+              "line": 5,
+              "file": "testdata/art/report_json/flows/01_health.art"
             }
           ]
         }
@@ -109,7 +114,8 @@ FAIL in <dur>
     },
     {
       "name": "items",
-      "file": "testdata/art/report_json/02_items.art",
+      "file": "testdata/art/report_json/scenarios/02_items.art",
+      "flow": "_02_items",
       "status": "fail",
       "duration_ms": 0,
       "error": "",
@@ -120,6 +126,7 @@ FAIL in <dur>
           "duration_ms": 0,
           "attempts": 1,
           "line": 2,
+          "file": "testdata/art/report_json/flows/02_items.art",
           "error": "",
           "screenshot": "",
           "trace": "",
@@ -132,7 +139,8 @@ FAIL in <dur>
               "actual": 200,
               "status": "pass",
               "error": "",
-              "line": 4
+              "line": 4,
+              "file": "testdata/art/report_json/flows/02_items.art"
             },
             {
               "kind": "expect",
@@ -142,7 +150,8 @@ FAIL in <dur>
               "actual": 0,
               "status": "fail",
               "error": "",
-              "line": 5
+              "line": 5,
+              "file": "testdata/art/report_json/flows/02_items.art"
             }
           ]
         },
@@ -152,6 +161,7 @@ FAIL in <dur>
           "duration_ms": 0,
           "attempts": 1,
           "line": 8,
+          "file": "testdata/art/report_json/flows/02_items.art",
           "error": "",
           "screenshot": "",
           "trace": "",
@@ -164,7 +174,8 @@ FAIL in <dur>
               "actual": 404,
               "status": "fail",
               "error": "",
-              "line": 10
+              "line": 10,
+              "file": "testdata/art/report_json/flows/02_items.art"
             }
           ]
         }
@@ -172,16 +183,16 @@ FAIL in <dur>
     },
     {
       "name": "",
-      "file": "testdata/art/report_json/03_broken.art",
+      "file": "testdata/art/report_json/scenarios/03_broken.art",
       "status": "error",
       "duration_ms": 0,
-      "error": "testdata/art/report_json/03_broken.art:6:5: unknown field \"timeot\"",
+      "error": "testdata/art/report_json/flows/03_broken.art:6:5: unknown field \"timeot\"",
       "steps": []
     }
   ],
   "failures": [
     {
-      "file": "testdata/art/report_json/02_items.art",
+      "file": "testdata/art/report_json/flows/02_items.art",
       "line": 5,
       "scenario": "items",
       "step": "list items",
@@ -195,7 +206,7 @@ FAIL in <dur>
       "screenshot": ""
     },
     {
-      "file": "testdata/art/report_json/02_items.art",
+      "file": "testdata/art/report_json/flows/02_items.art",
       "line": 10,
       "scenario": "items",
       "step": "missing route",
@@ -209,7 +220,7 @@ FAIL in <dur>
       "screenshot": ""
     },
     {
-      "file": "testdata/art/report_json/03_broken.art",
+      "file": "testdata/art/report_json/scenarios/03_broken.art",
       "line": 0,
       "scenario": "",
       "step": "",
@@ -219,11 +230,11 @@ FAIL in <dur>
       "operator": "",
       "expected": null,
       "actual": null,
-      "error": "testdata/art/report_json/03_broken.art:6:5: unknown field \"timeot\"",
+      "error": "testdata/art/report_json/flows/03_broken.art:6:5: unknown field \"timeot\"",
       "screenshot": ""
     }
   ]
 }
 
 --- exit error ---
-2 of 3 steps failed, 2 of 5 assertions failed; 1 scenario could not run: testdata/art/report_json/03_broken.art:6:5: unknown field "timeot"
+2 of 3 steps failed, 2 of 5 assertions failed; 1 scenario could not run: testdata/art/report_json/flows/03_broken.art:6:5: unknown field "timeot"

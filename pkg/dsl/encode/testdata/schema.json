@@ -8,7 +8,9 @@
       "scenario",
       "import",
       "collection",
-      "suite"
+      "suite",
+      "flowDecl",
+      "flowRef"
     ],
     "forClause": [
       "for"
@@ -20,7 +22,8 @@
       "use",
       "phase",
       "tags",
-      "flow"
+      "flow",
+      "set"
     ],
     "phaseBody": [
       "step",
@@ -62,6 +65,9 @@
     ],
     "collectionItem": [
       "requestDecl"
+    ],
+    "itemInput": [
+      "var"
     ],
     "param": [
       "param"
@@ -531,8 +537,14 @@
     },
     {
       "kind": "var",
-      "doc": "`var url = env(\"API_URL\")`",
+      "doc": "`var url = env(\"API_URL\")`, `private var url = ...`, or `var user` with no value",
       "fields": [
+        {
+          "name": "private",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `private` modifier: nothing outside the flow or item declaring the var sets it. Absent means false"
+        },
         {
           "name": "secret",
           "type": "boolean",
@@ -548,8 +560,7 @@
           "name": "value",
           "type": "node",
           "accepts": "expression",
-          "optional": true,
-          "inputRequired": true
+          "optional": true
         },
         {
           "name": "span",
@@ -846,8 +857,14 @@
     },
     {
       "kind": "capture",
-      "doc": "`capture token = body.data.access_token`",
+      "doc": "`capture token = body.data.access_token`, or `var token = ...` after a step's action",
       "fields": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "optional": true,
+          "doc": "`var` for a capture written `var token = ...`; absent means `capture`"
+        },
         {
           "name": "secret",
           "type": "boolean",
@@ -975,8 +992,14 @@
     },
     {
       "kind": "requestDecl",
-      "doc": "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised",
+      "doc": "`request login { var user = \"admin\" <action> <statement>... }`: a collection item, a step's body named and given inputs. `command` and `query` items are this kind too",
       "fields": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "optional": true,
+          "doc": "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"
+        },
         {
           "name": "name",
           "type": "string",
@@ -986,7 +1009,15 @@
           "name": "params",
           "type": "node[]",
           "accepts": "param",
-          "optional": true
+          "optional": true,
+          "doc": "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"
+        },
+        {
+          "name": "inputs",
+          "type": "node[]",
+          "accepts": "itemInput",
+          "optional": true,
+          "doc": "the var lines above the action: the item's inputs, which a step passes, the flow's context supplies, or a default fills"
         },
         {
           "name": "action",
@@ -1014,8 +1045,14 @@
     },
     {
       "kind": "use",
-      "doc": "`use auth.login as admin { user = \"alice\" ... }`",
+      "doc": "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`",
       "fields": [
+        {
+          "name": "name",
+          "type": "name",
+          "optional": true,
+          "doc": "the step form's quoted name, which the expanded step is called; absent for a use"
+        },
         {
           "name": "collection",
           "type": "string",
@@ -1080,13 +1117,86 @@
     },
     {
       "kind": "drop",
-      "doc": "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed",
+      "doc": "`drop expects`, `drop captures` or `drop vars` in a use block: the used item's expects, or its outputs, are removed",
       "fields": [
         {
           "name": "what",
           "type": "string",
           "inputRequired": true,
-          "doc": "expects or captures: what the line removes"
+          "doc": "expects, captures or vars: what the line removes; captures and vars both remove the outputs"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "flowDecl",
+      "doc": "`flow checkout { ... }`: a flow file's one flow, the steps of a test in order and the vars its scenarios set",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier naming the flow in reports"
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "scenarioBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "flowRef",
+      "doc": "`flow \"../flows/checkout.art\"`: a scenario file's first line, naming the flow its scenarios run",
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "doc": "the flow file, relative to the scenario file, decoded: escapes resolved, no quotes"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "set",
+      "doc": "`coupon = \"TEN\"` in a scenario of a scenario file: the value it gives one of its flow's vars; the ident `skip` turns off the expects that read it",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the flow var being set"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
         },
         {
           "name": "span",

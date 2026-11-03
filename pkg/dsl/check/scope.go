@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"strings"
 
 	"artemis/pkg/dsl/builtin"
@@ -148,38 +149,66 @@ func callableIn(word string, s builtin.Scope) bool {
 // ordering rules -- a var sees the vars above it, and a capture is in scope
 // for the steps *after* the one that writes it -- and it only works because
 // the walk is in source order.
+//
+// The last write wins: a capture of a name already bound overwrites it, and
+// the name stays one entry of vars or captures. Only a second var of a name
+// is a fault, because every var is evaluated before the first step runs, so
+// two of them would leave the scenario one value for both.
 type scope struct {
 	vars     []string
 	captures []string
 
-	// first is where each name was bound first, var or capture, for the
-	// rule that a capture may not take a name already bound. file is the
-	// scenario's own file, which a binding copied in by a use is not.
+	// first is where each var was declared first, for the rule that a var
+	// may not take a name another var holds. file is the scenario's own
+	// file, which a binding copied in by a use is not.
 	first map[string]binding
 	file  string
-	at    int // the index in the scenario body of the declaration being walked
+
+	// writes is every capture walked so far, in order, a name as often as it
+	// is written -- whether it made the name or overwrote it. A block reads
+	// what each branch wrote off it: two parallel branches may not write one
+	// name, even one that existed before the block.
+	writes []binding
 
 	// maybe are captures only some branches of an if or a switch make: name
 	// to the block that made them. A step after the block may not read one --
 	// it may not exist -- unless it is cleanup, which skips when it does not.
-	maybe map[string]string
+	maybe map[string]place
 	// cleanup is whether the steps being walked are teardown or a finally,
 	// whose reads of a maybe-capture are allowed.
 	cleanup bool
 	// siblings are the captures of the other branches of the parallel block
 	// being walked, by name, to the line of the branch: a step cannot read one,
-	// since that branch runs at the same time.
+	// even a name bound before the block, since that branch writes it at the
+	// same time. A name leaves it when this branch writes the name itself.
 	siblings map[string]int
 }
 
-// binding is one name's first binding: what bound it and its name token.
-type binding struct {
-	kind  string // "var" or "capture"
-	tok   token.Token
-	order int // its declaration's index in the scenario body
+// place is a block some of whose branches wrote a name: what it is, "the if",
+// and where its keyword is.
+type place struct {
+	what string
+	at   token.Span
 }
 
-func newScope() *scope { return &scope{first: map[string]binding{}, maybe: map[string]string{}} }
+// from is the block as a diagnostic in file names it: by its line, and by its
+// file too when that is another one -- a read in a collection item of a name
+// only some branches of the calling flow's if wrote.
+func (p place) from(file string) string {
+	s := fmt.Sprintf("%s at line %d", p.what, p.at.Line)
+	if p.at.File != "" && p.at.File != file {
+		s += " of " + p.at.File
+	}
+	return s
+}
+
+// binding is one binding of a name: what bound it and its name token.
+type binding struct {
+	kind string // "var" or "capture"
+	tok  token.Token
+}
+
+func newScope() *scope { return &scope{first: map[string]binding{}, maybe: map[string]place{}} }
 
 // fork is a copy of the scope for one branch of a block: what the branch
 // binds stays in the copy until the block decides what the scope after it
@@ -188,11 +217,12 @@ func (s *scope) fork() *scope {
 	cp := *s
 	cp.vars = append([]string(nil), s.vars...)
 	cp.captures = append([]string(nil), s.captures...)
+	cp.writes = append([]binding(nil), s.writes...)
 	cp.first = make(map[string]binding, len(s.first))
 	for k, v := range s.first {
 		cp.first[k] = v
 	}
-	cp.maybe = make(map[string]string, len(s.maybe))
+	cp.maybe = make(map[string]place, len(s.maybe))
 	for k, v := range s.maybe {
 		cp.maybe[k] = v
 	}
@@ -203,12 +233,38 @@ func (s *scope) fork() *scope {
 	return &cp
 }
 
-// bind records tok, declared at body index order, as its name's first
-// binding, unless the name has one.
-func (s *scope) bind(tok token.Token, kind string, order int) {
+// bind records the var tok as its name's first binding, unless the name has
+// one.
+func (s *scope) bind(tok token.Token, kind string) {
 	if _, ok := s.first[tok.Value]; !ok {
-		s.first[tok.Value] = binding{kind: kind, tok: tok, order: order}
+		s.first[tok.Value] = binding{kind: kind, tok: tok}
 	}
+}
+
+// write records a capture of tok's name, which makes the name or overwrites
+// it. Either way the name is bound from here on: no longer only maybe bound
+// by an earlier block, and no longer a sibling's, since what this branch reads
+// next is its own write.
+func (s *scope) write(tok token.Token) {
+	s.writes = append(s.writes, binding{kind: "capture", tok: tok})
+	s.addCapture(tok.Value)
+	delete(s.maybe, tok.Value)
+	delete(s.siblings, tok.Value)
+}
+
+// wrote brings what a branch of a block wrote into the scope around it, so a
+// parallel block around this one sees them as this branch's writes.
+func (s *scope) wrote(ws []binding) {
+	s.writes = append(s.writes, ws...)
+	for _, w := range ws {
+		delete(s.siblings, w.tok.Value)
+	}
+}
+
+// bound reports whether name is surely bound: a var, or a capture every path
+// to here made. A name only some branches made is not.
+func (s *scope) bound(name string) bool {
+	return contains(s.vars, name) || contains(s.captures, name)
 }
 
 // fromUse reports whether a span was copied in by a use rather than written
@@ -217,8 +273,19 @@ func (s *scope) fromUse(sp token.Span) bool {
 	return sp.Via != 0 || (s.file != "" && sp.File != s.file)
 }
 
-func (s *scope) addVar(name string)     { s.vars = append(s.vars, name) }
-func (s *scope) addCapture(name string) { s.captures = append(s.captures, name) }
+// addVar and addCapture make name resolvable. A name already bound stays one
+// entry, so a hint lists it once however often it is overwritten.
+func (s *scope) addVar(name string) {
+	if !s.bound(name) {
+		s.vars = append(s.vars, name)
+	}
+}
+
+func (s *scope) addCapture(name string) {
+	if !s.bound(name) {
+		s.captures = append(s.captures, name)
+	}
+}
 
 // view is the scope as it looks from one position: a step of a given type, or
 // a var declaration (type Unknown, no roots).
@@ -231,7 +298,7 @@ type view struct {
 	roots    []string
 	vars     []string
 	captures []string
-	maybe    map[string]string
+	maybe    map[string]place
 	siblings map[string]int
 }
 
@@ -296,16 +363,10 @@ func (v *view) hint() string { return scopeHints[v.typ] }
 // `statu` example); anything else means they named something that does not
 // exist (unknown-identifier).
 func (c *checker) notFound(span token.Span, name string, v *view) {
-	if line, ok := v.siblings[name]; ok {
-		c.bag.Error(span, diag.ParallelSiblingCapture,
-			"%q is captured by the branch at line %d, which runs at the same time as this one", name, line).
-			Hintf("read it after the parallel block, or put both steps in one branch")
-		return
-	}
 	if where, ok := v.maybe[name]; ok {
 		c.bag.Error(span, diag.CaptureMaybeUnbound,
-			"%q is captured in only some branches of %s, so it may not exist here", name, where).
-			Hintf("capture it in every branch, give the block an else or a default that does, or read it inside the branch")
+			"%q is written in only some branches of %s, so it may not exist here", name, where.from(span.File)).
+			Hintf("write it in every branch, give the block an else or a default that does, or read it inside the branch")
 		return
 	}
 	if t, ok := allRoots[name]; ok && t != v.typ {
@@ -330,6 +391,22 @@ func (c *checker) notFound(span token.Span, name string, v *view) {
 		return
 	}
 	ref.Hintf("%s", inScope(candidates, v))
+}
+
+// sibling reports a read of a name another branch of the parallel block
+// being walked writes, and whether it was one. It is asked before the name
+// resolves, because a name bound before the block resolves and is still a
+// race: which value the read sees depends on which branch gets there first.
+// A step's own root is not read from the scope, so it is never a sibling's.
+func (c *checker) sibling(span token.Span, name string, v *view) bool {
+	line, ok := v.siblings[name]
+	if !ok || v.isRoot(name) {
+		return false
+	}
+	c.bag.Error(span, diag.ParallelSiblingCapture,
+		"%q is written by the branch at line %d, which runs at the same time as this one", name, line).
+		Hintf("read it after the parallel block, or put both steps in one branch")
+	return true
 }
 
 // inScope is the hint for a name with no near miss: what is actually

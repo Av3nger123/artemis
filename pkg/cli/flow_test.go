@@ -56,17 +56,17 @@ func steps(run *result.RunResult) map[string]*result.StepResult {
 func TestParallelBranchesRunAtTheSameTime(t *testing.T) {
 	srv, _ := flowServer(t)
 	start := time.Now()
-	run, diags := runArt(t, fmt.Sprintf(`scenario "parallel" {
+	run, diags := runArt(t, fmt.Sprintf(`flow parallel {
   var url = %q
 
   parallel {
     step "a" {
       get "${url}/slow/a"
-      capture a = body.id
+      var a = body.id
     }
     step "b" {
       get "${url}/slow/b"
-      capture b = body.id
+      var b = body.id
     }
     step "c" {
       get "${url}/slow/c"
@@ -78,6 +78,8 @@ func TestParallelBranchesRunAtTheSameTime(t *testing.T) {
     expect body.path == "/joined/a/b"
   }
 }
+
+scenario "parallel" {}
 `, srv.URL))
 	took := time.Since(start)
 	if !run.Passed() {
@@ -97,12 +99,12 @@ func TestParallelBranchesRunAtTheSameTime(t *testing.T) {
 
 func TestIfAndSwitchRunOneBranch(t *testing.T) {
 	srv, asked := flowServer(t)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "choose" {
+	run, diags := runArt(t, fmt.Sprintf(`flow choose {
   var url = %q
 
   step "profile" {
     get "${url}/me"
-    capture tier = body.tier
+    var tier = body.tier
   }
 
   if tier == "silver" {
@@ -122,6 +124,8 @@ func TestIfAndSwitchRunOneBranch(t *testing.T) {
     }
   }
 }
+
+scenario "choose" {}
 `, srv.URL))
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
@@ -146,7 +150,7 @@ func TestIfAndSwitchRunOneBranch(t *testing.T) {
 // failed still fails the scenario.
 func TestTryCatchFinally(t *testing.T) {
 	srv, asked := flowServer(t)
-	run, _ := runArt(t, fmt.Sprintf(`scenario "try" {
+	run, _ := runArt(t, fmt.Sprintf(`flow try {
   var url = %q
 
   try {
@@ -161,6 +165,8 @@ func TestTryCatchFinally(t *testing.T) {
     step "unlock" { get "${url}/unlock" }
   }
 }
+
+scenario "try" {}
 `, srv.URL))
 	if run.Passed() {
 		t.Fatal("a scenario whose try failed passed: a catch is not a cure")
@@ -178,13 +184,13 @@ func TestTryCatchFinally(t *testing.T) {
 
 func TestRepeatPollsUntilItHolds(t *testing.T) {
 	srv, _ := flowServer(t)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "poll" {
+	run, diags := runArt(t, fmt.Sprintf(`flow poll {
   var url = %q
 
   repeat every "10ms" max 10 {
     step "status" {
       get "${url}/job"
-      capture state = body.state
+      var state = body.state
     }
   } until state == "done"
 
@@ -193,6 +199,8 @@ func TestRepeatPollsUntilItHolds(t *testing.T) {
     expect state == "done"
   }
 }
+
+scenario "poll" {}
 `, srv.URL))
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
@@ -205,16 +213,18 @@ func TestRepeatPollsUntilItHolds(t *testing.T) {
 
 func TestARepeatThatRunsOutNamesTheBoundAndTheLastValue(t *testing.T) {
 	srv, _ := flowServer(t)
-	run, _ := runArt(t, fmt.Sprintf(`scenario "poll" {
+	run, _ := runArt(t, fmt.Sprintf(`flow poll {
   var url = %q
 
   repeat max 2 {
     step "status" {
       get "${url}/job"
-      capture state = body.state
+      var state = body.state
     }
   } until state == "done"
 }
+
+scenario "poll" {}
 `, srv.URL))
 	if run.Passed() {
 		t.Fatal("a repeat that never held passed")

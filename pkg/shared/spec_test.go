@@ -20,11 +20,11 @@ const (
 	goldenPath = "../cli/testdata/art/report_json.golden"
 )
 
-// wantSpecScenarios is the number of whole-scenario examples SPEC.md is expected
-// to carry. The tests assert they found at least this many, so an edit that
-// renames the fences or deletes the examples fails here instead of leaving a
-// test that passes on nothing.
-const wantSpecScenarios = 4
+// wantSpecTests is the number of whole tests -- flow files and scenario files
+// -- SPEC.md is expected to carry. The tests assert they found at least this
+// many, so an edit that renames the fences or deletes the examples fails here
+// instead of leaving a test that passes on nothing.
+const wantSpecTests = 4
 
 // SPEC.md specifies the `.art` DSL, and the front end that reads it exists, so
 // its examples are compiled rather than linted -- which is what the first draft
@@ -40,24 +40,25 @@ const wantSpecScenarios = 4
 //     still has to translate, and the report's schema version and its keys.
 
 // TestSpecArtExamplesCompile holds every fenced art block in SPEC.md to the
-// language SPEC.md specifies, and counts the whole scenarios among them.
+// language SPEC.md specifies, and counts the flow and scenario files among
+// them.
 //
-// A whole scenario is parsed and name-checked as the file it is; a fragment is
-// wrapped in the part of a scenario its prose puts it in and has to parse. See
+// A whole file is parsed and name-checked as the file it is; a fragment is
+// wrapped in the part of a flow its prose puts it in and has to parse. See
 // compileBlock.
 func TestSpecArtExamplesCompile(t *testing.T) {
-	collections := docLoader{docCollections(t)}
-	scenarios := 0
+	files := docLoaderFor(t, specPath)
+	tests := 0
 	for _, b := range docBlocks(t, specPath, "art") {
-		if isArtScenario(b) {
-			scenarios++
+		if isArtTest(b) {
+			tests++
 		}
-		compileBlock(t, specPath, b, collections)
+		compileBlock(t, specPath, b, files)
 	}
 
-	if scenarios < wantSpecScenarios {
-		t.Errorf("found %d whole-scenario examples in SPEC.md, want at least %d -- did the examples move or lose their ```art fences?",
-			scenarios, wantSpecScenarios)
+	if tests < wantSpecTests {
+		t.Errorf("found %d flow and scenario files in SPEC.md, want at least %d -- did the examples move or lose their ```art fences?",
+			tests, wantSpecTests)
 	}
 }
 

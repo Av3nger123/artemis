@@ -1,8 +1,0 @@
-# A run where the API answers with a status nobody asked for.
-scenario "status code" {
-  step "ping" {
-    get "%SERVER%/ping"
-    expect status == 200
-    expect body.status == "ok"
-  }
-}

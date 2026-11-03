@@ -11,7 +11,7 @@ import (
 // suggestionArt has one fault, and it is the one a UI exists to fix in a
 // click: a misspelled field name, close enough to a real one that the checker
 // can name the replacement.
-const suggestionArt = `scenario "checkout" {
+const suggestionArt = `flow checkout {
   step "login" {
     post "https://example.test/token" {
       quer "limit" = 10
@@ -19,6 +19,8 @@ const suggestionArt = `scenario "checkout" {
     expect status == 200
   }
 }
+
+scenario "checkout" {}
 `
 
 // jsonDiag is the document as a client reads it -- declared here rather than
@@ -96,8 +98,8 @@ func TestParseJSONCarriesSpansAndSuggestions(t *testing.T) {
 	if d.Severity != "error" {
 		t.Errorf("severity = %q, want \"error\"", d.Severity)
 	}
-	if d.Span.File != path || d.Span.Line != 4 || d.Span.Col != 7 || d.Span.EndCol != 11 {
-		t.Errorf("span = %+v, want %s line 4, cols 7 to 11 -- the word `quer`", d.Span, path)
+	if d.Span.File != flowOf(path) || d.Span.Line != 4 || d.Span.Col != 7 || d.Span.EndCol != 11 {
+		t.Errorf("span = %+v, want %s line 4, cols 7 to 11 -- the word `quer`", d.Span, flowOf(path))
 	}
 	if d.Span.Offset <= 0 {
 		t.Errorf("span.offset = %d; an editor splicing a suggestion indexes by it", d.Span.Offset)

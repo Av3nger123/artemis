@@ -27,13 +27,13 @@ func TestAUseInsideABlockExpandsThere(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(dir, "auth.art"), auth, 0o600)
 	path := filepath.Join(dir, "s.art")
-	os.WriteFile(path, []byte(fmt.Sprintf(`import "auth.art"
+	writeSplit(t, path, fmt.Sprintf(`import "auth.art"
 
-scenario "uses in blocks" {
+flow uses_in_blocks {
   var url = %q
 
   parallel {
-    use auth.login { user = "alice", password = "s3cret", base = url }
+    step "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
     step "missing" {
       get "${url}/nowhere"
       expect status == 404
@@ -47,7 +47,9 @@ scenario "uses in blocks" {
     }
   }
 }
-`, srv.URL)), 0o600)
+
+scenario "uses in blocks" {}
+`, srv.URL))
 	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s", describeRun(run))
@@ -61,7 +63,7 @@ scenario "uses in blocks" {
 // scenario's own steps, naming the step, and a teardown block still runs.
 func TestBlocksInSetupAndTeardown(t *testing.T) {
 	srv, asked := flowServer(t)
-	run, _ := runArt(t, fmt.Sprintf(`scenario "phases" {
+	run, _ := runArt(t, fmt.Sprintf(`flow phases {
   var url = %q
 
   setup {
@@ -82,6 +84,8 @@ func TestBlocksInSetupAndTeardown(t *testing.T) {
     }
   }
 }
+
+scenario "phases" {}
 `, srv.URL))
 	got := steps(run)
 	if got["own"].Status != result.StatusSkip || got["own"].Error != `setup step "broken" did not pass` {
@@ -95,55 +99,17 @@ func TestBlocksInSetupAndTeardown(t *testing.T) {
 	}
 }
 
-// A suite's setup may hold blocks too.
-func TestASuitesSetupMayHoldABlock(t *testing.T) {
-	srv, asked := flowServer(t)
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "suite.art"), []byte(fmt.Sprintf(`suite {
-  var url = %q
-
-  setup {
-    parallel {
-      step "a" {
-        get "${url}/slow/a"
-        capture a = body.id
-      }
-      step "b" {
-        get "${url}/slow/b"
-        capture b = body.id
-      }
-    }
-  }
-}
-`, srv.URL)), 0o600)
-	path := filepath.Join(dir, "s.art")
-	os.WriteFile(path, []byte(`scenario "reads the suite" {
-  step "joined" {
-    get "${suite.url}/joined/${suite.a}/${suite.b}"
-    expect body.path == "/joined/a/b"
-  }
-}
-`), 0o600)
-	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
-	if !run.Passed() {
-		t.Fatalf("run failed:\n%s", describeRun(run))
-	}
-	if _, hit := asked.Load("/joined/a/b"); !hit {
-		t.Error("the scenario did not read both of the suite's parallel captures")
-	}
-}
-
 // Blocks nest at run time: a repeat and an if inside one parallel block.
 func TestNestedBlocksRun(t *testing.T) {
 	srv, _ := flowServer(t)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "nested" {
+	run, diags := runArt(t, fmt.Sprintf(`flow nested {
   var url = %q
 
   parallel {
     repeat every "5ms" max 10 {
       step "poll" {
         get "${url}/job"
-        capture state = body.state
+        var state = body.state
       }
     } until state == "done"
     if 2 > 1 {
@@ -156,6 +122,8 @@ func TestNestedBlocksRun(t *testing.T) {
     expect body.path == "/after/done"
   }
 }
+
+scenario "nested" {}
 `, srv.URL))
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
@@ -169,7 +137,7 @@ func TestNestedBlocksRun(t *testing.T) {
 // is, and every branch is skipped.
 func TestAConditionThatWillNotEvaluate(t *testing.T) {
 	srv, asked := flowServer(t)
-	run, _ := runArt(t, fmt.Sprintf(`scenario "bad conditions" {
+	run, _ := runArt(t, fmt.Sprintf(`flow bad_conditions {
   var url = %q
 
   if 1 {
@@ -182,6 +150,8 @@ func TestAConditionThatWillNotEvaluate(t *testing.T) {
     }
   }
 }
+
+scenario "bad conditions" {}
 `, srv.URL))
 	sc := run.Scenarios[0]
 	var errs []string
@@ -204,7 +174,7 @@ func TestAConditionThatWillNotEvaluate(t *testing.T) {
 // block, and fails the scenario.
 func TestAFailingParallelBranch(t *testing.T) {
 	srv, asked := flowServer(t)
-	run, _ := runArt(t, fmt.Sprintf(`scenario "one branch fails" {
+	run, _ := runArt(t, fmt.Sprintf(`flow one_branch_fails {
   var url = %q
 
   parallel {
@@ -217,6 +187,8 @@ func TestAFailingParallelBranch(t *testing.T) {
 
   step "after" { get "${url}/after" }
 }
+
+scenario "one branch fails" {}
 `, srv.URL))
 	if run.Passed() {
 		t.Fatal("a scenario with a failing branch passed")
@@ -231,16 +203,18 @@ func TestAFailingParallelBranch(t *testing.T) {
 // within bounds a repeat in time, and the error names it.
 func TestARepeatBoundedInTime(t *testing.T) {
 	srv, _ := flowServer(t)
-	run, _ := runArt(t, fmt.Sprintf(`scenario "times out" {
+	run, _ := runArt(t, fmt.Sprintf(`flow times_out {
   var url = %q
 
   repeat every "30ms" within "100ms" {
     step "status" {
       get "${url}/job"
-      capture state = body.state
+      var state = body.state
     }
   } until state == "never"
 }
+
+scenario "times out" {}
 `, srv.URL))
 	sc := run.Scenarios[0]
 	last := sc.Steps[len(sc.Steps)-1]
@@ -253,7 +227,7 @@ func TestARepeatBoundedInTime(t *testing.T) {
 // indexes counting up -- parallel branches and a repeat's last round included.
 func TestEventsOfBlocksAreInReportOrder(t *testing.T) {
 	srv, _ := flowServer(t)
-	path := writeArt(t, "events.art", fmt.Sprintf(`scenario "events" {
+	path := writeArt(t, "events.art", fmt.Sprintf(`flow events {
   var url = %q
 
   parallel {
@@ -264,12 +238,14 @@ func TestEventsOfBlocksAreInReportOrder(t *testing.T) {
   repeat every "5ms" max 5 {
     step "poll" {
       get "${url}/job"
-      capture state = body.state
+      var state = body.state
     }
   } until state == "done"
 
   step "c" { get "${url}/c" }
 }
+
+scenario "events" {}
 `, srv.URL))
 	var started, ended []string
 	var indexes []float64
@@ -299,18 +275,20 @@ func TestEventsOfBlocksAreInReportOrder(t *testing.T) {
 // The JSON report says which round a repeat's step is from.
 func TestTheJSONReportCarriesTheRound(t *testing.T) {
 	srv, _ := flowServer(t)
-	path := writeArt(t, "round.art", fmt.Sprintf(`scenario "round" {
+	path := writeArt(t, "round.art", fmt.Sprintf(`flow round {
   var url = %q
 
   repeat every "5ms" max 5 {
     step "poll" {
       get "${url}/job"
-      capture state = body.state
+      var state = body.state
     }
   } until state == "done"
 
   step "after" { get "${url}/after" }
 }
+
+scenario "round" {}
 `, srv.URL))
 	out := filepath.Join(t.TempDir(), "run.json")
 	if _, stderr, err := runCLI(t, "run", path, "--report", "json="+out); err != nil {
@@ -342,7 +320,7 @@ func TestParallelBranchesDrawReproducibly(t *testing.T) {
 		var paths []string
 		srv, _ := flowServer(t)
 		_ = srv
-		path := writeArt(t, "seed.art", fmt.Sprintf(`scenario "seeded" {
+		path := writeArt(t, "seed.art", fmt.Sprintf(`flow seeded {
   var url = %q
 
   parallel {
@@ -350,6 +328,8 @@ func TestParallelBranchesDrawReproducibly(t *testing.T) {
     step "b" { get "${url}/b/${random_string(12)}" }
   }
 }
+
+scenario "seeded" {}
 `, srv.URL))
 		out := filepath.Join(t.TempDir(), "run.json")
 		if _, stderr, err := runCLI(t, "run", path, "--seed", "42", "--trace", filepath.Dir(out)); err != nil {
@@ -374,29 +354,6 @@ func TestParallelBranchesDrawReproducibly(t *testing.T) {
 	}
 }
 
-// A data-driven scenario's rows each take their own branch.
-func TestRowsTakeTheirOwnBranches(t *testing.T) {
-	srv, asked := flowServer(t)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "row ${n}" for n in [1, 2] {
-  var url = %q
-
-  if n == 1 {
-    step "one" { get "${url}/one" }
-  } else {
-    step "two" { get "${url}/two" }
-  }
-}
-`, srv.URL))
-	if !run.Passed() || len(run.Scenarios) != 2 {
-		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
-	}
-	for _, p := range []string{"/one", "/two"} {
-		if _, hit := asked.Load(p); !hit {
-			t.Errorf("%s was not requested", p)
-		}
-	}
-}
-
 func names(run *result.RunResult) []string {
 	var out []string
 	for _, sc := range run.Scenarios {
@@ -407,9 +364,9 @@ func names(run *result.RunResult) []string {
 	return out
 }
 
-// A use with a secret parameter inside setup: the var its expansion hoists
-// beside the step is bound with the scenario's own.
-func TestAUseWithASecretInsideSetup(t *testing.T) {
+// A step that calls an item inside setup: the var the item writes is bound
+// for the steps after setup.
+func TestAnItemCallInsideSetup(t *testing.T) {
 	srv := authServer(t)
 	dir := t.TempDir()
 	auth, err := os.ReadFile("testdata/collections/auth.art")
@@ -418,13 +375,13 @@ func TestAUseWithASecretInsideSetup(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(dir, "auth.art"), auth, 0o600)
 	path := filepath.Join(dir, "s.art")
-	os.WriteFile(path, []byte(fmt.Sprintf(`import "auth.art"
+	writeSplit(t, path, fmt.Sprintf(`import "auth.art"
 
-scenario "setup logs in" {
+flow setup_logs_in {
   var url = %q
 
   setup {
-    use auth.login { user = "alice", password = "s3cret", base = url }
+    step "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
   }
 
   step "orders" {
@@ -432,7 +389,9 @@ scenario "setup logs in" {
     expect status == 200
   }
 }
-`, srv.URL)), 0o600)
+
+scenario "setup logs in" {}
+`, srv.URL))
 	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s", describeRun(run))

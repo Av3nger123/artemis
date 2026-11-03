@@ -1,0 +1,23 @@
+# stage: front
+#
+# A scenario that holds its steps, in a file with no flow "..." header: the
+# form a flow file and a scenario file replace. It is reported once, as a
+# whole -- its capture and its use with it, since artemis migrate rewrites
+# every line -- and nothing past it is checked, because what expansion and
+# the checker would say is about a file migrate rewrites.
+
+import "collections/auth.art"
+
+scenario "checkout" {
+  var sku = "SKU-1"
+
+  use auth.login { user = "alice" }
+
+  step "pay" {
+    post "/cart/pay" {
+      body = {"sku": sku}
+    }
+    expect status == 200
+    capture order_id = body.id
+  }
+}

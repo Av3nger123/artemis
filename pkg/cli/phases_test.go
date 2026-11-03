@@ -44,21 +44,21 @@ func (ps *phaseServer) requests() string {
 }
 
 func checkoutArt(url string) string {
-	return fmt.Sprintf(`scenario "checkout" {
+	return fmt.Sprintf(`flow checkout {
   var url = %q
 
   setup {
     step "make a cart" {
       post "${url}/carts"
       expect status == 200
-      capture cart_id = body.id
+      var cart_id = body.id
     }
   }
 
   step "pay" {
     post "${url}/pay"
     expect status == 200
-    capture order_id = body.id
+    var order_id = body.id
   }
 
   teardown {
@@ -70,6 +70,8 @@ func checkoutArt(url string) string {
     }
   }
 }
+
+scenario "checkout" {}
 `, url)
 }
 
@@ -133,7 +135,7 @@ func TestAFailedSetupSkipsTheStepsAndNotTheTeardown(t *testing.T) {
 		t.Errorf("the scenario's step = %+v, want a skip naming the setup step", steps[1])
 	}
 	for _, s := range steps[2:] {
-		if s.Status != "skip" || !strings.Contains(s.Error, "which no step before it captured") {
+		if s.Status != "skip" || !strings.Contains(s.Error, "which no step before it wrote") {
 			t.Errorf("teardown step %+v, want a skip for a capture that never happened", s)
 		}
 	}

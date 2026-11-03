@@ -88,7 +88,7 @@ func (c *canon) decl(d ast.Decl) {
 		c.step(v)
 	case *ast.PhaseDecl:
 		c.phase(v)
-	case *ast.FlowDecl:
+	case *ast.BlockDecl:
 		c.flow(v)
 	case *ast.TagsDecl:
 		c.line(v.Tokens(nil), assign(v.Keyword.Text, v.Assign, c.expr(v.Value)))
@@ -100,6 +100,12 @@ func (c *canon) decl(d ast.Decl) {
 		c.requestDecl(v)
 	case *ast.UseDecl:
 		c.useDecl(v)
+	case *ast.Flow:
+		c.flowDecl(v)
+	case *ast.FlowRef:
+		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text))
+	case *ast.Set:
+		c.line(v.Tokens(nil), assign(v.Name.Text, v.Assign, c.expr(v.Value)))
 	case *ast.Bad:
 		c.bad(v)
 	}
@@ -110,6 +116,10 @@ func (c *canon) decl(d ast.Decl) {
 // is the exception, because `scenario "s" {}` reads better than three lines of
 // nothing.
 func (c *canon) scenario(s *ast.Scenario) {
+	if isDataScenario(s) {
+		c.dataScenario(s)
+		return
+	}
 	head := join(" ", s.Keyword.Text, s.Name.Text)
 	headToks := toks(s.Keyword, s.Name)
 	if f := s.For; f != nil {
@@ -124,22 +134,34 @@ func (c *canon) scenario(s *ast.Scenario) {
 	c.w.in()
 	c.w.suppress()
 	for i, d := range s.Body {
-		// A step always gets a blank line above it, whether or not the author
-		// left one. It is the one piece of paragraphing canonical mode supplies
-		// rather than keeps, because `migrate` and `generate` build trees with
-		// no trivia at all and a wall of twelve steps with nothing between them
-		// is not a file anyone wants to read. The first item in the body is
-		// against the brace and gets nothing.
-		switch d.(type) {
-		case *ast.StepDecl, *ast.PhaseDecl, *ast.FlowDecl:
-			if i > 0 {
-				c.w.blank()
-			}
-		}
+		c.paragraph(i, d)
 		c.decl(d)
 	}
 	c.w.outd()
 	c.close(s.RBrace)
+}
+
+// paragraph writes the blank line a body's i-th declaration gets above it.
+//
+// A step always gets a blank line above it, whether or not the author left
+// one. It is the one piece of paragraphing canonical mode supplies rather than
+// keeps, because `migrate` and `generate` build trees with no trivia at all and
+// a wall of twelve steps with nothing between them is not a file anyone wants
+// to read. The first item in the body is against the brace and gets nothing.
+// A step that calls an item is a step, and gets a step's paragraph; a use line
+// stacks with its neighbours as it always has.
+func (c *canon) paragraph(i int, d ast.Decl) {
+	if i == 0 {
+		return
+	}
+	switch v := d.(type) {
+	case *ast.StepDecl, *ast.PhaseDecl, *ast.BlockDecl:
+		c.w.blank()
+	case *ast.UseDecl:
+		if v.Step.Text != "" {
+			c.w.blank()
+		}
+	}
 }
 
 // phase is `setup { ... }` or `teardown { ... }`, broken like a scenario: its
@@ -171,8 +193,9 @@ func (c *canon) config(d *ast.ConfigDecl) {
 
 func (c *canon) varDecl(d *ast.VarDecl) {
 	// join drops an empty string, so a plain var prints as it always has and a
-	// `secret var` needs no second branch here.
-	left := join(" ", d.Secret.Text, d.Keyword.Text, d.Name.Text)
+	// `private var` or a `secret var` needs no second branch here; assign
+	// drops the "=" of a required var, `var user`, which has neither.
+	left := join(" ", d.Private.Text, d.Secret.Text, d.Keyword.Text, d.Name.Text)
 	c.line(d.Tokens(nil), assign(left, d.Assign, c.expr(d.Value)))
 }
 

@@ -37,11 +37,12 @@ const durSentinel = "<dur>"
 
 // goldenCase is one whole run of artemis pinned to a file.
 //
-// Each case names testdata/art/<name>.art -- the scenario a user would write --
-// and testdata/art/<name>.golden, which holds every byte the command printed
-// plus the error it exited with. The pair is the point: the .art file is
-// readable as a scenario and the golden is readable as a report, so a change to
-// either side of the runner shows up as a diff a person can judge.
+// Each case names testdata/art/scenarios/<name>.art and the flow it names,
+// testdata/art/flows/<name>.art -- the files a user would write -- and
+// testdata/art/<name>.golden, which holds every byte the command printed plus
+// the error it exited with. The pair is the point: the .art files are readable
+// as a scenario and the golden is readable as a report, so a change to either
+// side of the runner shows up as a diff a person can judge.
 //
 // There was a second, parallel corpus of testdata/*.yaml fixtures and their
 // goldens until ART-40, with TestGoldenParity arguing that a migrated scenario
@@ -107,7 +108,7 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 		url = srv.URL
 	}
 
-	fixture, path := renderFixture(t, c, url)
+	tempRoot, path := renderFixture(t, c, url)
 
 	var out strings.Builder
 	RootCmd.SetArgs(append([]string{"run", path}, c.args...))
@@ -124,29 +125,32 @@ func runGolden(t *testing.T, c goldenCase) (string, error) {
 	if runErr != nil {
 		transcript += "\n--- exit error ---\n" + runErr.Error() + "\n"
 	}
-	return scrub(transcript, path, fixture, url), runErr
+	return scrub(transcript, tempRoot, filepath.Join("testdata", artDir), url), runErr
 }
 
-// renderFixture copies the case's fixture -- one file, or a whole folder for a
-// dir case -- into a temp location with the test server's address substituted
-// for %SERVER%, and returns the fixture path the transcript should name and the
-// temp path to run.
+// renderFixture copies the case's fixture -- a scenario file and its flow, or a
+// whole folder for a dir case -- into a temp folder laid out as testdata/art
+// is, with the test server's address substituted for %SERVER%, and returns that
+// folder and the temp path to run.
 //
-// The copy is needed because the server's port is only known now; the temp path
-// is scrubbed back to the fixture's, so the golden file reads as a run of the
-// committed suite.
-func renderFixture(t *testing.T, c goldenCase, url string) (fixture, path string) {
+// The copy is needed because the server's port is only known now; the temp
+// folder is scrubbed back to testdata/art, so the golden file reads as a run of
+// the committed suite.
+func renderFixture(t *testing.T, c goldenCase, url string) (tempRoot, path string) {
 	t.Helper()
 	name := c.fixtureName()
+	tempRoot = t.TempDir()
 	if !c.dir {
-		fixture = filepath.Join("testdata", artDir, name+artExt)
-		path = filepath.Join(t.TempDir(), name+artExt)
-		writeRendered(t, fixture, path, url, true)
-		return fixture, path
+		scenario := filepath.Join("testdata", artDir, "scenarios", name+artExt)
+		path = filepath.Join(tempRoot, "scenarios", name+artExt)
+		writeRendered(t, scenario, path, url, false)
+		flow := filepath.Join("testdata", artDir, "flows", name+artExt)
+		writeRendered(t, flow, filepath.Join(tempRoot, "flows", name+artExt), url, true)
+		return tempRoot, path
 	}
 
-	fixture = filepath.Join("testdata", artDir, name)
-	path = filepath.Join(t.TempDir(), name)
+	fixture := filepath.Join("testdata", artDir, name)
+	path = filepath.Join(tempRoot, name)
 	substituted := false
 	err := filepath.WalkDir(fixture, func(src string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -169,7 +173,7 @@ func renderFixture(t *testing.T, c goldenCase, url string) (fixture, path string
 	if !substituted {
 		t.Fatalf("no file under %s contains %s -- a fixture must not hardcode an address", fixture, serverPlaceholder)
 	}
-	return fixture, path
+	return tempRoot, path
 }
 
 // writeRendered copies src to dst with %SERVER% replaced by url, and reports
@@ -224,8 +228,8 @@ var (
 )
 
 // scrub replaces everything in a transcript that changes between runs: the temp
-// scenario path, the test server's address, every duration, and the timings
-// inside a JSON report.
+// folder the fixture was copied to, the test server's address, every duration,
+// and the timings inside a JSON report.
 //
 // Durations are replaced in place, keeping the field the same total width --
 // from the end of the preceding text to the end of the duration -- which is
@@ -362,16 +366,6 @@ func goldenCases(t *testing.T) []goldenCase {
 			},
 		},
 		{
-			// ART-54: a failed `expect` against a secret binding, with the
-			// JSON document as well as the console summary, because both are
-			// places an operand is written. The golden is the assertion that
-			// `hunter2` appears in neither.
-			name:    "secret_redacted",
-			args:    []string{"--report", "json"},
-			wantErr: true,
-			handler: jsonHandler(http.StatusOK, `{"given": "not-the-password"}`),
-		},
-		{
 			// The whole --report json document for a run with something of
 			// every kind in it: a scenario that passed, one with a failed
 			// assertion and an errored step, and a file that would not load
@@ -439,8 +433,8 @@ func reportFixtureHandler() http.HandlerFunc {
 
 // -- the corpus's own directory -------------------------------------------
 //
-// testdata/art holds one .art file (or folder) per goldenCase, with its own
-// .golden beside it. It stayed a subdirectory when ART-40 removed the YAML
+// testdata/art holds a scenario file in scenarios/ and its flow in flows/ (or
+// a folder) per goldenCase, with its own .golden at the top. It stayed a subdirectory when ART-40 removed the YAML
 // corpus's goldens, because testdata/ still holds the .yaml files
 // `artemis migrate` is tested on and a folder walk must not pick those up.
 const artDir = "art"
@@ -460,6 +454,8 @@ type artCase struct {
 	// handler overrides the YAML case's, for a case the YAML corpus had no
 	// server behaviour for.
 	handler http.HandlerFunc
+	// dir makes a DSL-only case a folder, as goldenCase.dir does.
+	dir bool
 }
 
 // artCases is every departure from the YAML corpus, in one table, each with the
@@ -490,7 +486,8 @@ func artCases() map[string]artCase {
 			handler: jsonHandler(http.StatusInternalServerError, `{"error": "boom"}`),
 		},
 		"terminal": {
-			noYAML:  "api and terminal in one scenario, and two scenarios in one file",
+			noYAML:  "api and terminal in one flow, and two scenario files in one folder",
+			dir:     true,
 			wantErr: &yes,
 			handler: jsonHandler(http.StatusOK, `{"items": []}`),
 		},
@@ -518,6 +515,7 @@ func artGoldenCases(t *testing.T) []goldenCase {
 		a := over[name]
 		cases = append(cases, goldenCase{
 			name:    name,
+			dir:     a.dir,
 			handler: a.handler,
 			wantErr: a.wantErr != nil && *a.wantErr,
 		})
@@ -608,9 +606,7 @@ func eventGoldenCases(t *testing.T) []goldenCase {
 		byName[c.name] = c
 	}
 	var cases []goldenCase
-	// secret_redacted: a step-end carries operands, so the stream is one more
-	// place a credential must not appear (ART-54).
-	for _, name := range []string{"pass", "fail", "template_error", "report_json", "secret_redacted"} {
+	for _, name := range []string{"pass", "fail", "template_error", "report_json"} {
 		c, ok := byName[name]
 		if !ok {
 			t.Fatalf("no golden case named %s to repeat with --events", name)

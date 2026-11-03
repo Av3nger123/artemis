@@ -39,7 +39,7 @@ func (r *recorder) seen() []string {
 }
 
 func randomArt(url string) string {
-	return fmt.Sprintf(`scenario "made up" {
+	return fmt.Sprintf(`flow made_up {
   var id = uuid()
 
   step "send it" {
@@ -49,6 +49,8 @@ func randomArt(url string) string {
     expect status == 200
   }
 }
+
+scenario "made up" {}
 `, url)
 }
 
