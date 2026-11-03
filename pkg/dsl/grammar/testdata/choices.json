@@ -407,7 +407,7 @@
         },
         {
           "value": "duplicate-binding",
-          "doc": "a capture or var reuses a name a var or an earlier capture binds",
+          "doc": "a var that reuses the name of a var declared in the same place",
           "severity": "error"
         },
         {

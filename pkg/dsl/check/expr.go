@@ -149,6 +149,9 @@ func (c *checker) ident(x *ast.Ident, v *view) {
 	if c.reserved(t, "name") {
 		return
 	}
+	if c.sibling(t.Span, t.Value, v) {
+		return
+	}
 	if v.has(t.Value) {
 		return
 	}
