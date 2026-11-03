@@ -171,6 +171,11 @@ const (
 	// var's. The span is the second binding's name; the hint says where the
 	// name was bound first.
 	DuplicateBinding Code = "duplicate-binding"
+
+	// VarNeedsValue is `var user` with no value where nothing can supply one:
+	// a plain scenario. Only a flow's scenarios and an item's callers give a
+	// required var its value.
+	VarNeedsValue Code = "var-needs-value"
 )
 
 // The expander's codes: what is wrong with an import or a use.
@@ -284,6 +289,7 @@ var registry = []CodeInfo{
 	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
 	{BadValue, Error, "a value is the wrong kind for the position it is in"},
 	{DuplicateBinding, Error, "a capture or var reuses a name a var or an earlier capture binds"},
+	{VarNeedsValue, Error, "a var has no value, and nothing can supply one"},
 	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
 	{ImportNotFound, Error, "an imported file cannot be read"},
 	{ImportCycle, Error, "a file imports itself, directly or through other files"},

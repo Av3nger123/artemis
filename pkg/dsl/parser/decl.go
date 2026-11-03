@@ -179,7 +179,8 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 	switch {
 	case p.atWord("config"):
 		return p.parseConfig()
-	case p.atWord("var"), p.atWord("secret") && p.peekWordAt(1, "var"):
+	case p.atWord("var"), p.atWord("secret") && p.peekWordAt(1, "var"),
+		p.atWord("private") && p.peekWordAt(1, "var"):
 		return p.parseVar()
 	case p.atWord("step"):
 		return p.parseStep()
@@ -272,12 +273,20 @@ func (p *parser) parseConfig() ast.Decl {
 	return c
 }
 
-// parseVar is `[ "secret" ] "var" <ident> = Expr`.
+// parseVar is `[ "private" ] [ "secret" ] "var" <ident> [ = Expr ]`.
 //
-// badFrom already drops a zero token, so the optional modifier needs no branch
+// The value is optional only where the line ends after the name: `var user`
+// is a required var, which a flow's scenario or an item's caller supplies,
+// while `var user "bob"` is still a missing "=". The checker rejects a
+// required var where nothing can supply one.
+//
+// badFrom already drops a zero token, so the optional modifiers need no branch
 // on the recovery paths.
 func (p *parser) parseVar() ast.Decl {
 	v := &ast.VarDecl{}
+	if p.atWord("private") {
+		v.Private = p.next()
+	}
 	if p.atWord("secret") {
 		v.Secret = p.next()
 	}
@@ -285,13 +294,16 @@ func (p *parser) parseVar() ast.Decl {
 
 	name, ok := p.expectIdent("a variable name")
 	if !ok {
-		return p.badFrom(v.Secret, v.Keyword)
+		return p.badFrom(v.Private, v.Secret, v.Keyword)
 	}
 	v.Name = name
 
+	if p.atBoundary() {
+		return v
+	}
 	assign, ok := p.expect(token.Assign, "\"=\" and a value")
 	if !ok {
-		return p.badFrom(v.Secret, v.Keyword, v.Name)
+		return p.badFrom(v.Private, v.Secret, v.Keyword, v.Name)
 	}
 	v.Assign = assign
 	v.Value = p.parseExpr()

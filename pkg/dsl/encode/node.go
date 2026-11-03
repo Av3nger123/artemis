@@ -245,6 +245,7 @@ func (e *enc) varDecl(d *ast.VarDecl) *obj {
 	// set drops a false flag, so a plain var encodes exactly as it did before
 	// ART-54 and no existing document gains a key.
 	return start(kindVar, d).
+		set("private", d.Private.Text != "").
 		set("secret", d.Secret.Text != "").
 		set("name", d.Name.Text).
 		set("value", e.node(d.Value)).

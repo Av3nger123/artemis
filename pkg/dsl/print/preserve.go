@@ -221,6 +221,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.Subject)
 		p.node(v.Block, c)
 	case *ast.VarDecl:
+		p.tok(v.Private)
+		p.tok(v.Secret)
 		p.tok(v.Keyword)
 		p.tok(v.Name)
 		p.tok(v.Assign)

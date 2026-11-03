@@ -290,16 +290,26 @@ func varDecl(f fields) (*ast.VarDecl, error) {
 	if err != nil {
 		return nil, err
 	}
+	private, err := f.flag("private")
+	if err != nil {
+		return nil, err
+	}
 	d := &ast.VarDecl{
 		Keyword: syn(token.Ident, "var"),
 		Name:    syn(token.Ident, name),
-		Assign:  syn(token.Assign, "="),
+	}
+	if private {
+		d.Private = syn(token.Ident, "private")
 	}
 	if secret {
 		d.Secret = syn(token.Ident, "secret")
 	}
-	if d.Value, err = exprOf(f, "value", true); err != nil {
+	// No value is a required var, `var user`, which has no "=" either.
+	if d.Value, err = exprOf(f, "value", false); err != nil {
 		return nil, err
+	}
+	if d.Value != nil {
+		d.Assign = syn(token.Assign, "=")
 	}
 	return d, plain(f, &d.Keyword)
 }

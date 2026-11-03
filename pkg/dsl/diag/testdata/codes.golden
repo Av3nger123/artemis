@@ -70,3 +70,4 @@ unknown-item	error	a use names a request its collection does not declare
 unknown-type	error	the right-hand side of "is" is not a type name
 unterminated-regex	error	a regex literal has no closing slash
 unterminated-string	error	a string literal has no closing quote
+var-needs-value	error	a var has no value, and nothing can supply one

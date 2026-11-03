@@ -531,8 +531,14 @@
     },
     {
       "kind": "var",
-      "doc": "`var url = env(\"API_URL\")`",
+      "doc": "`var url = env(\"API_URL\")`, `private var url = ...`, or `var user` with no value",
       "fields": [
+        {
+          "name": "private",
+          "type": "boolean",
+          "optional": true,
+          "doc": "the `private` modifier: nothing outside the flow or item declaring the var sets it. Absent means false"
+        },
         {
           "name": "secret",
           "type": "boolean",
@@ -548,8 +554,7 @@
           "name": "value",
           "type": "node",
           "accepts": "expression",
-          "optional": true,
-          "inputRequired": true
+          "optional": true
         },
         {
           "name": "span",

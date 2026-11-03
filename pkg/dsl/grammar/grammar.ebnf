@@ -40,7 +40,7 @@ ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting }
 BrowserSetting = "headless" "=" Bool | "viewport" "=" Expr ;
 HTTPSetting   = "cookies" "=" Bool ;
 
-VarDecl       = [ "secret" ] "var" Ident "=" Expr ;
+VarDecl       = [ "private" ] [ "secret" ] "var" Ident [ "=" Expr ] ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;
 
 Action        = Request | Run | Browser | DB ;

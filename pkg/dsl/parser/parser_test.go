@@ -633,3 +633,57 @@ func captures(t *testing.T, f *ast.File) []*ast.Capture {
 	}
 	return out
 }
+
+// TestParsePrivateAndRequiredVar is the two new forms of a var: `private var`,
+// which nothing outside its flow or item sets, and `var user`, which has no
+// value of its own and is required.
+func TestParsePrivateAndRequiredVar(t *testing.T) {
+	src := "scenario \"s\" {\n  private var url = env(\"U\")\n  var user\n}\n"
+	file, bag := Parse("t.art", src)
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	body := scenarioBody(t, file)
+	priv := body[0].(*ast.VarDecl)
+	if got := priv.Private.Value; got != "private" {
+		t.Errorf("Private = %q, want %q", got, "private")
+	}
+	if priv.Required() {
+		t.Error("a var with a value is Required")
+	}
+	req := body[1].(*ast.VarDecl)
+	if !req.Required() {
+		t.Error("`var user` is not Required")
+	}
+	if req.Private.Value != "" || req.Assign.Text != "" {
+		t.Errorf("`var user` has Private %q and Assign %q, want both empty", req.Private.Value, req.Assign.Text)
+	}
+	if got := ast.Source(file); got != src {
+		t.Errorf("round trip:\n got %q\nwant %q", got, src)
+	}
+}
+
+// `var private = 1` stays legal: `private` is a modifier only where `var`
+// follows it.
+func TestVarNamedPrivateStaysLegal(t *testing.T) {
+	file, bag := Parse("t.art", "scenario \"s\" {\n  var private = 1\n}\n")
+	if got := codes(bag); len(got) != 0 {
+		t.Fatalf("codes = %v, want none", got)
+	}
+	v := scenarioBody(t, file)[0].(*ast.VarDecl)
+	if v.Private.Value != "" {
+		t.Errorf("Private = %q, want empty", v.Private.Value)
+	}
+	if v.Name.Value != "private" {
+		t.Errorf("Name = %q, want %q", v.Name.Value, "private")
+	}
+}
+
+// A required var still ends at its line: a token after the name on the same
+// line is a missing "=", not a var with no value.
+func TestRequiredVarMustEndItsLine(t *testing.T) {
+	_, bag := Parse("t.art", "scenario \"s\" {\n  var user \"bob\"\n}\n")
+	if got := codes(bag); len(got) == 0 {
+		t.Fatal("want a diagnostic for `var user \"bob\"`")
+	}
+}

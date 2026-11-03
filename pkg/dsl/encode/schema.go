@@ -276,11 +276,13 @@ var nodeSchemas = []nodeSchema{
 		child("block", "block"),
 		spanField, commentsField,
 	}},
-	{Kind: kindVar, Doc: "`var url = env(\"API_URL\")`", Fields: []fieldSchema{
+	{Kind: kindVar, Doc: "`var url = env(\"API_URL\")`, `private var url = ...`, or `var user` with no value", Fields: []fieldSchema{
+		{Name: "private", Type: "boolean", Optional: true,
+			Doc: "the `private` modifier: nothing outside the flow or item declaring the var sets it. Absent means false"},
 		{Name: "secret", Type: "boolean", Optional: true,
 			Doc: "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"},
 		word("name", "the identifier being bound"),
-		child("value", "expression"),
+		optChild("value", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindStep, Doc: "`step \"login\" { <action> <statement>... }`", Fields: []fieldSchema{

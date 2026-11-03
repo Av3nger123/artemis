@@ -674,6 +674,11 @@
           "value": "unterminated-string",
           "doc": "a string literal has no closing quote",
           "severity": "error"
+        },
+        {
+          "value": "var-needs-value",
+          "doc": "a var has no value, and nothing can supply one",
+          "severity": "error"
         }
       ]
     },

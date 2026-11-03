@@ -93,6 +93,15 @@ func TestScopeRules(t *testing.T) {
 			src:  "scenario \"s\" {\n  var a = env(\"API_URL\")\n}\n",
 		},
 		{
+			name: "a var with no value in a plain scenario",
+			src:  "scenario \"s\" {\n  var user\n  step \"t\" {\n    get \"/${user}\"\n  }\n}\n",
+			want: []string{"var-needs-value@2:7"},
+		},
+		{
+			name: "a private var is a var in a plain scenario",
+			src:  "scenario \"s\" {\n  private var a = 1\n  var b = a\n}\n",
+		},
+		{
 			name: "a var shadows a root it collides with",
 			src:  "scenario \"s\" {\n  var status = 1\n  step \"t\" {\n    browser { goto \"/\" }\n    expect status == 1\n  }\n}\n",
 		},
