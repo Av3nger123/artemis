@@ -193,7 +193,7 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.LBrace)
 		p.list(decls(v.Body), c)
 		p.tok(v.RBrace)
-	case *ast.FlowDecl:
+	case *ast.BlockDecl:
 		for _, cl := range v.Clauses {
 			p.node(cl, c)
 		}
@@ -396,7 +396,7 @@ func (p *pres) descend(n ast.Node, c ctx) {
 func lineOriented(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.Scenario, *ast.ConfigDecl, *ast.VarDecl, *ast.StepDecl, *ast.PhaseDecl, *ast.TagsDecl,
-		*ast.FlowDecl, *ast.Clause,
+		*ast.BlockDecl, *ast.Clause,
 		*ast.Request, *ast.Run, *ast.DB, *ast.Browser, *ast.BrowserAct,
 		*ast.Field, *ast.Expect, *ast.Capture,
 		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.UseDecl,

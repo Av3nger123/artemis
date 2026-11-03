@@ -181,13 +181,13 @@ func (f *flowRun) flow(fl *lower.Flow, phase, skip string, cleanup bool) outcome
 		return outcome{ok: true}
 	}
 	switch fl.Kind {
-	case ast.FlowParallel:
+	case ast.BlockParallel:
 		return f.parallel(fl, phase, cleanup)
-	case ast.FlowIf, ast.FlowSwitch:
+	case ast.BlockIf, ast.BlockSwitch:
 		return f.choose(fl, phase, cleanup)
-	case ast.FlowTry:
+	case ast.BlockTry:
 		return f.try(fl, phase, cleanup)
-	case ast.FlowRepeat:
+	case ast.BlockRepeat:
 		return f.repeat(fl, phase, cleanup)
 	}
 	return outcome{ok: true}
@@ -237,7 +237,7 @@ func (f *flowRun) choose(fl *lower.Flow, phase string, cleanup bool) outcome {
 	env := &eval.Env{Vars: f.scope.Vars(), Gen: f.gen}
 	what := "if"
 	var subject any
-	if fl.Kind == ast.FlowSwitch {
+	if fl.Kind == ast.BlockSwitch {
 		what = "switch"
 		v, err := eval.Eval(fl.Subject, env)
 		if err != nil {
@@ -256,7 +256,7 @@ func (f *flowRun) choose(fl *lower.Flow, phase string, cleanup bool) outcome {
 		if err != nil {
 			return f.unchosen(fl, phase, what, fmt.Errorf("%s %s: %w", b.Keyword, b.CondText, err))
 		}
-		if fl.Kind == ast.FlowSwitch {
+		if fl.Kind == ast.BlockSwitch {
 			if eval.Equal(subject, v) {
 				taken = i
 				break

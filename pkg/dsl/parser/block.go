@@ -8,10 +8,10 @@ import (
 
 // flowWords are the words that open a control-flow block where a step could
 // be written. Each is positional: `var repeat = 1` is still a var.
-var flowWords = token.Flows
+var flowWords = token.BlockWords
 
-// atFlow reports whether the cursor is on a word that opens a block.
-func (p *parser) atFlow() bool {
+// atBlock reports whether the cursor is on a word that opens a block.
+func (p *parser) atBlock() bool {
 	for _, w := range flowWords {
 		if p.atWord(w) {
 			return true
@@ -20,7 +20,7 @@ func (p *parser) atFlow() bool {
 	return false
 }
 
-// parseFlow is one control-flow block:
+// parseBlockDecl is one control-flow block:
 //
 //	Flow   = "parallel" Body
 //	       | "if" Expr Body { "else" "if" Expr Body } [ "else" Body ]
@@ -29,12 +29,12 @@ func (p *parser) atFlow() bool {
 //	       | "repeat" { Option } Body "until" Expr ;
 //	Option = ( "every" | "within" | "max" ) Expr ;
 //	Body   = "{" { StepDecl | UseDecl | Flow } "}" ;
-func (p *parser) parseFlow() ast.Decl {
-	f := &ast.FlowDecl{}
+func (p *parser) parseBlockDecl() ast.Decl {
+	f := &ast.BlockDecl{}
 	switch kw := p.peek().Value; kw {
-	case ast.FlowParallel:
+	case ast.BlockParallel:
 		f.Clauses = append(f.Clauses, p.parseClause(false))
-	case ast.FlowIf:
+	case ast.BlockIf:
 		f.Clauses = append(f.Clauses, p.parseClause(true))
 		for p.atWord("else") {
 			c := &ast.Clause{Keyword: p.next()}
@@ -48,9 +48,9 @@ func (p *parser) parseFlow() ast.Decl {
 				break // an else with no if is the last clause
 			}
 		}
-	case ast.FlowSwitch:
+	case ast.BlockSwitch:
 		f.Clauses = append(f.Clauses, p.parseSwitch())
-	case ast.FlowTry:
+	case ast.BlockTry:
 		f.Clauses = append(f.Clauses, p.parseClause(false))
 		for _, w := range []string{"catch", "finally"} {
 			if p.atWord(w) {
@@ -62,7 +62,7 @@ func (p *parser) parseFlow() ast.Decl {
 				"expected \"catch\" or \"finally\" after a try block, found %s", describe(p.peek())).
 				Hintf("try { ... } catch { ... } finally { ... }")
 		}
-	case ast.FlowRepeat:
+	case ast.BlockRepeat:
 		c := &ast.Clause{Keyword: p.next()}
 		for p.atWord("every") || p.atWord("within") || p.atWord("max") {
 			o := &ast.Option{Name: p.next()}
@@ -151,7 +151,7 @@ func (p *parser) parseBody(c *ast.Clause) {
 	defer p.leave()
 	for !p.at(token.RBrace) && !p.at(token.EOF) {
 		before := p.i
-		c.Body = append(c.Body, p.parseFlowItem(c.Keyword.Value))
+		c.Body = append(c.Body, p.parseBlockItem(c.Keyword.Value))
 		if p.i == before {
 			c.Body = append(c.Body, &ast.Bad{Toks: []token.Token{p.consumeRaw()}})
 		}
@@ -163,16 +163,16 @@ func (p *parser) parseBody(c *ast.Clause) {
 	c.RBrace = p.next()
 }
 
-// parseFlowItem is one thing a block's body holds: a step, a use, or another
+// parseBlockItem is one thing a block's body holds: a step, a use, or another
 // block.
-func (p *parser) parseFlowItem(in string) ast.Decl {
+func (p *parser) parseBlockItem(in string) ast.Decl {
 	switch {
 	case p.atWord("step"):
 		return p.parseStep()
 	case p.atWord("use"):
 		return p.parseUse()
-	case p.atFlow():
-		return p.parseFlow()
+	case p.atBlock():
+		return p.parseBlockDecl()
 	}
 	p.errorf(p.peek(), diag.UnexpectedToken,
 		"expected a step, a use or a block in %s, found %s", in, describe(p.peek())).

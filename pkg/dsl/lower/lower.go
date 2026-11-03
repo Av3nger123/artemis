@@ -320,7 +320,7 @@ func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 				Value: d.Value,
 				Line:  d.Name.Span.Line,
 			})
-		case *ast.StepDecl, *ast.FlowDecl:
+		case *ast.StepDecl, *ast.BlockDecl:
 			nodes, err := l.body([]ast.Decl{d})
 			if err != nil {
 				return nil, fmt.Errorf("scenario %q: %w", out.Name, err)

@@ -17,7 +17,7 @@ func (c *checker) items(decls []ast.Decl, sc *scope) {
 			c.step(d, sc)
 		case *ast.VarDecl:
 			c.varDecl(d, sc)
-		case *ast.FlowDecl:
+		case *ast.BlockDecl:
 			c.flow(d, sc)
 		}
 	}
@@ -37,22 +37,22 @@ func (c *checker) items(decls []ast.Decl, sc *scope) {
 //     branch's; a finally's, always.
 //   - repeat: the body's, as a sequence -- it runs at least once -- and the
 //     until condition reads them.
-func (c *checker) flow(f *ast.FlowDecl, sc *scope) {
+func (c *checker) flow(f *ast.BlockDecl, sc *scope) {
 	if len(f.Clauses) == 0 {
 		return
 	}
 	first := f.Clauses[0]
 	switch f.Kind() {
-	case ast.FlowParallel:
+	case ast.BlockParallel:
 		c.parallel(first, sc)
-	case ast.FlowIf:
+	case ast.BlockIf:
 		for _, cl := range f.Clauses {
 			c.expr(cl.Expr, sc.view(Unknown))
 		}
 		last := f.Clauses[len(f.Clauses)-1]
 		exhaustive := last.Keyword.Value == "else" && last.If.Text == ""
 		c.branches(f.Clauses, sc, exhaustive, fmt.Sprintf("the if at line %d", first.Keyword.Span.Line))
-	case ast.FlowSwitch:
+	case ast.BlockSwitch:
 		c.expr(first.Expr, sc.view(Unknown))
 		var cases []*ast.Clause
 		exhaustive := false
@@ -64,7 +64,7 @@ func (c *checker) flow(f *ast.FlowDecl, sc *scope) {
 			}
 		}
 		c.branches(cases, sc, exhaustive, fmt.Sprintf("the switch at line %d", first.Keyword.Span.Line))
-	case ast.FlowTry:
+	case ast.BlockTry:
 		c.items(first.Body, sc)
 		for _, cl := range f.Clauses[1:] {
 			switch cl.Keyword.Value {
@@ -77,7 +77,7 @@ func (c *checker) flow(f *ast.FlowDecl, sc *scope) {
 				sc.cleanup = was
 			}
 		}
-	case ast.FlowRepeat:
+	case ast.BlockRepeat:
 		c.repeat(f, sc)
 	}
 }
@@ -212,7 +212,7 @@ func (c *checker) adopt(sc, branch *scope, names []string) {
 
 // repeat checks a repeat block: its pace and bounds, its body as a sequence,
 // and its until condition against what the body captured.
-func (c *checker) repeat(f *ast.FlowDecl, sc *scope) {
+func (c *checker) repeat(f *ast.BlockDecl, sc *scope) {
 	cl := f.Clauses[0]
 	bounded := false
 	seen := map[string]bool{}

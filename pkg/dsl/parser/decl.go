@@ -187,8 +187,8 @@ func (p *parser) parseScenarioDecl() ast.Decl {
 		return p.parseUse()
 	case p.atWord("setup"), p.atWord("teardown"):
 		return p.parsePhase()
-	case p.atFlow():
-		return p.parseFlow()
+	case p.atBlock():
+		return p.parseBlockDecl()
 	case p.atWord("tags") && p.peekKindAt(1, token.Assign):
 		d := &ast.TagsDecl{Keyword: p.next(), Assign: p.next()}
 		d.Value = p.parseExpr()
@@ -228,8 +228,8 @@ func (p *parser) parsePhase() ast.Decl {
 			d.Body = append(d.Body, p.parseStep())
 		case p.atWord("use"):
 			d.Body = append(d.Body, p.parseUse())
-		case p.atFlow():
-			d.Body = append(d.Body, p.parseFlow())
+		case p.atBlock():
+			d.Body = append(d.Body, p.parseBlockDecl())
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected \"step\" or \"use\" in %s, found %s", d.Keyword.Value, describe(p.peek())).

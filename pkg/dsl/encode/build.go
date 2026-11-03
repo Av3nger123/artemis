@@ -70,7 +70,7 @@ func decl(v value) (ast.Decl, error) {
 		return useDecl(f)
 	case kindPhase:
 		return phaseDecl(f)
-	case kindFlow:
+	case kindBlockDecl:
 		return flowDecl(f)
 	case kindClause:
 		return clause(f)
@@ -147,8 +147,8 @@ func phaseDecl(f fields) (*ast.PhaseDecl, error) {
 }
 
 // flowDecl builds a control-flow block from its clauses and a repeat's until.
-func flowDecl(f fields) (*ast.FlowDecl, error) {
-	d := &ast.FlowDecl{}
+func flowDecl(f fields) (*ast.BlockDecl, error) {
+	d := &ast.BlockDecl{}
 	items, err := f.list("clauses")
 	if err != nil {
 		return nil, err

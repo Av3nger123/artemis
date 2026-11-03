@@ -99,9 +99,9 @@ type groupSchema struct {
 var groupSchemas = []groupSchema{
 	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
 	{"forClause", []string{kindFor}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindFlow}},
-	{"phaseBody", []string{kindStep, kindUse, kindFlow}},
-	{"flowBody", []string{kindStep, kindUse, kindFlow, kindClause, kindVar}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindBlockDecl}},
+	{"phaseBody", []string{kindStep, kindUse, kindBlockDecl}},
+	{"flowBody", []string{kindStep, kindUse, kindBlockDecl, kindClause, kindVar}},
 	{"clause", []string{kindClause}},
 	{"option", []string{kindOption}},
 	{"action", []string{kindRequest, kindRun, kindBrowser, kindDB}},
@@ -246,7 +246,7 @@ var nodeSchemas = []nodeSchema{
 		list("body", "phaseBody"),
 		spanField, commentsField,
 	}},
-	{Kind: kindFlow, Doc: "a control-flow block -- `parallel`, `if`, `switch`, `try` or `repeat` -- named by its first clause's keyword", Fields: []fieldSchema{
+	{Kind: kindBlockDecl, Doc: "a control-flow block -- `parallel`, `if`, `switch`, `try` or `repeat` -- named by its first clause's keyword", Fields: []fieldSchema{
 		list("clauses", "clause"),
 		optChild("until", "expression"),
 		spanField, commentsField,

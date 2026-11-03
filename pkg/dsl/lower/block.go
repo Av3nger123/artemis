@@ -94,7 +94,7 @@ func (l *lowerer) body(decls []ast.Decl) ([]Node, error) {
 				return nil, err
 			}
 			out = append(out, st)
-		case *ast.FlowDecl:
+		case *ast.BlockDecl:
 			f, err := l.flow(d)
 			if err != nil {
 				return nil, err
@@ -123,14 +123,14 @@ func (l *lowerer) step(d *ast.StepDecl) (*Step, error) {
 }
 
 // flow lowers a control-flow block.
-func (l *lowerer) flow(d *ast.FlowDecl) (*Flow, error) {
+func (l *lowerer) flow(d *ast.BlockDecl) (*Flow, error) {
 	if len(d.Clauses) == 0 {
 		return nil, fmt.Errorf("a block with no clause")
 	}
 	first := d.Clauses[0]
 	f := &Flow{Kind: d.Kind(), Line: first.Keyword.Span.Line}
 	switch f.Kind {
-	case ast.FlowParallel:
+	case ast.BlockParallel:
 		for _, item := range first.Body {
 			body, err := l.body([]ast.Decl{item})
 			if err != nil {
@@ -141,7 +141,7 @@ func (l *lowerer) flow(d *ast.FlowDecl) (*Flow, error) {
 			}
 			f.Branches = append(f.Branches, &Branch{Keyword: "branch", Body: body, Line: item.Span().Line})
 		}
-	case ast.FlowSwitch:
+	case ast.BlockSwitch:
 		f.Subject = first.Expr
 		for _, item := range first.Body {
 			cl, ok := item.(*ast.Clause)
@@ -154,7 +154,7 @@ func (l *lowerer) flow(d *ast.FlowDecl) (*Flow, error) {
 			}
 			f.Branches = append(f.Branches, b)
 		}
-	case ast.FlowRepeat:
+	case ast.BlockRepeat:
 		for _, o := range first.Options {
 			switch o.Name.Value {
 			case "every":

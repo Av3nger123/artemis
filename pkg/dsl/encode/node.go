@@ -50,7 +50,7 @@ const (
 	kindRequestDecl = "requestDecl"
 	kindUse         = "use"
 	kindPhase       = "phase"
-	kindFlow        = "flow"
+	kindBlockDecl   = "flow" // a block; the value stays "flow" for programs that read the JSON
 	kindClause      = "clause"
 	kindOption      = "option"
 	kindBodySet     = "bodySet"
@@ -115,7 +115,7 @@ func (e *enc) node(n ast.Node) *obj {
 			set("body", e.list(toNodes(v.Body))).
 			span().
 			comments(toks(v.Keyword), v.LBrace, v.RBrace).done()
-	case *ast.FlowDecl:
+	case *ast.BlockDecl:
 		return e.flow(v)
 	case *ast.Clause:
 		return e.clause(v)
@@ -189,12 +189,12 @@ func (e *enc) scenario(s *ast.Scenario) *obj {
 
 // forClause is a data-driven scenario's `for [secret] <var> in <source>`.
 // flow is a control-flow block: its clauses in order, and a repeat's until.
-func (e *enc) flow(f *ast.FlowDecl) *obj {
+func (e *enc) flow(f *ast.BlockDecl) *obj {
 	clauses := make([]ast.Node, 0, len(f.Clauses))
 	for _, c := range f.Clauses {
 		clauses = append(clauses, c)
 	}
-	return start(kindFlow, f).
+	return start(kindBlockDecl, f).
 		set("clauses", e.list(clauses)).
 		set("until", e.node(f.Cond)).
 		span().

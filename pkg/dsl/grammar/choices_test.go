@@ -48,7 +48,7 @@ var owner = map[string]string{
 	"RunFields":           "runField",
 	"DBFields":            "dbField",
 	"DBSchemes":           "dbScheme",
-	"Flows":               "flow",
+	"BlockWords":          "flow",
 	"FlowClauses":         "flowClause",
 	"RepeatOptions":       "repeatOption",
 	"DBCommandSchemes":    "dbCommandScheme",

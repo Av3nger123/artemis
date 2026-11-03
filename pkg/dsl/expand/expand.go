@@ -163,7 +163,7 @@ func hasUse(decls []ast.Decl) bool {
 			if hasUse(v.Body) {
 				return true
 			}
-		case *ast.FlowDecl:
+		case *ast.BlockDecl:
 			for _, c := range v.Clauses {
 				if hasUse(c.Body) {
 					return true
@@ -210,7 +210,7 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 			out = append(out, &cp)
 			continue
 		}
-		if flow, ok := d.(*ast.FlowDecl); ok {
+		if flow, ok := d.(*ast.BlockDecl); ok {
 			cp := *flow
 			cp.Clauses = make([]*ast.Clause, len(flow.Clauses))
 			for i, c := range flow.Clauses {

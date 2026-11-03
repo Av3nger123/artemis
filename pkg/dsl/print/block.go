@@ -11,7 +11,7 @@ import (
 // writes `} else {`: `} else if`, `} catch {`, `} finally {`, `} until cond`.
 // A comment between the two keeps them apart, because a joined line has no
 // place to put one.
-func (c *canon) flow(f *ast.FlowDecl) {
+func (c *canon) flow(f *ast.BlockDecl) {
 	joined := false
 	for i, cl := range f.Clauses {
 		c.clause(cl, joined)
@@ -65,7 +65,7 @@ func (c *canon) clause(cl *ast.Clause, joined bool) {
 	for i, d := range cl.Body {
 		if i > 0 {
 			switch d.(type) {
-			case *ast.StepDecl, *ast.FlowDecl, *ast.UseDecl:
+			case *ast.StepDecl, *ast.BlockDecl, *ast.UseDecl:
 				c.w.blank()
 			}
 		}

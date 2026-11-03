@@ -340,7 +340,7 @@ func (c *checker) scenario(s *ast.Scenario) {
 			c.varDecl(d, sc)
 		case *ast.StepDecl:
 			c.step(d, sc)
-		case *ast.FlowDecl:
+		case *ast.BlockDecl:
 			c.flow(d, sc)
 		case *ast.PhaseDecl:
 			// A phase's steps are walked where the phase is written, which
@@ -373,7 +373,7 @@ func varsIn(d ast.Decl) []*ast.VarDecl {
 			for _, b := range d.Body {
 				walk(b)
 			}
-		case *ast.FlowDecl:
+		case *ast.BlockDecl:
 			for _, c := range d.Clauses {
 				walk(c)
 			}
@@ -448,7 +448,7 @@ func (c *checker) phases(s *ast.Scenario) {
 	stepSeen := false
 	for _, d := range s.Body {
 		switch d := d.(type) {
-		case *ast.StepDecl, *ast.FlowDecl:
+		case *ast.StepDecl, *ast.BlockDecl:
 			name := "a block"
 			if st, ok := d.(*ast.StepDecl); ok {
 				name = fmt.Sprintf("the step %q", st.Name.Value)

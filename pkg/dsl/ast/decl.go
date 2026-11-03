@@ -274,7 +274,7 @@ func (t *TagsDecl) Tokens(dst []token.Token) []token.Token {
 func (t *TagsDecl) Span() token.Span { return spanOf(t) }
 func (t *TagsDecl) decl()            {}
 
-// FlowDecl is a control-flow block: the steps inside it run in parallel, on a
+// BlockDecl is a control-flow block: the steps inside it run in parallel, on a
 // condition, as a switch, under try, or in a loop. Which one is its first
 // clause's keyword:
 //
@@ -288,31 +288,31 @@ func (t *TagsDecl) decl()            {}
 // keyword, an optional expression and a body of declarations -- steps, uses
 // and further blocks. A switch's own body holds its case and default clauses.
 // Until and Cond are a repeat's closing condition, written after its brace.
-type FlowDecl struct {
+type BlockDecl struct {
 	Clauses []*Clause
 	Until   token.Token // until; zero but for repeat
 	Cond    Expr        // the until condition; nil but for repeat
 }
 
-// Flow kinds, the keyword a FlowDecl's first clause opens with.
+// Block kinds, the keyword a BlockDecl's first clause opens with.
 const (
-	FlowParallel = "parallel"
-	FlowIf       = "if"
-	FlowSwitch   = "switch"
-	FlowTry      = "try"
-	FlowRepeat   = "repeat"
+	BlockParallel = "parallel"
+	BlockIf       = "if"
+	BlockSwitch   = "switch"
+	BlockTry      = "try"
+	BlockRepeat   = "repeat"
 )
 
-// Kind is which block this is: FlowParallel, FlowIf, FlowSwitch, FlowTry or
-// FlowRepeat, or "" for a block with no clause.
-func (f *FlowDecl) Kind() string {
+// Kind is which block this is: BlockParallel, BlockIf, BlockSwitch, BlockTry or
+// BlockRepeat, or "" for a block with no clause.
+func (f *BlockDecl) Kind() string {
 	if len(f.Clauses) == 0 {
 		return ""
 	}
 	return f.Clauses[0].Keyword.Value
 }
 
-func (f *FlowDecl) Tokens(dst []token.Token) []token.Token {
+func (f *BlockDecl) Tokens(dst []token.Token) []token.Token {
 	for _, c := range f.Clauses {
 		dst = appendNode(dst, c)
 	}
@@ -320,10 +320,10 @@ func (f *FlowDecl) Tokens(dst []token.Token) []token.Token {
 	return appendNode(dst, f.Cond)
 }
 
-func (f *FlowDecl) Span() token.Span { return spanOf(f) }
-func (f *FlowDecl) decl()            {}
+func (f *BlockDecl) Span() token.Span { return spanOf(f) }
+func (f *BlockDecl) decl()            {}
 
-// Clause is one part of a FlowDecl: `if cond { ... }`, `else if cond { ...
+// Clause is one part of a BlockDecl: `if cond { ... }`, `else if cond { ...
 // }`, `else { ... }`, `case "pro" { ... }`, `catch { ... }`, `repeat every
 // "2s" max 30 { ... }`.
 //
