@@ -108,6 +108,7 @@ func (r *RequestDecl) Tokens(dst []token.Token) []token.Token {
 func (r *RequestDecl) items() []Node {
 	return (&StepDecl{Action: r.Action, Body: r.Body}).items()
 }
+
 // Type is the step type the item's keyword names: "api" for request,
 // "terminal" for command and "db" for query.
 func (r *RequestDecl) Type() string {
