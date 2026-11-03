@@ -1,5 +1,5 @@
 # A run that passes: create a thing, capture its id, read it back.
-scenario "item lifecycle" {
+flow pass {
   var base = "%SERVER%"
 
   step "create item" {
@@ -10,7 +10,7 @@ scenario "item lifecycle" {
     expect status == 201
     expect body.id exists
     expect body.name == "widget"
-    capture itemId = body.id
+    var itemId = body.id
   }
 
   step "read it back" {

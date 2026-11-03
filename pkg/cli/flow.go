@@ -107,10 +107,10 @@ func (f *flowRun) step(phase string, st *lower.Step, skip string, cleanup bool) 
 	case skip != "":
 		r.Skip(skip)
 	case cleanup && len(missing) > 0:
-		r.Skip(fmt.Sprintf("needs %s, which no step before it captured", strings.Join(missing, ", ")))
+		r.Skip(fmt.Sprintf("needs %s, which no step before it wrote", strings.Join(missing, ", ")))
 	case len(failed) > 0:
 		r.Fail(0, errors.New(strings.Join(failed, "; ")))
-		// A step that did not run wrote nothing, so its own captures fail
+		// A step that did not run wrote nothing, so its own step vars fail
 		// too, and a step after it that reads one is told it was this one.
 		unwrite(st, f.scope)
 		f.wrote(st)

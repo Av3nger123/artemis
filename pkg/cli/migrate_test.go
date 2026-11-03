@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -9,7 +10,6 @@ import (
 
 	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/front"
-	artmigrate "artemis/pkg/dsl/migrate"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/print"
 )
@@ -42,17 +42,29 @@ steps:
       status_code: 200
 `
 
-// Without -o: the .art source goes to stdout, nothing goes to stderr, and the
-// YAML file is left exactly as it was. Migration never deletes its input.
-func TestMigratePrintsToStdout(t *testing.T) {
+// -o names a folder, and a YAML scenario becomes a flow and a scenario file in
+// it, laid out as an old .art file's migration is: the paths written on
+// stdout, nothing on stderr, and the YAML file left exactly as it was.
+// Migration never deletes its input.
+func TestMigrateWritesAFlowAndAScenarioFile(t *testing.T) {
 	path := writeYAML(t, "ping.yaml", smallYAML)
+	out := filepath.Join(t.TempDir(), "new")
 
-	stdout, stderr, err := executeArgs(t, "migrate", "-f", path)
+	stdout, stderr, err := executeArgs(t, "migrate", "-f", path, "-o", out)
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
-	want := `# what this file is for
-scenario "ping" {
+	flow := filepath.Join(out, "flows", "ping.art")
+	scenario := filepath.Join(out, "scenarios", "ping.art")
+	if want := flow + "\n" + scenario + "\n"; stdout != want {
+		t.Errorf("stdout = %q, want the two paths written, %q", stdout, want)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want nothing", stderr)
+	}
+
+	wantFlow := `# what this file is for
+flow ping {
   # what this step does
   step "ping" {
     get "%SERVER%/ping"
@@ -60,52 +72,48 @@ scenario "ping" {
   }
 }
 `
-	if stdout != want {
-		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	if got := readFile(t, flow); got != wantFlow {
+		t.Errorf("%s =\n%s\nwant\n%s", flow, got, wantFlow)
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want nothing", stderr)
+	wantScenario := "flow \"../flows/ping.art\"\n\nscenario \"ping\" {}\n"
+	if got := readFile(t, scenario); got != wantScenario {
+		t.Errorf("%s =\n%s\nwant\n%s", scenario, got, wantScenario)
 	}
 
-	on, err := os.ReadFile(path) //nolint:gosec // a path this test wrote
-	if err != nil {
-		t.Fatal(err)
+	// And the scenario file is one the front end accepts, which is the whole
+	// promise of the command.
+	if _, _, err := executeArgs(t, "parse", "-f", scenario); err != nil {
+		t.Errorf("parse %s = %v, want nil", scenario, err)
 	}
-	if string(on) != smallYAML {
-		t.Errorf("the YAML file changed:\n%s", on)
+	if got := readFile(t, path); got != smallYAML {
+		t.Errorf("the YAML file changed:\n%s", got)
 	}
 }
 
-// -o writes the file and prints nothing, so a migration that is redirected and
-// one that is written to a path produce the same bytes.
+// Two files need a folder: without -o, or with -o naming a file, nothing is
+// written and the error says what -o takes.
 func TestMigrateWritesTheFileWithOut(t *testing.T) {
 	path := writeYAML(t, "ping.yaml", smallYAML)
-	out := filepath.Join(filepath.Dir(path), "ping.art")
+	dir := filepath.Dir(path)
 
-	stdout, stderr, err := executeArgs(t, "migrate", "-f", path, "-o", out)
-	if err != nil {
-		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
+	stdout, _, err := executeArgs(t, "migrate", "-f", path)
+	if err == nil || !strings.Contains(err.Error(), "-o <dir>") {
+		t.Errorf("migrate -f ping.yaml = %v, want an error asking for -o <dir>", err)
 	}
-	if stdout != "" || stderr != "" {
-		t.Errorf("stdout = %q, stderr = %q, want nothing: -o writes to the file", stdout, stderr)
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing", stdout)
 	}
-
-	written, err := os.ReadFile(out) //nolint:gosec // a path this test named
-	if err != nil {
-		t.Fatalf("reading %s: %v", out, err)
+	for _, out := range []string{filepath.Join(dir, "ping.art"), filepath.Join(dir, "out.yaml")} {
+		if _, _, err := executeArgs(t, "migrate", "-f", path, "-o", out); err == nil || !strings.Contains(err.Error(), "is a file") {
+			t.Errorf("migrate -o %s = %v, want an error saying -o names a folder", out, err)
+		}
 	}
-	printed, _, err := executeArgs(t, "migrate", "-f", path)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(written) != printed {
-		t.Errorf("-o wrote\n%s\nbut stdout had\n%s", written, printed)
-	}
-
-	// And what it wrote is a file the front end accepts, which is the whole
-	// promise of the command.
-	if _, _, err := executeArgs(t, "parse", "-f", out); err != nil {
-		t.Errorf("parse %s = %v, want nil", out, err)
+	if len(entries) != 1 {
+		t.Errorf("a refused migration wrote beside the YAML: %v", entries)
 	}
 }
 
@@ -113,7 +121,7 @@ func TestMigrateWritesTheFileWithOut(t *testing.T) {
 // `artemis parse` uses, and nothing is written.
 func TestMigrateRefusesAScenarioArtemisCannotLoad(t *testing.T) {
 	path := writeYAML(t, "broken.yaml", "name: n\ntype: functional\nsteps:\n  - name: s\n    respones: {}\n")
-	out := filepath.Join(filepath.Dir(path), "broken.art")
+	out := filepath.Join(t.TempDir(), "new")
 
 	stdout, _, err := executeArgs(t, "migrate", "-f", path, "-o", out)
 	if err == nil {
@@ -144,7 +152,7 @@ steps:
         - path: "$.items[*].sku"
           value: "a"
 `)
-	stdout, _, err := executeArgs(t, "migrate", "-f", path)
+	stdout, _, err := executeArgs(t, "migrate", "-f", path, "-o", filepath.Join(t.TempDir(), "new"))
 	if err == nil {
 		t.Fatal("Execute() = nil, want an error")
 	}
@@ -159,7 +167,7 @@ steps:
 }
 
 // A comment with no home in the migrated file is dropped, and how many is said
-// on stderr -- not on stdout, which carries the document.
+// on stderr.
 func TestMigrateReportsDroppedComments(t *testing.T) {
 	path := writeYAML(t, "commented.yaml", `name: n
 type: functional
@@ -173,20 +181,21 @@ steps:
     response:
       status_code: 200
 `)
-	stdout, stderr, err := executeArgs(t, "migrate", "-f", path)
+	out := filepath.Join(t.TempDir(), "new")
+	_, stderr, err := executeArgs(t, "migrate", "-f", path, "-o", out)
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil", err)
 	}
 	if !strings.Contains(stderr, "1 comment") || !strings.Contains(stderr, "dropped") {
 		t.Errorf("stderr = %q, want it to say one comment was dropped", stderr)
 	}
-	if strings.Contains(stdout, "which host") {
-		t.Errorf("stdout holds the dropped comment:\n%s", stdout)
+	if flow := readFile(t, filepath.Join(out, "flows", "commented.art")); strings.Contains(flow, "which host") {
+		t.Errorf("the flow holds the dropped comment:\n%s", flow)
 	}
 }
 
-// The arguments that cannot work. A .art file becomes several files, so it
-// needs a folder to write them in; and YAML becomes one .art file.
+// The arguments that cannot work for a .art file: it becomes several files, so
+// it needs a folder to write them in.
 func TestMigrateRefusesTheWrongExtensions(t *testing.T) {
 	art := writeArt(t, "already.art", "scenario \"n\" {\n}\n")
 	if _, _, err := executeArgs(t, "migrate", "-f", art); err == nil || !strings.Contains(err.Error(), "-o <dir>") {
@@ -195,11 +204,6 @@ func TestMigrateRefusesTheWrongExtensions(t *testing.T) {
 	file := writeArt(t, "taken.art", "")
 	if _, _, err := executeArgs(t, "migrate", "-f", art, "-o", file); err == nil {
 		t.Error("migrate -f already.art -o taken.art = nil error, want one: -o names a folder")
-	}
-
-	yaml := writeYAML(t, "ping.yaml", smallYAML)
-	if _, _, err := executeArgs(t, "migrate", "-f", yaml, "-o", "out.yaml"); err == nil {
-		t.Error("migrate -o out.yaml = nil error, want one")
 	}
 }
 
@@ -310,8 +314,8 @@ func TestMigrateCorpusCoversEveryFixture(t *testing.T) {
 	}
 }
 
-// The corpus itself: migrate each fixture, pin the output, check it, and hold
-// it against the hand-written file.
+// The corpus itself: migrate each fixture, pin the two files it becomes, check
+// them, and hold them against the hand-written pair.
 //
 // The name starts with TestGolden so that `make golden` regenerates these
 // goldens along with every other set: the target runs `go test ./pkg/cli -run
@@ -321,33 +325,42 @@ func TestGoldenMigrations(t *testing.T) {
 	for _, c := range corpus {
 		t.Run(c.name, func(t *testing.T) {
 			yamlPath := filepath.Join("testdata", filepath.FromSlash(c.name)+".yaml")
+			out := t.TempDir()
 
 			if c.rel == undecodable {
-				if _, _, err := executeArgs(t, "migrate", "-f", yamlPath); err == nil {
+				if _, _, err := executeArgs(t, "migrate", "-f", yamlPath, "-o", out); err == nil {
 					t.Fatalf("migrate %s = nil error; the YAML does not load", yamlPath)
 				}
 				return
 			}
 
-			got, stderr, err := executeArgs(t, "migrate", "-f", yamlPath)
-			if err != nil {
+			if _, stderr, err := executeArgs(t, "migrate", "-f", yamlPath, "-o", out); err != nil {
 				t.Fatalf("migrate %s = %v\nstderr:\n%s", yamlPath, err, stderr)
 			}
-			checkMigrateGolden(t, c.name, got)
-			pair := newForms(t, c.name, got)
+			pair := migrated(t, c.name, out)
+			for _, key := range []string{pair.flowKey, pair.scenarioKey} {
+				checkMigrateGolden(t, migrateGolden(c.name, key), pair.files[key])
+			}
 			assertCodes(t, c.name, pair, c.wantCodes)
 			assertAgreesWithHandWritten(t, c, pair)
 		})
 	}
 }
 
-// checkMigrateGolden compares got with testdata/migrate/<name>.art, or rewrites
-// it under -update. The golden is what makes the whole of a migration
-// reviewable rather than only the lines a test happens to assert on.
-func checkMigrateGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("testdata", "migrate", filepath.FromSlash(name)+".art")
+// migrateGolden is where the golden of one migrated file is: testdata/migrate,
+// then the fixture's folder, then the file's path under -o -- so the goldens of
+// suite/01_login.yaml are testdata/migrate/suite/flows/01_login.art and
+// testdata/migrate/suite/scenarios/01_login.art, and each scenario file's
+// header names the flow beside it.
+func migrateGolden(name, key string) string {
+	return filepath.Join("testdata", "migrate", filepath.FromSlash(path.Dir(name)), filepath.FromSlash(key))
+}
 
+// checkMigrateGolden compares got with the golden at path, or rewrites it
+// under -update. The golden is what makes the whole of a migration reviewable
+// rather than only the lines a test happens to assert on.
+func checkMigrateGolden(t *testing.T, path, got string) {
+	t.Helper()
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
@@ -363,31 +376,39 @@ func checkMigrateGolden(t *testing.T, name, got string) {
 		t.Fatalf("%v\nrun `make golden` and read the diff", err)
 	}
 	if got != string(want) {
-		t.Errorf("migrating %s.yaml gave\n%s\nthe golden holds\n%s", name, got, want)
+		t.Errorf("migrating gave\n%s\nthe golden %s holds\n%s", got, path, want)
 	}
 }
 
-// migratedPair is a YAML fixture's migration carried on into the new forms:
-// the old-form .art that `artemis migrate -f x.yaml` writes, converted by
-// `artemis migrate`'s .art half into a flow and a scenario file.
+// migratedPair is the flow and the scenario file `artemis migrate -f x.yaml -o
+// <dir>` wrote for one YAML fixture.
 type migratedPair struct {
 	files                map[string]string // both, by the keys below
 	flowKey, scenarioKey string
 }
 
-// newForms converts got, the old-form migration of the fixture called name.
-// Only the file's own name is kept, so the pair is flows/<base>.art and
-// scenarios/<base>.art whatever folder the fixture is in.
-func newForms(t *testing.T, name, got string) migratedPair {
+// migrated reads the pair the fixture called name was migrated to under out:
+// flows/<base>.art and scenarios/<base>.art, whatever folder the fixture is
+// in, and nothing else.
+func migrated(t *testing.T, name, out string) migratedPair {
 	t.Helper()
 	base := path.Base(name) + artExt
-	files, _, err := artmigrate.Files(map[string]string{base: got})
-	if err != nil {
-		t.Fatalf("migrating the migrated %s.art to the new forms: %v", name, err)
+	p := migratedPair{files: map[string]string{}, flowKey: "flows/" + base, scenarioKey: "scenarios/" + base}
+	for _, key := range []string{p.flowKey, p.scenarioKey} {
+		p.files[key] = readFile(t, filepath.Join(out, filepath.FromSlash(key)))
 	}
-	p := migratedPair{files: files, flowKey: "flows/" + base, scenarioKey: "scenarios/" + base}
-	if _, ok := files[p.flowKey]; !ok {
-		t.Fatalf("the new forms of %s.art have no %s: %v", name, p.flowKey, files)
+	written := 0
+	err := filepath.WalkDir(out, func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			written++
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written != len(p.files) {
+		t.Errorf("migrating %s.yaml wrote %d files, want the flow and the scenario file", name, written)
 	}
 	return p
 }
@@ -515,13 +536,13 @@ func TestMigrateGoldensAreCanonical(t *testing.T) {
 			continue
 		}
 		t.Run(c.name, func(t *testing.T) {
-			path := filepath.Join("testdata", "migrate", filepath.FromSlash(c.name)+".art")
-			raw, err := os.ReadFile(path) //nolint:gosec // a path this test built
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := reprint(t, path, string(raw)); got != string(raw) {
-				t.Errorf("%s is not canonically formatted; artemis fmt would write\n%s", path, got)
+			base := path.Base(c.name) + artExt
+			for _, key := range []string{"flows/" + base, "scenarios/" + base} {
+				golden := migrateGolden(c.name, key)
+				raw := readFile(t, golden)
+				if got := reprint(t, golden, raw); got != raw {
+					t.Errorf("%s is not canonically formatted; artemis fmt would write\n%s", golden, got)
+				}
 			}
 		})
 	}

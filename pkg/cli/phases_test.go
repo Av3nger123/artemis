@@ -135,7 +135,7 @@ func TestAFailedSetupSkipsTheStepsAndNotTheTeardown(t *testing.T) {
 		t.Errorf("the scenario's step = %+v, want a skip naming the setup step", steps[1])
 	}
 	for _, s := range steps[2:] {
-		if s.Status != "skip" || !strings.Contains(s.Error, "which no step before it captured") {
+		if s.Status != "skip" || !strings.Contains(s.Error, "which no step before it wrote") {
 			t.Errorf("teardown step %+v, want a skip for a capture that never happened", s)
 		}
 	}

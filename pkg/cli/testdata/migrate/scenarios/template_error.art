@@ -1,0 +1,3 @@
+flow "../flows/template_error.art"
+
+scenario "undeclared variable" {}

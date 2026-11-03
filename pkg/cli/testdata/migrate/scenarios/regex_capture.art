@@ -1,0 +1,3 @@
+flow "../flows/regex_capture.art"
+
+scenario "regex capture" {}

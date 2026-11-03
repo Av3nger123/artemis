@@ -1,4 +1,4 @@
-scenario "items" {
+flow _02_items {
   step "list items" {
     get "%SERVER%/items"
     expect status == 200

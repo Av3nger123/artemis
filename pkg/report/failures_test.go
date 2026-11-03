@@ -78,7 +78,7 @@ func TestFailuresPrintsTheReasonForAnErroredAssertion(t *testing.T) {
 1) cap.yaml:11
      scenario  captures
      step      login
-     assert    capture authToken json
+     assert    var authToken json
      error     path "$.session.token": nothing is at that path
 `
 	if got != want {

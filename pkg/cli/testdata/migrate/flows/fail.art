@@ -1,5 +1,5 @@
 # A run where the API answers, but with the wrong values.
-scenario "status check" {
+flow fail {
   step "ping" {
     get "%SERVER%/ping"
     expect status == 200

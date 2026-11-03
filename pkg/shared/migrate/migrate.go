@@ -4,7 +4,7 @@
 // deleted: a suite converts once, in one command, and the output is a file
 // `artemis fmt` would not change.
 //
-//	artemis migrate -f old.yaml [-o new.art]
+//	artemis migrate -f old.yaml -o new/
 //
 // # How the output is produced
 //

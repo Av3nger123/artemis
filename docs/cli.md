@@ -280,9 +280,14 @@ scenario's values in its vars, imports resolved from disk, `skip` applied, and
 every item call replaced by the step it stands for, preceded by a comment
 naming the item, the line it is declared on, and the step that called it.
 
+The output is for reading, not for running: it is written as a scenario that
+holds its steps, which artemis no longer compiles.
+
 The file is checked first, exactly as `artemis run` checks it, and nothing is
-printed for a file with errors. `-o` will not replace an existing file without
-`--force`. See [Reusing requests](flows.md#reusing-requests).
+printed for a file with errors. A flow file is an error whose hint names the
+scenario files that run it, and a file with no scenario in it is an error too.
+`-o` will not replace an existing file without `--force`. See
+[Reusing requests](flows.md#reusing-requests).
 
 ## `artemis grammar`
 

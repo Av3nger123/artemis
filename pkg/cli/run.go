@@ -382,9 +382,6 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	}()
 
 	run := result.NewRun()
-	// Before anything compiles: a watcher learns the shape of the run first,
-	// including the files that will turn out not to load.
-	rt.events.RunStart(files)
 
 	// Every file is compiled before any file runs, which is what the check
 	// before the run needs: an absent variable has to be reported before the
@@ -425,6 +422,12 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 		c.file = file
 		attempts[i] = fileAttempt{ok: err == nil, compiled: c, err: err, diag: diag}
 	}
+
+	// Before anything runs, and before the gate or a selection has its say: a
+	// watcher learns the shape of the run first, including the files that
+	// turned out not to load. A flow or collection file a folder run found
+	// compiles to no scenario and is not one of them.
+	rt.events.RunStart(scenarioFiles(attempts))
 
 	var loaded []compiled
 	for _, a := range attempts {
@@ -657,6 +660,20 @@ type fileAttempt struct {
 	// while the attempt is being built; a value here would be copied into the
 	// slice and the diagnostics written to the copy that was thrown away.
 	diag *bytes.Buffer
+}
+
+// scenarioFiles is the files of attempts that run-start lists, in run order:
+// each that holds a scenario, and each that would not load, which is reported
+// as a scenario of its own. A file that loaded with no scenario in it -- a
+// flow or a collection a folder run found -- runs nothing and is left out.
+func scenarioFiles(attempts []fileAttempt) []string {
+	files := make([]string, 0, len(attempts))
+	for _, a := range attempts {
+		if !a.ok || len(a.scenarios) > 0 {
+			files = append(files, a.file)
+		}
+	}
+	return files
 }
 
 // notAScenarioError is what a path artemis will not run says. It names the one

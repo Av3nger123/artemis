@@ -6,12 +6,12 @@
 # A capture that is unreadable before anything runs -- an empty path, a regex
 # that will not compile -- is a load error instead, and never gets this far; see
 # models.Capture's tests.
-scenario "captures that cannot be read" {
+flow bad_capture {
   step "login" {
     post "%SERVER%/login" { body = {"user": "ada"} }
     expect status == 200
     expect body.token exists
-    capture authToken = body.session.token
-    capture requestId = match(raw, /req-([0-9a-f]+)/)
+    var authToken = body.session.token
+    var requestId = match(raw, /req-([0-9a-f]+)/)
   }
 }

@@ -1654,9 +1654,11 @@ scenario "bad coupon" {
 ```
 
 `total = skip` has removed the var and the two `expect`s that read it, and the
-private `url` is a plain var: what runs has no private var. The file
-is checked first, exactly as `artemis run` checks it, and a file with errors
-prints nothing. `-o <out.art>` writes the result to a file instead, and
+private `url` is a plain var: what runs has no private var. The output is for
+reading: a scenario that holds its steps is not a form this language compiles.
+The file is checked first, exactly as `artemis run` checks it, and a file with
+errors prints nothing; a flow file is `flow-not-runnable`, as it is for
+`artemis run`. `-o <out.art>` writes the result to a file instead, and
 refuses to replace one that is there unless `--force` is given.
 
 A failure in an expanded step names the file its line was written in -- the
@@ -2658,8 +2660,9 @@ and their output.
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
 
 A test is converted into this language once, never translated on the fly:
-`artemis migrate -f old.yaml` for a YAML scenario, `artemis migrate -f old.art
--o new/` for a `.art` file in [the old forms](#the-old-forms), and `artemis
+`artemis migrate -f old.yaml -o new/` for a YAML scenario, which writes a flow
+and a scenario file, `artemis migrate -f old.art -o new/` for a `.art` file in
+[the old forms](#the-old-forms), and `artemis
 generate -f collection.json -o x.art` for a Postman collection, which writes a
 collection, a flow and a scenario file. All of them write through `artemis
 fmt`'s printer, so what they produce is already canonical.

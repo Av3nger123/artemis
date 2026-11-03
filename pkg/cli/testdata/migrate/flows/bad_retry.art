@@ -1,5 +1,5 @@
 # A retry delay that is not a duration.
-scenario "bad retry delay" {
+flow bad_retry {
   step "ping" {
     get "%SERVER%/ping"
     retry { times = 3, delay = "soon" }

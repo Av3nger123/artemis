@@ -73,11 +73,11 @@ func Init() {
 	runCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
 		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off; the folder is created only when one fails")
 	// Off by default, which is the opposite of --screenshots: a trace holds
-	// what the service answered, so it is opted into. Values a `secret`
-	// binding named are withheld -- see SPEC.md -- but a trace is still a
-	// file to treat as sensitive.
+	// what the service answered, so it is opted into. A cookie's value and a
+	// db URL's password are withheld and nothing else is -- see SPEC.md -- so
+	// a trace is a file to treat as sensitive.
 	runCmd.Flags().String(traceFlag, "",
-		"Write what each step sent and saw into this folder, one file per step. Off unless given; values from `secret` bindings are withheld")
+		"Write what each step sent and saw into this folder, one file per step. Off unless given. Holds what was sent, passwords and tokens included; only cookie values and db passwords are withheld")
 	// One by default, and deliberately not the number of CPUs: the limit on a
 	// run like this is the service under test, not this process.
 	// One collection item, or every item of one collection, in place of the
@@ -89,7 +89,7 @@ func Init() {
 	runCmd.Flags().String(argsFileFlag, "",
 		"With --item: read parameters from this JSON file of names to values, so a secret is not on the command line. --arg wins over it")
 	runCmd.Flags().String(capturesFlag, "",
-		"With --item: write every value the item's captures got, secret ones included, to this JSON file (mode 0600)")
+		"With --item: write every value the item's outputs got to this JSON file (mode 0600)")
 	runCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order, rather than streaming it live")
 	runCmd.Flags().String(tagsFlag, "",
@@ -113,7 +113,7 @@ func Init() {
 	testCmd.Flags().String(screenshotsFlag, browserstep.DefaultDir,
 		"Write a screenshot of the page for each browser step that fails, into this folder. Empty turns them off")
 	testCmd.Flags().String(traceFlag, "",
-		"Write what each step sent and saw into this folder, one file per step. Off unless given; values from `secret` bindings are withheld")
+		"Write what each step sent and saw into this folder, one file per step. Off unless given. Holds what was sent, passwords and tokens included; only cookie values and db passwords are withheld")
 	testCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order")
 
@@ -126,7 +126,7 @@ func Init() {
 	if err := migrateCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
-	migrateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout; for .art input, the folder to write the new files in")
+	migrateCmd.Flags().StringP(outFlag, "o", "", "The folder to write the new flow, scenario and collection files in")
 
 	// Generate command: a Postman collection in, .art out, once -- the other
 	// adoption path, onto the same printer as migrate (ART-41).
@@ -156,6 +156,6 @@ var RootCmd = &cobra.Command{
     Scenarios are written in the Artemis DSL, in .art files: artemis parses,
     checks and runs them, and converts an old YAML scenario with migrate.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one, and 'artemis grammar' for the language itself.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml> -o <dir>' to convert an old YAML scenario to a flow and a scenario file, and 'artemis grammar' for the language itself.")
 	},
 }

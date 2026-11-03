@@ -85,8 +85,8 @@ func scopes() string {
 		b.WriteString("\n\n")
 	}
 	b.WriteString("A var's initialiser is in no step, so it may use env() and the vars\n")
-	b.WriteString("above it and nothing else. A capture is visible to every step below the\n")
-	b.WriteString("one that made it, whatever the two step types are.\n")
+	b.WriteString("above it and nothing else. A step var is visible to every step below the\n")
+	b.WriteString("one that wrote it, whatever the two step types are.\n")
 	return b.String()
 }
 

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"artemis/pkg/dsl/parser"
 )
 
 // checkFileGolden holds got to path, or rewrites path under -update.
@@ -63,9 +65,29 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 	if strings.Contains(out, " = auth.") || strings.Contains(out, "import ") || strings.Contains(out, "flow ") {
 		t.Errorf("the expanded scenario still has an item call, an import or a flow:\n%s", out)
 	}
-	// What expand prints is a scenario artemis accepts on its own.
-	if u := frontEnd("expanded.art", out); u.Bag.HasErrors() {
-		t.Errorf("the expanded scenario does not compile: %v", u.Bag.All())
+	// What expand prints is for reading: a scenario holding its steps, which
+	// parses and is no longer a form artemis compiles.
+	if _, bag := parser.Parse("expanded.art", out); bag.HasErrors() {
+		t.Errorf("the expanded scenario does not parse: %v", bag.All())
+	}
+}
+
+// A flow has no values of its own, so expand refuses one as run does and names
+// the scenario files that run it; a collection file has no scenario at all.
+// Neither prints nothing and exits zero.
+func TestExpandRefusesAFileWithNoScenario(t *testing.T) {
+	out, stderr, err := runCLI(t, "expand", "testdata/collections/flows/checkout.art")
+	if err == nil || out != "" {
+		t.Fatalf("expand of a flow: err %v, stdout %q", err, out)
+	}
+	for _, want := range []string{"is a flow; expand a scenario file that names it", "testdata/collections/scenarios/checkout.art"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr has no %q:\n%s", want, stderr)
+		}
+	}
+	out, _, err = runCLI(t, "expand", "testdata/collections/auth.art")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "holds no scenario to expand") {
+		t.Fatalf("expand of a collection: err %v, stdout %q", err, out)
 	}
 }
 

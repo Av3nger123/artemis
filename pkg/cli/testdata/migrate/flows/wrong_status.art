@@ -1,5 +1,5 @@
 # A run where the API answers with a status nobody asked for.
-scenario "status code" {
+flow wrong_status {
   step "ping" {
     get "%SERVER%/ping"
     expect status == 200

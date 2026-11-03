@@ -132,10 +132,11 @@ the files a mode writes; `--force` replaces them.
 runs it.
 
 ```sh
-artemis migrate -f checkout.yaml                 # to stdout
-artemis migrate -f checkout.yaml -o old/checkout.art
-artemis migrate -f old/checkout.art -o new/      # then into a flow and a scenario file
+artemis migrate -f checkout.yaml -o new/   # new/flows/checkout.art and new/scenarios/checkout.art
 ```
+
+A YAML scenario becomes a flow and a scenario file, so `-o` names a folder for
+them, and the paths written are printed on stdout.
 
 This is the input:
 
@@ -181,12 +182,12 @@ steps:
     timeout: "5s"
 ```
 
-And this is what `artemis migrate -f checkout.yaml` writes. It is a `.art`
-scenario in the form written before flows, with its steps in the scenario:
+And this is what `artemis migrate -f checkout.yaml -o new/` writes:
 
 ```text
+# new/flows/checkout.art
 # The scenario the README documented before the DSL landed.
-scenario "API Collection" {
+flow checkout {
   var url = env("API_URL")
 
   step "Login" {
@@ -196,7 +197,7 @@ scenario "API Collection" {
     }
     expect status == 200
     expect body.data.message == "success"
-    capture token = body.data.access_token
+    var token = body.data.access_token
   }
 
   step "Orders" {
@@ -207,14 +208,16 @@ scenario "API Collection" {
     expect body.data.count > 0
   }
 }
+
+# new/scenarios/checkout.art
+flow "../flows/checkout.art"
+
+scenario "API Collection" {}
 ```
 
-That form does not compile any more, so the second command converts it, as
-[Old `.art` files](#old-art-files) below describes, into
-`new/flows/checkout.art`, a flow named `checkout` holding the var and the two
-steps with `capture token` written `var token`, and
-`new/scenarios/checkout.art`, which names the flow and holds
-`scenario "API Collection" {}`.
+The flow is named after the file, and the scenario after the YAML's `name`.
+The YAML's variables are the flow's vars, at its top, and the scenario sets
+nothing, so each keeps the value the flow gives it.
 
 The YAML file is checked as strictly as it ever was -- a strict decode, and
 every step type validated -- so a scenario artemis would have refused to run is

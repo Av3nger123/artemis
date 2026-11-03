@@ -2,13 +2,13 @@
 # plain text, so there is no path to read -- the regex reads the bytes -- and the
 # value is templated into the second step's url, which is what proves a capture
 # landed in the scenario's scope.
-scenario "regex capture" {
+flow regex_capture {
   var base = "%SERVER%"
 
   step "read the redirect" {
     get "${base}/redirect"
     expect status == 200
-    capture itemId = match(raw, /\/items\/([0-9]+)/)
+    var itemId = match(raw, /\/items\/([0-9]+)/)
   }
 
   step "read the item back" {

@@ -839,7 +839,7 @@ scenario "failed write" {}
 	// In cleanup, a step that reads an unset name is skipped, as it always
 	// has been for a name no step wrote.
 	undo := steps(run)["undo"]
-	if undo == nil || undo.Status != result.StatusSkip || undo.Error != "needs code, which no step before it captured" {
+	if undo == nil || undo.Status != result.StatusSkip || undo.Error != "needs code, which no step before it wrote" {
 		t.Errorf("undo = %+v, want it skipped for the unset name", undo)
 	}
 }
