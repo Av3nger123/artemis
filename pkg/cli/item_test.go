@@ -29,7 +29,7 @@ func TestRunOneRequestOfACollection(t *testing.T) {
 	dir := t.TempDir()
 	captures := filepath.Join(dir, "captures.json")
 	traces := filepath.Join(dir, "traces")
-	out, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login",
+	out, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login",
 		"--arg", "user=alice", "--arg", "password=s3cret", "--arg", "base="+srv.URL,
 		"--report", "json", "--captures", captures, "--trace", traces)
 	if err != nil {
@@ -38,24 +38,23 @@ func TestRunOneRequestOfACollection(t *testing.T) {
 	if !strings.Contains(out, `"auth.login"`) {
 		t.Errorf("the report has no auth.login step:\n%s", out)
 	}
-	if strings.Contains(out, "s3cret") || strings.Contains(stderr, "s3cret") {
-		t.Error("a secret parameter leaked into the report")
-	}
 	// The response a client shows comes from the step's trace.
 	shot, err := os.ReadFile(filepath.Join(traces, "auth-login-auth-login.json"))
 	if err != nil {
 		entries, _ := os.ReadDir(traces)
 		t.Fatalf("no trace for the request: %v (the folder holds %v)", err, entries)
 	}
-	if !strings.Contains(string(shot), `"status"`) || strings.Contains(string(shot), "s3cret") {
-		t.Errorf("the trace has no status, or holds the secret:\n%s", shot)
+	if !strings.Contains(string(shot), `"status"`) {
+		t.Errorf("the trace has no status:\n%s", shot)
 	}
+	// Nothing in the language marks a value secret any more, so the list of
+	// secret names is there and empty.
 	got := readCaptures(t, captures)
 	if got.Values["token"] != "t" {
 		t.Errorf("token = %v, want t", got.Values["token"])
 	}
-	if len(got.Secret) != 1 || got.Secret[0] != "token" {
-		t.Errorf("secret = %v, want [token]", got.Secret)
+	if got.Secret == nil || len(got.Secret) != 0 {
+		t.Errorf("secret = %#v, want []", got.Secret)
 	}
 	info, err := os.Stat(captures)
 	if err != nil {
@@ -73,7 +72,7 @@ func TestItemArgumentsFromAFile(t *testing.T) {
 	if err := os.WriteFile(args, []byte(`{"user": "alice", "password": "s3cret", "base": "`+srv.URL+`"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login", "--args", args, "--report", "json")
+	out, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login", "--args", args, "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
 	}
@@ -91,7 +90,7 @@ func TestAnArgumentIsSentAsWritten(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
 	}))
 	t.Cleanup(srv.Close)
-	_, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login",
+	_, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login",
 		"--arg", `user=a"b ${base} \n`, "--arg", "password=x", "--arg", "base="+srv.URL, "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, stderr)
@@ -108,7 +107,7 @@ func TestRunEveryItemOfACollection(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
 	}))
 	t.Cleanup(srv.Close)
-	out, stderr, err := runCLI(t, "run", "testdata/collections/old/session.art", "--item", "session", "--arg", "base="+srv.URL, "--report", "json")
+	out, stderr, err := runCLI(t, "run", "testdata/collections/session.art", "--item", "session", "--arg", "base="+srv.URL, "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
 	}
@@ -123,7 +122,7 @@ func TestAnItemMissingAnArgumentDoesNotRun(t *testing.T) {
 	hit := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
 	t.Cleanup(srv.Close)
-	_, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login", "--arg", "user=alice", "--arg", "base="+srv.URL)
+	_, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login", "--arg", "user=alice", "--arg", "base="+srv.URL)
 	if err == nil {
 		t.Fatal("want a non-zero exit")
 	}
@@ -136,19 +135,19 @@ func TestAnItemMissingAnArgumentDoesNotRun(t *testing.T) {
 }
 
 func TestAnItemThatIsNotThere(t *testing.T) {
-	_, _, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.logout")
+	_, _, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.logout")
 	if err == nil || !strings.Contains(err.Error(), "auth has no item logout") || !strings.Contains(err.Error(), "login") {
 		t.Fatalf("err = %v", err)
 	}
 	// Before the dot is only the name the run imports the file as.
-	_, _, err = runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "my-auth.login")
+	_, _, err = runCLI(t, "run", "testdata/collections/auth.art", "--item", "my-auth.login")
 	if err == nil || !strings.Contains(err.Error(), "like my_auth") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
-	_, _, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--arg", "user=alice")
+	_, _, err := runCLI(t, "run", "testdata/collections/auth.art", "--arg", "user=alice")
 	if err == nil || !strings.Contains(err.Error(), "--item") {
 		t.Fatalf("err = %v", err)
 	}
@@ -156,7 +155,7 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "a collection file") {
 		t.Fatalf("err = %v", err)
 	}
-	_, _, err = runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login", "--arg", "no-equals")
+	_, _, err = runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login", "--arg", "no-equals")
 	if err == nil || !strings.Contains(err.Error(), "name=value") {
 		t.Fatalf("err = %v", err)
 	}

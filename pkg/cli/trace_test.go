@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,20 +16,27 @@ import (
 	"artemis/pkg/trace"
 )
 
-// ART-55 end to end: a real run with --trace, and the one thing that must be
-// true of the files it leaves behind.
+// ART-55 end to end: a real run with --trace, and what is true of the files it
+// leaves behind.
 //
-// The scenario is the README's own shape -- a token request whose password comes
-// from a secret var, and whose token is a secret capture used by the next step --
-// because that is the shape where every withholding rule fires at once.
-func TestRunWritesATraceAndWithholdsTheCredential(t *testing.T) {
+// The scenario is the README's own shape -- a token request with a password,
+// whose token the next step sends -- against a service that also sets a session
+// cookie. Nothing in the language marks a value as a credential, so the password
+// and the token are in the traces as they went over the wire; a cookie's value
+// is the one thing withheld, because the service handed it over unasked.
+func TestRunWritesATraceOfEveryStep(t *testing.T) {
 	initLog(t)
 	t.Setenv("ART_TRACE_PW", "hunter2")
 
-	srv := okServer(t, 200, `{"data":{"access_token":"t0ken-abc","expires_in":3600}}`)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "s3ss10n", HttpOnly: true})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"access_token":"t0ken-abc","expires_in":3600}}`))
+	}))
+	t.Cleanup(srv.Close)
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"checkout.art": `scenario "checkout" {
-  secret var pw = env("ART_TRACE_PW")
+		"checkout.art": `flow checkout {
+  var pw = env("ART_TRACE_PW")
 
   step "get a token" {
     post "` + srv.URL + `" {
@@ -35,7 +44,7 @@ func TestRunWritesATraceAndWithholdsTheCredential(t *testing.T) {
       body = {"username": "alice", "password": pw}
     }
     expect status == 200
-    secret capture token = body.data.access_token
+    var token = body.data.access_token
   }
 
   step "list the orders" {
@@ -44,7 +53,10 @@ func TestRunWritesATraceAndWithholdsTheCredential(t *testing.T) {
     }
     expect status == 200
   }
-}`,
+}
+
+scenario "checkout" {}
+`,
 	})
 
 	dir := filepath.Join(t.TempDir(), "traces")
@@ -72,7 +84,7 @@ func TestRunWritesATraceAndWithholdsTheCredential(t *testing.T) {
 		}
 	}
 
-	// Nothing anywhere in the folder may hold either credential.
+	// Nothing anywhere in the folder holds the cookie's value.
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
@@ -85,40 +97,35 @@ func TestRunWritesATraceAndWithholdsTheCredential(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, leak := range []string{"hunter2", "t0ken-abc"} {
-			if bytes.Contains(raw, []byte(leak)) {
-				t.Errorf("%s holds %q:\n%s", e.Name(), leak, raw)
-			}
+		if bytes.Contains(raw, []byte("s3ss10n")) {
+			t.Errorf("%s holds the cookie's value:\n%s", e.Name(), raw)
 		}
 	}
 
-	// The first step: the password is withheld in what it sent, the token is
-	// withheld in what it saw, and everything else survives.
+	// The first step: what it sent and what it saw, as they were, but for the
+	// cookie, whose value is withheld and whose attributes stay.
 	first := readTrace(t, steps[0].Trace)
-	body := first.Sent["body"].(map[string]any)
-	if body["password"] != trace.Redacted {
-		t.Errorf("sent body password = %v, want withheld", body["password"])
-	}
-	if body["username"] != "alice" {
-		t.Errorf("sent body username = %v, want it kept", body["username"])
+	if body := first.Sent["body"]; body != `{"password":"hunter2","username":"alice"}` {
+		t.Errorf("sent body = %#v, want it as sent", body)
 	}
 	data := first.Observed["body"].(map[string]any)["data"].(map[string]any)
-	if data["access_token"] != trace.Redacted {
-		t.Errorf("observed access_token = %v, want withheld", data["access_token"])
-	}
-	if data["expires_in"] != float64(3600) {
-		t.Errorf("observed expires_in = %v, want it kept", data["expires_in"])
+	if data["access_token"] != "t0ken-abc" || data["expires_in"] != float64(3600) {
+		t.Errorf("observed data = %v, want it as received", data)
 	}
 	if first.Observed["status"] != float64(200) {
 		t.Errorf("observed status = %v, want it kept", first.Observed["status"])
 	}
+	cookies, _ := first.Observed["cookies"].(map[string]any)
+	sid, _ := cookies["sid"].(map[string]any)
+	if sid["value"] != trace.Redacted || sid["http_only"] != true {
+		t.Errorf("observed cookies = %v, want sid's value withheld and its attributes kept", cookies)
+	}
 
-	// The second step: the Authorization header interpolates the secret capture,
-	// so it is withheld, and the other header is not.
+	// The second step sent the token the first one wrote.
 	second := readTrace(t, steps[1].Trace)
 	headers := second.Sent["headers"].(map[string]any)
-	if headers["Authorization"] != trace.Redacted {
-		t.Errorf("Authorization = %v, want withheld", headers["Authorization"])
+	if headers["Authorization"] != "Bearer t0ken-abc" {
+		t.Errorf("Authorization = %v, want it as sent", headers["Authorization"])
 	}
 }
 

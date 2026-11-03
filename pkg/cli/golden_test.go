@@ -142,13 +142,6 @@ func renderFixture(t *testing.T, c goldenCase, url string) (tempRoot, path strin
 	tempRoot = t.TempDir()
 	if !c.dir {
 		scenario := filepath.Join("testdata", artDir, "scenarios", name+artExt)
-		if _, err := os.Stat(scenario); err != nil {
-			// A fixture still written in the old form, as one file.
-			fixture := filepath.Join("testdata", artDir, name+artExt)
-			path = filepath.Join(tempRoot, name+artExt)
-			writeRendered(t, fixture, path, url, true)
-			return tempRoot, path
-		}
 		path = filepath.Join(tempRoot, "scenarios", name+artExt)
 		writeRendered(t, scenario, path, url, false)
 		flow := filepath.Join("testdata", artDir, "flows", name+artExt)
@@ -371,16 +364,6 @@ func goldenCases(t *testing.T) []goldenCase {
 					fmt.Fprintf(w, `{"error": "no route for %s"}`, r.URL.Path)
 				}
 			},
-		},
-		{
-			// ART-54: a failed `expect` against a secret binding, with the
-			// JSON document as well as the console summary, because both are
-			// places an operand is written. The golden is the assertion that
-			// `hunter2` appears in neither.
-			name:    "secret_redacted",
-			args:    []string{"--report", "json"},
-			wantErr: true,
-			handler: jsonHandler(http.StatusOK, `{"given": "not-the-password"}`),
 		},
 		{
 			// The whole --report json document for a run with something of
@@ -623,9 +606,7 @@ func eventGoldenCases(t *testing.T) []goldenCase {
 		byName[c.name] = c
 	}
 	var cases []goldenCase
-	// secret_redacted: a step-end carries operands, so the stream is one more
-	// place a credential must not appear (ART-54).
-	for _, name := range []string{"pass", "fail", "template_error", "report_json", "secret_redacted"} {
+	for _, name := range []string{"pass", "fail", "template_error", "report_json"} {
 		c, ok := byName[name]
 		if !ok {
 			t.Fatalf("no golden case named %s to repeat with --events", name)
