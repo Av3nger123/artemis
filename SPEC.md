@@ -1651,9 +1651,11 @@ scenario "bad coupon" {
 ```
 
 `total = skip` has removed the var and the two `expect`s that read it, and the
-private `url` is a plain var: what runs has no private var. The file
-is checked first, exactly as `artemis run` checks it, and a file with errors
-prints nothing. `-o <out.art>` writes the result to a file instead, and
+private `url` is a plain var: what runs has no private var. The output is for
+reading: a scenario that holds its steps is not a form this language compiles.
+The file is checked first, exactly as `artemis run` checks it, and a file with
+errors prints nothing; a flow file is `flow-not-runnable`, as it is for
+`artemis run`. `-o <out.art>` writes the result to a file instead, and
 refuses to replace one that is there unless `--force` is given.
 
 A failure in an expanded step names the file its line was written in -- the
