@@ -1,4 +1,4 @@
-scenario "checkout" {
+flow checkout {
   config browser {
     headless = true
   }
@@ -15,8 +15,8 @@ scenario "checkout" {
 
     expect status == 200
     expect body.token exists
-    # a capture is visible to every step below it
-    capture token = body.token
+    # a var after the action is visible to every step below it
+    var token = body.token
   }
 
   step "the order is there" {
@@ -30,7 +30,7 @@ scenario "checkout" {
     expect body.orders[0].total > 0
     expect not body.error exists
     expect headers["content-type"] contains "json"
-    capture order_id = match(body.orders[0].ref, /ORD-(\d+)/)
+    var order_id = match(body.orders[0].ref, /ORD-(\d+)/)
   }
 
   step "the row landed in the database" {

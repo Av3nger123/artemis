@@ -281,7 +281,7 @@
       ]
     },
     "declaration": {
-      "doc": "The declarations of a file -- import, collection, scenario, flow -- and those a scenario body holds, use among them.",
+      "doc": "The declarations of a file -- import, collection, scenario, flow -- and those a flow's body holds.",
       "values": [
         {
           "value": "import"
@@ -296,9 +296,6 @@
           "value": "flow"
         },
         {
-          "value": "suite"
-        },
-        {
           "value": "tags"
         },
         {
@@ -309,9 +306,6 @@
         },
         {
           "value": "step"
-        },
-        {
-          "value": "use"
         },
         {
           "value": "setup"
@@ -1032,7 +1026,7 @@
           "value": "expect"
         },
         {
-          "value": "capture"
+          "value": "var"
         },
         {
           "value": "retry"

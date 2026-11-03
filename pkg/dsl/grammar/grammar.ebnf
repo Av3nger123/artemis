@@ -2,9 +2,13 @@
    text; Ident, String, Number, Regex and Bool are lexical tokens described
    under LEXICAL TOKENS below. Nothing in a .art file is outside this. *)
 
-File          = { Import } { Collection | Scenario } ;
+(* A file is one of three: a collection of items, a flow of steps, or the
+   scenarios that run a flow with their data. *)
+File          = CollectionFile | FlowFile | ScenarioFile ;
+CollectionFile = { Import } Collection ;
 (* A flow file: its imports and one flow, whose name is what reports print.
-   The vars at the top of the flow are the values its scenarios may set. *)
+   The vars at the top of the flow are the values its scenarios may set. A
+   flow runs only through a scenario file that names it. *)
 FlowFile      = { Import } FlowDecl ;
 FlowDecl      = "flow" Ident "{" { ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl | Flow } "}" ;
 (* A scenario file: the flow it runs, relative to it, on its first line, then
@@ -17,15 +21,10 @@ Import        = "import" String [ "as" Ident ] ;
 Collection    = "collection" String "{" { ItemDecl } "}" ;
 (* The keyword is the item's type, and the action must be one it holds: a
    request an HTTP verb, a command run, a query db. The vars above the action
-   are the item's inputs; an item with a Params list has none. *)
-ItemDecl      = ( "request" | "command" | "query" ) Ident [ Params ]
+   are the item's inputs, and the vars after it its outputs. *)
+ItemDecl      = ( "request" | "command" | "query" ) Ident
                 "{" { VarDecl } Action { StepStmt } "}" ;
-Params        = "(" [ Param { "," Param } ] ")" ;
-Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
-Scenario      = "scenario" String [ ForClause ] "{" { TagsDecl | ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl | Flow } "}" ;
-(* suite.art: one block for a folder, shared by every scenario below it. *)
-Suite         = "suite" "{" { TagsDecl | ConfigDecl | VarDecl | PhaseDecl } "}" ;
 (* Lower-case words, written out: a run selects before it evaluates. *)
 TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
 (* setup runs before the scenario's steps and teardown after them, so setup is
@@ -39,12 +38,9 @@ Flow          = "parallel" FlowBody
               | "repeat" { RepeatOption } FlowBody "until" Expr ;
 RepeatOption  = ( "every" | "within" | "max" ) Expr ;
 FlowBody      = "{" { StepDecl | UseDecl | Flow } "}" ;
-(* One scenario per row: the name may interpolate the row, and nothing else. *)
-ForClause     = "for" [ "secret" ] Ident "in" Expr ;
-(* The step form calls an item as a use does, and the step it expands to takes
-   the quoted name. *)
-UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ]
-              | "step" String "=" ItemRef [ "as" Ident ] "{" { UseLine } "}" ;
+(* A step that calls a collection item: its lines set the item's inputs, and
+   override what it sends and expects. as prefixes the vars it writes. *)
+UseDecl       = "step" String "=" ItemRef [ "as" Ident ] "{" { UseLine } "}" ;
 ItemRef       = Ident "." Ident ;
 UseLine       = Ident "=" Expr
               | ReqField
@@ -57,7 +53,7 @@ ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting }
 BrowserSetting = "headless" "=" Bool | "viewport" "=" Expr ;
 HTTPSetting   = "cookies" "=" Bool ;
 
-VarDecl       = [ "private" ] [ "secret" ] "var" Ident [ "=" Expr ] ;
+VarDecl       = [ "private" ] "var" Ident [ "=" Expr ] ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;
 
 Action        = Request | Run | Browser | DB ;
@@ -84,9 +80,11 @@ BrowserAct    = "goto"   Expr
               | "select" Expr "=" Expr
               | "upload" Expr "=" Expr ;
 
-StepStmt      = Expect | Capture | Retry | Timeout ;
+(* A var after the action writes a name the steps below read. A later write
+   of the name replaces it. *)
+StepStmt      = Expect | StepVar | Retry | Timeout ;
 Expect        = "expect" Expr [ "within" String ] ;
-Capture       = [ "secret" ] "capture" Ident "=" Expr | "var" Ident "=" Expr ;
+StepVar       = "var" Ident "=" Expr ;
 Retry         = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
 RetryField    = "times" "=" Number | "delay" "=" String ;
 Timeout       = "timeout" "=" String ;

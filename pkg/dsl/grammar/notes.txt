@@ -3,7 +3,7 @@ LEXICAL TOKENS
   Ident     a letter or _ followed by letters, digits and _. This grammar has
             no lexical keywords: every word above lexes as an Ident and the
             parser decides what it meant from its position. So `body`, `get`
-            and `contains` are all legal variable and capture names.
+            and `contains` are all legal variable names.
   Number    123, 3.5, 1e9. No leading +.
   String    "..." with \" \\ \n \r \t \$ as its escapes, and ${ Expr } for
             interpolation: "${base}/orders/${id}". A ${ with no } is an error
@@ -56,30 +56,54 @@ WHAT THE GRAMMAR DOES NOT SAY
   A duration is a string of a number and a unit: "30s", "500ms", "2m". A
   string in a duration position that is not one is a compile error.
 
-  A collection holds requests and flows that a scenario reuses:
+  A file is one of three. A collection holds items -- request, command,
+  query -- whose vars above the action are their inputs and whose vars after
+  it are what they write. A flow file holds one flow, the steps in order. A
+  scenario file names its flow on its first line and holds the scenarios
+  that run it, data only:
 
-    import "collections/auth.art"           # relative to this file
+    # collections/auth.art
+    collection "auth" {
+      request login {
+        var user                             # an input with no value: required
+        var password = env("API_PASSWORD")   # an input with a default
+        post "/login" { body = {"user": user, "password": password} }
+        expect status == 200
+        var token = body.token               # an output, for the steps below
+      }
+    }
 
-    scenario "bad password" {
-      use auth.login {                       # collection.item
-        user = "alice"                       # an argument, by name
-        password = "wrong"
-        drop expects                         # the template's expects go,
-        drop captures                        # its captures too: a 401 has no token
+    # flows/checkout.art
+    import "../collections/auth.art"         # relative to this file
+
+    flow checkout {
+      var user = "alice"                     # a scenario may set it
+      step "bad password" = auth.login {     # collection.item
+        password = "wrong"                   # an input, by name; user comes
+                                             # from the flow's context
+        drop expects                         # the item's expects go,
+        drop vars                            # its outputs too: a 401 has no token
         expect status == 401                 # and this one is added
       }
     }
 
-  A use is expanded into plain steps before the file is checked; `artemis
-  expand` prints what will run. Arguments are passed by name. A use line that
-  opens with header, query, body, drop, expect or in is an override, so a
-  parameter may not be named one of those. `as rush` names the step "rush"
-  and prefixes the captures the use makes with rush_. A bare `use item`
-  names a sibling and is legal only inside a collection. Imports are not
-  transitive. A template may read only its parameters, its observation and
-  earlier captures in the same flow.
+    # scenarios/checkout.art
+    flow "../flows/checkout.art"
 
-  A capture may not reuse a var's name or an earlier capture's name.
+    scenario "as alice" { }
+    scenario "as bob"   { user = "bob" }
+
+  A step that calls an item is expanded into a plain step before the file is
+  checked; `artemis expand` prints what will run. An input the step does not
+  set is read from the flow's context -- a var of the flow, or one an earlier
+  step wrote -- and else takes its default. A line that opens with header,
+  query, body, drop or expect is an override, so an input may not be named one
+  of those. `as rush` prefixes the vars the item writes with rush_. Imports
+  are not transitive. An item may read only its inputs and its observation.
+
+  A step that writes a name already bound replaces it, and the steps after it
+  read the new value: the last write wins. Two vars of one name at one level
+  are an error.
 
   There is no control flow: no conditionals, no loops, no functions. That is
   deliberate, and the Reserved list above is what keeps the door open.
