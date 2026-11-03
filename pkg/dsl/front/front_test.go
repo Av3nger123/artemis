@@ -215,3 +215,30 @@ func TestDuplicateBindingHintNamesTheFirstUse(t *testing.T) {
 		t.Fatalf("hint is %q, want %q", got[0].Hint, want)
 	}
 }
+
+// Review Focus 1: one flow, two scenario files that name it. A mistake in the
+// flow is reported by each file's unit once, at the flow's line, chained to
+// that file.
+func TestFlowErrorReportedPerScenarioFile(t *testing.T) {
+	t.Skip("integration: needs Task 6")
+	files := expand.MapLoader{
+		"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/${nope}\"\n  }\n}\n",
+		"a.art":              "flow \"flows/checkout.art\"\nscenario \"a1\" { }\nscenario \"a2\" { }\n",
+		"b.art":              "flow \"flows/checkout.art\"\nscenario \"b1\" { }\n",
+	}
+	for _, name := range []string{"a.art", "b.art"} {
+		u := front.CompileWith(name, files[name], files)
+		var got []diag.Diagnostic
+		for _, d := range u.Bag.All() {
+			if d.Code == diag.UnknownIdentifier {
+				got = append(got, d)
+			}
+		}
+		if len(got) != 1 || got[0].Span.File != "flows/checkout.art" || got[0].Span.Line != 3 {
+			t.Fatalf("%s: want one unknown-identifier at flows/checkout.art:3, got %v", name, u.Bag.All())
+		}
+		if ch := got[0].UsedFrom; len(ch) != 1 || ch[0].File != name {
+			t.Fatalf("%s: the fault chains to %s, got %v", name, name, ch)
+		}
+	}
+}

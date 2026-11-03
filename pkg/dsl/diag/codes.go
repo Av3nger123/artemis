@@ -244,6 +244,21 @@ const (
 	RepeatUnbounded        Code = "repeat-unbounded"
 )
 
+// A scenario file: the flow its header names, and the values its scenarios
+// give that flow's vars.
+const (
+	FlowNotFound Code = "flow-not-found"
+	NotAFlowFile Code = "not-a-flow-file"
+	// A flow's parameters are the vars at its top, above its first setup,
+	// step or block; only those can be set by a scenario.
+	VarAfterStep           Code = "var-after-step"
+	ReservedTags           Code = "reserved-tags"
+	UnknownParam           Code = "unknown-param"
+	PrivateParam           Code = "private-param"
+	MissingParam           Code = "missing-param"
+	ScenarioValueReadsName Code = "scenario-value-reads-name"
+)
+
 // CodeInfo is what the registry knows about a code: its default severity and
 // one line a person can read. Description is documentation, not a message --
 // a diagnostic's Message says what went wrong here, a description says what
@@ -329,6 +344,14 @@ var registry = []CodeInfo{
 	{ParallelBrowser, Error, "two branches of a parallel block drive the browser, which has one page"},
 	{RepeatUnbounded, Error, "a repeat has neither within nor max, so nothing stops it"},
 	{UnknownDBScheme, Error, "a db step's connection URL names a database artemis has no driver for"},
+	{FlowNotFound, Error, "a scenario file's flow header names a file that cannot be read"},
+	{NotAFlowFile, Error, "a scenario file's flow header names a file that holds no flow"},
+	{VarAfterStep, Error, "a flow declares a var below its first setup, step or block"},
+	{ReservedTags, Error, "a flow declares a var named tags, which is each scenario's own list"},
+	{UnknownParam, Error, "a scenario sets a name that is not a var at the top of its flow"},
+	{PrivateParam, Error, "a scenario sets a private var of its flow"},
+	{MissingParam, Error, "a scenario does not set a var its flow declares without a value"},
+	{ScenarioValueReadsName, Error, "a scenario's value reads a name, where only literals and builtins are allowed"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

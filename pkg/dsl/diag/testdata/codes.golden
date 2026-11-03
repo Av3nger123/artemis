@@ -22,6 +22,7 @@ duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-row-name	error	two rows of a data-driven scenario name it alike
 duplicate-suite-name	error	a suite exports a name a suite above it already exports
 duplicate-tags	error	a scenario or a suite has more than one tags list
+flow-not-found	error	a scenario file's flow header names a file that cannot be read
 for-no-rows	error	a for clause's data has no rows
 for-source-not-array	error	a for clause's data is not an array of rows
 for-source-not-static	error	a for clause reads rows that are not known before the run
@@ -36,18 +37,23 @@ invalid-escape	error	a string literal contains an escape the language does not d
 invalid-regex	error	a regex literal does not compile
 missing-action	error	a step block contains no action block, so the step has no type
 missing-argument	error	a use does not pass a parameter that has no default
+missing-param	error	a scenario does not set a var its flow declares without a value
 missing-separator	error	two statements run together with no newline or comma between them
 nesting-too-deep	error	a file nests deeper than the parser will descend
 non-associative-operator	error	a comparison operator is chained with another
+not-a-flow-file	error	a scenario file's flow header names a file that holds no flow
 not-in-scope	error	a name is not bound in this step's type
 parallel-browser	error	two branches of a parallel block drive the browser, which has one page
 parallel-capture-clash	error	two branches of a parallel block capture the same name
 parallel-sibling-capture	error	a branch of a parallel block reads a capture another branch makes at the same time
+private-param	error	a scenario sets a private var of its flow
 repeat-unbounded	error	a repeat has neither within nor max, so nothing stops it
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
+reserved-tags	error	a flow declares a var named tags, which is each scenario's own list
 reserved-word	error	a word reserved for a later tier is used as a name
 root-capture	error	a collection's template captures under the name of a step's observation, such as body
 scenario-in-collection-file	error	a file holding a collection also holds a scenario
+scenario-value-reads-name	error	a scenario's value reads a name, where only literals and builtins are allowed
 second-collection	error	a file holds more than one collection
 secret-argument	error	an argument to a secret parameter is not itself secret
 setup-after-step	error	a setup block is below a step it would run before
@@ -67,6 +73,8 @@ unknown-db-scheme	error	a db step's connection URL names a database artemis has 
 unknown-field	error	an identifier names no field of anything in scope
 unknown-identifier	error	a name is bound nowhere in the file
 unknown-item	error	a use names a request its collection does not declare
+unknown-param	error	a scenario sets a name that is not a var at the top of its flow
 unknown-type	error	the right-hand side of "is" is not a type name
 unterminated-regex	error	a regex literal has no closing slash
 unterminated-string	error	a string literal has no closing quote
+var-after-step	error	a flow declares a var below its first setup, step or block
