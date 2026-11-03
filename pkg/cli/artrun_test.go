@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -700,5 +701,287 @@ func TestEventsOfAGatedRunStartNoScenario(t *testing.T) {
 	}
 	if msg, _ := end["error"].(string); !strings.Contains(msg, "ARTEMIS_TEST_EVENTS_GATE_URL") {
 		t.Errorf("run-end error = %q, want it to name the absent variable", msg)
+	}
+}
+
+// writeServer answers /pay with the responses it is given -- a status and a
+// body, or "hangup" for no response -- one a request, the last again once they
+// run out, and records every query /x was asked with -- the
+// value a step after "pay" sent for the name "pay" writes.
+func writeServer(t *testing.T, pays ...string) (*httptest.Server, func() []string) {
+	t.Helper()
+	var (
+		mu    sync.Mutex
+		n     int
+		asked []string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/pay":
+			body := pays[min(n, len(pays)-1)]
+			n++
+			if body == "hangup" {
+				// No response at all: the step errors rather than fails.
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err == nil {
+					_ = conn.Close()
+				}
+				return
+			}
+			status, rest, _ := strings.Cut(body, " ")
+			code := http.StatusOK
+			if status == "500" {
+				code = http.StatusInternalServerError
+			}
+			w.WriteHeader(code)
+			fmt.Fprint(w, rest)
+		case "/other":
+			fmt.Fprint(w, `{"o": 1}`)
+		case "/x":
+			asked = append(asked, r.URL.RawQuery)
+			fmt.Fprint(w, `{}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), asked...)
+	}
+}
+
+// wantUnsetRead checks that the step "after" did not run because it reads code,
+// which "pay" failed to write, and that the server never saw the value code
+// held before that write.
+func wantUnsetRead(t *testing.T, run *result.RunResult, diags string, asked []string) {
+	t.Helper()
+	after := steps(run)["after"]
+	if after == nil {
+		t.Fatalf("no step \"after\":\n%s%s", diags, describeRun(run))
+	}
+	want := `reads code, which step "pay" failed to write`
+	if after.Status != result.StatusError || after.Error != want {
+		t.Errorf("after = %s %q, want an error %q\n%s", after.Status, after.Error, want, describeRun(run))
+	}
+	if len(asked) != 0 {
+		t.Errorf("the server was asked /x with %v; a step that reads an unset name must not run", asked)
+	}
+}
+
+// A capture that fails unsets the name even when it held a value, and a later
+// step that reads it fails naming the step -- it does not send the old value.
+// Here the old value is the one the same capture wrote a round earlier, which
+// is the overwrite the checker allows before last-write-wins (Task 11).
+func TestFailedWriteUnsetsTheName(t *testing.T) {
+	srv, asked := writeServer(t, `200 {"n": 1, "code": "a"}`, `200 {"n": 2}`)
+	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+  var url = %q
+
+  repeat max 3 {
+    step "pay" {
+      get "${url}/pay"
+      capture n = body.n
+      capture code = body.code
+    }
+  } until n >= 2
+
+  step "after" {
+    get "${url}/x?c=${code}"
+  }
+
+  teardown {
+    step "undo" {
+      get "${url}/x?undo=${code}"
+    }
+  }
+}
+`, srv.URL))
+	wantUnsetRead(t, run, diags, asked())
+	// In cleanup, a step that reads an unset name is skipped, as it always
+	// has been for a name no step wrote.
+	undo := steps(run)["undo"]
+	if undo == nil || undo.Status != result.StatusSkip || undo.Error != "needs code, which no step before it captured" {
+		t.Errorf("undo = %+v, want it skipped for the unset name", undo)
+	}
+}
+
+// A retry's attempts write in turn, and the last one is what the step wrote:
+// an attempt that captured code and then a final attempt that could not leave
+// code unset, not holding the first attempt's value.
+func TestFailedWriteOnTheLastAttemptUnsetsTheName(t *testing.T) {
+	srv, asked := writeServer(t, `500 {"code": "a"}`, `200 {}`)
+	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+  var url = %q
+
+  step "pay" {
+    get "${url}/pay"
+    retry { times = 2 }
+    expect status == 200
+    capture code = body.code
+  }
+
+  step "after" {
+    get "${url}/x?c=${code}"
+  }
+}
+`, srv.URL))
+	if pay := steps(run)["pay"]; pay == nil || pay.Attempts != 2 {
+		t.Fatalf("pay = %+v, want two attempts", pay)
+	}
+	wantUnsetRead(t, run, diags, asked())
+}
+
+// A step that could not reach a response writes nothing, so the names it
+// writes are unset too: a round that errored does not leave the round before's
+// value for the steps after the loop to read.
+func TestAStepThatErroredUnsetsWhatItWrites(t *testing.T) {
+	srv, asked := writeServer(t, `200 {"n": 1, "code": "a"}`, "hangup")
+	run, diags := runArt(t, fmt.Sprintf(`scenario "errored write" {
+  var url = %q
+
+  repeat max 3 {
+    step "pay" {
+      get "${url}/pay"
+      capture n = body.n
+      capture code = body.code
+    }
+  } until n >= 2
+
+  step "after" {
+    get "${url}/x?c=${code}"
+  }
+}
+`, srv.URL))
+	if pay := steps(run)["pay"]; pay == nil || pay.Status != result.StatusError || pay.Round != 2 {
+		t.Fatalf("pay = %+v, want round 2 to have errored", pay)
+	}
+	wantUnsetRead(t, run, diags, asked())
+}
+
+// A parallel branch whose write fails unsets the name for the steps after the
+// block, though the sibling branches' copies of the scope still hold the old
+// value.
+func TestFailedWriteInAParallelBranchUnsetsTheName(t *testing.T) {
+	srv, asked := writeServer(t, `200 {"n": 1, "code": "a"}`, `200 {"n": 2}`)
+	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+  var url = %q
+
+  repeat max 3 {
+    parallel {
+      step "pay" {
+        get "${url}/pay"
+        capture n = body.n
+        capture code = body.code
+      }
+      step "other" {
+        get "${url}/other"
+        capture o = body.o
+      }
+    }
+  } until n >= 2
+
+  step "after" {
+    get "${url}/x?c=${code}"
+  }
+}
+`, srv.URL))
+	wantUnsetRead(t, run, diags, asked())
+}
+
+// The plan's own form of TestFailedWriteUnsetsTheName: a flow var that a step's
+// `var` overwrites. It needs `var` after a step's action (Task 3) and the
+// checker letting a write replace a name (Task 11).
+func TestFailedWriteUnsetsTheNameOfAFlowVar(t *testing.T) {
+	t.Skip("integration: needs Tasks 3,5,11")
+	srv, asked := writeServer(t, `200 {}`)
+	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+  var url = %q
+  var code = 200
+
+  step "pay" {
+    get "${url}/no-code"
+    var code = body.code
+  }
+
+  step "after" {
+    get "${url}/x?c=${code}"
+  }
+}
+`, srv.URL))
+	wantUnsetRead(t, run, diags, asked())
+}
+
+// Review Focus 5: a step overwrites a flow var, and a later item that reads the
+// name through the flow's context sends the new value, not the flow's default.
+func TestOverwrittenNameReachesALaterItem(t *testing.T) {
+	t.Skip("integration: needs Tasks 3,5,11")
+	var (
+		mu  sync.Mutex
+		got []string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/who":
+			fmt.Fprint(w, `{"name": "b"}`)
+		case "/greet":
+			mu.Lock()
+			got = append(got, r.URL.Query().Get("u"))
+			mu.Unlock()
+			fmt.Fprint(w, `{}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	write := func(name, src string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	write("api.art", `collection "api" {
+  request greet {
+    var user
+    var url
+    get "${url}/greet?u=${user}"
+    expect status == 200
+  }
+}
+`)
+	write("greeting.art", fmt.Sprintf(`import "api.art"
+
+flow greeting {
+  var user = "a"
+  private var url = %q
+
+  step "who" {
+    get "${url}/who"
+    var user = body.name
+  }
+
+  step "greet" = api.greet { }
+}
+`, srv.URL))
+	scenarios := write("greetings.art", `flow "greeting.art"
+
+scenario "greets whoever answered" { }
+`)
+	out, stderr, err := runCLI(t, "run", scenarios)
+	if err != nil {
+		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 || got[0] != "b" {
+		t.Errorf("greet sent u=%v, want [b]: the overwritten value, not the flow's default", got)
 	}
 }

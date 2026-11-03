@@ -9,7 +9,7 @@ package executor
 // through the runner today, where the pointer bought nothing.
 //
 // A Scope must be made with NewScope. Set on a nil Scope panics, as writing to
-// any nil map does; Get and Vars on one are fine.
+// any nil map does; Get, Unset and Vars on one are fine.
 type Scope map[string]any
 
 // NewScope returns an empty scope ready to be written to.
@@ -30,6 +30,15 @@ func ScopeOf(vars map[string]any) Scope {
 // step captures a value for the steps after it.
 func (s Scope) Set(key string, value any) {
 	s[key] = value
+}
+
+// Unset removes key, so the scope holds nothing under it -- not nil, nothing.
+// This is what a write that failed does: the name stops holding the value it
+// had before, so a later read finds it missing rather than quietly reading a
+// value that is out of date. Unsetting a key that is not there, or unsetting on
+// a nil scope, does nothing.
+func (s Scope) Unset(key string) {
+	delete(s, key)
 }
 
 // Get returns the value under key and whether there was one. A key that was set

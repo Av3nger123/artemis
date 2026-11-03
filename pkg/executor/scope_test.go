@@ -55,6 +55,26 @@ func TestScopeGetDistinguishesNilFromAbsent(t *testing.T) {
 	}
 }
 
+// Unset leaves the key absent, not nil: after a failed write the name holds
+// nothing, and a later read must find nothing rather than the old value.
+func TestScopeUnsetRemovesTheKey(t *testing.T) {
+	s := NewScope()
+	s.Set("code", 200)
+	s.Set("other", "kept")
+	s.Unset("code")
+
+	if got, ok := s.Get("code"); ok {
+		t.Errorf("Get(\"code\") after Unset = %v, true; want nothing", got)
+	}
+	if got, _ := s.Get("other"); got != "kept" {
+		t.Errorf("Get(\"other\") = %v, want a key Unset did not name kept", got)
+	}
+	// Neither of these is an error: there is nothing to remove.
+	s.Unset("never-set")
+	var none Scope
+	none.Unset("anything")
+}
+
 func TestScopeOfAdoptsTheMap(t *testing.T) {
 	vars := map[string]any{"base": "http://localhost"}
 	s := ScopeOf(vars)

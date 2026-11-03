@@ -324,6 +324,31 @@ func TestAFailedCaptureIsOneErroredAssertion(t *testing.T) {
 	}
 }
 
+// A capture that fails unsets a name that held a value before -- an earlier
+// round's, an earlier attempt's -- so the steps after it do not read the old
+// value as if this write had made it. The last write wins, even one that failed.
+func TestAFailedCaptureUnsetsAnEarlierValue(t *testing.T) {
+	sc, scope := bound(t, `scenario "s" {
+  step "pay" {
+    get "https://api.test/pay"
+    capture code = body.code
+    capture kept = body.kept
+  }
+}`)
+	scope.Set("code", "old")
+	got := sc.Steps[0].Apply(observed(apiRoots(200, map[string]any{"kept": 1.0}), scope), scope)
+
+	if len(got) != 1 || got[0].Path != "code" || got[0].Status != result.StatusError {
+		t.Fatalf("Apply() = %#v, want one errored assertion for code", got)
+	}
+	if v, ok := scope.Get("code"); ok {
+		t.Errorf("scope[code] = %v after a failed write, want it unset", v)
+	}
+	if v, ok := scope.Get("kept"); !ok || v != 1.0 {
+		t.Errorf("scope[kept] = %v, %v; want the capture after the failure written", v, ok)
+	}
+}
+
 // `within` is a per-assertion budget, defaulting to BrowserWithin in a browser
 // step and to "evaluate once" in an api or terminal one.
 func TestWithinDefaultsByStepType(t *testing.T) {
