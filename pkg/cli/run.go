@@ -132,6 +132,12 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 	} else if files, err = discover(path); err != nil {
 		return err
 	}
+	named := ""
+	if item == nil && len(files) == 1 && files[0] == path {
+		// discover answers a file it was given as itself, and a folder as
+		// the paths under it.
+		named = path
+	}
 
 	// cmd.OutOrStdout, not os.Stdout: a test captures the run's output by
 	// setting the command's writer.
@@ -162,6 +168,7 @@ func reportRun(cmd *cobra.Command, path, envFile string) error {
 		root:     path,
 		item:     item,
 		captures: captures,
+		named:    named,
 	}
 	if streaming {
 		rt.events = report.NewEvents(out)
@@ -357,6 +364,11 @@ type runtimeEnv struct {
 	// where --captures collects, nil when it was not asked for.
 	item     *itemRun
 	captures *captureSink
+
+	// named is the file `run` was given by name, and empty for a folder run:
+	// only a file named outright can be a flow file run by mistake, because a
+	// folder run passes over flow files as it does collection files.
+	named string
 }
 
 // runFilesWith is runFiles with the run-wide settings given rather than
@@ -409,6 +421,12 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			continue
 		}
 		diag := &bytes.Buffer{}
+		if file == rt.named {
+			if isFlow, err := flowNotRunnable(file, diag); isFlow {
+				attempts[i] = fileAttempt{compiled: compiled{file: file}, diag: diag, err: err}
+				continue
+			}
+		}
 		c, err := rt.load(file, diag)
 		// loadArtFile answers a zero compiled when the file would not
 		// compile, and every report below needs the path either way.

@@ -1,0 +1,16 @@
+import "../collections/auth.art"
+
+flow checkout {
+  var password = "s3cret"
+  var code = 200
+  private var url = env("API_URL")
+
+  step "log in" = auth.login {}
+
+  step "orders" = auth.orders {}
+
+  step "orders again" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == code
+  }
+}

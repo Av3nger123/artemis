@@ -4,47 +4,70 @@ Every conversion is one-shot: it reads the old file, writes `.art` source, and
 never touches the original. Nothing translates on the fly, because a format that
 is only ever read through a converter is a format nobody has to learn.
 
-Each writes through the same printer `artemis fmt` uses, so what comes out is
-already canonically formatted and `artemis fmt` over it changes nothing.
+Each one writes the canonical form `artemis fmt` gives, so `artemis fmt` over
+what comes out changes nothing.
 
 ## A Postman collection
 
 ```sh
-artemis generate -f orders.postman_collection.json -o orders.art         # a collection and a scenario
-artemis generate -f orders.postman_collection.json --flat                # one scenario, to stdout
-artemis generate -f orders.postman_collection.json --flat -o orders.art
+artemis generate -f orders.postman_collection.json -o orders.art          # a collection, a flow and a scenario file
+artemis generate -f orders.postman_collection.json --flat -o orders.art   # a flow and a scenario file
 ```
 
-By default, `generate` writes two files: `orders.collection.art` holds one
-`request` for each Postman request, and `orders.art` imports it and holds one
-`use` line for each request. A request gets one parameter for each scenario
-`var` it reads. This mode needs `-o`, and `--force` replaces each of the two
-files. `--flat` writes one scenario with one `step` for each request instead.
+By default, `generate` writes three files:
 
-The default output has one `request` for each Postman request, in
-`orders.collection.art`, whose collection is titled as the Postman collection
-is. The scenario uses it by the file's name, `orders` -- or, when the `-o`
-name is not a DSL name, imports it `as` one. That name and the request name
-form the name of a step: `orders.orders_admin_list_orders`.
-The scenario `orders.art` holds one `use` line for each request:
+- `orders.collection.art` holds one `request` for each Postman request, in
+  a collection titled as the Postman collection is. A request declares each
+  Postman variable it reads as a `var` with no value: an input the flow
+  supplies.
+- `orders.flow.art` imports the collection and holds the flow. The flow is
+  named after the collection -- `"Orders API"` is `orders_api` -- and has one
+  `var` for each Postman variable, then one step for each request that calls
+  its item: `step "Orders / Admin / list orders" = orders.orders_admin_list_orders {}`.
+  The item's inputs are read from the flow's vars of the same names.
+- `orders.art` is the scenario file. It names the flow and holds one
+  scenario, titled as the collection is, that sets nothing, so every var keeps
+  the value the flow gives it. Run this one: `artemis run orders.art`.
+
+The flow calls the collection by the file's name, `orders` -- or, when the `-o`
+name is not a DSL name, imports it `as` one. `--flat` writes no collection: the
+flow holds each request in place as a step, and the scenario file is the same.
+Both modes need `-o`, which names the scenario file; the other files go beside
+it.
 
 ```text
+# orders.collection.art
+collection "Orders API" {
+  request health_ping {
+    var base_url
+
+    get "${base_url}/ping"
+    expect status == 200
+  }
+}
+
+# orders.flow.art
 import "orders.collection.art"
 
-scenario "Orders API" {
+flow orders_api {
   var base_url = "https://api.example.com"
-  use orders.health_ping { base_url = base_url }
+
+  step "Health / ping" = orders.health_ping {}
 }
+
+# orders.art
+flow "orders.flow.art"
+
+scenario "Orders API" {}
 ```
 
-(`orders.art`, cut short. The file `orders.collection.art` holds `request health_ping(base_url)`.)
+(The three files, cut short.)
 
-The text and the sample below show `--flat` output. In `--flat` output, folders
-nest to any depth and every request becomes one step named by its folder
-path -- `"Orders / Admin / list orders"`. Headers, `url.query` parameters and the
-body's mode are read as the collection wrote them: a raw JSON body becomes an
-object literal, a urlencoded body a string. A disabled header or parameter is
-left out, because the author switched it off.
+Folders nest to any depth, and every request becomes one step named by its
+folder path -- `"Orders / Admin / list orders"`. Headers, `url.query`
+parameters and the body's mode are read as the collection wrote them: a raw
+JSON body becomes an object literal, a urlencoded body a string. A disabled
+header or parameter is left out, because the author switched it off.
 
 Auth at the collection and at the request both become a header: bearer, basic
 with literal credentials, and apikey in a header or the query. A request with a
@@ -55,14 +78,15 @@ says.
 A Postman variable whose key is not a DSL name is renamed -- `base-url` becomes
 `base_url` -- and every placeholder is rewritten to match. A `{{name}}` no
 variable defines becomes `var name = env("NAME")`. Both are noted in the comment
-above the scenario, so nothing is renamed silently. This is `--flat` output:
+above the flow, so nothing is renamed silently. This is the flow `--flat`
+writes:
 
-```art
+```text
 # Generated by artemis generate from kitchen_sink.postman_collection.json.
 # The Postman variable "access-token" is written access_token here, because a DSL name cannot hold "-".
 # The Postman variable "base-url" is written base_url here, because a DSL name cannot hold "-".
 # Read from the environment, because the collection used them without defining them: access_token from ACCESS_TOKEN.
-scenario "Orders API" {
+flow orders_api {
   var base_url = "https://api.example.com"
   var page_size = "10"
   var access_token = env("ACCESS_TOKEN")
@@ -99,8 +123,8 @@ variable like `{{$guid}}`. Pre-request and test scripts are not read at all --
 the DSL has no spelling for arbitrary JavaScript, and it is not going to grow
 one.
 
-With `-o`, a file that is already there is an error rather than an overwrite;
-`--force` replaces it.
+A file that is already there is an error rather than an overwrite, for each of
+the files a mode writes; `--force` replaces them.
 
 ## An old YAML scenario
 

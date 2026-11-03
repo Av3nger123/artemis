@@ -2484,6 +2484,7 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `scenarios` | run | One entry per scenario the run reached, in run order |
 | `kind` | scenario | `"suite"` for a [suite's](#suites-suiteart) setup or teardown. **Omitted** on a scenario |
 | `tags` | scenario | The scenario's [tags](#tags), its own and its suites'. **Omitted** when it has none |
+| `flow` | scenario | For a scenario of a scenario file, the name of the flow it ran: `"checkout"`. **Omitted** on every other scenario |
 | `row` | scenario | For a [data-driven scenario](#data-driven-scenarios), the row it was made from: `{"source": "users.json", "index": 0}`, where `source` is the file its rows were read from, or `"rows"` for an array written out. **Absent** on every other scenario |
 | `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
 | `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |

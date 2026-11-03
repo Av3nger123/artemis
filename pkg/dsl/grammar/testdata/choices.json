@@ -460,6 +460,11 @@
           "severity": "error"
         },
         {
+          "value": "flow-not-runnable",
+          "doc": "a flow file is named on the command line, and a flow runs only through a scenario file",
+          "severity": "error"
+        },
+        {
           "value": "flow-ref-placement",
           "doc": "a scenario file's flow \"...\" header is not its first line",
           "severity": "error"

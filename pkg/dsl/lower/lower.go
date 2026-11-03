@@ -76,6 +76,10 @@ type Scenario struct {
 	// written with a for clause, and nil for every other.
 	Row *Row
 
+	// FlowName is the name of the flow the scenario runs, for a scenario of a
+	// scenario file, and "" for every other.
+	FlowName string
+
 	// Tags are the scenario's own `tags = [...]`, in the order written. The
 	// suites above it add theirs when the run selects.
 	Tags []string
@@ -279,8 +283,9 @@ func File(tree *ast.File, info *check.Info) ([]*Scenario, error) {
 // which is why the set is built here and not in a pass of its own.
 func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 	out := &Scenario{
-		Name: sc.Name.Value,
-		Line: sc.Keyword.Span.Line,
+		Name:     sc.Name.Value,
+		Line:     sc.Keyword.Span.Line,
+		FlowName: sc.Flow,
 	}
 	if sc.Row != nil {
 		out.Row = &Row{Source: sc.Row.Source, Index: sc.Row.Index}

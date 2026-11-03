@@ -272,6 +272,11 @@ const (
 	ParallelSiblingCapture Code = "parallel-sibling-capture"
 	ParallelBrowser        Code = "parallel-browser"
 	RepeatUnbounded        Code = "repeat-unbounded"
+
+	// FlowNotRunnable is a flow file named on the command line: a flow runs
+	// only through a scenario file that names it. pkg/cli reports it, because
+	// only a path the user named can be one.
+	FlowNotRunnable Code = "flow-not-runnable"
 )
 
 // A scenario file: the flow its header names, and the values its scenarios
@@ -395,6 +400,7 @@ var registry = []CodeInfo{
 	{ScenarioValueReadsName, Error, "a scenario's value reads a name, where only literals and builtins are allowed"},
 	{SkipRead, Error, "a var a scenario skips is read somewhere other than an expect or an object field"},
 	{SkipMaybeWritten, Error, "a var a scenario skips is read where only some paths have written it"},
+	{FlowNotRunnable, Error, "a flow file is named on the command line, and a flow runs only through a scenario file"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

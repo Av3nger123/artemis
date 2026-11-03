@@ -490,3 +490,24 @@ func TestWriteJSONNamesAFileOnlyWhenItIsNotTheScenarios(t *testing.T) {
 		t.Errorf("failure = %v", f)
 	}
 }
+
+// A scenario of a scenario file names the flow it ran; any other scenario has
+// no flow key, so a run with no scenario file writes the document it always
+// did.
+func TestWriteJSONNamesTheFlowOfAScenarioFile(t *testing.T) {
+	flowed := &result.ScenarioResult{Name: "full price", File: "scenarios/checkout.art", Flow: "checkout"}
+	flowed.Finish(0)
+	plain := &result.ScenarioResult{Name: "health", File: "health.art"}
+	plain.Finish(0)
+	run := result.NewRun()
+	run.Scenarios = []*result.ScenarioResult{flowed, plain}
+	run.Finish()
+
+	scenarios := decode(t, writeJSON(t, run))["scenarios"].([]any)
+	if f := scenarios[0].(map[string]any)["flow"]; f != "checkout" {
+		t.Errorf("flow = %v, want checkout", f)
+	}
+	if f, has := scenarios[1].(map[string]any)["flow"]; has {
+		t.Errorf("a scenario with no flow has flow = %v, want the key absent", f)
+	}
+}

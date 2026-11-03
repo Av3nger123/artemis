@@ -1,0 +1,19 @@
+collection "auth" {
+  request login {
+    var url
+    var user = "admin"
+    var password
+
+    post "${url}/token" { body = {"username": user, "password": password} }
+    expect status == 200
+    var token = body.data.access_token
+  }
+
+  request orders {
+    var url
+    var token
+
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+  }
+}

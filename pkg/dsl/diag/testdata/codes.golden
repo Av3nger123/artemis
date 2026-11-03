@@ -25,6 +25,7 @@ duplicate-suite-name	error	a suite exports a name a suite above it already expor
 duplicate-tags	error	a scenario or a suite has more than one tags list
 flow-file-holds	error	a flow file holds a collection or a scenario
 flow-not-found	error	a scenario file's flow header names a file that cannot be read
+flow-not-runnable	error	a flow file is named on the command line, and a flow runs only through a scenario file
 flow-ref-placement	error	a scenario file's flow "..." header is not its first line
 for-no-rows	error	a for clause's data has no rows
 for-source-not-array	error	a for clause's data is not an array of rows

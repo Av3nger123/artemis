@@ -272,6 +272,10 @@ type ScenarioResult struct {
 	// Row is the row of data a data-driven scenario was made from, and nil
 	// for every other scenario.
 	Row *Row
+	// Flow is the name of the flow the scenario ran, for a scenario of a
+	// scenario file, and empty for every other. NewScenario leaves it unset;
+	// the runner sets it after.
+	Flow string
 	// Kind is "suite" for a suite.art's setup or teardown, which the run
 	// reports beside the scenarios it was for, and empty for a scenario.
 	Kind string

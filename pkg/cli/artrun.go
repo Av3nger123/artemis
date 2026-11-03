@@ -84,6 +84,7 @@ func runCompiled(ctx context.Context, rt *runtimeEnv, c compiled, run *result.Ru
 			// it; not on the console, where a smoke run of a large suite
 			// would otherwise be a page of lines saying nothing ran.
 			skipped := run.NewScenario(sc.Name, c.file)
+			skipped.Flow = sc.FlowName
 			skipped.Tags = rt.tagsOf(c.file, sc)
 			skipped.Status = result.StatusSkip
 			skipped.Error = rt.sel.reason()
@@ -269,6 +270,7 @@ type scenarioOut struct {
 // execute runs one scenario from in. See executeArtScenario.
 func execute(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console, in scenarioIn) scenarioOut {
 	scenario := run.NewScenario(sc.Name, file)
+	scenario.Flow = sc.FlowName
 	scenario.Kind = in.kind
 	scenario.Tags = in.tags
 	if sc.Row != nil {

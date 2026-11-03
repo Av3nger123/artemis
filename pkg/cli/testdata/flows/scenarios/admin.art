@@ -1,0 +1,8 @@
+flow "../flows/checkout.art"
+
+scenario "admin smoke" {
+  tags = ["smoke"]
+  password = "s3cret"
+}
+
+scenario "admin full" {}
