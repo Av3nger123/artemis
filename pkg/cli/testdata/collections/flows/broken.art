@@ -1,0 +1,5 @@
+import "../broken_coll.art"
+
+flow broken {
+  step "broken_coll.r" = broken_coll.r {}
+}

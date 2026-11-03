@@ -1,18 +1,18 @@
-scenario: status and body (testdata/art/status_and_body.art)
+scenario: status and body (testdata/art/scenarios/status_and_body.art)
   ERROR ping                        <dur>
          status == 200, got 500
          body.status ==: body.status did not resolve
 
 2 failures:
 
-1) testdata/art/status_and_body.art:17
+1) testdata/art/flows/status_and_body.art:17
      scenario  status and body
      step      ping
      assert    expect status ==
      expected  200
      actual    500
 
-2) testdata/art/status_and_body.art:18
+2) testdata/art/flows/status_and_body.art:18
      scenario  status and body
      step      ping
      assert    expect body.status ==

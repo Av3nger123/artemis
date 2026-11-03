@@ -10,10 +10,10 @@ import (
 	"artemis/pkg/dsl/print"
 )
 
-// uglyArt is cleanArt's scenario with the layout wrecked: tabs, runs of
+// uglyArt is cleanArt's flow with the layout wrecked: tabs, runs of
 // spaces, inline blocks that should break, a missing trailing newline. It
 // parses clean, so it is a file `fmt` is allowed to touch.
-const uglyArt = "scenario \"checkout\"   {\n\tvar url=env(\"API_URL\")\n\n\n  step \"login\"  {\n        post \"${url}/token\" { header \"Content-Type\" = \"application/json\"\n   body = {\"username\":\"alice\"} }\n\texpect status==200\n  }\n}"
+const uglyArt = "flow checkout   {\n\tvar url=env(\"API_URL\")\n\n\n  step \"login\"  {\n        post \"${url}/token\" { header \"Content-Type\" = \"application/json\"\n   body = {\"username\":\"alice\"} }\n\texpect status==200\n  }\n}"
 
 // canonical is what the printer makes of src, by the same route the command
 // takes. The expectation is derived rather than written out, because pinning
@@ -132,6 +132,7 @@ func TestFmtWriteKeepsTheFileMode(t *testing.T) {
 // someone's work.
 func TestFmtRefusesAFileWithErrors(t *testing.T) {
 	path := writeArt(t, "many_errors.art", manyErrorsArt)
+	before := mustRead(t, path)
 
 	stdout, stderr, err := executeArgs(t, "fmt", "-w", path)
 	if err == nil {
@@ -148,7 +149,7 @@ func TestFmtRefusesAFileWithErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(on) != manyErrorsArt {
+	if string(on) != before {
 		t.Errorf("the file was rewritten despite its errors:\n%q", on)
 	}
 }

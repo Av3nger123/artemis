@@ -29,7 +29,7 @@ func TestRunOneRequestOfACollection(t *testing.T) {
 	dir := t.TempDir()
 	captures := filepath.Join(dir, "captures.json")
 	traces := filepath.Join(dir, "traces")
-	out, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login",
+	out, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login",
 		"--arg", "user=alice", "--arg", "password=s3cret", "--arg", "base="+srv.URL,
 		"--report", "json", "--captures", captures, "--trace", traces)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestItemArgumentsFromAFile(t *testing.T) {
 	if err := os.WriteFile(args, []byte(`{"user": "alice", "password": "s3cret", "base": "`+srv.URL+`"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login", "--args", args, "--report", "json")
+	out, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login", "--args", args, "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
 	}
@@ -91,7 +91,7 @@ func TestAnArgumentIsSentAsWritten(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
 	}))
 	t.Cleanup(srv.Close)
-	_, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login",
+	_, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login",
 		"--arg", `user=a"b ${base} \n`, "--arg", "password=x", "--arg", "base="+srv.URL, "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, stderr)
@@ -108,7 +108,7 @@ func TestRunEveryItemOfACollection(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
 	}))
 	t.Cleanup(srv.Close)
-	out, stderr, err := runCLI(t, "run", "testdata/collections/session.art", "--item", "session", "--arg", "base="+srv.URL, "--report", "json")
+	out, stderr, err := runCLI(t, "run", "testdata/collections/old/session.art", "--item", "session", "--arg", "base="+srv.URL, "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
 	}
@@ -123,7 +123,7 @@ func TestAnItemMissingAnArgumentDoesNotRun(t *testing.T) {
 	hit := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
 	t.Cleanup(srv.Close)
-	_, stderr, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login", "--arg", "user=alice", "--arg", "base="+srv.URL)
+	_, stderr, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login", "--arg", "user=alice", "--arg", "base="+srv.URL)
 	if err == nil {
 		t.Fatal("want a non-zero exit")
 	}
@@ -136,19 +136,19 @@ func TestAnItemMissingAnArgumentDoesNotRun(t *testing.T) {
 }
 
 func TestAnItemThatIsNotThere(t *testing.T) {
-	_, _, err := runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.logout")
+	_, _, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.logout")
 	if err == nil || !strings.Contains(err.Error(), "auth has no item logout") || !strings.Contains(err.Error(), "login") {
 		t.Fatalf("err = %v", err)
 	}
 	// Before the dot is only the name the run imports the file as.
-	_, _, err = runCLI(t, "run", "testdata/collections/auth.art", "--item", "my-auth.login")
+	_, _, err = runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "my-auth.login")
 	if err == nil || !strings.Contains(err.Error(), "like my_auth") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
-	_, _, err := runCLI(t, "run", "testdata/collections/auth.art", "--arg", "user=alice")
+	_, _, err := runCLI(t, "run", "testdata/collections/old/auth.art", "--arg", "user=alice")
 	if err == nil || !strings.Contains(err.Error(), "--item") {
 		t.Fatalf("err = %v", err)
 	}
@@ -156,7 +156,7 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "a collection file") {
 		t.Fatalf("err = %v", err)
 	}
-	_, _, err = runCLI(t, "run", "testdata/collections/auth.art", "--item", "auth.login", "--arg", "no-equals")
+	_, _, err = runCLI(t, "run", "testdata/collections/old/auth.art", "--item", "auth.login", "--arg", "no-equals")
 	if err == nil || !strings.Contains(err.Error(), "name=value") {
 		t.Fatalf("err = %v", err)
 	}
@@ -166,7 +166,7 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 // file is.
 func TestAstAndParseReadAFileAsIfItWereElsewhere(t *testing.T) {
 	draft := filepath.Join(t.TempDir(), "draft.art")
-	src := "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
+	src := "import \"auth.art\"\n\nflow s {\n  step \"login\" = auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
 	if err := os.WriteFile(draft, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -1,10 +1,10 @@
-scenario: status code (testdata/art/wrong_status.art)
+scenario: status code (testdata/art/scenarios/wrong_status.art)
   FAIL  ping                        <dur>
          status == 200, got 500
 
 1 failure:
 
-1) testdata/art/wrong_status.art:11
+1) testdata/art/flows/wrong_status.art:11
      scenario  status code
      step      ping
      assert    expect status ==

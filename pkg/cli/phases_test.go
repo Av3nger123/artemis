@@ -44,21 +44,21 @@ func (ps *phaseServer) requests() string {
 }
 
 func checkoutArt(url string) string {
-	return fmt.Sprintf(`scenario "checkout" {
+	return fmt.Sprintf(`flow checkout {
   var url = %q
 
   setup {
     step "make a cart" {
       post "${url}/carts"
       expect status == 200
-      capture cart_id = body.id
+      var cart_id = body.id
     }
   }
 
   step "pay" {
     post "${url}/pay"
     expect status == 200
-    capture order_id = body.id
+    var order_id = body.id
   }
 
   teardown {
@@ -70,6 +70,8 @@ func checkoutArt(url string) string {
     }
   }
 }
+
+scenario "checkout" {}
 `, url)
 }
 

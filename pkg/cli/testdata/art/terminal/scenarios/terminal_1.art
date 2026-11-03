@@ -1,0 +1,3 @@
+flow "../flows/terminal_1.art"
+
+scenario "api and terminal" {}

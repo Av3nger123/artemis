@@ -2,10 +2,14 @@ package cli
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/expand"
+	"artemis/pkg/dsl/front"
+	artmigrate "artemis/pkg/dsl/migrate"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/print"
 )
@@ -330,8 +334,9 @@ func TestGoldenMigrations(t *testing.T) {
 				t.Fatalf("migrate %s = %v\nstderr:\n%s", yamlPath, err, stderr)
 			}
 			checkMigrateGolden(t, c.name, got)
-			assertCodes(t, c.name, got, c.wantCodes)
-			assertAgreesWithHandWritten(t, c, got)
+			pair := newForms(t, c.name, got)
+			assertCodes(t, c.name, pair, c.wantCodes)
+			assertAgreesWithHandWritten(t, c, pair)
 		})
 	}
 }
@@ -362,62 +367,119 @@ func checkMigrateGolden(t *testing.T, name, got string) {
 	}
 }
 
-// assertCodes runs the front end over the migrated source and compares the
-// diagnostic codes with the row's. A file expected to check clean that does not
-// is a migration bug; a file expected to fail that passes means the design
-// change the row records has been undone.
-func assertCodes(t *testing.T, name, src string, want []string) {
+// migratedPair is a YAML fixture's migration carried on into the new forms:
+// the old-form .art that `artemis migrate -f x.yaml` writes, converted by
+// `artemis migrate`'s .art half into a flow and a scenario file.
+type migratedPair struct {
+	files                map[string]string // both, by the keys below
+	flowKey, scenarioKey string
+}
+
+// newForms converts got, the old-form migration of the fixture called name.
+// Only the file's own name is kept, so the pair is flows/<base>.art and
+// scenarios/<base>.art whatever folder the fixture is in.
+func newForms(t *testing.T, name, got string) migratedPair {
 	t.Helper()
-	bag := frontEnd(name+".art", src).Bag
+	base := path.Base(name) + artExt
+	files, _, err := artmigrate.Files(map[string]string{base: got})
+	if err != nil {
+		t.Fatalf("migrating the migrated %s.art to the new forms: %v", name, err)
+	}
+	p := migratedPair{files: files, flowKey: "flows/" + base, scenarioKey: "scenarios/" + base}
+	if _, ok := files[p.flowKey]; !ok {
+		t.Fatalf("the new forms of %s.art have no %s: %v", name, p.flowKey, files)
+	}
+	return p
+}
+
+// assertCodes runs the front end over the migrated scenario file and compares
+// the diagnostic codes with the row's. A file expected to check clean that does
+// not is a migration bug; a file expected to fail that passes means the design
+// change the row records has been undone.
+func assertCodes(t *testing.T, name string, p migratedPair, want []string) {
+	t.Helper()
+	bag := front.CompileWith(p.scenarioKey, p.files[p.scenarioKey], expand.MapLoader(p.files)).Bag
 
 	var got []string
 	for _, d := range bag.All() {
 		got = append(got, string(d.Code))
 	}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("the migrated %s.art produced diagnostics %v, want %v\n%s", name, got, want, src)
+		t.Errorf("the migrated %s.art produced diagnostics %v, want %v\n%s", name, got, want, p.files[p.flowKey])
 	}
 }
 
-// assertAgreesWithHandWritten is the two-paths-must-agree half of the done-when.
+// handWritten is where testdata/art holds the fixture called name: its flow in
+// flows/ and its scenario file in scenarios/, under the corpus folder the
+// fixture belongs to -- report_json/, suite/ -- or under testdata/art itself,
+// with any folder below that kept beneath both.
+func handWritten(name string) (flow, scenario string) {
+	root, rest := "", name
+	if i := strings.Index(name, "/"); i >= 0 {
+		root, rest = name[:i], name[i+1:]
+	}
+	at := func(kind string) string {
+		return filepath.Join("testdata", artDir, root, kind, filepath.FromSlash(rest)+artExt)
+	}
+	return at("flows"), at("scenarios")
+}
+
+// belowHeader is a scenario file without its first line, the header naming its
+// flow, which is a path relative to where the file is.
+func belowHeader(src string) string {
+	_, rest, _ := strings.Cut(src, "\n")
+	return rest
+}
+
+// assertAgreesWithHandWritten is the two-paths-must-agree half of the done-when:
+// the YAML fixture, migrated and carried on into the new forms, against the
+// flow and scenario file testdata/art holds.
 //
-// Both sides are canonically printed before they are compared, because
-// migration's output always is and two of ART-38's files are not -- bad_retry's
-// `retry` block is written across three lines where canonical mode fits it on
-// one. Comparing the two formatters' idea of the same tree would be a test of
-// nothing.
-func assertAgreesWithHandWritten(t *testing.T, c corpusCase, got string) {
+// The hand-written flow is canonically printed before it is compared, because
+// migration's output always is. Comparing the two formatters' idea of the same
+// tree would be a test of nothing.
+func assertAgreesWithHandWritten(t *testing.T, c corpusCase, p migratedPair) {
 	t.Helper()
-	path := filepath.Join("testdata", "art", filepath.FromSlash(c.name)+".art")
-	raw, err := os.ReadFile(path) //nolint:gosec // a path this test built
+	flowPath, scenarioPath := handWritten(c.name)
+	raw, err := os.ReadFile(flowPath) //nolint:gosec // a path this test built
 	if err != nil {
 		t.Fatal(err)
 	}
-	hand := reprint(t, path, string(raw))
+	hand := reprint(t, flowPath, string(raw))
+	got := p.files[p.flowKey]
+
+	scenario, err := os.ReadFile(scenarioPath) //nolint:gosec // a path this test built
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.rel != diverges && belowHeader(p.files[p.scenarioKey]) != belowHeader(string(scenario)) {
+		t.Errorf("below its header, migrating %s.yaml does not reproduce %s:\ngot\n%s\nwant\n%s",
+			c.name, scenarioPath, p.files[p.scenarioKey], scenario)
+	}
 
 	switch c.rel {
 	case same:
 		if got != string(raw) {
 			t.Errorf("migrating %s.yaml does not reproduce %s byte for byte:\ngot\n%s\nwant\n%s",
-				c.name, path, got, raw)
+				c.name, flowPath, got, raw)
 		}
 	case sameBelowComments:
 		gotBody, handBody := belowComments(got), belowComments(hand)
 		if gotBody != handBody {
 			t.Errorf("below its comment block, migrating %s.yaml does not reproduce %s:\ngot\n%s\nwant\n%s",
-				c.name, path, gotBody, handBody)
+				c.name, flowPath, gotBody, handBody)
 		}
 	case diverges:
 		if belowComments(got) == belowComments(hand) {
 			t.Errorf("%s.yaml now migrates to %s, so the row saying they differ is stale.\nThe reason it gave: %s",
-				c.name, path, c.why)
+				c.name, flowPath, c.why)
 		}
 	}
 }
 
 // belowComments is src with its leading comment block removed: every line from
 // the top that is blank or starts with a `#`, which in canonical layout is
-// exactly the block above the first `scenario`.
+// exactly the block above the first `flow` or `scenario`.
 func belowComments(src string) string {
 	lines := strings.Split(src, "\n")
 	for i, line := range lines {

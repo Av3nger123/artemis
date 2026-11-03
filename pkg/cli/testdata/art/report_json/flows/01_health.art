@@ -1,0 +1,8 @@
+flow _01_health {
+  step "ping" {
+    get "%SERVER%/health"
+    expect status == 200
+    expect body.status == "ok"
+    var build = body.build
+  }
+}

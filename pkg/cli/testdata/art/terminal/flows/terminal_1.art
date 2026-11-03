@@ -1,0 +1,22 @@
+# Both step types in one flow, which is the whole of A2 in one file: a
+# terminal step captures a value out of its stdout and an api step uses it.
+#
+# This folder holds two scenario files, run as one folder -- both run, in path
+# order, as two scenarios of one run with one summary.
+flow terminal_1 {
+  var base = "%SERVER%"
+
+  step "work out the path" {
+    run "sh" { args = ["-c", "printf items; printf 'nothing is wrong' >&2"] }
+    expect exit_code == 0
+    expect stdout == "items"
+    expect stderr contains "nothing"
+    var path = stdout
+  }
+
+  step "read the collection" {
+    get "${base}/${path}"
+    expect status == 200
+    expect body.items exists
+  }
+}

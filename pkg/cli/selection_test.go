@@ -43,34 +43,42 @@ func TestTagExpressions(t *testing.T) {
 	}
 }
 
+// taggedTree is a folder of two scenario files: one flow run by two tagged
+// scenarios, each reading its address from its own environment variable, and
+// one whose flow reads a variable that is never set.
 func taggedTree(t *testing.T, url string) string {
 	t.Helper()
-	scenario := func(name, tags, env string) string {
-		return fmt.Sprintf(`scenario %q {
-  tags = [%s]
-  var u = env(%q, %q)
+	return writeTree(t, t.TempDir(), map[string]string{
+		"suite/a.art": fmt.Sprintf(`flow checkout {
+  var u
   step "s" {
     get "${u}"
     expect status == 200
   }
 }
-`, name, tags, env, url)
-	}
-	return writeTree(t, t.TempDir(), map[string]string{
-		"suite/suite.art": "suite {\n  tags = [\"api\"]\n}\n",
-		"suite/a.art":     scenario("checkout smoke", `"smoke"`, "SMOKE_URL") + scenario("checkout slow", `"slow"`, "SLOW_URL"),
-		"suite/b.art": `scenario "needs a secret" {
-  tags = ["nightly"]
+
+scenario "checkout smoke" {
+  tags = ["smoke", "api"]
+  u = env("SMOKE_URL", %[1]q)
+}
+
+scenario "checkout slow" {
+  tags = ["slow", "api"]
+  u = env("SLOW_URL", %[1]q)
+}
+`, url),
+		"suite/b.art": `flow needs_a_secret {
   var key = env("NIGHTLY_KEY_NEVER_SET")
   step "s" { run "true" }
 }
+
+scenario "needs a secret" { tags = ["nightly", "api"] }
 `,
 	})
 }
 
-// --tags runs what it selects -- tags a suite gives count -- and records the
-// rest as skipped, with why; a variable only an unselected scenario reads is
-// not checked.
+// --tags runs what it selects and records the rest as skipped, with why; a
+// variable only an unselected scenario reads is not checked.
 func TestTagsSelectWhatRuns(t *testing.T) {
 	srv, _ := recordingServer(t, 200)
 	dir := taggedTree(t, srv.URL)
@@ -94,7 +102,7 @@ func TestTagsSelectWhatRuns(t *testing.T) {
 	for _, sc := range doc.Scenarios {
 		got[sc.Name] = sc.Status
 		if sc.Name == "checkout smoke" && strings.Join(sc.Tags, ",") != "smoke,api" {
-			t.Errorf("tags = %v, want its own and the suite's", sc.Tags)
+			t.Errorf("tags = %v, want smoke and api", sc.Tags)
 		}
 		if sc.Status == "skip" && !strings.Contains(sc.Error, `not selected by --tags "api and smoke"`) {
 			t.Errorf("%s was skipped saying %q", sc.Name, sc.Error)
@@ -147,8 +155,8 @@ func TestListShowsWhatWouldRun(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, stdout)
 		}
 	}
-	if strings.Contains(stdout, "needs a secret") || strings.Contains(stdout, "suite.art") {
-		t.Errorf("listed what was not selected, or the suite itself:\n%s", stdout)
+	if strings.Contains(stdout, "needs a secret") || strings.Contains(stdout, "flow.art") {
+		t.Errorf("listed what was not selected, or a flow file:\n%s", stdout)
 	}
 	if len(rec.seen()) != 0 {
 		t.Error("list sent a request")

@@ -22,7 +22,9 @@ import (
 )
 
 // writeTree writes a file per entry under dir, creating the parents, and
-// returns dir. The keys are slash-separated paths relative to dir.
+// returns dir. The keys are slash-separated paths relative to dir. A body that
+// is a flow followed by its scenarios is written as the two files, as
+// writeArt writes it.
 func writeTree(t *testing.T, dir string, files map[string]string) string {
 	t.Helper()
 	for name, body := range files {
@@ -30,9 +32,7 @@ func writeTree(t *testing.T, dir string, files map[string]string) string {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		writeSplit(t, path, body)
 	}
 	return dir
 }
@@ -222,20 +222,24 @@ func TestRunFilesDoesNotLeakCapturesBetweenFiles(t *testing.T) {
 	initLog(t)
 	srv := okServer(t, 200, `{"token":"abc"}`)
 
-	capturing := fmt.Sprintf(`scenario "capture" {
+	capturing := fmt.Sprintf(`flow capture {
   step "login" {
     get %q
     expect status == 200
-    capture token = body.token
+    var token = body.token
   }
 }
+
+scenario "capture" {}
 `, srv.URL)
-	using := fmt.Sprintf(`scenario "use" {
+	using := fmt.Sprintf(`flow use {
   step "me" {
     get "%s/${token}"
     expect status == 200
   }
 }
+
+scenario "use" {}
 `, srv.URL)
 
 	root := writeTree(t, t.TempDir(), map[string]string{
@@ -267,13 +271,15 @@ func TestRunFilesDoesNotLeakCapturesBetweenFiles(t *testing.T) {
 // brokenArt is a scenario with a misspelled step field, which the checker
 // rejects: a file artemis cannot load.
 func brokenArt(url string) string {
-	return fmt.Sprintf(`scenario "broken" {
+	return fmt.Sprintf(`flow broken {
   step "ping" {
     get %q
     timeot = "5s"
     expect status == 200
   }
 }
+
+scenario "broken" {}
 `, url)
 }
 
@@ -319,13 +325,15 @@ func TestRunFilesRefusesANonScenarioFile(t *testing.T) {
 // namedScenarioArt is one passing GET step, with the scenario's name set so a
 // test can tell the files of a folder run apart.
 func namedScenarioArt(name, url, wantBody string) string {
-	return fmt.Sprintf(`scenario %q {
+	return fmt.Sprintf(`flow ping {
   step "ping" {
-    get %q
+    get %[2]q
     expect status == 200
-    expect body.status == %q
+    expect body.status == %[3]q
   }
 }
+
+scenario %[1]q {}
 `, name, url, wantBody)
 }
 
@@ -339,9 +347,7 @@ func runStreams(t *testing.T, src string, args ...string) (stdout, stderr string
 	resetRunFlags(t)
 
 	path := filepath.Join(t.TempDir(), "scenario.art")
-	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSplit(t, path, src)
 
 	var out, errOut bytes.Buffer
 	RootCmd.SetArgs(append([]string{"run", path}, args...))
@@ -618,13 +624,15 @@ func TestReportWithAnUnknownFormatRunsNothing(t *testing.T) {
 func TestRunPrintsAFailureBlockNamingTheFileAndLine(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"pending"}`)
 
-	stdout, _, err := runStreams(t, `scenario "status check" {
+	stdout, _, err := runStreams(t, `flow status_check {
   step "ping" {
     get "`+srv.URL+`/ping"
     expect status == 200
     expect body.status == "ok"
   }
 }
+
+scenario "status check" {}
 `)
 	if err == nil {
 		t.Fatalf("Execute() = nil, want an error:\n%s", stdout)
@@ -632,7 +640,7 @@ func TestRunPrintsAFailureBlockNamingTheFileAndLine(t *testing.T) {
 
 	// The scenario is written to a temp file, so only the line and the basename
 	// are ours to assert on.
-	if !strings.Contains(stdout, "scenario.art:5") {
+	if !strings.Contains(stdout, "scenario.flow.art:5") {
 		t.Errorf("output does not point at the failing check's line:\n%s", stdout)
 	}
 	for _, want := range []string{"1 failure:", "step      ping", `expected  "ok"`, `actual    "pending"`} {
@@ -744,19 +752,23 @@ func TestRunStopsBeforeTheFirstStepWhenAVariableIsAbsent(t *testing.T) {
 	defer srv.Close()
 
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"01-first.art": `scenario "first" {
+		"01-first.art": `flow first {
   step "touch it" {
     get "` + srv.URL + `/orders"
     expect status == 200
   }
-}`,
-		"03-reports.art": `scenario "reports" {
+}
+
+scenario "first" {}`,
+		"03-reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_REPORT_URL")
   step "report" {
     get "${url}"
     expect status == 200
   }
-}`,
+}
+
+scenario "reports" {}`,
 	})
 
 	var out, errOut bytes.Buffer
@@ -790,13 +802,15 @@ func TestRunFilesWithSetsErrorAndStatusWhenTheEnvGateTrips(t *testing.T) {
 	initOnce.Do(Init)
 
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"01-reports.art": `scenario "reports" {
+		"01-reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_GATE_WIRING_URL")
   step "report" {
     get "${url}"
     expect status == 200
   }
-}`,
+}
+
+scenario "reports" {}`,
 	})
 	files, err := discover(root)
 	if err != nil {
@@ -846,13 +860,15 @@ func TestRunReportsABrokenFileEvenWhenTheEnvGateAlsoTrips(t *testing.T) {
 
 	root := writeTree(t, t.TempDir(), map[string]string{
 		"01-broken.art": brokenArt("http://unused.invalid"),
-		"02-reports.art": `scenario "reports" {
+		"02-reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_REPORT_URL_2")
   step "report" {
     get "${url}"
     expect status == 200
   }
-}`,
+}
+
+scenario "reports" {}`,
 	})
 
 	var out, errOut bytes.Buffer
@@ -971,13 +987,15 @@ func TestRunDoesNotClaimToHaveReadAnEnvFileWhenThereIsNone(t *testing.T) {
 
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
-		"reports.art": `scenario "reports" {
+		"reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_NO_ENV_FILE_URL")
   step "report" {
     get "${url}"
     expect status == 200
   }
-}`,
+}
+
+scenario "reports" {}`,
 	})
 	inDir(t, dir)
 
@@ -1105,13 +1123,15 @@ func TestEventsWithAnUnknownFormatRunsNothing(t *testing.T) {
 
 // envScenarioArt is a scenario whose URL comes from the variable name.
 func envScenarioArt(name string) string {
-	return fmt.Sprintf(`scenario "env" {
+	return fmt.Sprintf(`flow env {
   var url = env(%q)
   step "ping" {
     get "${url}"
     expect status == 200
   }
 }
+
+scenario "env" {}
 `, name)
 }
 

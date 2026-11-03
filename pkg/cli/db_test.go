@@ -15,8 +15,8 @@ import (
 // dbScenario seeds a database from a script in setup, writes through an api
 // stand-in -- here, a db step -- reads the row back with typed args, and
 // cleans up in teardown: the shape a db step exists for.
-const dbScenario = `scenario "an order lands" {
-  secret var db_url = env("ART_TEST_DB")
+const dbScenario = `flow an_order_lands {
+  var db_url = env("ART_TEST_DB")
   var id = 42
 
   setup {
@@ -43,7 +43,7 @@ const dbScenario = `scenario "an order lands" {
     expect rows[0].total == 12.5
     expect from_json(rows[0].meta).tier == "gold"
     expect duration_ms >= 0
-    capture status = rows[0].status
+    var status = rows[0].status
   }
 
   teardown {
@@ -56,6 +56,8 @@ const dbScenario = `scenario "an order lands" {
     }
   }
 }
+
+scenario "an order lands" {}
 `
 
 const dbSeed = `CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT, total REAL, meta TEXT);
@@ -65,7 +67,7 @@ CREATE TABLE audit (note TEXT);
 func TestArtRunDBStepsEndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "orders.art")
-	os.WriteFile(path, []byte(dbScenario), 0o600)
+	writeSplit(t, path, dbScenario)
 	os.WriteFile(filepath.Join(dir, "seed.sql"), []byte(dbSeed), 0o600)
 	t.Setenv("ART_TEST_DB", "sqlite:"+filepath.Join(dir, "shop.db"))
 
@@ -85,7 +87,7 @@ func TestArtRunDBStepsEndToEnd(t *testing.T) {
 func TestArtRunDBFailuresKeepTheirKinds(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ART_TEST_DB", "sqlite:"+filepath.Join(dir, "shop.db"))
-	run, _ := runArt(t, `scenario "kinds" {
+	run, _ := runArt(t, `flow kinds {
   var url = env("ART_TEST_DB")
 
   step "wrong answer" {
@@ -98,6 +100,8 @@ func TestArtRunDBFailuresKeepTheirKinds(t *testing.T) {
     expect affected == 1
   }
 }
+
+scenario "kinds" {}
 `)
 	steps := run.Scenarios[0].Steps
 	if steps[0].Status != result.StatusFail {

@@ -24,12 +24,14 @@ func manyFiles(t *testing.T, url string, n int) string {
 	files := map[string]string{}
 	for i := 1; i <= n; i++ {
 		name := fmt.Sprintf("%02d_file.art", i)
-		files[name] = fmt.Sprintf(`scenario "scenario %02d" {
+		files[name] = fmt.Sprintf(`flow ping {
   step "ping" {
-    get %q
+    get %[2]q
     expect status == 200
   }
-}`, i, url)
+}
+
+scenario "scenario %02[1]d" {}`, i, url)
 	}
 	return writeTree(t, t.TempDir(), files)
 }
@@ -67,12 +69,14 @@ func TestJobsKeepsFileOrder(t *testing.T) {
 
 	files := map[string]string{}
 	for i := 1; i <= 6; i++ {
-		files[fmt.Sprintf("%02d_file.art", i)] = fmt.Sprintf(`scenario "scenario %02d" {
+		files[fmt.Sprintf("%02d_file.art", i)] = fmt.Sprintf(`flow ping {
   step "ping" {
-    get "%s/%d"
+    get "%[2]s/%[3]d"
     expect status == 200
   }
-}`, i, srv.URL, (7-i)*20)
+}
+
+scenario "scenario %02[1]d" {}`, i, srv.URL, (7-i)*20)
 	}
 	root := writeTree(t, t.TempDir(), files)
 

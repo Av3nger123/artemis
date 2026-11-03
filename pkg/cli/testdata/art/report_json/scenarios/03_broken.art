@@ -1,0 +1,3 @@
+flow "../flows/03_broken.art"
+
+scenario "broken" {}
