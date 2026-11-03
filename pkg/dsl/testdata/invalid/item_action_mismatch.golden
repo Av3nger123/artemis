@@ -1,0 +1,8 @@
+=== terminal
+item_action_mismatch.art:7:5: a request holds an api action, and this one is run
+   7 |     run "make" {
+     |     ^^^
+   hint: make it a command, or use get, post, put, patch or delete
+
+=== codes
+item-action-mismatch	error	7:5-7:8

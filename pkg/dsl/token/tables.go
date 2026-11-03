@@ -90,8 +90,9 @@ var (
 	// place and `artemis grammar --json` has nowhere else to look.
 	StepFields = []string{"timeout", "retry"}
 
-	// CollectionItems are what a collection body holds.
-	CollectionItems = []string{"request"}
+	// CollectionItems are what a collection body holds, one keyword per item
+	// type: a request holds an api action, a command a run, a query a db.
+	CollectionItems = []string{"request", "command", "query"}
 
 	// UseLines are the words that open an override line in a use block. Any
 	// other identifier opening a line there is an argument, which is why a
@@ -135,6 +136,7 @@ var (
 	reserved       = set(Reserved)
 	useLines       = set(UseLines)
 	dropTargets    = set(DropTargets)
+	collItems      = set(CollectionItems)
 
 	// comparisonKinds and comparisonWords are Comparisons split by how a token
 	// spells each entry: the six symbols arrive with a Kind of their own, the
@@ -186,6 +188,9 @@ func IsUseLine(word string) bool { return useLines[word] }
 
 // IsDropTarget reports whether word may follow `drop` in a use block.
 func IsDropTarget(word string) bool { return dropTargets[word] }
+
+// IsCollectionItem reports whether word opens an item in a collection body.
+func IsCollectionItem(word string) bool { return collItems[word] }
 
 // IsReserved reports whether word is reserved for a later tier of the language.
 func IsReserved(word string) bool { return reserved[word] }

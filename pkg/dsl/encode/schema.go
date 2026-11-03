@@ -110,6 +110,7 @@ var groupSchemas = []groupSchema{
 	{"browserAction", []string{kindBrowserAct}},
 	{"block", []string{kindBlock}},
 	{"collectionItem", []string{kindRequestDecl}},
+	{"itemInput", []string{kindVar}},
 	{"param", []string{kindParam}},
 	{"useLine", []string{kindField, kindBodySet, kindDrop, kindExpect}},
 	{"expression", []string{
@@ -370,9 +371,14 @@ var nodeSchemas = []nodeSchema{
 		optChild("default", "expression"),
 		spanField,
 	}},
-	{Kind: kindRequestDecl, Doc: "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised", Fields: []fieldSchema{
+	{Kind: kindRequestDecl, Doc: "`request login { var user = \"admin\" <action> <statement>... }`: a collection item, a step's body named and given inputs. `command` and `query` items are this kind too", Fields: []fieldSchema{
+		{Name: "keyword", Type: "string", Optional: true,
+			Doc: "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"},
 		word("name", "the identifier a use names it by"),
-		list("params", "param"),
+		{Name: "params", Type: "node[]", Accepts: "param", Optional: true,
+			Doc: "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"},
+		{Name: "inputs", Type: "node[]", Accepts: "itemInput", Optional: true,
+			Doc: "the var lines above the action: the item's inputs, which a step passes, the flow's context supplies, or a default fills"},
 		child("action", "action"),
 		list("body", "stepStatement"),
 		spanField, commentsField,

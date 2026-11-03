@@ -4,8 +4,12 @@
 
 File          = { Import } { Collection | Scenario } ;
 Import        = "import" String [ "as" Ident ] ;
-Collection    = "collection" String "{" { RequestDecl } "}" ;
-RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
+Collection    = "collection" String "{" { ItemDecl } "}" ;
+(* The keyword is the item's type, and the action must be one it holds: a
+   request an HTTP verb, a command run, a query db. The vars above the action
+   are the item's inputs; an item with a Params list has none. *)
+ItemDecl      = ( "request" | "command" | "query" ) Ident [ Params ]
+                "{" { VarDecl } Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 

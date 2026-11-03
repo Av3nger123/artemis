@@ -65,7 +65,7 @@ func TestDropAfterExpectIsAnError(t *testing.T) {
 }
 
 func TestOverrideShapeErrors(t *testing.T) {
-	c := "collection \"c\" {\n  request r() {\n    run \"true\"\n    expect exit_code == 0\n  }\n}\n"
+	c := "collection \"c\" {\n  command r() {\n    run \"true\"\n    expect exit_code == 0\n  }\n}\n"
 	_, diags := run(t, map[string]string{"c.art": c, "main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { header \"X\" = \"1\" }\n}\n"})
 	if !contains(diags, "main.art: bad-override") {
 		t.Fatalf("got %s", diags)
@@ -197,16 +197,17 @@ func TestDropCapturesKeepsTheExpects(t *testing.T) {
 	}
 }
 
-// An override on a terminal or browser step is refused, and the hint says
-// what to do instead: pass the value as a parameter.
+// An override on a terminal or db step is refused, and the hint says what to
+// do instead: pass the value as a parameter. (No item type holds a browser
+// action yet, so a browser step cannot be used at all.)
 func TestOverrideOnNonAPIStepHintsAParameter(t *testing.T) {
 	for name, tc := range map[string]struct{ item, kind string }{
-		"terminal": {"run \"true\"\n    expect exit_code == 0", "terminal step"},
-		"browser":  {"browser {\n      goto \"/x\"\n    }\n    expect page.url exists", "browser step"},
+		"terminal": {"command r() {\n    run \"true\"\n    expect exit_code == 0", "terminal step"},
+		"db":       {"query r() {\n    db \"sqlite://x.db\" { sql = \"select 1\" }", "db step"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			files := map[string]string{
-				"c.art":    "collection \"c\" {\n  request r() {\n    " + tc.item + "\n  }\n}\n",
+				"c.art":    "collection \"c\" {\n  " + tc.item + "\n  }\n}\n",
 				"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { header \"X\" = \"1\" }\n}\n",
 			}
 			tree, pb := parserParse(files["main.art"])

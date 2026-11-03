@@ -102,6 +102,11 @@ const (
 	// ReservedParam is a parameter named like a use-block override word, which
 	// no use could ever pass.
 	ReservedParam Code = "reserved-param"
+
+	// ItemActionMismatch is a collection item whose action is not the one its
+	// keyword names: `run` in a request, `get` in a command. The keyword is
+	// the item's type, so the two must agree.
+	ItemActionMismatch Code = "item-action-mismatch"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -273,6 +278,7 @@ var registry = []CodeInfo{
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{ImportPlacement, Error, "an import appears below a collection or a scenario"},
 	{ReservedParam, Error, "a parameter is named like a use-block override word, so no use can pass it"},
+	{ItemActionMismatch, Error, "a collection item's action is not the kind its keyword names"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},

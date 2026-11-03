@@ -136,10 +136,16 @@
       ]
     },
     "collectionItem": {
-      "doc": "What a collection body holds: requests.",
+      "doc": "What a collection body holds, one keyword per item type: request (an api action), command (run) and query (db).",
       "values": [
         {
           "value": "request"
+        },
+        {
+          "value": "command"
+        },
+        {
+          "value": "query"
         }
       ]
     },
@@ -493,6 +499,11 @@
         {
           "value": "invalid-regex",
           "doc": "a regex literal does not compile",
+          "severity": "error"
+        },
+        {
+          "value": "item-action-mismatch",
+          "doc": "a collection item's action is not the kind its keyword names",
           "severity": "error"
         },
         {

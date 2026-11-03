@@ -330,12 +330,22 @@ func (p *parser) parseStep() ast.Decl {
 // missing-action diagnostic points at. It returns nil, having consumed
 // nothing, when there is no "{".
 func (p *parser) parseStepBody(what string, name token.Token) *ast.StepDecl {
+	return p.parseStepBodyWith(what, name, nil)
+}
+
+// parseStepBodyWith is parseStepBody with head, when it is not nil, reading
+// what an item writes between its "{" and its action -- its input vars --
+// before the step's own loop starts.
+func (p *parser) parseStepBodyWith(what string, name token.Token, head func(*ast.StepDecl)) *ast.StepDecl {
 	s := &ast.StepDecl{}
 	open, ok := p.expect(token.LBrace, "\"{\" to open the "+what)
 	if !ok {
 		return nil
 	}
 	s.LBrace = open
+	if head != nil {
+		head(s)
+	}
 
 	var firstAction token.Span // where the action block already seen began
 	sawStmt := false

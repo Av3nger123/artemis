@@ -15,6 +15,35 @@ collection "orders" {
     }
     expect status == 200
   }
+
+  # An item's inputs are the vars above its action, and its keyword is its
+  # type: a request holds an api action, a command a run, a query a db.
+  request login {
+    var user = "admin"
+    var base = env("API_URL")
+
+    post "${base}/login" {
+      body = {"user": user}
+    }
+    capture token = body.token
+  }
+
+  command migrate {
+    var target = "migrate"
+
+    run "make" {
+      args = [target]
+    }
+    expect exit_code == 0
+  }
+
+  query seed {
+    var db_url = env("DB_URL")
+
+    db db_url {
+      sql = "select 1"
+    }
+  }
 }
 
 scenario "rush" {

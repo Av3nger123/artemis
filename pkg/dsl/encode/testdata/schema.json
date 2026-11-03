@@ -63,6 +63,9 @@
     "collectionItem": [
       "requestDecl"
     ],
+    "itemInput": [
+      "var"
+    ],
     "param": [
       "param"
     ],
@@ -975,8 +978,14 @@
     },
     {
       "kind": "requestDecl",
-      "doc": "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised",
+      "doc": "`request login { var user = \"admin\" <action> <statement>... }`: a collection item, a step's body named and given inputs. `command` and `query` items are this kind too",
       "fields": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "optional": true,
+          "doc": "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"
+        },
         {
           "name": "name",
           "type": "string",
@@ -986,7 +995,15 @@
           "name": "params",
           "type": "node[]",
           "accepts": "param",
-          "optional": true
+          "optional": true,
+          "doc": "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"
+        },
+        {
+          "name": "inputs",
+          "type": "node[]",
+          "accepts": "itemInput",
+          "optional": true,
+          "doc": "the var lines above the action: the item's inputs, which a step passes, the flow's context supplies, or a default fills"
         },
         {
           "name": "action",

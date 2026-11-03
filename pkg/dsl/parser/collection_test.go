@@ -161,3 +161,113 @@ func TestMissingSeparatorInAUseBlockOffersAComma(t *testing.T) {
 		t.Errorf("hint = %q", all[0].Hint)
 	}
 }
+
+// The plan's full example: a required var, a private var and an output var
+// after the action. Those three forms are Tasks 2 and 3; the typed items and
+// their input vars are this test's own, and TestTypedItemsWithValuedInputs
+// holds them on their own until the forms land.
+func TestTypedItemsWithInputs(t *testing.T) {
+	t.Skip("integration: needs Task 2 (private var, var with no value) and Task 3 (var after the action)")
+	src := "collection \"auth\" {\n" +
+		"  request login {\n    var user = \"admin\"\n    var password\n    private var tries = 1\n" +
+		"    post \"/login\" { body = {\"user\": user} }\n    var token = body.token\n  }\n" +
+		"  command migrate {\n    run \"make\" { args = [\"migrate\"] }\n  }\n" +
+		"  query seed {\n    var db_url\n    db db_url { sql = \"select 1\" }\n  }\n}\n"
+	f := mustParse(t, src)
+	c := f.Scenarios[0].(*ast.Collection)
+	login := c.Items[0].(*ast.RequestDecl)
+	if len(login.Inputs) != 3 || login.Params != nil {
+		t.Fatalf("login inputs = %d, params = %v", len(login.Inputs), login.Params)
+	}
+	if login.Inputs[2].Private.Text != "private" || !login.Inputs[1].Required() {
+		t.Errorf("inputs = %+v", login.Inputs)
+	}
+	if got := c.Items[1].(*ast.RequestDecl).Type(); got != "terminal" {
+		t.Errorf("migrate type = %q", got)
+	}
+	if got := c.Items[2].(*ast.RequestDecl).Type(); got != "db" {
+		t.Errorf("seed type = %q", got)
+	}
+}
+
+func TestTypedItemsWithValuedInputs(t *testing.T) {
+	src := "collection \"auth\" {\n" +
+		"  request login {\n    var user = \"admin\"\n    var base = env(\"U\")\n" +
+		"    post \"${base}/login\" { body = {\"user\": user} }\n    capture token = body.token\n  }\n" +
+		"  command migrate {\n    run \"make\" { args = [\"migrate\"] }\n  }\n" +
+		"  query seed {\n    var db_url = env(\"DB\")\n    db db_url { sql = \"select 1\" }\n  }\n}\n"
+	f := mustParse(t, src)
+	c := f.Scenarios[0].(*ast.Collection)
+	login := c.Items[0].(*ast.RequestDecl)
+	if login.Params != nil || len(login.Inputs) != 2 || login.Inputs[1].Name.Value != "base" {
+		t.Fatalf("login = params %v, inputs %+v", login.Params, login.Inputs)
+	}
+	if _, ok := login.Action.(*ast.Request); !ok || len(login.Body) != 1 {
+		t.Fatalf("login action = %T, body = %d", login.Action, len(login.Body))
+	}
+	for i, want := range []string{"api", "terminal", "db"} {
+		if got := c.Items[i].(*ast.RequestDecl).Type(); got != want {
+			t.Errorf("item %d type = %q, want %q", i, got, want)
+		}
+	}
+	if seed := c.Items[2].(*ast.RequestDecl); len(seed.Inputs) != 1 {
+		t.Errorf("seed inputs = %d", len(seed.Inputs))
+	}
+}
+
+func TestItemActionMustMatchItsType(t *testing.T) {
+	for src, want := range map[string]struct{ at, msg, hint string }{
+		"collection \"c\" {\n  request r {\n    run \"make\"\n  }\n}\n": {
+			"run", "a request holds an api action, and this one is run", "make it a command, or use get, post, put, patch or delete"},
+		"collection \"c\" {\n  command c {\n    get \"/\"\n  }\n}\n": {
+			"get", "a command holds a terminal action, and this one is get", "make it a request, or use run"},
+		"collection \"c\" {\n  query q {\n    run \"psql\"\n  }\n}\n": {
+			"run", "a query holds a db action, and this one is run", "make it a command, or use db"},
+	} {
+		tree, bag := Parse("t.art", src)
+		all := bag.All()
+		if len(all) != 1 || all[0].Code != diag.ItemActionMismatch {
+			t.Errorf("%q: diagnostics = %v", src, all)
+			continue
+		}
+		d := all[0]
+		if d.Message != want.msg || d.Hint != want.hint {
+			t.Errorf("%q: got %q / %q", src, d.Message, d.Hint)
+		}
+		if got := src[d.Span.Offset : d.Span.Offset+len(want.at)]; got != want.at {
+			t.Errorf("%q: span at %q, want %q", src, got, want.at)
+		}
+		if ast.Source(tree) != src {
+			t.Errorf("%q: round trip lost bytes", src)
+		}
+	}
+}
+
+// The older form keeps its parameters and reads no vars above the action.
+func TestItemWithParamsReadsNoInputs(t *testing.T) {
+	f := mustParse(t, "collection \"c\" {\n  command m(target = \"x\") {\n    run \"make\" { args = [target] }\n  }\n}\n")
+	m := f.Scenarios[0].(*ast.Collection).Items[0].(*ast.RequestDecl)
+	if m.Params == nil || len(m.Params.List) != 1 || len(m.Inputs) != 0 {
+		t.Fatalf("params = %v, inputs = %d", m.Params, len(m.Inputs))
+	}
+}
+
+func TestInputNamedLikeAUseLineIsAnError(t *testing.T) {
+	_, bag := Parse("t.art", "collection \"c\" {\n  request r {\n    var body = 1\n    get \"x\"\n  }\n}\n")
+	all := bag.All()
+	if len(all) != 1 || all[0].Code != diag.ReservedParam {
+		t.Fatalf("diagnostics = %v", all)
+	}
+}
+
+// A var that does not parse ends the inputs and keeps its bytes.
+func TestBrokenInputStillRoundTrips(t *testing.T) {
+	src := "collection \"c\" {\n  request r {\n    var = 1\n    var u = 2\n    get \"x\"\n  }\n}\n"
+	tree, bag := Parse("t.art", src)
+	if !bag.HasErrors() {
+		t.Fatal("a var with no name parsed")
+	}
+	if got := ast.Source(tree); got != src {
+		t.Fatalf("round trip lost bytes:\n got %q\nwant %q", got, src)
+	}
+}
