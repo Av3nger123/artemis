@@ -30,9 +30,13 @@ func (c *checker) items(decls []ast.Decl, sc *scope) {
 //
 //   - parallel: every branch sees the captures above the block and none of
 //     its siblings', which may not exist yet; after the block, all of them.
+//     A name bound above the block that a sibling writes is a sibling's too,
+//     and two branches may not write one name, bound above or not.
 //   - if and switch: each branch sees the captures above it; after the block,
 //     the captures every branch makes. A capture only some make may not exist
-//     there, and reading one is an error outside cleanup.
+//     there, and reading one is an error outside cleanup. A name bound above
+//     the block that a branch overwrites stays bound: it holds the old value
+//     or the branch's.
 //   - try: the try's captures, as a sequence; a catch's are only one
 //     branch's; a finally's, always.
 //   - repeat: the body's, as a sequence -- it runs at least once -- and the
@@ -87,6 +91,7 @@ func (c *checker) parallel(cl *ast.Clause, sc *scope) {
 	made := map[string]token.Token{}
 	browsers := 0
 	var merged []*scope
+	var writes []binding
 	// What each branch captures, read off the tree before any is walked, so
 	// a branch that reads a sibling's capture is told so whichever is written
 	// first.
@@ -120,18 +125,27 @@ func (c *checker) parallel(cl *ast.Clause, sc *scope) {
 				branch.siblings[name] = line
 			}
 		}
-		base := len(branch.captures)
+		base := len(branch.writes)
 		c.items([]ast.Decl{d}, branch)
-		for _, name := range branch.captures[base:] {
-			tok := branch.first[name].tok
+		// Every name the branch writes, made or overwritten: two branches
+		// writing one name race whether or not it existed before the block.
+		// A branch that writes a name twice is one writer of it.
+		wrote := map[string]bool{}
+		for _, w := range branch.writes[base:] {
+			name := w.tok.Value
+			if wrote[name] {
+				continue
+			}
+			wrote[name] = true
 			if prev, dup := made[name]; dup {
-				c.bag.Error(tok.Span, diag.ParallelCaptureClash,
+				c.bag.Error(w.tok.Span, diag.ParallelCaptureClash,
 					"%q is captured by two branches of this parallel block, which run at once", name).
 					Hintf("the other is at line %d; give one of them another name", prev.Span.Line)
 				continue
 			}
-			made[name] = tok
+			made[name] = w.tok
 		}
+		writes = append(writes, branch.writes[base:]...)
 		if drivesBrowser(d) {
 			browsers++
 			if browsers == 2 {
@@ -143,22 +157,30 @@ func (c *checker) parallel(cl *ast.Clause, sc *scope) {
 		branch.siblings = sc.siblings
 		merged = append(merged, branch)
 	}
+	// A name bound above the block that a branch overwrote is still bound;
+	// what the branches made is bound now too.
 	base := len(sc.captures)
 	for _, b := range merged {
-		c.adopt(sc, b, b.captures[base:])
+		sc.adopt(b.captures[base:])
 	}
+	sc.wrote(writes)
 }
 
 // branches checks alternatives -- an if's, a switch's cases, a catch -- each
 // from the scope above the block. After it, the scope holds what every branch
 // captures when exhaustive is true, and records as maybe what only some do.
+//
+// Only a name the scope did not hold surely can be maybe. One bound above the
+// block -- a var, or a capture every path made -- that a branch overwrites
+// stays bound: after the block it holds the value of the branch that ran, or
+// the old one if that branch did not write it. b.captures[base:] is exactly
+// the names a branch made, since an overwrite adds no entry.
 func (c *checker) branches(cls []*ast.Clause, sc *scope, exhaustive bool, where string) {
 	count := map[string]int{}
 	var order []string
-	var forks []*scope
 	for _, cl := range cls {
 		b := sc.fork()
-		base := len(b.captures)
+		base, wbase := len(b.captures), len(b.writes)
 		c.items(cl.Body, b)
 		seen := map[string]bool{}
 		for _, name := range b.captures[base:] {
@@ -171,42 +193,22 @@ func (c *checker) branches(cls []*ast.Clause, sc *scope, exhaustive bool, where 
 			}
 			count[name]++
 		}
-		forks = append(forks, b)
+		sc.wrote(b.writes[wbase:])
 	}
 	for _, name := range order {
-		var from *scope
-		for _, b := range forks {
-			if _, ok := b.first[name]; ok && contains(b.captures, name) {
-				from = b
-				break
-			}
-		}
 		if exhaustive && count[name] == len(cls) {
-			c.adopt(sc, from, []string{name})
+			sc.adopt([]string{name})
 			continue
 		}
 		sc.maybe[name] = where
-		if bind, ok := from.first[name]; ok {
-			if _, taken := sc.first[name]; !taken {
-				sc.first[name] = bind
-			}
-		}
 	}
 }
 
-// adopt brings names a branch captured into the scope after the block.
-func (c *checker) adopt(sc, branch *scope, names []string) {
+// adopt brings names a branch made into the scope after the block.
+func (s *scope) adopt(names []string) {
 	for _, name := range names {
-		if contains(sc.captures, name) {
-			continue
-		}
-		sc.addCapture(name)
-		delete(sc.maybe, name)
-		if bind, ok := branch.first[name]; ok {
-			if _, taken := sc.first[name]; !taken {
-				sc.first[name] = bind
-			}
-		}
+		s.addCapture(name)
+		delete(s.maybe, name)
 	}
 }
 

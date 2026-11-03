@@ -16,7 +16,7 @@ db-statement-kind	error	a db step sends sql to a database that takes a command, 
 drop-after-expect	error	a drop expects line comes after an expect line in the same use block
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
-duplicate-binding	error	a capture or var reuses a name a var or an earlier capture binds
+duplicate-binding	error	a var that reuses the name of a var declared in the same place
 duplicate-import-name	error	two imports give their collections the same name
 duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-row-name	error	two rows of a data-driven scenario name it alike

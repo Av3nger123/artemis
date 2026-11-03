@@ -75,49 +75,39 @@ func TestCompileWithExpandsAndChecksTheExpandedTree(t *testing.T) {
 }
 
 func TestCompileWithAttachesTheUseChainToCheckerDiagnostics(t *testing.T) {
+	// The scenario's var and the var the use hoists clash only in the
+	// expanded tree, so the checker finds it in c.art with the use behind it.
 	files := expand.MapLoader{
-		"c.art":    "collection \"c\" {\n  request r() {\n    get \"x\"\n    capture tok = body.t\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  step \"a\" {\n    get \"y\"\n    capture tok = body.t\n  }\n  use c.r\n}\n",
+		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    get \"x\" {\n      header \"P\" = pw\n    }\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var r_pw = \"a\"\n  use c.r { pw = \"b\" }\n}\n",
 	}
 	u := front.CompileWith("main.art", files["main.art"], files)
 	var found bool
 	for _, d := range u.Bag.All() {
-		if d.Span.File == "c.art" && len(d.UsedFrom) == 1 && d.UsedFrom[0].Line == 8 {
+		if d.Code == diag.DuplicateBinding && d.Span.File == "c.art" && len(d.UsedFrom) == 1 && d.UsedFrom[0].Line == 5 {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("want the capture clash in c.art used from main.art:8, got %v", u.Bag.All())
+		t.Fatalf("want the var clash in c.art used from main.art:5, got %v", u.Bag.All())
 	}
 }
 
-// An argument naming a scenario capture that a flow also captures: the flow's
-// capture is the second binding of the name, and the checker -- running on the
-// expanded tree -- says so, names the use line, and points at as.
-func TestArgumentCannotShadowFlowCapture(t *testing.T) {
+// An argument naming a scenario capture that the request captures too: the
+// request reads the old value and its capture overwrites it, as any later
+// write does. The last write wins.
+func TestARequestMayOverwriteTheCaptureItsArgumentReads(t *testing.T) {
 	auth := "collection \"auth\" {\n  request login(user, password = \"pw\", base = env(\"API_URL\")) {\n" +
 		"    post \"${base}/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
 		"    expect status == 200\n    capture token = body.token\n  }\n}\n"
 	files := expand.MapLoader{
 		"auth.art": auth,
-		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"x\"\n    capture token = body.t\n  }\n  use auth.login { user = token }\n}\n",
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"x\"\n    capture token = body.t\n  }\n  use auth.login { user = token }\n" +
+			"  step \"after\" {\n    get \"${token}\"\n  }\n}\n",
 	}
 	u := front.CompileWith("main.art", files["main.art"], files)
-	var got []diag.Diagnostic
-	for _, d := range u.Bag.All() {
-		if d.Code == diag.DuplicateBinding {
-			got = append(got, d)
-		}
-	}
-	if len(got) != 1 {
-		t.Fatalf("want one duplicate-binding, got %v", u.Bag.All())
-	}
-	d := got[0]
-	if d.Span.File != "auth.art" || d.Span.Line != 7 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 8 {
-		t.Fatalf("want the clash at auth.art:7 used from main.art:8, got %+v", d)
-	}
-	if d.Hint != "the capture at line 6 of main.art binds it first\nuse ... as <name> to keep both" {
-		t.Fatalf("hint is %q", d.Hint)
+	if u.Bag.HasErrors() {
+		t.Fatal(u.Bag.All())
 	}
 }
 
@@ -197,19 +187,19 @@ func TestTwoUsesWithAsHoistTwoVars(t *testing.T) {
 	}
 }
 
-// Two uses of one request that captures: the first binding is the first
-// use's copy of the capture, on the very line the caret is on, so "the capture
-// at line 7 binds it first" points at itself. The hint names the use instead.
+// Two uses of one request that hoist a var: the first binding is the first
+// use's copy of the var, on the very line the caret is on, so "the var at
+// line 2 binds it first" points at itself. The hint names the use instead.
 func TestDuplicateBindingHintNamesTheFirstUse(t *testing.T) {
 	files := expand.MapLoader{
-		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"http://h/token\"\n    expect status == 200\n" +
-			"    capture token = body.token\n  }\n}\n",
-		"twice.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\" }\n  use auth.login { user = \"b\" }\n}\n",
+		"auth.art": secretAuth,
+		"twice.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"first\" }\n" +
+			"  use auth.login { user = \"a\", password = \"second\", drop captures }\n}\n",
 	}
 	u := front.CompileWith("twice.art", files["twice.art"], files)
-	got := dupBindings(u, "token")
+	got := dupBindings(u, "login_password")
 	if len(got) != 1 {
-		t.Fatalf("want one duplicate-binding of token, got %v", u.Bag.All())
+		t.Fatalf("want one duplicate-binding of login_password, got %v", u.Bag.All())
 	}
 	if want := "the use at twice.art:4 binds it first\nuse ... as <name> to keep both"; got[0].Hint != want {
 		t.Fatalf("hint is %q, want %q", got[0].Hint, want)
@@ -240,5 +230,20 @@ func TestContextInputFromOneBranchIsMaybeUnbound(t *testing.T) {
 	d := got[0]
 	if d.Span.File != "api.art" || d.Span.Line != 3 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 11 {
 		t.Fatalf("want it at api.art:3 used from the call at main.art:11, got %+v", d)
+	}
+}
+
+// Two uses of one request that captures, without as: the second use's
+// capture overwrites the first's, and a step after both reads the second.
+func TestTwoUsesOfACapturingRequestOverwriteTheCapture(t *testing.T) {
+	files := expand.MapLoader{
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"http://h/token\"\n    expect status == 200\n" +
+			"    capture token = body.token\n  }\n}\n",
+		"twice.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\" }\n  use auth.login { user = \"b\" }\n" +
+			"  step \"after\" {\n    get \"http://h/${token}\"\n  }\n}\n",
+	}
+	u := front.CompileWith("twice.art", files["twice.art"], files)
+	if u.Bag.HasErrors() {
+		t.Fatal(u.Bag.All())
 	}
 }

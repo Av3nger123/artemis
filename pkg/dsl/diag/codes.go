@@ -166,10 +166,10 @@ const (
 	// a `header` with no name before its `=`.
 	BadValue Code = "bad-value"
 
-	// DuplicateBinding is a capture that reuses the name of a var or of an
-	// earlier capture in the same scenario, or a var that reuses an earlier
-	// var's. The span is the second binding's name; the hint says where the
-	// name was bound first.
+	// DuplicateBinding is a var that reuses the name of a var declared in the
+	// same place: two of a scenario's vars, its own or ones a use hoisted. A
+	// capture of a name already bound is not one -- the last write wins. The
+	// span is the second var's name; the hint says where the first is.
 	DuplicateBinding Code = "duplicate-binding"
 
 	// VarNeedsValue is `var user` with no value where nothing can supply one:
@@ -290,7 +290,7 @@ var registry = []CodeInfo{
 	{UnknownType, Error, "the right-hand side of \"is\" is not a type name"},
 	{BadArity, Error, "a call or a browser action has the wrong number of arguments"},
 	{BadValue, Error, "a value is the wrong kind for the position it is in"},
-	{DuplicateBinding, Error, "a capture or var reuses a name a var or an earlier capture binds"},
+	{DuplicateBinding, Error, "a var that reuses the name of a var declared in the same place"},
 	{VarNeedsValue, Error, "a var has no value, and nothing can supply one"},
 	{ImportNeedsFile, Error, "a file read from no disk imports another file"},
 	{ImportNotFound, Error, "an imported file cannot be read"},

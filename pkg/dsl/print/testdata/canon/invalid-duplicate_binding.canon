@@ -1,21 +1,18 @@
-# A capture that takes a name the scenario already binds.
+# Two vars of one name at one level.
 #
-# SPEC.md: a capture may not reuse the name of a var or of an earlier capture,
-# because silently shadowing a value is how a scenario comes to assert against
-# the wrong one. The checker owns it because it is the stage that walks the
-# scenario's bindings in order; the hint names the first binding.
+# The last write wins: a step that writes a name the scenario already binds
+# overwrites it, and the steps after it read the new value. The one fault is a
+# second declaration in the same place. Every var is evaluated before the first
+# step runs, so two vars of one name would leave one value for both. The
+# checker owns it because it is the stage that walks the scenario's bindings in
+# order; the hint names the first var.
 
 scenario "rebind" {
   var token = env("TOKEN")
-
-  step "login" {
-    post "/token"
-    capture session = body.session
-  }
+  var token = "fallback"
 
   step "refresh" {
     post "/refresh"
     capture token = body.token
-    capture session = body.session
   }
 }

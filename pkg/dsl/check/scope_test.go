@@ -252,31 +252,182 @@ func TestScopeRules(t *testing.T) {
 			src:  "scenario \"s\" {\n  step \"t\" {\n    run \"x\" {\n      env { PGPASSWORD = \"s\", ANYTHING_AT_ALL = \"t\" }\n    }\n  }\n}\n",
 		},
 
-		// --- a name is bound once ----------------------------------------
+		// --- the last write wins -----------------------------------------
+		// A capture stands in for a step's `var x = ...` after its action:
+		// the parser makes both an *ast.Capture.
 		{
-			name: "a capture may not reuse a var's name",
-			src:  "scenario \"s\" {\n  var token = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n}\n",
-			want: []string{"duplicate-binding@5:13"},
+			name: "a step overwrites a var, and a later step reads the new value",
+			src: `scenario "s" {
+  var code = 400
+  step "a" {
+    get "/"
+    capture code = status
+  }
+  step "b" {
+    get "/${code}"
+  }
+}
+`,
 		},
 		{
-			name: "a capture may not reuse a var declared below it",
+			name: "a step overwrites an earlier step's capture",
+			src: `scenario "s" {
+  step "a" {
+    get "/x"
+    capture session = body.s
+  }
+  step "b" {
+    get "/y"
+    capture session = body.s
+  }
+}
+`,
+		},
+		{
+			name: "a step overwrites a var declared below it",
 			src:  "scenario \"s\" {\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  var token = \"a\"\n}\n",
-			want: []string{"duplicate-binding@4:13"},
 		},
 		{
-			name: "a capture may not reuse an earlier step's capture",
-			src:  "scenario \"s\" {\n  step \"a\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  step \"b\" {\n    get \"/y\"\n    capture token = body.u\n  }\n}\n",
-			want: []string{"duplicate-binding@8:13"},
-		},
-		{
-			name: "a capture may not reuse a capture in its own step",
+			name: "a step writes one name twice",
 			src:  step("api", `get "/x"`, `capture token = body.t`, `capture token = body.u`),
-			want: []string{"duplicate-binding@5:13"},
 		},
 		{
-			name: "a var may not reuse an earlier var's name",
-			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
+			name: "two vars of one name at one level",
+			src:  "scenario \"s\" {\n  var code = 1\n  var code = 2\n}\n",
 			want: []string{"duplicate-binding@3:7"},
+		},
+		{
+			name: "a parallel branch reads a name that existed and that a sibling writes",
+			src: `scenario "s" {
+  var code = 1
+  parallel {
+    step "a" {
+      get "/"
+      capture code = status
+    }
+    step "b" {
+      get "/x?c=${code}"
+    }
+  }
+}
+`,
+			want: []string{"parallel-sibling-capture@9:19"},
+		},
+		{
+			name: "two parallel branches overwrite a name that existed",
+			src: `scenario "s" {
+  var code = 1
+  parallel {
+    step "a" {
+      get "/"
+      capture code = status
+    }
+    step "b" {
+      get "/x"
+      capture code = status
+    }
+  }
+}
+`,
+			want: []string{"parallel-capture-clash@10:15"},
+		},
+		{
+			// The clash is the one fault: a2 reads the branch's own write, not
+			// b's. The if makes the branch two steps, and its write still
+			// counts as the branch's.
+			name: "a parallel branch reads its own write of a name a sibling also writes",
+			src: `scenario "s" {
+  var code = 1
+  parallel {
+    if 1 == 1 {
+      step "a" {
+        get "/"
+        capture code = status
+      }
+      step "a2" {
+        get "/${code}"
+      }
+    }
+    step "b" {
+      get "/x"
+      capture code = status
+    }
+  }
+}
+`,
+			want: []string{"parallel-capture-clash@15:15"},
+		},
+		{
+			name: "an if branch overwrites a name that existed, which is still bound after",
+			src: `scenario "s" {
+  var code = 1
+  if code == 1 {
+    step "a" {
+      get "/"
+      capture code = status
+    }
+  }
+  step "b" {
+    get "/${code}"
+  }
+}
+`,
+		},
+		{
+			name: "a switch case overwrites an earlier capture, which is still bound after",
+			src: `scenario "s" {
+  step "a" {
+    get "/"
+    capture id = body.id
+  }
+  switch 1 {
+    case 1 {
+      step "b" {
+        get "/"
+        capture id = body.id
+      }
+    }
+  }
+  step "c" {
+    get "/${id}"
+  }
+}
+`,
+		},
+		{
+			name: "a name that did not exist and that only one if branch creates",
+			src: `scenario "s" {
+  if 1 == 1 {
+    step "a" {
+      get "/"
+      capture seat = body.seat
+    }
+  }
+  step "b" {
+    get "/${seat}"
+  }
+}
+`,
+			want: []string{"capture-maybe-unbound@9:13"},
+		},
+		{
+			name: "a step after the if writes the name only some branches made",
+			src: `scenario "s" {
+  if 1 == 1 {
+    step "a" {
+      get "/"
+      capture seat = body.seat
+    }
+  }
+  step "b" {
+    get "/"
+    capture seat = body.seat
+  }
+  step "c" {
+    get "/${seat}"
+  }
+}
+`,
 		},
 		{
 			name: "distinct captures and vars are fine",
@@ -336,27 +487,17 @@ func step(name, action string, stmts ...string) string {
 }
 
 // TestDuplicateBindingNamesTheFirstBinding pins the hint: it says where the
-// name was bound first, by kind and line, because "already bound" alone sends
-// an author hunting through the scenario.
+// name was declared first, by line, because "already bound" alone sends an
+// author hunting through the scenario.
 func TestDuplicateBindingNamesTheFirstBinding(t *testing.T) {
 	cases := []struct{ src, msg, hint string }{
 		{
-			src:  "scenario \"s\" {\n  var token = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n}\n",
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
 			msg:  `"token" is already bound`,
 			hint: "the var at line 2 binds it first",
 		},
 		{
-			src:  "scenario \"s\" {\n  step \"a\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  step \"b\" {\n    get \"/y\"\n    capture token = body.u\n  }\n}\n",
-			msg:  `"token" is already bound`,
-			hint: "the capture at line 4 binds it first",
-		},
-		{
-			src:  "scenario \"s\" {\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  var token = \"a\"\n}\n",
-			msg:  `"token" is already bound`,
-			hint: "the var at line 6 also binds it",
-		},
-		{
-			src:  "scenario \"s\" {\n  var token = \"a\"\n  var token = \"b\"\n}\n",
+			src:  "scenario \"s\" {\n  var token = \"a\"\n  step \"t\" {\n    get \"/x\"\n    capture token = body.t\n  }\n  var token = \"b\"\n}\n",
 			msg:  `"token" is already bound`,
 			hint: "the var at line 2 binds it first",
 		},

@@ -148,8 +148,6 @@ func TestSecretArgumentDiagnosticNamesTheParamAndTheCapture(t *testing.T) {
 
 // The request's argument reads the scenario's var token while the request
 // captures token too: as renames the capture and leaves the argument alone.
-// (The request once named its parameter token as well; a parameter is a var
-// to the standalone check, so that is now duplicate-binding.)
 func TestAsRenamesTheCaptureAndLeavesTheArgument(t *testing.T) {
 	got, diags := run(t, map[string]string{
 		"c.art":    "collection \"c\" {\n  request r(want) {\n    get \"x\"\n    expect body.token == want\n    capture token = body.token\n  }\n}\n",

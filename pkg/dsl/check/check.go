@@ -314,25 +314,25 @@ func (c *checker) scenario(s *ast.Scenario) {
 	// its first var: binding it here is what makes a var of the same name a
 	// clash rather than a quiet second meaning.
 	if c.prelude.Suite != nil {
-		sc.bind(token.Token{Kind: token.Ident, Value: "suite"}, "var", -1)
+		sc.bind(token.Token{Kind: token.Ident, Value: "suite"}, "var")
 		sc.addVar("suite")
 	}
 
-	// Every var of the scenario is a name a capture may not take, whether it
-	// is declared above the capture or below: either way the scenario would
-	// hold two values under one name. So the vars are collected before the
-	// walk, while the walk itself still binds them in order for resolution.
+	// Every var of the scenario is evaluated before its first step runs, so
+	// two vars of one name would leave one value for both, wherever each is
+	// written. So the vars are collected before the walk, which tells the
+	// first var of a name from the others, while the walk itself still binds
+	// them in order for resolution. A capture may overwrite any of them.
 	//
 	// A var inside setup, teardown or a block is one a use hoisted next to
 	// the steps it was expanded into; it is bound with the scenario's own.
-	for i, d := range s.Body {
+	for _, d := range s.Body {
 		for _, v := range varsIn(d) {
-			sc.bind(v.Name, "var", i)
+			sc.bind(v.Name, "var")
 		}
 	}
 
-	for i, d := range s.Body {
-		sc.at = i
+	for _, d := range s.Body {
 		switch d := d.(type) {
 		case *ast.ConfigDecl:
 			c.config(d, sc)
@@ -511,7 +511,8 @@ func (c *checker) varDecl(v *ast.VarDecl, sc *scope) {
 	if v.Name.Kind == token.Ident {
 		// The vars were bound before the walk, so the first var of a name is
 		// its first binding; any other var of that name is a second value
-		// under it, and lower would quietly keep the last for both.
+		// under it, and lower would quietly keep the last for both. A capture
+		// of the name, above or below, is a write and never a clash.
 		if first := sc.first[v.Name.Value]; first.tok.Span != v.Name.Span {
 			c.clash(v.Name, first, sc)
 			return
@@ -560,44 +561,26 @@ func (c *checker) step(s *ast.StepDecl, sc *scope) {
 	}
 
 	// After the step, not during it: a capture is in scope for the steps that
-	// follow, which is the design's "each capture from an *earlier* step".
+	// follow, which is the design's "each capture from an *earlier* step". A
+	// capture of a name already bound overwrites it, and the steps that follow
+	// read the new value: the last write wins.
 	for _, st := range s.Body {
 		if cap, ok := st.(*ast.Capture); ok && cap != nil && cap.Name.Kind == token.Ident {
-			c.rebinds(cap.Name, sc)
-			sc.addCapture(cap.Name.Value)
+			sc.write(cap.Name)
 		}
 	}
 }
 
-// rebinds reports a capture whose name a var or an earlier capture already
-// holds -- varDecl reports a var whose name an earlier var holds -- and otherwise records it as the name's first binding. SPEC.md: "a
-// capture may not reuse the name of a var or of an earlier capture, because
-// silently shadowing a value is how a scenario comes to assert against the
-// wrong one."
+// clash reports name, a var, as a second var of a name first declared at
+// first. Every var is evaluated before the first step runs, so lower would
+// quietly keep the last value for both.
 //
-// When either binding was copied in by a use -- its span is stamped with Via,
-// or it sits in another file than the scenario -- the fix is usually `as`,
-// which prefixes a use's captures, so the hint says so.
-func (c *checker) rebinds(name token.Token, sc *scope) {
-	if token.IsReserved(name.Value) {
-		return // reserved already said what is wrong with this name
-	}
-	first, ok := sc.first[name.Value]
-	if !ok {
-		sc.bind(name, "capture", sc.at)
-		return
-	}
-	c.clash(name, first, sc)
-}
-
-// clash reports name, a var or capture, as a second binding of a name first
-// bound at first.
-//
-// The hint names the first binding where a reader can find it: by its line,
-// or -- when a use brought it in -- by the scenario's use line, since its own
-// line is in the collection and is often the very line the caret is on. A var
-// declared below the second binding "also binds it": it is not first in
-// reading order, only in scope.
+// The hint names the first var where a reader can find it: by its line, or --
+// when a use brought it in -- by the scenario's use line, since its own line is
+// in the collection and is often the very line the caret is on. When either was
+// copied in by a use -- its span is stamped with Via, or it sits in another
+// file than the scenario -- the fix is usually `as`, which prefixes the vars a
+// use hoists, so the hint says so.
 func (c *checker) clash(name token.Token, first binding, sc *scope) {
 	where := fmt.Sprintf("the %s at line %d", first.kind, first.tok.Span.Line)
 	if first.tok.Span.File != name.Span.File {
@@ -610,9 +593,6 @@ func (c *checker) clash(name token.Token, first binding, sc *scope) {
 		}
 	}
 	hint := where + " binds it first"
-	if first.order > sc.at {
-		hint = where + " also binds it"
-	}
 	if sc.fromUse(first.tok.Span) || sc.fromUse(name.Span) {
 		hint += "\nuse ... as <name> to keep both"
 	}

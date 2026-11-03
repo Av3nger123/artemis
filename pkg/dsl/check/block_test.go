@@ -76,6 +76,48 @@ func TestBlockScopes(t *testing.T) {
     }
   } until state == "done"
   step "b" { get "${state}" }`},
+		{"a name an if branch overwrites is bound after the block", `
+  var code = 400
+  if code == 400 {
+    step "a" {
+      get "x"
+      capture code = status
+    }
+  }
+  step "b" { get "${code}" }`},
+		{"a name a catch overwrites is bound after the block", `
+  step "a" {
+    get "x"
+    capture id = body.id
+  }
+  try {
+    step "b" { get "y" }
+  } catch {
+    step "c" {
+      get "z"
+      capture id = body.id
+    }
+  }
+  step "d" { get "${id}" }`},
+		{"a name a parallel branch overwrites is bound after the block", `
+  var code = 400
+  parallel {
+    step "a" {
+      get "x"
+      capture code = status
+    }
+    step "b" { get "y" }
+  }
+  step "c" { get "${code}" }`},
+		{"a repeat overwrites a name each round", `
+  var state = "new"
+  repeat max 3 {
+    step "a" {
+      get "x/${state}"
+      capture state = body.state
+    }
+  } until state == "done"
+  step "b" { get "${state}" }`},
 		{"blocks nest", `
   parallel {
     if 1 == 1 {
