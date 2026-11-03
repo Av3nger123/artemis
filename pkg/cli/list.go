@@ -37,6 +37,7 @@ makes the command exit non-zero after listing the rest.`,
 type listedScenario struct {
 	File string   `json:"file"`
 	Name string   `json:"name"`
+	Flow string   `json:"flow,omitempty"`
 	Line int      `json:"line"`
 	Tags []string `json:"tags"`
 	Row  *jsonRow `json:"row"`
@@ -85,7 +86,7 @@ func listScenarios(cmd *cobra.Command, path string) error {
 			if !sel.selects(sc.Name, tags) {
 				continue
 			}
-			item := listedScenario{File: c.file, Name: sc.Name, Line: sc.Line, Tags: tags}
+			item := listedScenario{File: c.file, Name: sc.Name, Flow: sc.FlowName, Line: sc.Line, Tags: tags}
 			if item.Tags == nil {
 				item.Tags = []string{}
 			}

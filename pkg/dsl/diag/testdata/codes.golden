@@ -22,6 +22,7 @@ duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-row-name	error	two rows of a data-driven scenario name it alike
 duplicate-suite-name	error	a suite exports a name a suite above it already exports
 duplicate-tags	error	a scenario or a suite has more than one tags list
+flow-not-runnable	error	a flow file is named on the command line, and a flow runs only through a scenario file
 for-no-rows	error	a for clause's data has no rows
 for-source-not-array	error	a for clause's data is not an array of rows
 for-source-not-static	error	a for clause reads rows that are not known before the run

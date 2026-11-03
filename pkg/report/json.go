@@ -99,8 +99,12 @@ type jsonScenario struct {
 // stream's scenario-end carries: by then every step has already arrived on its
 // own step-end. Embedded in jsonScenario for the same reason as jsonRunSummary.
 type jsonScenarioSummary struct {
-	Name string   `json:"name"`
-	File string   `json:"file"`
+	Name string `json:"name"`
+	File string `json:"file"`
+	// Flow is the flow a scenario of a scenario file ran, and omitted for any
+	// other scenario, so a run with no scenario file writes the document it
+	// always did.
+	Flow string   `json:"flow,omitempty"`
 	Row  *jsonRow `json:"row,omitempty"`
 	// Kind is "suite" for a suite.art's setup or teardown, and omitted for a
 	// scenario, so a run with no suite writes the document it always did.
@@ -298,6 +302,7 @@ func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
 	out := jsonScenarioSummary{
 		Name:       sc.Name,
 		File:       sc.File,
+		Flow:       sc.Flow,
 		Status:     sc.Status.String(),
 		DurationMS: millis(sc.Duration),
 		Error:      sc.Error,

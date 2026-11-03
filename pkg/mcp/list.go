@@ -27,7 +27,9 @@ func addList(s *mcp.Server, srv *server) {
 			"as workspace-relative paths, and under `collections` the " +
 			"`name.item` refs each collection file's requests are used by: name is the file's name, which " +
 			"`import \"<file>\"` gives it, or, for a file whose name cannot be one, the name to give it " +
-			"with `import \"<file>\" as name`. Call this first to find out what " +
+			"with `import \"<file>\" as name`. Under `scenario_files`, each scenario file -- one whose " +
+			"first line is `flow \"<path>\"` -- with the flow file its header names (workspace-relative), " +
+			"the flow's name, and the titles of its scenarios. Call this first to find out what " +
 			"scenarios exist before reading or changing one.",
 		Annotations:  readOnly(),
 		OutputSchema: objectSchema(),
@@ -49,6 +51,7 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 
 	files := []string{}
 	collections := map[string][]string{}
+	scenarioFiles := map[string]scenarioFile{}
 	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -75,6 +78,9 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 		if items := srv.collectionItems(rel); len(items) > 0 {
 			collections[rel] = items
 		}
+		if sf, ok := srv.scenarioFile(rel); ok {
+			scenarioFiles[rel] = sf
+		}
 		return nil
 	})
 	if err != nil {
@@ -84,6 +90,9 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 	out := map[string]any{"workspace": srv.ws.root, "files": files}
 	if len(collections) > 0 {
 		out["collections"] = collections
+	}
+	if len(scenarioFiles) > 0 {
+		out["scenario_files"] = scenarioFiles
 	}
 	doc, err := json.Marshal(out)
 	if err != nil {
@@ -127,4 +136,54 @@ func (srv *server) collectionItems(rel string) []string {
 		}
 	}
 	return out
+}
+
+// scenarioFile is what the list says about a scenario file: the flow its
+// header names and the scenarios it holds.
+type scenarioFile struct {
+	// FlowFile is the header's path made workspace-relative, as every other
+	// path the tools take is.
+	FlowFile string `json:"flow_file"`
+	// Flow is the flow's name, or "" when the flow file cannot be read or
+	// declares no flow.
+	Flow      string   `json:"flow"`
+	Scenarios []string `json:"scenarios"`
+}
+
+// scenarioFile reads the file at rel as a scenario file. ok is false for a
+// file with no `flow "..."` header. Like collectionItems, it reads what the
+// file says and does not expand it.
+func (srv *server) scenarioFile(rel string) (scenarioFile, bool) {
+	abs, err := srv.ws.resolveArt(rel)
+	if err != nil {
+		return scenarioFile{}, false
+	}
+	b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
+	if err != nil {
+		return scenarioFile{}, false
+	}
+	header, ok := front.FlowHeader(rel, string(b))
+	if !ok {
+		return scenarioFile{}, false
+	}
+	out := scenarioFile{
+		FlowFile:  filepath.Join(filepath.Dir(rel), filepath.FromSlash(header)),
+		Scenarios: []string{},
+	}
+	tree, _ := parser.Parse(rel, string(b))
+	for _, d := range tree.Scenarios {
+		if sc, isScenario := d.(*ast.Scenario); isScenario {
+			out.Scenarios = append(out.Scenarios, sc.Name.Value)
+		}
+	}
+	// Through resolveArt, so a header that climbs out of the workspace names
+	// a file that is never read.
+	if flowAbs, err := srv.ws.resolveArt(out.FlowFile); err == nil {
+		if src, err := os.ReadFile(flowAbs); err == nil { //nolint:gosec // as above
+			if _, name, isFlow := front.FlowDecl(out.FlowFile, string(src)); isFlow {
+				out.Flow = name
+			}
+		}
+	}
+	return out, true
 }

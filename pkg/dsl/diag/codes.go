@@ -242,6 +242,11 @@ const (
 	ParallelSiblingCapture Code = "parallel-sibling-capture"
 	ParallelBrowser        Code = "parallel-browser"
 	RepeatUnbounded        Code = "repeat-unbounded"
+
+	// FlowNotRunnable is a flow file named on the command line: a flow runs
+	// only through a scenario file that names it. pkg/cli reports it, because
+	// only a path the user named can be one.
+	FlowNotRunnable Code = "flow-not-runnable"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -329,6 +334,7 @@ var registry = []CodeInfo{
 	{ParallelBrowser, Error, "two branches of a parallel block drive the browser, which has one page"},
 	{RepeatUnbounded, Error, "a repeat has neither within nor max, so nothing stops it"},
 	{UnknownDBScheme, Error, "a db step's connection URL names a database artemis has no driver for"},
+	{FlowNotRunnable, Error, "a flow file is named on the command line, and a flow runs only through a scenario file"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

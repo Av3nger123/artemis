@@ -436,6 +436,11 @@
           "severity": "error"
         },
         {
+          "value": "flow-not-runnable",
+          "doc": "a flow file is named on the command line, and a flow runs only through a scenario file",
+          "severity": "error"
+        },
+        {
           "value": "for-no-rows",
           "doc": "a for clause's data has no rows",
           "severity": "error"
