@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"artemis/pkg/shared/migrate"
 	"artemis/pkg/shared/postman"
 
 	"github.com/spf13/cobra"
@@ -16,42 +15,50 @@ import (
 // forceFlag is --force: replace the file -o names when it is already there.
 const forceFlag = "force"
 
-// flatFlag is --flat: write one scenario with a step per request, the output
-// before collections. Without it, generate writes a collection and a scenario
-// that uses it.
+// flatFlag is --flat: write a flow with each request in place as a step, and
+// the scenario file that runs it. Without it, generate also writes a
+// collection, and the flow calls its items.
 const flatFlag = "flat"
 
-// collectionExt is what the collection file is called beside the -o file:
-// orders.art gets orders.collection.art.
-const collectionExt = ".collection" + artExt
+// collectionExt and flowExt are what the collection and the flow are called
+// beside the -o file, which is the scenario file: orders.art gets
+// orders.collection.art and orders.flow.art.
+const (
+	collectionExt = ".collection" + artExt
+	flowExt       = ".flow" + artExt
+)
 
 var generateCmd = &cobra.Command{
-	Use:   "generate -f <collection.json> -o <file.art> [--force] | -f <collection.json> --flat [-o <file.art>]",
+	Use:   "generate -f <collection.json> -o <file.art> [--flat] [--force]",
 	Short: "Convert a Postman collection to .art files, once",
 	Long: `Read a Postman collection and write the same requests as Artemis DSL source.
 
-	artemis generate -f orders.postman_collection.json -o orders.art          # two files
-	artemis generate -f orders.postman_collection.json --flat                 # one file, to stdout
-	artemis generate -f orders.postman_collection.json --flat -o orders.art   # one file
+	artemis generate -f orders.postman_collection.json -o orders.art          # three files
+	artemis generate -f orders.postman_collection.json --flat -o orders.art   # two files
 
 There are two modes:
 
-  collection (the default)  Writes two files. orders.collection.art holds one
+  collection (the default)  Writes three files. orders.collection.art holds one
                             'collection', titled as the Postman collection is,
                             with one 'request' for each Postman request.
-                            orders.art imports it and holds one 'use' line for
-                            each request. This mode needs -o.
-  --flat                    Writes one scenario with one 'step' for each
-                            request. This is the output before collections.
+                            orders.flow.art imports it and holds the flow: one
+                            'var' for each Postman variable, then one
+                            'step "<name>" = orders.<request> {}' for each
+                            request. orders.art is the scenario file: it names
+                            the flow and holds one scenario, titled as the
+                            collection is, that sets nothing.
+  --flat                    Writes two files: the flow, with one 'step' written
+                            in place for each request, and the scenario file.
 
-In the collection mode, the scenario keeps the 'var' lines. A request gets one
-parameter for each var it reads, and the 'use' line passes the var by name. Two
+Both modes need -o, which names the scenario file; the others are written
+beside it. In the collection mode, a request declares each variable it reads
+as a 'var' with no value, which the flow's var of that name supplies. Two
 requests with the same name get the suffixes _2, _3 and so on. A Postman file
-with no requests is an error, and no file is written.
+with no requests is an error in the collection mode, and no file is written.
 
-The output goes through the same printer 'artemis fmt' and 'artemis migrate'
-use, so a generated file is already canonically formatted. The collection is
-never touched.
+The flow is named after the collection: "Orders API" is orders_api. The output
+is written in the form 'artemis fmt' gives, so a generated file is already
+canonically formatted. The collection is never touched.
 
 Folders nest to any depth, and every request in the tree becomes one step named
 by its folder path: "Orders / Admin / list orders". Request headers, 'url.query'
@@ -68,17 +75,15 @@ actually says.
 A Postman variable whose key is not a DSL name is renamed -- 'base-url' becomes
 base_url -- and every placeholder is rewritten to match. A '{{name}}' no
 variable defines becomes 'var name = env("NAME")'. Both are noted in the
-comment above the scenario.
+comment above the flow.
 
 A construct with no DSL spelling is an error naming the request: a formdata or
 file body, an auth type needing a signature, a dynamic variable like
 '{{$guid}}'. Nothing is written. Pre-request and test scripts are not read at
 all -- the DSL has no spelling for arbitrary JavaScript.
 
-With --flat and without -o, the source goes to stdout and no file is written.
-With -o, a file that is already there is an error rather than an overwrite: in
-the collection mode this is true for each of the two files. --force replaces
-them.`,
+A file that is already there is an error rather than an overwrite, for each of
+the files a mode writes. --force replaces them.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := cmd.Flags().GetString("file")
 		if err != nil {
@@ -96,7 +101,7 @@ them.`,
 		if err != nil {
 			return fmt.Errorf("reading --%s flag: %w", flatFlag, err)
 		}
-		return generateFile(cmd, path, out, force, flat)
+		return generateFile(path, out, force, flat)
 	},
 }
 
@@ -106,7 +111,7 @@ them.`,
 // that logged each failure and carried on, so a collection that would not parse
 // was followed by a conversion of the zero value -- an empty scenario written
 // over whatever file was in the way -- and the process still exited 0.
-func generateFile(cmd *cobra.Command, path, out string, force, flat bool) error {
+func generateFile(path, out string, force, flat bool) error {
 	if err := checkGenerateArgs(path, out, force, flat); err != nil {
 		return err
 	}
@@ -121,41 +126,30 @@ func generateFile(cmd *cobra.Command, path, out string, force, flat bool) error 
 		return fmt.Errorf("generate %s: %w", path, err)
 	}
 
-	if !flat {
-		return generateCollection(path, out, config, comments)
+	var files postman.Files
+	if flat {
+		files, err = postman.FlatFiles(config, comments, flowPath(out))
+	} else {
+		files, err = postman.CollectionFiles(config, comments, collectionPath(out), flowPath(out))
 	}
-
-	// The same translator `artemis migrate` uses, so the two commands cannot
-	// disagree about quoting, interpolation or layout: what lands on disk is
-	// print.Canonical's output either way.
-	src, err := migrate.Source(config, comments)
-	if err != nil {
-		return fmt.Errorf("generate %s: %w", path, err)
-	}
-
-	if out == "" {
-		_, err := fmt.Fprint(cmd.OutOrStdout(), src)
-		return err
-	}
-	if err := ensureWritable(out); err != nil {
-		return err
-	}
-	return writeFormatted(out, src)
-}
-
-// generateCollection writes the collection file beside out, then the scenario
-// file at out. Both are built before either is written, so a refused
-// collection writes nothing.
-func generateCollection(path, out string, config migrate.Config, comments migrate.Comments) error {
-	collOut := collectionPath(out)
-	files, err := postman.CollectionFiles(config, comments, collOut)
 	if errors.Is(err, postman.ErrNoRequests) {
 		return fmt.Errorf("generate %s: %w, so no file is written", path, err)
 	}
 	if err != nil {
 		return fmt.Errorf("generate %s: %w", path, err)
 	}
-	for _, f := range []struct{ path, src string }{{collOut, files.Collection}, {out, files.Scenario}} {
+	return writeGenerated(out, files)
+}
+
+// writeGenerated writes the collection (when there is one) and the flow beside
+// out, then the scenario file at out. Every file is built before any is
+// written, so a refused generation writes nothing.
+func writeGenerated(out string, files postman.Files) error {
+	targets := []struct{ path, src string }{{flowPath(out), files.Flow}, {out, files.Scenario}}
+	if files.Collection != "" {
+		targets = append([]struct{ path, src string }{{collectionPath(out), files.Collection}}, targets...)
+	}
+	for _, f := range targets {
 		if err := ensureWritable(f.path); err != nil {
 			return err
 		}
@@ -164,6 +158,11 @@ func generateCollection(path, out string, config migrate.Config, comments migrat
 		}
 	}
 	return nil
+}
+
+// flowPath is the flow file written beside out.
+func flowPath(out string) string {
+	return strings.TrimSuffix(out, filepath.Ext(out)) + flowExt
 }
 
 // collectionPath is the collection file written beside out.
@@ -188,10 +187,10 @@ func checkGenerateArgs(path, out string, force, flat bool) error {
 	}
 	if out == "" {
 		if flat {
-			return nil
+			return errors.New("artemis generate --flat writes a flow file and a scenario file, so it needs -o <file.art>, the scenario file")
 		}
-		return fmt.Errorf("artemis generate writes a collection file and a scenario file, so it needs -o <file.art>; "+
-			"pass --%s to print one scenario to stdout", flatFlag)
+		return fmt.Errorf("artemis generate writes a collection file, a flow file and a scenario file, so it needs -o <file.art>, "+
+			"the scenario file; --%s writes no collection, and needs -o too", flatFlag)
 	}
 	if !isArtFile(out) {
 		return fmt.Errorf("artemis generate writes %s files; -o %s is not one", artExt, out)
@@ -199,7 +198,7 @@ func checkGenerateArgs(path, out string, force, flat bool) error {
 	if force {
 		return nil
 	}
-	targets := []string{out}
+	targets := []string{out, flowPath(out)}
 	if !flat {
 		targets = append(targets, collectionPath(out))
 	}
