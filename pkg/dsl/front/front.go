@@ -70,7 +70,7 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 	tree, bag := parser.Parse(file, src)
 	pre, outer := prelude(file, l)
 	checkSuiteFile(file, tree, outer, bag)
-	res, eb := expand.Expand(tree, l)
+	res, eb := expand.ExpandParsed(tree, l, !bag.HasErrors())
 	bag.Merge(eb)
 	info, checked := check.CheckWith(res.File, res.Chain, pre)
 	for _, d := range checked.All() {

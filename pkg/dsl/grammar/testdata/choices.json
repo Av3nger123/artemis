@@ -455,6 +455,11 @@
           "severity": "error"
         },
         {
+          "value": "flow-not-found",
+          "doc": "a scenario file's flow header names a file that cannot be read",
+          "severity": "error"
+        },
+        {
           "value": "flow-ref-placement",
           "doc": "a scenario file's flow \"...\" header is not its first line",
           "severity": "error"
@@ -535,6 +540,11 @@
           "severity": "error"
         },
         {
+          "value": "missing-param",
+          "doc": "a scenario does not set a var its flow declares without a value",
+          "severity": "error"
+        },
+        {
           "value": "missing-separator",
           "doc": "two statements run together with no newline or comma between them",
           "severity": "error"
@@ -547,6 +557,11 @@
         {
           "value": "non-associative-operator",
           "doc": "a comparison operator is chained with another",
+          "severity": "error"
+        },
+        {
+          "value": "not-a-flow-file",
+          "doc": "a scenario file's flow header names a file that holds no flow",
           "severity": "error"
         },
         {
@@ -575,6 +590,11 @@
           "severity": "error"
         },
         {
+          "value": "private-param",
+          "doc": "a scenario sets a private var of its flow",
+          "severity": "error"
+        },
+        {
           "value": "repeat-unbounded",
           "doc": "a repeat has neither within nor max, so nothing stops it",
           "severity": "error"
@@ -582,6 +602,11 @@
         {
           "value": "reserved-param",
           "doc": "a parameter is named like a use-block override word, so no use can pass it",
+          "severity": "error"
+        },
+        {
+          "value": "reserved-tags",
+          "doc": "a flow declares a var named tags, which is each scenario's own list",
           "severity": "error"
         },
         {
@@ -597,6 +622,11 @@
         {
           "value": "scenario-in-collection-file",
           "doc": "a file holding a collection also holds a scenario",
+          "severity": "error"
+        },
+        {
+          "value": "scenario-value-reads-name",
+          "doc": "a scenario's value reads a name, where only literals and builtins are allowed",
           "severity": "error"
         },
         {
@@ -617,6 +647,16 @@
         {
           "value": "setup-after-step",
           "doc": "a setup block is below a step it would run before",
+          "severity": "error"
+        },
+        {
+          "value": "skip-maybe-written",
+          "doc": "a var a scenario skips is read where only some paths have written it",
+          "severity": "error"
+        },
+        {
+          "value": "skip-read",
+          "doc": "a var a scenario skips is read somewhere other than an expect or an object field",
           "severity": "error"
         },
         {
@@ -700,6 +740,11 @@
           "severity": "error"
         },
         {
+          "value": "unknown-param",
+          "doc": "a scenario sets a name that is not a var at the top of its flow",
+          "severity": "error"
+        },
+        {
           "value": "unknown-type",
           "doc": "the right-hand side of \"is\" is not a type name",
           "severity": "error"
@@ -712,6 +757,11 @@
         {
           "value": "unterminated-string",
           "doc": "a string literal has no closing quote",
+          "severity": "error"
+        },
+        {
+          "value": "var-after-step",
+          "doc": "a flow declares a var below its first setup, step or block",
           "severity": "error"
         },
         {
@@ -920,6 +970,10 @@
         {
           "value": "ai",
           "purpose": "reserved for a possible future agentic assertion"
+        },
+        {
+          "value": "skip",
+          "purpose": "a scenario's value that turns off the expects reading a var: total = skip"
         }
       ]
     },

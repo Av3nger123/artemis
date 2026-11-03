@@ -122,4 +122,4 @@ Builtin       = "env" | "match"
    tier of the language can take them without a breaking change. *)
 Reserved      = "if" | "else" | "for" | "in" | "while" | "parallel" | "group"
               | "fn" | "return" | "import" | "use" | "let" | "setup" | "teardown"
-              | "ai" ;
+              | "ai" | "skip" ;

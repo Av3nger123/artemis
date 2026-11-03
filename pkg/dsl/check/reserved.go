@@ -31,6 +31,7 @@ var purposes = map[string]string{
 	"let":      "reserved for a future local-binding form",
 	"setup":    "opens the steps that run before a scenario's own: setup { ... }",
 	"teardown": "opens the steps that run after a scenario's own: teardown { ... }",
+	"skip":     "a scenario's value that turns off the expects reading a var: total = skip",
 
 	// `ai` is the one word reserved for something the design explicitly
 	// declines to build. See notes.
