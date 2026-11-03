@@ -80,3 +80,24 @@ func TestAnImportKeepsItsName(t *testing.T) {
 		t.Errorf("preserve:\n%s", got)
 	}
 }
+
+// A step that calls an item prints as a step does, a blank line above it, and
+// an item's inputs print as a paragraph above its action.
+func TestCanonicalStepCallAndItemInputs(t *testing.T) {
+	src := "collection \"c\" {\n  command m {\n    var target = \"migrate\"\n    run \"make\" {   args = [target] }\n  }\n}\n" +
+		"scenario \"s\" {\n  var u = \"a\"\n  step \"log in\"   =   auth.login   as  admin { user = u }\n" +
+		"  use auth.me\n  step \"again\" = auth.login {\n    drop vars\n  }\n}\n"
+	want := "collection \"c\" {\n  command m {\n    var target = \"migrate\"\n\n    run \"make\" { args = [target] }\n  }\n}\n\n" +
+		"scenario \"s\" {\n  var u = \"a\"\n\n  step \"log in\" = auth.login as admin { user = u }\n" +
+		"  use auth.me\n\n  step \"again\" = auth.login {\n    drop vars\n  }\n}\n"
+	tree, bag := parser.Parse("t.art", src)
+	if bag.Len() > 0 {
+		t.Fatalf("parse: %v", bag.All())
+	}
+	if got := Canonical(tree); got != want {
+		t.Errorf("canonical:\n%s\nwant:\n%s", got, want)
+	}
+	if got := Preserving(tree); got != src {
+		t.Errorf("preserve:\n%s", got)
+	}
+}

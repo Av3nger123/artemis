@@ -312,6 +312,9 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.list(append(items, stepItems(&ast.StepDecl{Action: v.Action, Body: v.Body})...), c)
 		p.tok(v.RBrace)
 	case *ast.UseDecl:
+		p.tok(v.Step)
+		p.tok(v.Name)
+		p.tok(v.Assign)
 		p.tok(v.Keyword)
 		p.tok(v.Collection)
 		p.tok(v.Dot)

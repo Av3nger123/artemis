@@ -79,10 +79,12 @@ func (c *canon) requestDecl(r *ast.RequestDecl) {
 	c.close(r.RBrace)
 }
 
-// useDecl is `use a.b as x` and, when there is a block, its lines.
+// useDecl is `use a.b as x`, or `step "name" = a.b as x`, and, when there is
+// a block, its lines.
 func (c *canon) useDecl(u *ast.UseDecl) {
-	head := join(" ", u.Keyword.Text, u.Collection.Text+u.Dot.Text+u.Item.Text, u.As.Text, u.Alias.Text)
-	lead := toks(u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias)
+	head := join(" ", u.Step.Text, u.Name.Text, u.Assign.Text, u.Keyword.Text,
+		u.Collection.Text+u.Dot.Text+u.Item.Text, u.As.Text, u.Alias.Text)
+	lead := toks(u.Step, u.Name, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias)
 	if u.LBrace.Text == "" {
 		c.line(lead, head)
 		return

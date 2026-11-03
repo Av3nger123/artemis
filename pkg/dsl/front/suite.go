@@ -153,7 +153,11 @@ func checkSuiteFile(file string, tree *ast.File, outer []exported, bag *diag.Bag
 					"a suite runs setup and teardown, not steps of its own").
 					Hintf("put the step in setup { ... } or teardown { ... }")
 			case *ast.UseDecl:
-				bag.Error(b.Keyword.Span, diag.SuiteHasStep,
+				at := b.Keyword
+				if b.Step.Text != "" {
+					at = b.Step
+				}
+				bag.Error(at.Span, diag.SuiteHasStep,
 					"a suite runs setup and teardown, not steps of its own").
 					Hintf("put the use in setup { ... } or teardown { ... }")
 			}

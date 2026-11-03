@@ -46,4 +46,10 @@ scenario "rush" {
     expect status == 202
   }
   use orders.pay { order_id = rush_order_id, card = env("CARD"), header "X-Trace" = "1" }
+
+  # A step that calls an item is named like a step and takes the use's lines.
+  step "reorder" = orders.create as again {
+    sku = "B-2"
+    drop vars
+  }
 }

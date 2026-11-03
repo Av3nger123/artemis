@@ -689,13 +689,16 @@
       ]
     },
     "dropTarget": {
-      "doc": "What a drop line in a use block removes from the template: drop expects or drop captures.",
+      "doc": "What a drop line in a use block removes from the template: drop expects its expects, drop captures or drop vars its outputs.",
       "values": [
         {
           "value": "expects"
         },
         {
           "value": "captures"
+        },
+        {
+          "value": "vars"
         }
       ]
     },

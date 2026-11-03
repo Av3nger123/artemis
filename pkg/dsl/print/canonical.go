@@ -130,9 +130,15 @@ func (c *canon) scenario(s *ast.Scenario) {
 		// no trivia at all and a wall of twelve steps with nothing between them
 		// is not a file anyone wants to read. The first item in the body is
 		// against the brace and gets nothing.
-		switch d.(type) {
+		switch v := d.(type) {
 		case *ast.StepDecl, *ast.PhaseDecl, *ast.BlockDecl:
 			if i > 0 {
+				c.w.blank()
+			}
+		case *ast.UseDecl:
+			// A step that calls an item is a step, and gets a step's paragraph;
+			// a use line stacks with its neighbours as it always has.
+			if i > 0 && v.Step.Text != "" {
 				c.w.blank()
 			}
 		}

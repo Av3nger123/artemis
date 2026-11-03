@@ -100,8 +100,8 @@ var (
 	UseLines = []string{"header", "query", "body", "drop", "expect"}
 
 	// DropTargets are what a use's `drop` line can remove from the template:
-	// `drop expects` its expects, `drop captures` its captures.
-	DropTargets = []string{"expects", "captures"}
+	// `drop expects` its expects, `drop captures` or `drop vars` its outputs.
+	DropTargets = []string{"expects", "captures", "vars"}
 
 	// ConfigBlocks are the subjects of a `config` declaration: the browser a
 	// scenario opens, and how its api steps talk HTTP.

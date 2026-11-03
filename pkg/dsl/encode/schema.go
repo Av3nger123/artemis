@@ -383,7 +383,9 @@ var nodeSchemas = []nodeSchema{
 		list("body", "stepStatement"),
 		spanField, commentsField,
 	}},
-	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`", Fields: []fieldSchema{
+	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`", Fields: []fieldSchema{
+		{Name: "name", Type: "name", Optional: true,
+			Doc: "the step form's quoted name, which the expanded step is called; absent for a use"},
 		{Name: "collection", Type: "string", Optional: true,
 			Doc: "the collection before the dot"},
 		word("item", "the request used"),
@@ -396,8 +398,8 @@ var nodeSchemas = []nodeSchema{
 		child("value", "expression"),
 		spanField, commentsField,
 	}},
-	{Kind: kindDrop, Doc: "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed", Fields: []fieldSchema{
-		{Name: "what", Type: "string", InputRequired: true, Doc: "expects or captures: what the line removes"},
+	{Kind: kindDrop, Doc: "`drop expects`, `drop captures` or `drop vars` in a use block: the used item's expects, or its outputs, are removed", Fields: []fieldSchema{
+		{Name: "what", Type: "string", InputRequired: true, Doc: "expects, captures or vars: what the line removes; captures and vars both remove the outputs"},
 		spanField, commentsField,
 	}},
 	{Kind: kindIdent, Doc: "a name: a variable, a capture, or a bound root like `status`", Fields: []fieldSchema{

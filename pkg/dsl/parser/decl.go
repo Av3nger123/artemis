@@ -307,12 +307,19 @@ func (p *parser) parseVar() ast.Decl {
 // turns a step whose author wrote `expect` above `get` into a cascade of
 // unexpected tokens from the first line onward; this way one mistake produces
 // one diagnostic and the rest of the step still lands in the tree.
+//
+// `step "name" = auth.login { ... }` is the other form, a step that calls a
+// collection item: the "=" after the name decides it, and parseStepCall reads
+// the rest.
 func (p *parser) parseStep() ast.Decl {
 	s := &ast.StepDecl{Keyword: p.next()}
 
 	name, ok := p.expectIdentOrString("a step name in quotes")
 	if !ok {
 		return p.badFrom(s.Keyword)
+	}
+	if p.at(token.Assign) {
+		return p.parseStepCall(s.Keyword, name)
 	}
 
 	body := p.parseStepBody("step", name)

@@ -1031,8 +1031,14 @@
     },
     {
       "kind": "use",
-      "doc": "`use auth.login as admin { user = \"alice\" ... }`",
+      "doc": "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`",
       "fields": [
+        {
+          "name": "name",
+          "type": "name",
+          "optional": true,
+          "doc": "the step form's quoted name, which the expanded step is called; absent for a use"
+        },
         {
           "name": "collection",
           "type": "string",
@@ -1097,13 +1103,13 @@
     },
     {
       "kind": "drop",
-      "doc": "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed",
+      "doc": "`drop expects`, `drop captures` or `drop vars` in a use block: the used item's expects, or its outputs, are removed",
       "fields": [
         {
           "name": "what",
           "type": "string",
           "inputRequired": true,
-          "doc": "expects or captures: what the line removes"
+          "doc": "expects, captures or vars: what the line removes; captures and vars both remove the outputs"
         },
         {
           "name": "span",

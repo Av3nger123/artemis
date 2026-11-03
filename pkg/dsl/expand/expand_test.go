@@ -327,3 +327,69 @@ func TestADefaultDoesNotReorderTheStep(t *testing.T) {
 		t.Fatalf("the action must come first:\n%s", got)
 	}
 }
+
+func TestStepFormExpandsLikeUse(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"main.art": "import \"auth.art\"\nscenario \"s\" {\n  step \"log in\" = auth.login { user = \"bob\" }\n}\n",
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"/l\"\n    capture token = body.t\n  }\n}\n",
+	})
+	noDiags(t, diags)
+	for _, want := range []string{`step "log in" {`, `post "/l"`, `capture token = body.t`} {
+		if !contains(got, want) {
+			t.Errorf("missing %s in\n%s", want, got)
+		}
+	}
+}
+
+// as renames the step's outputs, not the step: the step form's name is its
+// own, where a use's step is called by its alias.
+func TestStepFormAliasRenamesOutputsNotTheStep(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"main.art": "import \"auth.art\"\nscenario \"s\" {\n  step \"log in\" = auth.login as admin { user = \"bob\" }\n" +
+			"  step \"me\" {\n    get \"/me?t=${admin_token}\"\n  }\n}\n",
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"/l\"\n    capture token = body.t\n  }\n}\n",
+	})
+	noDiags(t, diags)
+	if !contains(got, `step "log in" {`) || !contains(got, "capture admin_token = body.t") || contains(got, `step "admin"`) {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestDropVarsRemovesTheItemsOutputs(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"main.art": "import \"auth.art\"\nscenario \"s\" {\n  step \"bad login\" = auth.login {\n    user = \"x\"\n    drop vars\n  }\n}\n",
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"/l\"\n    expect status == 200\n    capture token = body.t\n  }\n}\n",
+	})
+	noDiags(t, diags)
+	if contains(got, "capture") || !contains(got, "status == 200") {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+// drop vars removes an item's step vars as well as its captures.
+func TestDropVarsRemovesVarOutputs(t *testing.T) {
+	t.Skip("integration: needs Task 3 (var after the action)")
+	got, diags := run(t, map[string]string{
+		"main.art": "import \"auth.art\"\nscenario \"s\" {\n  step \"bad login\" = auth.login {\n    user = \"x\"\n    drop vars\n  }\n}\n",
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"/l\"\n    expect status == 200\n    var token = body.t\n  }\n}\n",
+	})
+	noDiags(t, diags)
+	if contains(got, "token") || !contains(got, "status == 200") {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+// The step form works inside a block and in setup, as a step does.
+func TestStepFormExpandsInsideBlocks(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"main.art": "import \"auth.art\"\nscenario \"s\" {\n  setup {\n    step \"first\" = auth.login { user = \"a\" }\n  }\n" +
+			"  parallel {\n    step \"one\" = auth.login as one { user = \"b\" }\n    step \"two\" = auth.login as two { user = \"c\" }\n  }\n}\n",
+		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"/l\"\n    capture token = body.t\n  }\n}\n",
+	})
+	noDiags(t, diags)
+	for _, want := range []string{`step "first" {`, `step "one" {`, `step "two" {`, "capture one_token", "capture two_token"} {
+		if !contains(got, want) {
+			t.Errorf("missing %s in\n%s", want, got)
+		}
+	}
+}

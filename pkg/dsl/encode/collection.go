@@ -80,14 +80,21 @@ func (e *enc) requestDecl(r *ast.RequestDecl) *obj {
 // useDecl leaves collection out for a bare ref and alias out when
 // there is no `as`: absent, not empty, which is obj.set's rule for a missing
 // value and what the schema promises.
+//
+// The step form, `step "log in" = auth.login { ... }`, is the same kind with
+// the step's name: a use has no name, so its presence is the form.
 func (e *enc) useDecl(u *ast.UseDecl) *obj {
-	return start(kindUse, u).
+	b := start(kindUse, u)
+	if u.Name.Text != "" {
+		b.set("name", nameObj(u.Name))
+	}
+	return b.
 		set("collection", optional(u.Collection.Text)).
 		set("item", u.Item.Text).
 		set("alias", optional(u.Alias.Text)).
 		set("lines", e.list(toNodes(u.Lines))).
 		span().
-		comments(toks(u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
+		comments(toks(u.Step, u.Name, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
 }
 
 // present records key even when list is empty, for the one field whose
@@ -315,6 +322,18 @@ func useDecl(f fields) (*ast.UseDecl, error) {
 		return nil, err
 	}
 	u := &ast.UseDecl{Keyword: syn(token.Ident, "use"), Item: syn(token.Ident, item)}
+	// A name makes it the step form, which always has a block.
+	stepForm := f.has("name")
+	if stepForm {
+		if u.Name, err = nameTok(f, "name"); err != nil {
+			return nil, err
+		}
+		u.Keyword, u.Step, u.Assign = token.Token{}, syn(token.Ident, "step"), syn(token.Assign, "=")
+	}
+	first := &u.Keyword
+	if stepForm {
+		first = &u.Step
+	}
 	if coll != "" {
 		u.Collection, u.Dot = syn(token.Ident, coll), syn(token.Dot, ".")
 	}
@@ -332,11 +351,11 @@ func useDecl(f fields) (*ast.UseDecl, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(u.Lines) > 0 || len(c.open) > 0 || len(c.beforeClose) > 0 || len(c.afterClose) > 0 {
+	if stepForm || len(u.Lines) > 0 || len(c.open) > 0 || len(c.beforeClose) > 0 || len(c.afterClose) > 0 {
 		u.LBrace, u.RBrace = syn(token.LBrace, "{"), syn(token.RBrace, "}")
-		return u, braced(f, &u.Keyword, &u.LBrace, &u.RBrace)
+		return u, braced(f, first, &u.LBrace, &u.RBrace)
 	}
-	return u, plain(f, &u.Keyword)
+	return u, plain(f, first)
 }
 
 // useLine is one line of a use block: an argument (a field), a body field, a
@@ -359,8 +378,8 @@ func useLine(f fields) (ast.Stmt, error) {
 	return nil, badKind(f, kind, "a use line")
 }
 
-// drop is `drop expects` or `drop captures`. what is required: a document
-// that left it out would otherwise silently mean one of the two.
+// drop is `drop expects`, `drop captures` or `drop vars`. what is required: a
+// document that left it out would otherwise silently mean one of them.
 func drop(f fields) (ast.Stmt, error) {
 	what, err := f.str("what")
 	if err != nil {

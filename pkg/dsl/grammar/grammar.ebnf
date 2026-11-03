@@ -31,12 +31,15 @@ RepeatOption  = ( "every" | "within" | "max" ) Expr ;
 FlowBody      = "{" { StepDecl | UseDecl | Flow } "}" ;
 (* One scenario per row: the name may interpolate the row, and nothing else. *)
 ForClause     = "for" [ "secret" ] Ident "in" Expr ;
-UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
+(* The step form calls an item as a use does, and the step it expands to takes
+   the quoted name. *)
+UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ]
+              | "step" String "=" ItemRef [ "as" Ident ] "{" { UseLine } "}" ;
 ItemRef       = Ident "." Ident ;
 UseLine       = Ident "=" Expr
               | ReqField
               | "body" "." Ident { "." Ident } "=" Expr
-              | "drop" ( "expects" | "captures" )
+              | "drop" ( "expects" | "captures" | "vars" )
               | Expect ;
 
 ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting } ] "}"

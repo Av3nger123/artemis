@@ -103,7 +103,7 @@ func TestParamNamedLikeAUseLineIsAnError(t *testing.T) {
 func TestDropTakesExpectsOrCaptures(t *testing.T) {
 	_, bag := Parse("t.art", "scenario \"s\" {\n  use c.r { drop capture }\n}\n")
 	all := bag.All()
-	if len(all) != 1 || !strings.Contains(all[0].Message, "\"expects\" or \"captures\"") {
+	if len(all) != 1 || !strings.Contains(all[0].Message, "\"expects\", \"captures\" or \"vars\"") {
 		t.Fatalf("diagnostics = %v", all)
 	}
 	if !strings.Contains(all[0].Hint, "captures") {
@@ -257,6 +257,75 @@ func TestInputNamedLikeAUseLineIsAnError(t *testing.T) {
 	all := bag.All()
 	if len(all) != 1 || all[0].Code != diag.ReservedParam {
 		t.Fatalf("diagnostics = %v", all)
+	}
+}
+
+func TestStepCallsAnItem(t *testing.T) {
+	src := "import \"auth.art\"\n\nscenario \"s\" {\n  step \"log in\" = auth.login as admin {\n    user = \"bob\"\n    drop vars\n  }\n}\n"
+	f := mustParse(t, src)
+	u, ok := f.Scenarios[1].(*ast.Scenario).Body[0].(*ast.UseDecl)
+	if !ok {
+		t.Fatalf("body[0] = %T", f.Scenarios[1].(*ast.Scenario).Body[0])
+	}
+	if u.Name.Value != "log in" || u.Name.Text != `"log in"` || u.Alias.Value != "admin" || u.Keyword.Text != "" {
+		t.Fatalf("use = name %q alias %q keyword %q", u.Name.Text, u.Alias.Value, u.Keyword.Text)
+	}
+	if u.StepName() != "log in" || u.Ref() != "auth.login" {
+		t.Errorf("StepName = %q, Ref = %q", u.StepName(), u.Ref())
+	}
+	if d, ok := u.Lines[1].(*ast.Drop); !ok || d.What.Value != "vars" {
+		t.Errorf("lines[1] = %#v", u.Lines[1])
+	}
+}
+
+// The step form is accepted wherever a step is: in setup, teardown and every
+// block, and a bare sibling ref works as it does for a use.
+func TestStepCallIsAStepEverywhere(t *testing.T) {
+	src := "scenario \"s\" {\n  setup {\n    step \"a\" = auth.login { }\n  }\n" +
+		"  parallel {\n    step \"b\" = auth.me { }\n    step \"c\" = me { }\n  }\n" +
+		"  if x {\n    step \"d\" = auth.login {}\n  }\n  teardown {\n    step \"e\" = auth.logout { }\n  }\n}\n"
+	f := mustParse(t, src)
+	n := 0
+	ast.Inspect(f, func(x ast.Node) {
+		if u, ok := x.(*ast.UseDecl); ok && u.Step.Text == "step" {
+			n++
+		}
+	})
+	if n != 5 {
+		t.Fatalf("found %d step calls, want 5", n)
+	}
+}
+
+func TestStepCallNeedsABlock(t *testing.T) {
+	src := "scenario \"s\" {\n  step \"a\" = auth.login\n  step \"b\" {\n    get \"/\"\n  }\n}\n"
+	tree, bag := Parse("t.art", src)
+	all := bag.All()
+	if len(all) != 1 || !strings.Contains(all[0].Message, "expected \"{\" after auth.login") {
+		t.Fatalf("diagnostics = %v", all)
+	}
+	if got := ast.Source(tree); got != src {
+		t.Fatalf("round trip lost bytes:\n got %q\nwant %q", got, src)
+	}
+	if _, ok := tree.Scenarios[0].(*ast.Scenario).Body[1].(*ast.StepDecl); !ok {
+		t.Errorf("the step after it was lost: %T", tree.Scenarios[0].(*ast.Scenario).Body[1])
+	}
+}
+
+func TestBrokenStepCallStillRoundTrips(t *testing.T) {
+	for _, src := range []string{
+		"scenario \"s\" {\n  step \"a\" = { }\n}\n",
+		"scenario \"s\" {\n  step \"a\" = auth. { }\n}\n",
+		"scenario \"s\" {\n  step \"a\" = auth.login as { }\n}\n",
+		"scenario \"s\" {\n  step \"a\" = auth.login { 1 }\n}\n",
+		"scenario \"s\" {\n  step \"a\" = auth.login {\n",
+	} {
+		tree, bag := Parse("t.art", src)
+		if !bag.HasErrors() {
+			t.Errorf("%q parsed clean", src)
+		}
+		if got := ast.Source(tree); got != src {
+			t.Errorf("round trip lost bytes:\n got %q\nwant %q", got, src)
+		}
 	}
 }
 

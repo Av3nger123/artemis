@@ -235,15 +235,52 @@ func article(word string) string {
 // parseUse is `use ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ]`.
 func (p *parser) parseUse() ast.Decl {
 	u := &ast.UseDecl{Keyword: p.next()}
-	first, ok := p.expectIdent("what to use, like auth.login")
+	if !p.parseItemRef(u, "what to use, like auth.login") {
+		return p.badFrom(u.Tokens(nil)...)
+	}
+	if p.at(token.LBrace) {
+		u.LBrace, u.Lines, u.RBrace = p.parseUseLines("use")
+	}
+	p.endDecl("a use")
+	return u
+}
+
+// parseStepCall is the rest of `step String "=" ItemRef [ "as" Ident ] "{"
+// { UseLine } "}"`, once parseStep has read the keyword and the name and seen
+// the "=": a step that calls a collection item. It is the same node as a use,
+// with the step's keyword, name and "=" in place of `use`.
+func (p *parser) parseStepCall(kw, name token.Token) ast.Decl {
+	u := &ast.UseDecl{Step: kw, Name: name, Assign: p.next()}
+	if !p.parseItemRef(u, "the item the step calls, like auth.login") {
+		return p.badFrom(u.Tokens(nil)...)
+	}
+	if p.at(token.LBrace) {
+		u.LBrace, u.Lines, u.RBrace = p.parseUseLines("step")
+	} else {
+		// The step keeps what it parsed, and whatever follows is the next
+		// line's to read: recovering here would take that line with it.
+		p.errorf(p.peek(), diag.UnexpectedToken,
+			"expected \"{\" after %s, found %s", u.Ref(), describe(p.peek())).
+			Hintf("a step that calls an item has a block, even an empty one: step %s = %s { }", name.Text, u.Ref())
+	}
+	p.endDecl("a step")
+	return u
+}
+
+// parseItemRef is `ItemRef [ "as" Ident ]` into u: `auth.login`, or a bare
+// `login` for a sibling, then the alias. what describes the reference for the
+// diagnostic when there is none. It reports false having consumed only what
+// u now holds, and the caller abandons the declaration into a Bad.
+func (p *parser) parseItemRef(u *ast.UseDecl, what string) bool {
+	first, ok := p.expectIdent(what)
 	if !ok {
-		return p.badFrom(u.Keyword)
+		return false
 	}
 	if p.at(token.Dot) {
 		u.Collection, u.Dot = first, p.next()
 		item, ok := p.expectIdent("the request after the dot")
 		if !ok {
-			return p.badFrom(u.Tokens(nil)...)
+			return false
 		}
 		u.Item = item
 	} else {
@@ -253,15 +290,11 @@ func (p *parser) parseUse() ast.Decl {
 		u.As = p.next()
 		alias, ok := p.expectIdent("a name after \"as\"")
 		if !ok {
-			return p.badFrom(u.Tokens(nil)...)
+			return false
 		}
 		u.Alias = alias
 	}
-	if p.at(token.LBrace) {
-		u.LBrace, u.Lines, u.RBrace = p.parseUseLines("use")
-	}
-	p.endDecl("a use")
-	return u
+	return true
 }
 
 // parseUseLines reads `"{" { UseLine } "}"`. A line's first word decides what
@@ -291,7 +324,7 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected an argument or an override, found %s", describe(p.peek())).
-				Hintf("a use block holds: name = value, header, query, body, drop expects, drop captures, expect")
+				Hintf("%s", useLinesHint(what))
 			lines = append(lines, p.recoverTo())
 		}
 		if p.i == before {
@@ -305,14 +338,22 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 	return open, lines, p.next()
 }
 
+// useLinesHint is what a use block, or a step that calls an item, may hold.
+func useLinesHint(what string) string {
+	if what == "step" {
+		return "a step that calls an item holds: name = value, header, query, body, drop expects, drop vars, expect"
+	}
+	return "a use block holds: name = value, header, query, body, drop expects, drop captures, expect"
+}
+
 func (p *parser) parseDrop() ast.Stmt {
 	d := &ast.Drop{Keyword: p.next()}
-	what, ok := p.expectIdent("\"expects\" or \"captures\" after \"drop\"")
+	what, ok := p.expectIdent("\"expects\", \"captures\" or \"vars\" after \"drop\"")
 	if !ok {
 		return p.badFrom(d.Keyword)
 	}
 	if !token.IsDropTarget(what.Value) {
-		p.errorf(what, diag.UnexpectedToken, "expected \"expects\" or \"captures\" after \"drop\", found %s", describe(what)).
+		p.errorf(what, diag.UnexpectedToken, "expected \"expects\", \"captures\" or \"vars\" after \"drop\", found %s", describe(what)).
 			DidYouMean(what.Value, token.DropTargets)
 	}
 	d.What = what

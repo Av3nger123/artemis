@@ -54,10 +54,11 @@ func (e *expander) apply(via int, s *ast.StepDecl, lines []ast.Stmt) {
 				e.setBodyField(via, s, req, v)
 			}
 		case *ast.Drop:
-			// drop captures removes the template's captures. A use adds no
-			// capture of its own, so unlike drop expects it has no place it
+			// drop captures, or drop vars, removes the template's outputs --
+			// its captures and the vars after its action alike. A use adds no
+			// output of its own, so unlike drop expects it has no place it
 			// must come before.
-			if v.What.Value == "captures" {
+			if v.What.Value == "captures" || v.What.Value == "vars" {
 				s.Body = without[*ast.Capture](s.Body)
 				continue
 			}
