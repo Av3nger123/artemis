@@ -1,0 +1,12 @@
+# stage: front
+#
+# A scenario that reads its rows with for. Each row is now a scenario of its
+# own in a scenario file, setting the flow's var that held the row. It is
+# reported at for, once, as the old scenario it is.
+
+scenario "log in as ${user.role}" for user in json("users.json") {
+  step "log in" {
+    post "/login" { body = {"email": user.email} }
+    expect status == user.status
+  }
+}

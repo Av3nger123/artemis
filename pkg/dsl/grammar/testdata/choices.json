@@ -281,7 +281,7 @@
       ]
     },
     "declaration": {
-      "doc": "The declarations of a file -- import, collection, scenario, flow -- and those a scenario body holds, use among them.",
+      "doc": "The declarations of a file -- import, collection, scenario, flow -- and those a flow's body holds.",
       "values": [
         {
           "value": "import"
@@ -296,9 +296,6 @@
           "value": "flow"
         },
         {
-          "value": "suite"
-        },
-        {
           "value": "tags"
         },
         {
@@ -309,9 +306,6 @@
         },
         {
           "value": "step"
-        },
-        {
-          "value": "use"
         },
         {
           "value": "setup"
@@ -337,11 +331,6 @@
         {
           "value": "bad-override",
           "doc": "a line in a use block is not an argument or an override that applies",
-          "severity": "error"
-        },
-        {
-          "value": "bad-row-name",
-          "doc": "a data-driven scenario's name reads something other than its row",
           "severity": "error"
         },
         {
@@ -435,18 +424,8 @@
           "severity": "error"
         },
         {
-          "value": "duplicate-row-name",
-          "doc": "two rows of a data-driven scenario name it alike",
-          "severity": "error"
-        },
-        {
-          "value": "duplicate-suite-name",
-          "doc": "a suite exports a name a suite above it already exports",
-          "severity": "error"
-        },
-        {
           "value": "duplicate-tags",
-          "doc": "a scenario or a suite has more than one tags list",
+          "doc": "a scenario has more than one tags list",
           "severity": "error"
         },
         {
@@ -467,21 +446,6 @@
         {
           "value": "flow-ref-placement",
           "doc": "a scenario file's flow \"...\" header is not its first line",
-          "severity": "error"
-        },
-        {
-          "value": "for-no-rows",
-          "doc": "a for clause's data has no rows",
-          "severity": "error"
-        },
-        {
-          "value": "for-source-not-array",
-          "doc": "a for clause's data is not an array of rows",
-          "severity": "error"
-        },
-        {
-          "value": "for-source-not-static",
-          "doc": "a for clause reads rows that are not known before the run",
           "severity": "error"
         },
         {
@@ -575,6 +539,41 @@
           "severity": "error"
         },
         {
+          "value": "old-capture",
+          "doc": "a step writes a name with capture, which var after the action replaces",
+          "severity": "error"
+        },
+        {
+          "value": "old-for",
+          "doc": "a scenario reads its rows with for, which a scenario for each row replaces",
+          "severity": "error"
+        },
+        {
+          "value": "old-params",
+          "doc": "a collection item declares parameters in parentheses, which vars above its action replace",
+          "severity": "error"
+        },
+        {
+          "value": "old-scenario",
+          "doc": "a scenario holds steps in a file with no flow header, the form a flow file and a scenario file replace",
+          "severity": "error"
+        },
+        {
+          "value": "old-secret",
+          "doc": "a var, a capture, a parameter or a for clause is marked secret, which is removed",
+          "severity": "error"
+        },
+        {
+          "value": "old-suite",
+          "doc": "a file is a suite, which folders, --tags and each flow's own setup replace",
+          "severity": "error"
+        },
+        {
+          "value": "old-use",
+          "doc": "a use calls an item, which step \"name\" = <collection>.<item> replaces",
+          "severity": "error"
+        },
+        {
           "value": "parallel-browser",
           "doc": "two branches of a parallel block drive the browser, which has one page",
           "severity": "error"
@@ -645,11 +644,6 @@
           "severity": "error"
         },
         {
-          "value": "secret-argument",
-          "doc": "an argument to a secret parameter is not itself secret",
-          "severity": "error"
-        },
-        {
           "value": "setup-after-step",
           "doc": "a setup block is below a step it would run before",
           "severity": "error"
@@ -662,21 +656,6 @@
         {
           "value": "skip-read",
           "doc": "a var a scenario skips is read somewhere other than an expect or an object field",
-          "severity": "error"
-        },
-        {
-          "value": "suite-file-name",
-          "doc": "a suite block is in a file not named suite.art",
-          "severity": "error"
-        },
-        {
-          "value": "suite-has-scenario",
-          "doc": "a suite file holds a scenario, or a second suite block",
-          "severity": "error"
-        },
-        {
-          "value": "suite-has-step",
-          "doc": "a suite block holds a step or a use outside setup and teardown",
           "severity": "error"
         },
         {
@@ -1047,7 +1026,7 @@
           "value": "expect"
         },
         {
-          "value": "capture"
+          "value": "var"
         },
         {
           "value": "retry"

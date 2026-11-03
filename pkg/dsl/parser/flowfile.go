@@ -160,7 +160,9 @@ func (p *parser) parseDataLine() ast.Decl {
 // data scenario does not hold. Seeing one is data-only-scenario rather than a
 // set that lost its "=".
 var dataOnlyWords = func() map[string]bool {
-	out := map[string]bool{"secret": true, "private": true}
+	// The old forms' words too, so a capture or a use written in a data
+	// scenario is told it holds data only.
+	out := map[string]bool{"secret": true, "private": true, "capture": true, "use": true, "suite": true}
 	for _, table := range [][]string{
 		token.Blocks, token.BlockWords, token.StepStatements,
 		token.Methods, token.Actions, token.UseLines,

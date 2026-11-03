@@ -41,9 +41,8 @@ var (
 
 	// Blocks are the top-level declarations of a file -- `import`,
 	// `collection`, `scenario` and `flow`, which is a flow file's flow or a
-	// scenario file's header -- and the declarations a scenario body holds,
-	// `use` among them.
-	Blocks = []string{"import", "collection", "scenario", "flow", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
+	// scenario file's header -- and the declarations a flow's body holds.
+	Blocks = []string{"import", "collection", "scenario", "flow", "tags", "config", "var", "step", "setup", "teardown"}
 
 	// BlockWords are the words that open a control-flow block where a step could
 	// be written, and FlowClauses the words of the clauses that follow one:
@@ -57,7 +56,7 @@ var (
 	RepeatOptions = []string{"every", "within", "max"}
 
 	// StepStatements are the statements legal in a step after its action.
-	StepStatements = []string{"expect", "capture", "retry", "timeout", "within"}
+	StepStatements = []string{"expect", "var", "retry", "timeout", "within"}
 
 	// RequestFields are the fields of an api step's action block.
 	RequestFields = []string{"header", "query", "body", "form", "multipart"}

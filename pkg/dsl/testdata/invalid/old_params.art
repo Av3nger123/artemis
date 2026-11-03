@@ -1,0 +1,14 @@
+# stage: front
+#
+# A collection item that declares its inputs as parameters. An item's inputs
+# are the vars above its action, so a step that calls it sets them by name
+# and a missing one can come from the flow's context.
+
+collection "auth" {
+  request login(user, password = env("API_PASSWORD")) {
+    post "/login" {
+      body = {"user": user, "password": password}
+    }
+    expect status == 200
+  }
+}

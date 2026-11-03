@@ -8,16 +8,14 @@ import (
 	"artemis/pkg/dsl/diag"
 )
 
-// checkout is a flow file, in the old form oldFlow reads.
-const checkout = "scenario \"checkout\" {\n  var quantity = 1\n  var total = 100\n" +
+// checkout is a flow file.
+const checkout = "flow checkout {\n  var quantity = 1\n  var total = 100\n" +
 	"  step \"pay\" {\n    post \"/pay\" { body = {\"q\": quantity} }\n    expect body.total == total\n  }\n}\n"
-
-var checkoutFlow = []string{"flows/checkout.art"}
 
 func TestScenarioFileExpandsOneScenarioPerLine(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"full\" { }\nscenario \"coupon\" {\n  var quantity = 3\n  var total = 270\n}\n",
-		map[string]string{"flows/checkout.art": checkout}, checkoutFlow)
+		"flow \"flows/checkout.art\"\nscenario \"full\" { }\nscenario \"coupon\" {\n  quantity = 3\n  total = 270\n}\n",
+		map[string]string{"flows/checkout.art": checkout})
 	noDiags(t, got.diags)
 	full, coupon, ok := strings.Cut(got.out, "scenario \"coupon\"")
 	if !ok || !contains(full, "scenario \"full\"") {
@@ -42,8 +40,8 @@ func TestScenarioFileExpandsOneScenarioPerLine(t *testing.T) {
 
 func TestAStepInTheFlowChainsToItsScenario(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"full\" { }\nscenario \"coupon\" { var quantity = 3 }\n",
-		map[string]string{"flows/checkout.art": checkout}, checkoutFlow)
+		"flow \"flows/checkout.art\"\nscenario \"full\" { }\nscenario \"coupon\" { quantity = 3 }\n",
+		map[string]string{"flows/checkout.art": checkout})
 	noDiags(t, got.diags)
 	coupon := got.res.File.Scenarios[1].(*ast.Scenario)
 	var step *ast.StepDecl
@@ -62,11 +60,11 @@ const authLogin = "collection \"auth\" {\n  request login(user) {\n    post \"/l
 
 func TestFlowImportsResolveFromTheFlowFile(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
+		"flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
 		map[string]string{
-			"flows/checkout.art":   "import \"../collections/auth.art\"\n\nscenario \"checkout\" {\n  use auth.login { user = \"a\" }\n}\n",
+			"flows/checkout.art":   "import \"../collections/auth.art\"\n\nflow checkout {\n  step \"log in\" = auth.login { user = \"a\" }\n}\n",
 			"collections/auth.art": authLogin,
-		}, checkoutFlow)
+		})
 	noDiags(t, got.diags)
 	if !contains(got.out, `post "/login"`) || !contains(got.out, "capture token = body.token") {
 		t.Fatalf("the flow's use was not expanded:\n%s", got.out)
@@ -75,11 +73,11 @@ func TestFlowImportsResolveFromTheFlowFile(t *testing.T) {
 
 func TestStandaloneFlowsItemFaultChainsThroughTheStep(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
+		"flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
 		map[string]string{
-			"flows/checkout.art":   "import \"../collections/auth.art\"\n\nscenario \"checkout\" {\n  use auth.login { }\n}\n",
+			"flows/checkout.art":   "import \"../collections/auth.art\"\n\nflow checkout {\n  step \"log in\" = auth.login { }\n}\n",
 			"collections/auth.art": authLogin,
-		}, checkoutFlow)
+		})
 	ds := only(got.bag, diag.MissingArgument)
 	if len(ds) != 1 || ds[0].Span.File != "flows/checkout.art" {
 		t.Fatalf("want one missing-argument at the flow's use, got:\n%s", got.diags)
@@ -91,10 +89,9 @@ func TestStandaloneFlowsItemFaultChainsThroughTheStep(t *testing.T) {
 
 func TestScenarioCannotSetAnUnknownOrPrivateVar(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"s\" {\n  var quantty = 3\n  var url = \"x\"\n}\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var quantity = 1\n  var url = \"http://h\"\n" +
-			"  step \"pay\" {\n    post \"${url}/pay\" { body = {\"q\": quantity} }\n  }\n}\n"},
-		checkoutFlow, private("url"))
+		"flow \"flows/checkout.art\"\nscenario \"s\" {\n  quantty = 3\n  url = \"x\"\n}\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  var quantity = 1\n  private var url = \"http://h\"\n" +
+			"  step \"pay\" {\n    post \"${url}/pay\" { body = {\"q\": quantity} }\n  }\n}\n"})
 	unknown := only(got.bag, diag.UnknownParam)
 	if len(unknown) != 1 || unknown[0].Span.Line != 3 || !contains(unknown[0].Hint, `did you mean "quantity"?`) {
 		t.Fatalf("want unknown-param at quantty with a did-you-mean, got:\n%s", got.diags)
@@ -109,16 +106,16 @@ func TestScenarioCannotSetAnUnknownOrPrivateVar(t *testing.T) {
 }
 
 func TestRequiredFlowVarMustBeSet(t *testing.T) {
-	flow := map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var password = null\n" +
+	flow := map[string]string{"flows/checkout.art": "flow checkout {\n  var password\n" +
 		"  step \"pay\" {\n    post \"/pay\" { body = {\"p\": password} }\n  }\n}\n"}
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { }\n", flow, checkoutFlow, required("password"))
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { }\n", flow)
 	ds := only(got.bag, diag.MissingParam)
 	if len(ds) != 1 || ds[0].Span.File != "main.art" || ds[0].Span.Line != 2 ||
 		!contains(ds[0].Message, "password") || !contains(ds[0].Message, "checkout") {
 		t.Fatalf("want missing-param naming password and checkout at scenario s, got:\n%s", got.diags)
 	}
 
-	got = expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { var password = env(\"PW\") }\n", flow, checkoutFlow, required("password"))
+	got = expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { password = env(\"PW\") }\n", flow)
 	noDiags(t, got.diags)
 	if !contains(got.out, `var password = env("PW")`) {
 		t.Fatalf("the scenario's value is the var's:\n%s", got.out)
@@ -127,10 +124,10 @@ func TestRequiredFlowVarMustBeSet(t *testing.T) {
 
 func TestScenarioValueCannotReadAName(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"s\" { var total = \"${quantity}0\" }\n",
-		map[string]string{"flows/checkout.art": checkout}, checkoutFlow)
+		"flow \"flows/checkout.art\"\nscenario \"s\" { total = \"${quantity}0\" }\n",
+		map[string]string{"flows/checkout.art": checkout})
 	ds := only(got.bag, diag.ScenarioValueReadsName)
-	if len(ds) != 1 || ds[0].Span.File != "main.art" || ds[0].Span.Line != 2 || ds[0].Span.Col != 31 {
+	if len(ds) != 1 || ds[0].Span.File != "main.art" || ds[0].Span.Line != 2 || ds[0].Span.Col != 27 {
 		t.Fatalf("want scenario-value-reads-name at quantity, got:\n%s", got.diags)
 	}
 	if contains(got.out, "${quantity}0") {
@@ -138,15 +135,15 @@ func TestScenarioValueCannotReadAName(t *testing.T) {
 	}
 
 	got = expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"s\" {\n  var quantity = env(\"Q\")\n  var total = {\"n\": [1, \"${env(\"T\")}\"]}\n}\n",
-		map[string]string{"flows/checkout.art": checkout}, checkoutFlow)
+		"flow \"flows/checkout.art\"\nscenario \"s\" {\n  quantity = env(\"Q\")\n  total = {\"n\": [1, \"${env(\"T\")}\"]}\n}\n",
+		map[string]string{"flows/checkout.art": checkout})
 	noDiags(t, got.diags)
 }
 
 func TestVarAfterTheFirstStepIsAnError(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var a = 1\n" +
-			"  step \"pay\" {\n    get \"/pay\"\n  }\n  var b = 2\n}\n"}, checkoutFlow)
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  var a = 1\n" +
+			"  step \"pay\" {\n    get \"/pay\"\n  }\n  var b = 2\n}\n"})
 	ds := only(got.bag, diag.VarAfterStep)
 	if len(ds) != 1 || ds[0].Span.File != "flows/checkout.art" || ds[0].Span.Line != 6 {
 		t.Fatalf("want var-after-step at var b, got:\n%s", got.diags)
@@ -157,9 +154,9 @@ func TestVarAfterTheFirstStepIsAnError(t *testing.T) {
 }
 
 func TestFlowCannotDeclareTags(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var tags = 1\n" +
-			"  step \"pay\" {\n    get \"/pay\"\n  }\n}\n"}, checkoutFlow)
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  var tags = 1\n" +
+			"  step \"pay\" {\n    get \"/pay\"\n  }\n}\n"})
 	if ds := only(got.bag, diag.ReservedTags); len(ds) != 1 || ds[0].Span.Line != 2 {
 		t.Fatalf("want reserved-tags at var tags, got:\n%s", got.diags)
 	}
@@ -167,8 +164,8 @@ func TestFlowCannotDeclareTags(t *testing.T) {
 
 func TestScenarioTagsAreCarried(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"s\" {\n  tags = [\"smoke\"]\n  var total = 1\n}\nscenario \"t\" { }\n",
-		map[string]string{"flows/checkout.art": checkout}, checkoutFlow)
+		"flow \"flows/checkout.art\"\nscenario \"s\" {\n  tags = [\"smoke\"]\n  total = 1\n}\nscenario \"t\" { }\n",
+		map[string]string{"flows/checkout.art": checkout})
 	noDiags(t, got.diags)
 	s, rest, _ := strings.Cut(got.out, "scenario \"t\"")
 	if !contains(s, `tags = ["smoke"]`) || contains(rest, "tags") {
@@ -178,9 +175,8 @@ func TestScenarioTagsAreCarried(t *testing.T) {
 
 func TestFlowFaultIsReportedOnceAtTheFlow(t *testing.T) {
 	got := expandFlows(t,
-		"# flow \"flows/checkout.art\"\nscenario \"a\" { }\nscenario \"b\" { }\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  step \"pay\" {\n    get \"/${nope}\"\n  }\n}\n"},
-		checkoutFlow)
+		"flow \"flows/checkout.art\"\nscenario \"a\" { }\nscenario \"b\" { }\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/${nope}\"\n  }\n}\n"})
 	ds := only(got.bag, diag.UnknownIdentifier)
 	if len(ds) != 1 || ds[0].Span.File != "flows/checkout.art" || ds[0].Span.Line != 3 {
 		t.Fatalf("want one unknown-identifier at the flow's line, got:\n%s", got.diags)
@@ -191,12 +187,12 @@ func TestFlowFaultIsReportedOnceAtTheFlow(t *testing.T) {
 }
 
 func TestFlowHeaderNamesAFlowFile(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/nope.art\"\nscenario \"s\" { }\n", map[string]string{}, nil)
+	got := expandFlows(t, "flow \"flows/nope.art\"\nscenario \"s\" { }\n", map[string]string{})
 	if ds := only(got.bag, diag.FlowNotFound); len(ds) != 1 || ds[0].Span.File != "main.art" {
 		t.Fatalf("want flow-not-found at the header, got:\n%s", got.diags)
 	}
-	got = expandFlows(t, "# flow \"collections/auth.art\"\nscenario \"s\" { }\n",
-		map[string]string{"collections/auth.art": authLogin}, nil)
+	got = expandFlows(t, "flow \"collections/auth.art\"\nscenario \"s\" { }\n",
+		map[string]string{"collections/auth.art": authLogin})
 	ds := only(got.bag, diag.NotAFlowFile)
 	if len(ds) != 1 || ds[0].Message != "collections/auth.art is a collection file" {
 		t.Fatalf("want not-a-flow-file naming a collection file, got:\n%s", got.diags)

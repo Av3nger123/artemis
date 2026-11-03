@@ -6,9 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -229,45 +227,6 @@ func TestRunAFolderWithACollectionOnlyFile(t *testing.T) {
 	}
 }
 
-// A hoisted secret var is a secret like any other: its value is in neither
-// the event stream nor a trace.
-func TestAHoistedSecretIsInNoEventOrTrace(t *testing.T) {
-	srv := authServer(t)
-	t.Setenv("API_URL", srv.URL)
-	traces := t.TempDir()
-	stdout, stderr, err := runCLI(t, "run", "testdata/collections/old/checkout.art", "--events", "ndjson", "--trace", traces)
-	if err != nil {
-		t.Fatalf("%v\n%s", err, stderr)
-	}
-	if !strings.Contains(stdout, "step-end") {
-		t.Fatalf("no event stream:\n%s", stdout)
-	}
-	// The event stream's step-end carries the step's file like the report
-	// does, for a step a use brought in.
-	if !strings.Contains(stdout, `"file":"testdata/collections/old/auth.art"`) {
-		t.Errorf("no step-end names auth.art:\n%s", stdout)
-	}
-	var all strings.Builder
-	all.WriteString(stdout)
-	all.WriteString(stderr)
-	entries, err := os.ReadDir(traces)
-	if err != nil || len(entries) == 0 {
-		t.Fatalf("no traces written: %v", err)
-	}
-	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(traces, e.Name())) //nolint:gosec // a dir this test made
-		if err != nil {
-			t.Fatal(err)
-		}
-		all.Write(b)
-	}
-	for _, secret := range []string{"s3cret", `"wrong"`} {
-		if strings.Contains(all.String(), secret) {
-			t.Errorf("%s leaked into the events or a trace", secret)
-		}
-	}
-}
-
 func mustRead(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path) //nolint:gosec // a testdata path
@@ -275,56 +234,4 @@ func mustRead(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
-}
-
-// Two uses of one request with secret arguments each send their own value:
-// with as, each hoists its own var. Without as both hoisted the same name and
-// the last value was sent twice, which is now duplicate-binding.
-func TestTwoUsesOfASecretRequestSendTheirOwnPasswords(t *testing.T) {
-	var mu sync.Mutex
-	var sent []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Password string `json:"password"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		mu.Lock()
-		sent = append(sent, body.Password)
-		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		if body.Password != "s3cret" {
-			w.WriteHeader(http.StatusUnauthorized)
-		}
-		_, _ = w.Write([]byte(`{"data":{"access_token":"t"}}`))
-	}))
-	t.Cleanup(srv.Close)
-	t.Setenv("API_URL", srv.URL)
-
-	scenario := func(real, bad string) string {
-		return "import \"auth.art\"\n\nscenario \"s\" {\n  var url = env(\"API_URL\")\n" +
-			"  use auth.login" + real + " { user = \"alice\", password = \"s3cret\", base = url }\n" +
-			"  use auth.login" + bad + " { user = \"alice\", password = \"wrong\", base = url, drop captures, drop expects, expect status == 401 }\n}\n"
-	}
-	dir := writeTree(t, t.TempDir(), map[string]string{
-		"auth.art":  mustRead(t, "testdata/collections/old/auth.art"),
-		"two.art":   scenario(" as real", " as bad"),
-		"clash.art": scenario("", ""),
-	})
-
-	stdout, stderr, err := runCLI(t, "run", filepath.Join(dir, "two.art"), "--report", "json")
-	if err != nil {
-		t.Fatalf("%v\n%s\n%s", err, stdout, stderr)
-	}
-	if strings.Join(sent, ",") != "s3cret,wrong" {
-		t.Fatalf("passwords sent = %v, want each use's own", sent)
-	}
-
-	sent = nil
-	_, stderr, err = runCLI(t, "run", filepath.Join(dir, "clash.art"))
-	if err == nil || !strings.Contains(stderr, `"login_password" is already bound`) {
-		t.Fatalf("want duplicate-binding, got err %v\n%s", err, stderr)
-	}
-	if len(sent) != 0 {
-		t.Fatalf("a file that does not compile sent %v", sent)
-	}
 }

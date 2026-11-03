@@ -221,7 +221,6 @@ const (
 	DuplicateArgument        Code = "duplicate-argument"
 	BadOverride              Code = "bad-override"
 	DropAfterExpect          Code = "drop-after-expect"
-	SecretArgument           Code = "secret-argument"
 	RootCapture              Code = "root-capture"
 	// A use passes a private var of the item, which takes only its own default.
 	PrivateInput Code = "private-input"
@@ -237,23 +236,10 @@ const (
 	// `form` and `multipart`.
 	BodyConflict Code = "body-conflict"
 
-	// A data-driven scenario's for clause, and the rows it makes.
-	ForSourceNotStatic Code = "for-source-not-static"
-	ForSourceNotArray  Code = "for-source-not-array"
-	ForNoRows          Code = "for-no-rows"
-	DuplicateRowName   Code = "duplicate-row-name"
-	BadRowName         Code = "bad-row-name"
-
 	// setup and teardown, held to where they run.
 	SetupAfterStep     Code = "setup-after-step"
 	TeardownBeforeStep Code = "teardown-before-step"
 	DuplicatePhase     Code = "duplicate-phase"
-
-	// suite.art: a folder's suite, and the rules it is under.
-	SuiteFileName      Code = "suite-file-name"
-	SuiteHasScenario   Code = "suite-has-scenario"
-	SuiteHasStep       Code = "suite-has-step"
-	DuplicateSuiteName Code = "duplicate-suite-name"
 
 	// A scenario's tags, which a run selects by.
 	BadTag        Code = "bad-tag"
@@ -296,6 +282,34 @@ const (
 	// skip, a scenario's value that turns off the expects reading a var.
 	SkipRead         Code = "skip-read"
 	SkipMaybeWritten Code = "skip-maybe-written"
+)
+
+// The old forms, each replaced by a form of a flow file, a scenario file or a
+// collection. pkg/dsl/front reports them over the file as written, before
+// expansion, so every command that compiles a file -- run, parse, the MCP
+// server's validate -- says the same about it; the parser still reads them,
+// because artemis migrate rewrites them from the tree. Each hint names the new
+// form and ends by naming artemis migrate.
+const (
+	// OldScenario is a scenario with steps in a file with no flow "..."
+	// header: its steps are now a flow, and its data a scenario file.
+	OldScenario Code = "old-scenario"
+	// OldCapture is capture x = ...: a step writes a name with var after its
+	// action.
+	OldCapture Code = "old-capture"
+	// OldUse is use a.b { ... }: a step calls an item, step "name" = a.b.
+	OldUse Code = "old-use"
+	// OldParams is request r(...): an item's inputs are the vars above its
+	// action.
+	OldParams Code = "old-params"
+	// OldSecret is secret on a var, a capture, a parameter or a for clause.
+	OldSecret Code = "old-secret"
+	// OldSuite is suite { ... }, or any file named suite.art: a folder and
+	// --tags select what runs, and each flow has its own setup.
+	OldSuite Code = "old-suite"
+	// OldFor is a scenario's for clause: each row is now a scenario of its
+	// own in a scenario file.
+	OldFor Code = "old-for"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -359,27 +373,17 @@ var registry = []CodeInfo{
 	{DuplicateArgument, Error, "a use passes the same argument twice"},
 	{BadOverride, Error, "a line in a use block is not an argument or an override that applies"},
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
-	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
 	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
 	{PrivateInput, Error, "a use passes a private var of the item, which takes only its own default"},
 	{DataFileMissing, Error, "json(), csv() or file() names a path where there is no file"},
 	{DataNotJSON, Error, "json() names a file that is not JSON"},
 	{DataNotCSV, Error, "csv() names a file that is not CSV"},
 	{BodyConflict, Error, "a request says what its body is more than one way"},
-	{ForSourceNotStatic, Error, "a for clause reads rows that are not known before the run"},
-	{ForSourceNotArray, Error, "a for clause's data is not an array of rows"},
-	{ForNoRows, Error, "a for clause's data has no rows"},
-	{DuplicateRowName, Error, "two rows of a data-driven scenario name it alike"},
-	{BadRowName, Error, "a data-driven scenario's name reads something other than its row"},
 	{SetupAfterStep, Error, "a setup block is below a step it would run before"},
 	{TeardownBeforeStep, Error, "a teardown block is above a step it would run after"},
 	{DuplicatePhase, Error, "a scenario has two setup blocks or two teardown blocks"},
-	{SuiteFileName, Error, "a suite block is in a file not named suite.art"},
-	{SuiteHasScenario, Error, "a suite file holds a scenario, or a second suite block"},
-	{SuiteHasStep, Error, "a suite block holds a step or a use outside setup and teardown"},
-	{DuplicateSuiteName, Error, "a suite exports a name a suite above it already exports"},
 	{BadTag, Error, "a tag is not a lower-case word written out as a string, or is listed twice"},
-	{DuplicateTags, Error, "a scenario or a suite has more than one tags list"},
+	{DuplicateTags, Error, "a scenario has more than one tags list"},
 	{DBNeedsStatement, Error, "a db step has no sql or command to run"},
 	{DBArgsWithoutSQL, Error, "a db step binds args with no sql to bind them to"},
 	{DBStatementConflict, Error, "a db step has both sql and a command"},
@@ -401,6 +405,13 @@ var registry = []CodeInfo{
 	{SkipRead, Error, "a var a scenario skips is read somewhere other than an expect or an object field"},
 	{SkipMaybeWritten, Error, "a var a scenario skips is read where only some paths have written it"},
 	{FlowNotRunnable, Error, "a flow file is named on the command line, and a flow runs only through a scenario file"},
+	{OldScenario, Error, "a scenario holds steps in a file with no flow header, the form a flow file and a scenario file replace"},
+	{OldCapture, Error, "a step writes a name with capture, which var after the action replaces"},
+	{OldUse, Error, "a use calls an item, which step \"name\" = <collection>.<item> replaces"},
+	{OldParams, Error, "a collection item declares parameters in parentheses, which vars above its action replace"},
+	{OldSecret, Error, "a var, a capture, a parameter or a for clause is marked secret, which is removed"},
+	{OldSuite, Error, "a file is a suite, which folders, --tags and each flow's own setup replace"},
+	{OldFor, Error, "a scenario reads its rows with for, which a scenario for each row replaces"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

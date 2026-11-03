@@ -18,7 +18,7 @@ const loginItem = "collection \"auth\" {\n  request login(user = \"admin\", pass
 // build the item in Go: varInputs turns its parameters into Inputs.
 
 func TestInputsUnifiesParamsAndVars(t *testing.T) {
-	f, bag := parser.Parse("c.art", "collection \"c\" {\n  request r(a, secret b = 1) {\n    get \"/\"\n  }\n}\n")
+	f, bag := parser.Parse("c.art", "collection \"c\" {\n  request r(a, b = 1) {\n    get \"/\"\n  }\n}\n")
 	if bag.HasErrors() {
 		t.Fatal(bag.All())
 	}
@@ -26,7 +26,7 @@ func TestInputsUnifiesParamsAndVars(t *testing.T) {
 	check := func(got []input) {
 		t.Helper()
 		if len(got) != 2 || got[0].Name.Value != "a" || !isNil(got[0].Default) || got[0].Private ||
-			got[1].Name.Value != "b" || isNil(got[1].Default) || got[1].Secret.Text != "secret" {
+			got[1].Name.Value != "b" || isNil(got[1].Default) {
 			t.Fatalf("got %+v", got)
 		}
 	}
@@ -110,12 +110,9 @@ func TestAPrivateInputIgnoresTheContext(t *testing.T) {
 }
 
 func TestCommandItemExpandsInATree(t *testing.T) {
-	got, diags := runEdited(t, map[string]string{
-		"ops.art":  "collection \"ops\" {\n  request migrate(target = \"migrate\") {\n    run \"make\" { args = [target] }\n  }\n}\n",
-		"main.art": "import \"ops.art\"\n\nscenario \"s\" {\n  use ops.migrate { }\n}\n",
-	}, func(r *ast.RequestDecl) {
-		varInputs()(r)
-		r.Keyword.Text, r.Keyword.Value = "command", "command"
+	got, diags := run(t, map[string]string{
+		"ops.art":  "collection \"ops\" {\n  command migrate {\n    var target = \"migrate\"\n    run \"make\" { args = [target] }\n  }\n}\n",
+		"main.art": "import \"ops.art\"\n\nscenario \"s\" {\n  step \"m\" = ops.migrate { }\n}\n",
 	})
 	noDiags(t, diags)
 	if !contains(got, `run "make"`) || !contains(got, `args = ["migrate"]`) {

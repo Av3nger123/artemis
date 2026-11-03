@@ -1,0 +1,16 @@
+# stage: front
+#
+# capture in a flow. A step writes a name with var after its action, and a
+# flow is the new form, so each old line in it is reported on its own.
+
+flow checkout {
+  step "pay" {
+    post "/cart/pay"
+    expect status == 200
+    capture order_id = body.id
+  }
+
+  step "read it" {
+    get "/orders/${order_id}"
+  }
+}

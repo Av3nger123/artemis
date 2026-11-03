@@ -42,6 +42,21 @@ happens not to move.
 
 No Go changes: the driver globs `*.art`.
 
+## The stage a fixture runs through
+
+A fixture runs through the lexer, the parser and the checker, over the file as
+plain scenarios — the form expansion makes of a scenario file and the one the
+parser and the checker are written against. A fixture whose fault is judged
+over the file as a person writes it, an old form, says so in its header:
+
+```
+# stage: front
+```
+
+and runs through `pkg/dsl/front.Compile`, which is what `artemis parse` runs on
+a file with no disk behind it. A plain scenario is itself an old form there, so
+the rest of the corpus could not run through it.
+
 ## Fixtures waiting on a stage
 
 A fault can get its fixture before the stage that reports it exists. The design
@@ -94,6 +109,13 @@ no `# todo` fixtures outstanding today.
 | `chained_compare.art` | `non-associative-operator` — `a == 1 == true` |
 | `many_errors.art` | four unrelated faults, all reported; also asserted by count in `TestAllErrorsReported` |
 | `missing_action.art` | `missing-action` — a step with no action block, and no scope cascade under it |
+| `old_capture.art` | `old-capture` — `capture` in a flow, with the `var` that replaces it |
+| `old_for.art` | `old-for` — a scenario's `for` rows, reported once at `for` |
+| `old_params.art` | `old-params` — a collection item's parameters in parentheses |
+| `old_scenario.art` | `old-scenario` — a scenario that holds steps, its capture and use with it |
+| `old_secret.art` | `old-secret` — `secret` on a flow's var |
+| `old_suite.art` | `old-suite` — a suite block, reported once as a whole |
+| `old_use.art` | `old-use` — `use` in a flow, with the `step "<name>" =` that replaces it |
 | `out_of_scope_root.art` | `not-in-scope` — `status` in a `browser` step, with the roots that are |
 | `page_member.art` | `unknown-field` — `page.titl`, the one root whose members are closed |
 | `reserved_ai.art` | `reserved-word` — `ai`, and the agentic-assertion note in its hint |

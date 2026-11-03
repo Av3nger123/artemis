@@ -388,7 +388,7 @@ func (p *parser) parseStepBodyWith(what string, name token.Token, head func(*ast
 				if sawStmt {
 					p.errorf(tokenAt(action), diag.ActionNotFirst,
 						"a step's action block must come before its statements").
-						Hintf("move this above the expect, capture, retry and timeout lines")
+						Hintf("move this above the expect, var, retry and timeout lines")
 				}
 			default:
 				p.errorf(tokenAt(action), diag.DuplicateAction,

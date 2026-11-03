@@ -11,6 +11,7 @@ import (
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/encode"
+	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/lower"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/executor"
@@ -20,8 +21,8 @@ import (
 
 // The flags that run one collection item rather than a file's scenarios. A
 // collection is never run on its own -- only scenarios run -- so a client that
-// wants to send one request, the way an API client does, needed a scenario
-// written for it. --item writes that scenario.
+// wants to send one request, the way an API client does, needed a flow and a
+// scenario written for it. --item writes them.
 const (
 	itemFlag     = "item"
 	argFlag      = "arg"
@@ -31,17 +32,32 @@ const (
 
 // itemRun is a run of one collection item, or of every item of one collection.
 //
-// The scenario is written in a file of its own, in memory, beside the
-// collection file and importing it, as any scenario would: a collection file
-// holds only its collection (SPEC.md, A collection file). The collection's own
+// It is a flow, `flow item { step "<ref>" = coll.item { <args> } }`, and a
+// scenario file that runs it, `scenario "<ref>" { }`, each in a file of its
+// own, in memory, beside the collection file, as any flow and scenario file
+// would be: a collection file holds only its collection. The collection's own
 // imports resolve from where they always did, and every line of it keeps its
 // number -- a diagnostic or a failed expect points at the file the person has
 // open. The run is reported under the collection file's path. Nothing is
 // written to disk.
 type itemRun struct {
-	file string // the collection file, as the run reports it
-	name string // the in-memory scenario file's name, beside it
-	src  string
+	file     string // the collection file, as the run reports it
+	name     string // the in-memory scenario file's name, beside it
+	src      string
+	flowName string // the in-memory flow file's name, beside it
+	flowSrc  string
+}
+
+// loader reads the flow file from memory and every other file from disk.
+func (r *itemRun) loader() expand.Loader { return itemLoader{name: r.flowName, src: r.flowSrc} }
+
+type itemLoader struct{ name, src string }
+
+func (l itemLoader) Load(from, p string) (string, string, error) {
+	if name := filepath.Clean(filepath.Join(filepath.Dir(from), p)); name == filepath.Clean(l.name) {
+		return name, l.src, nil
+	}
+	return expand.DirLoader().Load(from, p)
 }
 
 // itemCaptures is what --captures writes: every value a capture got, and which
@@ -102,16 +118,20 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 	if err != nil {
 		return nil, nil, err
 	}
-	scenario, err := itemScenario(frontEnd(path, string(src)).Tree, ref, args)
+	tree, _ := parser.Parse(path, string(src))
+	flow, err := itemFlow(tree, ref, args)
 	if err != nil {
 		return nil, nil, err
 	}
 	base := filepath.Base(path)
+	stem := strings.TrimSuffix(base, filepath.Ext(base))
 	collName, _, _ := strings.Cut(ref, ".")
 	run := &itemRun{
-		file: path,
-		name: filepath.Join(filepath.Dir(path), strings.TrimSuffix(base, filepath.Ext(base))+".item.art"),
-		src:  "import " + encode.QuoteString(base) + " as " + collName + "\n\n" + scenario,
+		file:     path,
+		name:     filepath.Join(filepath.Dir(path), stem+".item.art"),
+		src:      "flow " + encode.QuoteString(stem+".item.flow.art") + "\n\nscenario " + encode.QuoteString(ref) + " { }\n",
+		flowName: filepath.Join(filepath.Dir(path), stem+".item.flow.art"),
+		flowSrc:  "import " + encode.QuoteString(base) + " as " + collName + "\n\n" + flow,
 	}
 	var sink *captureSink
 	if capturesPath != "" {
@@ -120,17 +140,18 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 	return run, sink, nil
 }
 
-// itemScenario is the scenario that runs ref: `orders.create` is one use of
-// the file's request create, `orders` a use of each of its requests in the
-// order they are written, captures passing down as they do in any scenario.
-// orders is only the name the scenario imports the file as -- any name a use
-// can read -- and the run, its captures and the report are named by it.
+// itemFlow is the flow that runs ref: `orders.create` is one step that calls
+// the file's item create, `orders` a step for each of its items in the order
+// they are written, the vars each writes passing down as they do in any flow.
+// orders is only the name the flow imports the file as -- any name a step can
+// call an item by -- and the steps, their vars and the report are named by
+// it.
 //
-// Each use is passed the arguments its item has a parameter for. For a single
+// Each step is passed the arguments its item has an input for. For a single
 // item that is all of them, so a name it does not take is the checker's
-// unknown-argument error, with its did-you-mean; a required parameter left out
-// is the checker's error too. Both stop the run before anything is sent.
-func itemScenario(tree *ast.File, ref string, args map[string]any) (string, error) {
+// unknown-argument error, with its did-you-mean; a required input left out is
+// the checker's error too. Both stop the run before anything is sent.
+func itemFlow(tree *ast.File, ref string, args map[string]any) (string, error) {
 	collName, itemName, _ := strings.Cut(ref, ".")
 	if !parser.IsIdentName(collName) {
 		return "", fmt.Errorf("--item %s: before the dot is the name the run imports the file as, a name a use can read, like %s", ref, parser.IdentLike(collName))
@@ -157,15 +178,15 @@ func itemScenario(tree *ast.File, ref string, args map[string]any) (string, erro
 		if !ok {
 			continue
 		}
-		name, params := x.Name.Text, x.Params
+		name := x.Name.Text
 		itemNames = append(itemNames, name)
 		if itemName != "" && name != itemName {
 			continue
 		}
 		taken := map[string]bool{}
-		if params != nil {
-			for _, p := range params.List {
-				taken[p.Name.Text] = true
+		for _, v := range x.Inputs {
+			if v.Private.Text == "" {
+				taken[v.Name.Text] = true
 			}
 		}
 		items = append(items, item{name: name, params: taken})
@@ -181,9 +202,9 @@ func itemScenario(tree *ast.File, ref string, args map[string]any) (string, erro
 	sort.Strings(keys)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "scenario %s {\n", encode.QuoteString(ref))
+	b.WriteString("flow item {\n")
 	for _, it := range items {
-		fmt.Fprintf(&b, "  use %s.%s {\n", collName, it.name)
+		fmt.Fprintf(&b, "  step %s = %s.%s {\n", encode.QuoteString(collName+"."+it.name), collName, it.name)
 		for _, k := range keys {
 			if itemName == "" && !it.params[k] {
 				continue
@@ -237,10 +258,9 @@ func listOrNone(names []string) string {
 	return strings.Join(names, ", ")
 }
 
-// take records what one scenario's captures got. A capture is secret when it
-// was written `secret capture`, or when a later step counts it among the
-// secret bindings it can see -- a capture off a secret value is secret without
-// saying so (ART-54).
+// take records what one scenario's captures got. A capture is secret when a
+// later step counts it among the secret bindings it can see -- a capture off a
+// secret value is secret without saying so (ART-54).
 func (c *captureSink) take(sc *lower.Scenario, scope executor.Scope) {
 	if c == nil {
 		return
@@ -253,9 +273,6 @@ func (c *captureSink) take(sc *lower.Scenario, scope executor.Scope) {
 		for _, cp := range st.Captures {
 			if v, ok := vars[cp.Name]; ok {
 				c.values[cp.Name] = v
-			}
-			if cp.Declared {
-				c.secret[cp.Name] = true
 			}
 		}
 	}

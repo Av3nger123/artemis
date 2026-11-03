@@ -1,0 +1,8 @@
+=== terminal
+old_params.art:8:16: request login declares parameters, and an item's inputs are now vars
+   8 |   request login(user, password = env("API_PASSWORD")) {
+     |                ^
+   hint: declare each one as a var above the action, var user, and drop the parentheses -- artemis migrate -f old_params.art -o <dir> rewrites it
+
+=== codes
+old-params	error	8:16-8:17

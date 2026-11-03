@@ -1,0 +1,8 @@
+=== terminal
+old_scenario.art:11:1: scenario "checkout" holds steps, and a scenario now holds data only
+   11 | scenario "checkout" {
+      | ^^^^^^^^
+   hint: put its vars and steps in a flow file, flow <name> { ... }, and the scenario in a scenario file whose first line is flow "<path to the flow>" -- artemis migrate -f old_scenario.art -o <dir> rewrites it
+
+=== codes
+old-scenario	error	11:1-11:9

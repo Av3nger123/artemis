@@ -1,0 +1,16 @@
+# stage: front
+#
+# A suite block. A folder and --tags now select what runs, and a suite's
+# setup, which ran once for each run, is a setup in each flow under the
+# folder, which runs once for each scenario. It is reported once, as a whole.
+
+suite {
+  tags = ["smoke"]
+  var url = env("API_URL")
+
+  setup {
+    step "seed" {
+      post "${url}/seed"
+    }
+  }
+}

@@ -1,9 +1,6 @@
 package front_test
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"artemis/pkg/dsl/ast"
@@ -13,25 +10,22 @@ import (
 )
 
 // Compile must report the checker's findings and not only the parser's. The
-// fixture parses and then fails the checker, so a Compile that forgot to merge
+// flow parses and then fails the checker, so a front end that forgot to merge
 // the checker's bag would return no diagnostics at all.
 func TestCompileMergesTheCheckersBag(t *testing.T) {
-	path := filepath.Join("..", "testdata", "invalid", "action_not_first.art")
-	src, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading the fixture: %v", err)
+	files := expand.MapLoader{
+		"f.art": "flow f {\n  step \"orders\" {\n    get \"/orders\"\n    expect statu == 200\n  }\n}\n",
 	}
-
-	tree, info, bag := front.Compile(path, string(src))
-
-	if tree == nil {
-		t.Fatal("Compile returned no tree; the fixture is meant to parse")
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	if u.Tree == nil || u.Info == nil {
+		t.Fatal("CompileWith returned no tree or no checker Info")
 	}
-	if info == nil {
-		t.Fatal("Compile returned no checker Info")
+	var found bool
+	for _, d := range u.Bag.All() {
+		found = found || d.Code == diag.UnknownField && d.Span.File == "f.art" && d.Span.Line == 4
 	}
-	if !bag.HasErrors() {
-		t.Fatalf("Compile found no errors in %s, which exists to have one", path)
+	if !found {
+		t.Fatalf("want the checker's unknown-field at f.art:4, got %v", u.Bag.All())
 	}
 }
 
@@ -50,174 +44,72 @@ func TestIsArtFileIgnoresCase(t *testing.T) {
 
 func TestCompileWithExpandsAndChecksTheExpandedTree(t *testing.T) {
 	files := expand.MapLoader{
-		"c.art":    "collection \"c\" {\n  request r(u) {\n    get u\n    expect status == 200\n    capture tok = body.t\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { u = \"x\" }\n  step \"next\" {\n    get \"${tok}\"\n    expect status == 200\n  }\n}\n",
+		"c.art": "collection \"c\" {\n  request r {\n    var u\n    get u\n    expect status == 200\n    var tok = body.t\n  }\n}\n",
+		"f.art": "import \"c.art\"\n\nflow s {\n  step \"call\" = c.r { u = \"x\" }\n  step \"next\" {\n    get \"${tok}\"\n    expect status == 200\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", files["main.art"], files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
 	if u.Bag.HasErrors() {
 		t.Fatal(u.Bag.All())
 	}
 	if u.Tree == u.Expanded {
-		t.Fatal("a file with a use must expand to a new tree")
+		t.Fatal("a scenario file must expand to a new tree")
 	}
 	if u.Info.Steps() != 2 {
 		t.Fatalf("Info is about %d steps; want the 2 expanded ones", u.Info.Steps())
 	}
-	if _, ok := u.Sources["c.art"]; !ok {
-		t.Fatal("Sources must hold the collection, to render its diagnostics")
-	}
-	if _, ok := u.Sources["main.art"]; !ok {
-		t.Fatal("Sources must hold the root file too")
-	}
-	if len(u.Uses) != 1 || u.Uses[0].Ref != "c.r" || u.Uses[0].Item.File != "c.art" {
-		t.Fatalf("Uses must be the expansion's use table, got %+v", u.Uses)
-	}
-}
-
-func TestCompileWithAttachesTheUseChainToCheckerDiagnostics(t *testing.T) {
-	// The scenario's var and the var the use hoists clash only in the
-	// expanded tree, so the checker finds it in c.art with the use behind it.
-	files := expand.MapLoader{
-		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    get \"x\" {\n      header \"P\" = pw\n    }\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var r_pw = \"a\"\n  use c.r { pw = \"b\" }\n}\n",
-	}
-	u := front.CompileWith("main.art", files["main.art"], files)
-	var found bool
-	for _, d := range u.Bag.All() {
-		if d.Code == diag.DuplicateBinding && d.Span.File == "c.art" && len(d.UsedFrom) == 1 && d.UsedFrom[0].Line == 5 {
-			found = true
+	for _, name := range []string{"main.art", "f.art", "c.art"} {
+		if _, ok := u.Sources[name]; !ok {
+			t.Fatalf("Sources must hold %s, to render its diagnostics", name)
 		}
 	}
-	if !found {
-		t.Fatalf("want the var clash in c.art used from main.art:5, got %v", u.Bag.All())
+	var call bool
+	for _, use := range u.Uses {
+		call = call || use.Ref == "c.r" && use.Item.File == "c.art"
+	}
+	if !call {
+		t.Fatalf("Uses must be the expansion's use table, with the call of c.r, got %+v", u.Uses)
 	}
 }
 
-// An argument naming a scenario capture that the request captures too: the
-// request reads the old value and its capture overwrites it, as any later
-// write does. The last write wins.
-func TestARequestMayOverwriteTheCaptureItsArgumentReads(t *testing.T) {
-	auth := "collection \"auth\" {\n  request login(user, password = \"pw\", base = env(\"API_URL\")) {\n" +
-		"    post \"${base}/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
-		"    expect status == 200\n    capture token = body.token\n  }\n}\n"
+// An argument naming a name the flow wrote that the item writes too: the item
+// reads the old value and its var overwrites it, as any later write does. The
+// last write wins.
+func TestAnItemMayOverwriteTheNameItsArgumentReads(t *testing.T) {
 	files := expand.MapLoader{
-		"auth.art": auth,
-		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"x\"\n    capture token = body.t\n  }\n  use auth.login { user = token }\n" +
-			"  step \"after\" {\n    get \"${token}\"\n  }\n}\n",
+		"auth.art": "collection \"auth\" {\n  request login {\n    var user\n    var password = \"pw\"\n" +
+			"    post \"http://h/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
+			"    expect status == 200\n    var token = body.token\n  }\n}\n",
+		"f.art": "import \"auth.art\"\n\nflow s {\n  step \"t\" {\n    get \"http://h/x\"\n    var token = body.t\n  }\n" +
+			"  step \"log in\" = auth.login { user = token }\n  step \"after\" {\n    get \"http://h/${token}\"\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", files["main.art"], files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
 	if u.Bag.HasErrors() {
 		t.Fatal(u.Bag.All())
 	}
 }
 
-func TestCompileWithoutImportsIsCompile(t *testing.T) {
-	src := "scenario \"s\" {\n  step \"a\" {\n    get \"x\"\n    expect status == 200\n  }\n}\n"
+// Compile is CompileWith with no disk to read from.
+func TestCompileIsCompileWithNoLoader(t *testing.T) {
+	src := "flow s {\n  step \"a\" {\n    get \"x\"\n    expect status == 200\n  }\n}\n"
 	tree, info, bag := front.Compile("a.art", src)
 	u := front.CompileWith("a.art", src, nil)
-	if u.Tree != u.Expanded || ast.Source(u.Tree) != ast.Source(tree) || bag.Len() != u.Bag.Len() || info.Steps() != u.Info.Steps() {
-		t.Fatal("CompileWith must equal Compile for a file with no imports")
+	if ast.Source(u.Tree) != ast.Source(tree) || bag.Len() != u.Bag.Len() || info.Steps() != u.Info.Steps() {
+		t.Fatal("CompileWith with no loader must equal Compile")
 	}
 }
 
-// secretAuth is a collection whose request takes a secret parameter, so a use
-// of it with a literal argument hoists `secret var login_password`.
-const secretAuth = "collection \"auth\" {\n  request login(user, secret password) {\n" +
-	"    post \"http://h/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
-	"    expect status == 200\n    secret capture token = body.token\n  }\n}\n"
-
-// dupBindings is every duplicate-binding of name in u.
-func dupBindings(u *front.Unit, name string) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	for _, d := range u.Bag.All() {
-		if d.Code == diag.DuplicateBinding && d.Message == `"`+name+`" is already bound` {
-			out = append(out, d)
-		}
-	}
-	return out
-}
-
-// Two uses of one request with a secret argument, without as, would each
-// hoist `secret var login_password`; the second var silently overwrote the
-// first, so both requests sent the second password. It is duplicate-binding.
-func TestTwoUsesHoistingOneSecretVarAreDuplicateBinding(t *testing.T) {
-	files := expand.MapLoader{
-		"auth.art": secretAuth,
-		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"first\" }\n" +
-			"  use auth.login { user = \"a\", password = \"second\", drop captures }\n}\n",
-	}
-	u := front.CompileWith("main.art", files["main.art"], files)
-	got := dupBindings(u, "login_password")
-	if len(got) != 1 {
-		t.Fatalf("want one duplicate-binding of login_password, got %v", u.Bag.All())
-	}
-	d := got[0]
-	if d.Span.File != "auth.art" || d.Span.Line != 2 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 5 {
-		t.Fatalf("want the clash at auth.art:2 used from main.art:5, got %+v", d)
-	}
-	if !strings.Contains(d.Hint, "use ... as <name> to keep both") {
-		t.Fatalf("hint is %q", d.Hint)
-	}
-}
-
-// A scenario's own var of the name a use hoists is a clash too, above or below.
-func TestAScenarioVarClashesWithAHoistedVar(t *testing.T) {
-	for _, main := range []string{
-		"import \"auth.art\"\n\nscenario \"s\" {\n  var login_password = \"x\"\n  use auth.login { user = \"a\", password = \"p\" }\n}\n",
-		"import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"p\" }\n  var login_password = \"x\"\n}\n",
-	} {
-		files := expand.MapLoader{"auth.art": secretAuth, "main.art": main}
-		u := front.CompileWith("main.art", main, files)
-		if got := dupBindings(u, "login_password"); len(got) != 1 {
-			t.Errorf("want one duplicate-binding of login_password, got %v\n%s", u.Bag.All(), main)
-		}
-	}
-}
-
-// With as, each use hoists its own var and the file compiles.
-func TestTwoUsesWithAsHoistTwoVars(t *testing.T) {
-	files := expand.MapLoader{
-		"auth.art": secretAuth,
-		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login as a { user = \"a\", password = \"first\" }\n" +
-			"  use auth.login as b { user = \"a\", password = \"second\" }\n}\n",
-	}
-	u := front.CompileWith("main.art", files["main.art"], files)
-	if u.Bag.HasErrors() {
-		t.Fatal(u.Bag.All())
-	}
-}
-
-// Two uses of one request that hoist a var: the first binding is the first
-// use's copy of the var, on the very line the caret is on, so "the var at
-// line 2 binds it first" points at itself. The hint names the use instead.
-func TestDuplicateBindingHintNamesTheFirstUse(t *testing.T) {
-	files := expand.MapLoader{
-		"auth.art": secretAuth,
-		"twice.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\", password = \"first\" }\n" +
-			"  use auth.login { user = \"a\", password = \"second\", drop captures }\n}\n",
-	}
-	u := front.CompileWith("twice.art", files["twice.art"], files)
-	got := dupBindings(u, "login_password")
-	if len(got) != 1 {
-		t.Fatalf("want one duplicate-binding of login_password, got %v", u.Bag.All())
-	}
-	if want := "the use at twice.art:4 binds it first\nuse ... as <name> to keep both"; got[0].Hint != want {
-		t.Fatalf("hint is %q, want %q", got[0].Hint, want)
-	}
-}
-
-// Review Focus 4: an item input that the use does not pass is read from the
+// Review Focus 4: an item input that the call does not pass is read from the
 // context, and a name that only one if branch creates is not bound on every
 // path. That is capture-maybe-unbound at compile time -- where the item reads
-// the input, with the call as the chain -- not missing-argument, and not a
-// runtime error.
+// the input, with the call and then the scenario as the chain -- not
+// missing-argument, and not a runtime error.
 func TestContextInputFromOneBranchIsMaybeUnbound(t *testing.T) {
 	files := expand.MapLoader{
-		"api.art": "collection \"api\" {\n  request me(token) {\n    get \"http://h/me/${token}\"\n  }\n}\n",
-		"main.art": "import \"api.art\"\n\nscenario \"s\" {\n  var x = true\n  if x {\n    step \"a\" {\n      get \"http://h/\"\n" +
-			"      capture token = body.t\n    }\n  }\n  use api.me { }\n}\n",
+		"api.art": "collection \"api\" {\n  request me {\n    var token\n    get \"http://h/me/${token}\"\n  }\n}\n",
+		"f.art": "import \"api.art\"\n\nflow s {\n  var x = true\n  if x {\n    step \"a\" {\n      get \"http://h/\"\n" +
+			"      var token = body.t\n    }\n  }\n  step \"me\" = api.me { }\n}\n",
 	}
-	u := front.CompileWith("main.art", files["main.art"], files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
 	var got []diag.Diagnostic
 	for _, d := range u.Bag.All() {
 		if d.Severity == diag.Error {
@@ -228,21 +120,22 @@ func TestContextInputFromOneBranchIsMaybeUnbound(t *testing.T) {
 		t.Fatalf("want one capture-maybe-unbound, got %v", u.Bag.All())
 	}
 	d := got[0]
-	if d.Span.File != "api.art" || d.Span.Line != 3 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 11 {
-		t.Fatalf("want it at api.art:3 used from the call at main.art:11, got %+v", d)
+	if d.Span.File != "api.art" || d.Span.Line != 4 || len(d.UsedFrom) != 2 ||
+		d.UsedFrom[0].File != "f.art" || d.UsedFrom[0].Line != 11 || d.UsedFrom[1].File != "main.art" {
+		t.Fatalf("want it at api.art:4 used from the call at f.art:11, then main.art, got %+v", d)
 	}
 }
 
-// Two uses of one request that captures, without as: the second use's
-// capture overwrites the first's, and a step after both reads the second.
-func TestTwoUsesOfACapturingRequestOverwriteTheCapture(t *testing.T) {
+// Two calls of one item that writes a var, without as: the second call's var
+// overwrites the first's, and a step after both reads the second.
+func TestTwoCallsOfAWritingItemOverwriteTheVar(t *testing.T) {
 	files := expand.MapLoader{
-		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"http://h/token\"\n    expect status == 200\n" +
-			"    capture token = body.token\n  }\n}\n",
-		"twice.art": "import \"auth.art\"\n\nscenario \"s\" {\n  use auth.login { user = \"a\" }\n  use auth.login { user = \"b\" }\n" +
+		"auth.art": "collection \"auth\" {\n  request login {\n    var user\n    post \"http://h/token\"\n    expect status == 200\n" +
+			"    var token = body.token\n  }\n}\n",
+		"f.art": "import \"auth.art\"\n\nflow s {\n  step \"a\" = auth.login { user = \"a\" }\n  step \"b\" = auth.login { user = \"b\" }\n" +
 			"  step \"after\" {\n    get \"http://h/${token}\"\n  }\n}\n",
 	}
-	u := front.CompileWith("twice.art", files["twice.art"], files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
 	if u.Bag.HasErrors() {
 		t.Fatal(u.Bag.All())
 	}

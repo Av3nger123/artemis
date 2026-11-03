@@ -43,21 +43,10 @@ type Scenario struct {
 	Body    []Decl // ConfigDecl, VarDecl, StepDecl, or Bad
 	RBrace  token.Token
 
-	// Row is where an expanded scenario came from: the row of its data it is.
-	// pkg/dsl/expand sets it on each scenario it makes out of one with a for
-	// clause; it is nil everywhere else and has no tokens.
-	Row *RowOrigin
-
 	// Flow is the name of the flow an expanded scenario runs. pkg/dsl/expand
 	// sets it on each scenario it makes out of a scenario file; it is "" for
 	// any other scenario and has no tokens.
 	Flow string
-}
-
-// RowOrigin is the row an expanded scenario was made from.
-type RowOrigin struct {
-	Source string // what the for clause read: "data/users.json", or "rows" for a literal
-	Index  int    // the row's place in the data, from 0
 }
 
 // ForClause is `for user in json("data/users.json")`, or `for secret user in

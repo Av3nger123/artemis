@@ -189,13 +189,8 @@ var itemActions = map[string]struct{ keyword, words string }{
 }
 
 // checkItemAction reports an item whose action is not the type its keyword
-// names: `run` in a request, `get` in a command. An old-form request, with
-// parameters in parentheses, held any action, so it is not judged until the
-// old forms are retired.
+// names: `run` in a request, `get` in a command.
 func (p *parser) checkItemAction(r *ast.RequestDecl) {
-	if r.Params != nil && r.Keyword.Value == "request" {
-		return
-	}
 	got := actionType(r.Action)
 	want := r.Type()
 	if got == "" || got == want {

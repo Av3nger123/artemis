@@ -8,7 +8,8 @@ import (
 
 	"artemis/pkg/dsl/builtin"
 	"artemis/pkg/dsl/check"
-	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/expand"
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/token"
 )
 
@@ -61,14 +62,14 @@ func wordTables() map[string][]string {
 }
 
 // soleWords are terminals that belong to no table because each is the only
-// word its position admits: `secret` before a var, a capture or a parameter,
-// `private` before a var, `as` after a use's item, and `skip` as a scenario's
+// word its position admits: `private` before a var, `as` after a called
+// item, and `skip` as a scenario's
 // value for a var whose expects it turns off. A table is a choice
 // point -- a dropdown -- and a position with one option is not one, so the
 // parser spells these directly. Listing them here is what keeps that a
 // decision rather than an accident: a new terminal still has to be put in a
 // table or argued onto this list.
-var soleWords = []string{"secret", "private", "as", "skip"}
+var soleWords = []string{"private", "as", "skip"}
 
 // TestEveryTableWordIsATerminal is half of the issue's drift gate. A browser
 // action or a comparison operator added to a token table and not written into
@@ -126,7 +127,7 @@ func TestEveryTerminalIsInATable(t *testing.T) {
 func TestDocumentIsSelfContained(t *testing.T) {
 	doc := Document()
 	for _, want := range []string{
-		"GRAMMAR", "File          = { Import } { Collection | Scenario } ;",
+		"GRAMMAR", "File          = CollectionFile | FlowFile | ScenarioFile ;",
 		"LEXICAL TOKENS", "SEPARATORS", "PRECEDENCE", "WHAT THE GRAMMAR DOES NOT SAY",
 		"SCOPES", "EXAMPLE",
 	} {
@@ -161,11 +162,16 @@ func TestScopesSectionComesFromTheChecker(t *testing.T) {
 // TestTheExampleCompiles is the claim the example makes by being in the
 // document: this is a file artemis accepts. A worked example that does not
 // parse is worse than none, because it is what a model will imitate.
+//
+// The example is a flow, which runs only through a scenario file, so it is
+// compiled as one names it.
 func TestTheExampleCompiles(t *testing.T) {
-	tree, bag := parser.Parse("example.art", example)
-	_, checked := check.Check(tree)
-	bag.Merge(checked)
-	for _, d := range bag.All() {
+	files := expand.MapLoader{"example.art": example}
+	u := front.CompileWith("scenario.art", "flow \"example.art\"\n\nscenario \"checkout\" { }\n", files)
+	if u.Info.Steps() == 0 {
+		t.Error("the example compiled to no step")
+	}
+	for _, d := range u.Bag.All() {
 		t.Errorf("example.art: %s:%d:%d: %s: %s", d.Span.File, d.Span.Line, d.Span.Col, d.Code, d.Message)
 	}
 }
@@ -176,7 +182,7 @@ func TestTheExampleCompiles(t *testing.T) {
 // a model ends up writing only the trivial case.
 func TestTheExampleUsesTheLanguage(t *testing.T) {
 	for _, want := range []string{
-		"config browser", "var ", "capture ", "retry {", "timeout =", "within ",
+		"flow ", "config browser", "var ", "var token = ", "retry {", "timeout =", "within ",
 		"${", "env(", "match(", "text(", "visible(", "#", " is ", " exists", " not ",
 		"get ", "post ", "run \"", "browser {",
 	} {

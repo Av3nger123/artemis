@@ -1,13 +1,10 @@
 package expand
 
 import (
-	"strings"
 	"testing"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/parser"
-	"artemis/pkg/dsl/print"
 )
 
 const orders = `collection "orders" {
@@ -58,27 +55,6 @@ func TestViaDistinguishesTwoUses(t *testing.T) {
 	}
 }
 
-func TestSecretParamHoistsALiteralArgumentIntoASecretVar(t *testing.T) {
-	got, diags := run(t, map[string]string{
-		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n    expect status == 200\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"hunter2\" }\n}\n",
-	})
-	noDiags(t, diags)
-	if !contains(got, `secret var r_pw = "hunter2"`) || !contains(got, `{"p": r_pw}`) {
-		t.Fatalf("got\n%s", got)
-	}
-}
-
-func TestSecretParamFromAPlainCaptureIsAnError(t *testing.T) {
-	_, diags := run(t, map[string]string{
-		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n    expect status == 200\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"y\"\n    capture tok = body.t\n  }\n  use c.r { pw = tok }\n}\n",
-	})
-	if !contains(diags, "secret-argument") {
-		t.Fatalf("got %s", diags)
-	}
-}
-
 // Beyond the brief.
 
 func TestAsLeavesTheUsesOwnArgumentsAlone(t *testing.T) {
@@ -97,55 +73,6 @@ func TestAsOnARequestPrefixesItsCapture(t *testing.T) {
 	}
 }
 
-const secretColl = "collection \"c\" {\n  request r(secret pw, auth = \"Basic ${pw}\", secret key = \"k\") {\n    post \"x\" {\n      header \"A\" = auth\n      body = {\"p\": pw, \"k\": key}\n    }\n  }\n}\n"
-
-func TestHoistedSecretVarsSitAboveTheirUseInUseOrderAndDefaultsReadThem(t *testing.T) {
-	got, diags := run(t, map[string]string{
-		"c.art":    secretColl,
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var base = \"b\"\n  use c.r { pw = base }\n  use c.r as two { pw = \"x\" }\n  var tail = 1\n}\n",
-	})
-	noDiags(t, diags)
-	for _, want := range []string{
-		"  var base = \"b\"\n  secret var r_pw = base\n  secret var r_key = \"k\"\n\n  step \"c.r\"",
-		"  secret var two_pw = \"x\"\n  secret var two_key = \"k\"\n\n  step \"two\"",
-	} {
-		if !contains(got, want) {
-			t.Fatalf("missing\n%s\nin\n%s", want, got)
-		}
-	}
-	if !strings.HasSuffix(got, "  var tail = 1\n}\n") {
-		t.Fatalf("got\n%s", got)
-	}
-	if !contains(got, `header "A" = "Basic ${r_pw}"`) {
-		t.Fatalf("a default built from a secret parameter must read the hoisted var:\n%s", got)
-	}
-}
-
-func TestSecretParamFromASecretCaptureIsSubstitutedAsWritten(t *testing.T) {
-	got, diags := run(t, map[string]string{
-		"c.art":    secretColl,
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"y\"\n    secret capture tok = body.t\n  }\n  use c.r { pw = tok }\n}\n",
-	})
-	noDiags(t, diags)
-	if !contains(got, `"p": tok`) || contains(got, "secret var r_pw") {
-		t.Fatalf("got\n%s", got)
-	}
-}
-
-func TestSecretArgumentDiagnosticNamesTheParamAndTheCapture(t *testing.T) {
-	files := map[string]string{
-		"c.art":    secretColl,
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  step \"t\" {\n    get \"y\"\n    capture tok = body.t\n  }\n  use c.r { pw = \"${tok}!\" }\n}\n",
-	}
-	tree, _ := parser.Parse("main.art", files["main.art"])
-	_, bag := Expand(tree, MapLoader(files))
-	ds := bag.All()
-	if len(ds) != 1 || ds[0].Message != "pw is secret in c.r, so its argument must be secret too" ||
-		ds[0].Hint != "make tok a secret capture" || ds[0].Span.Line != 8 {
-		t.Fatalf("got %+v", ds)
-	}
-}
-
 // The request's argument reads the scenario's var token while the request
 // captures token too: as renames the capture and leaves the argument alone.
 func TestAsRenamesTheCaptureAndLeavesTheArgument(t *testing.T) {
@@ -158,62 +85,5 @@ func TestAsRenamesTheCaptureAndLeavesTheArgument(t *testing.T) {
 		if !contains(got, want) {
 			t.Errorf("missing %s in\n%s", want, got)
 		}
-	}
-}
-
-func TestHoistedSecretVarsGoAboveTheSteps(t *testing.T) {
-	got, diags := run(t, map[string]string{
-		"c.art":    secretColl,
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  var base = \"b\"\n  use c.r { pw = base }\n}\n",
-	})
-	noDiags(t, diags)
-	want := "scenario \"s\" {\n  var base = \"b\"\n  secret var r_pw = base\n  secret var r_key = \"k\"\n\n  step \"c.r\""
-	if !strings.HasPrefix(got, want) {
-		t.Fatalf("got\n%s", got)
-	}
-}
-
-func TestHoistedSecretVarsGoAtTheTopWithNoVars(t *testing.T) {
-	got, diags := run(t, map[string]string{
-		"c.art":    secretColl,
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"x\" }\n}\n",
-	})
-	noDiags(t, diags)
-	if !strings.HasPrefix(got, "scenario \"s\" {\n  secret var r_pw = \"x\"\n  secret var r_key = \"k\"\n") {
-		t.Fatalf("got\n%s", got)
-	}
-}
-
-func TestAnExpandedSecretParameterChecks(t *testing.T) {
-	files := map[string]string{
-		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n    expect status == 200\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"k\" }\n}\n",
-	}
-	tree, _ := parser.Parse("main.art", files["main.art"])
-	res, bag := Expand(tree, MapLoader(files))
-	if bag.Len() != 0 {
-		t.Fatalf("expand: %v", bag.All())
-	}
-	if _, cb := check.Check(res.File); cb.Len() != 0 {
-		t.Fatalf("check of the expanded tree: %v", cb.All())
-	}
-}
-
-func TestAHoistedVarSitsAboveItsUseEvenWithALaterVar(t *testing.T) {
-	files := map[string]string{
-		"c.art":    "collection \"c\" {\n  request r(secret pw) {\n    post \"x\" { body = {\"p\": pw} }\n    expect status == 200\n  }\n}\n",
-		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { pw = \"x\" }\n  var y = 1\n}\n",
-	}
-	tree, _ := parser.Parse("main.art", files["main.art"])
-	res, bag := Expand(tree, MapLoader(files))
-	if bag.Len() != 0 {
-		t.Fatalf("expand: %v", bag.All())
-	}
-	if _, cb := check.Check(res.File); cb.Len() != 0 {
-		t.Fatalf("check of the expanded tree: %v", cb.All())
-	}
-	got := print.Canonical(res.File)
-	if !contains(got, "  secret var r_pw = \"x\"\n\n  step \"c.r\"") {
-		t.Fatalf("got\n%s", got)
 	}
 }

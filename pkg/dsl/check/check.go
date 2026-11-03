@@ -163,13 +163,7 @@ type Info struct {
 	scopes  map[*ast.StepDecl][]string
 	envs    []EnvNeed
 	envSeen map[string]bool
-
-	suiteSecret bool
 }
-
-// SuiteSecret reports whether any name a suite above the file exports is
-// secret, which makes every value read through `suite` one a report withholds.
-func (i *Info) SuiteSecret() bool { return i != nil && i.suiteSecret }
 
 // EnvNeed is one env() call whose variable name the checker could read: a
 // single string literal, with no interpolation and no default value.
@@ -250,33 +244,14 @@ func Check(tree *ast.File) (*Info, *diag.Bag) {
 // diagnostic that names another binding names it by the scenario's use line
 // when a use brought that binding in. A nil chain is Check.
 func CheckChained(tree *ast.File, chain func(token.Span) []token.Span) (*Info, *diag.Bag) {
-	return CheckWith(tree, chain, Prelude{})
-}
-
-// Prelude is what a file's scenarios can read that the file did not declare:
-// the names the suite.art files above it export, as members of `suite`.
-type Prelude struct {
-	// Suite is the names `suite.<name>` may read -- every var and setup
-	// capture of every suite above the file -- or nil when no suite applies.
-	Suite []string
-	// SuiteSecret is whether any of them is secret, in which case `suite`
-	// is: a report withholds every value read through it.
-	SuiteSecret bool
-}
-
-// CheckWith is CheckChained with the file's prelude.
-func CheckWith(tree *ast.File, chain func(token.Span) []token.Span, prelude Prelude) (*Info, *diag.Bag) {
 	c := &checker{
-		chain:   chain,
-		prelude: prelude,
-		bag:     diag.New(),
+		chain: chain,
+		bag:   diag.New(),
 		info: &Info{
 			steps:   map[*ast.StepDecl]StepType{},
 			expects: map[*ast.Expect]Class{},
 			scopes:  map[*ast.StepDecl][]string{},
 			envSeen: map[string]bool{},
-
-			suiteSecret: prelude.SuiteSecret,
 		},
 	}
 	if tree != nil {
@@ -294,10 +269,9 @@ func CheckWith(tree *ast.File, chain func(token.Span) []token.Span, prelude Prel
 // step's statements see different ones and a field on the checker would make
 // that an ordering bug waiting to happen.
 type checker struct {
-	bag     *diag.Bag
-	info    *Info
-	chain   func(token.Span) []token.Span // nil outside an expansion
-	prelude Prelude
+	bag   *diag.Bag
+	info  *Info
+	chain func(token.Span) []token.Span // nil outside an expansion
 }
 
 // scenario walks one scenario's body in source order.
@@ -309,14 +283,6 @@ type checker struct {
 func (c *checker) scenario(s *ast.Scenario) {
 	sc := newScope()
 	sc.file = s.Keyword.Span.File
-
-	// `suite` is a name every scenario under a suite.art has, as if it were
-	// its first var: binding it here is what makes a var of the same name a
-	// clash rather than a quiet second meaning.
-	if c.prelude.Suite != nil {
-		sc.bind(token.Token{Kind: token.Ident, Value: "suite"}, "var")
-		sc.addVar("suite")
-	}
 
 	// Every var of the scenario is evaluated before its first step runs, so
 	// two vars of one name would leave one value for both, wherever each is

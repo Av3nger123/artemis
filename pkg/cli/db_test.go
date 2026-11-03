@@ -112,44 +112,6 @@ scenario "kinds" {}
 	}
 }
 
-// A trace of a db step writes what it sent -- the statement, its args by type
-// -- and withholds the args that read a secret.
-func TestADBTraceWithholdsSecretArgs(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("ART_TEST_DB", "sqlite:"+filepath.Join(dir, "shop.db"))
-	path := writeArt(t, "trace.art", `scenario "trace" {
-  var url = env("ART_TEST_DB")
-  secret var pw = "hunter2"
-
-  step "plain" {
-    db url {
-      sql  = "SELECT ? AS n, ? AS s"
-      args = [7, "x"]
-    }
-  }
-
-  step "secret" {
-    db url {
-      sql  = "SELECT ? AS pw"
-      args = [pw]
-    }
-  }
-}
-`)
-	traces := t.TempDir()
-	if _, stderr, err := runCLI(t, "run", path, "--trace", traces); err != nil {
-		t.Fatalf("run: %v\n%s", err, stderr)
-	}
-	sent := readTrace(t, filepath.Join(traces, "trace-plain.json")).Sent
-	if sent["sql"] != "SELECT ? AS n, ? AS s" || len(sent["args"].([]any)) != 2 || sent["args"].([]any)[0] != 7.0 {
-		t.Errorf("sent = %v, want the sql and the args [7, \"x\"]", sent)
-	}
-	secret, _ := os.ReadFile(filepath.Join(traces, "trace-secret.json"))
-	if bytes.Contains(secret, []byte("hunter2")) {
-		t.Errorf("the trace of a step that bound a secret prints it:\n%s", secret)
-	}
-}
-
 func describeRun(run *result.RunResult) string {
 	var b strings.Builder
 	for _, sc := range run.Scenarios {

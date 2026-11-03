@@ -99,44 +99,6 @@ scenario "phases" {}
 	}
 }
 
-// A suite's setup may hold blocks too.
-func TestASuitesSetupMayHoldABlock(t *testing.T) {
-	srv, asked := flowServer(t)
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "suite.art"), []byte(fmt.Sprintf(`suite {
-  var url = %q
-
-  setup {
-    parallel {
-      step "a" {
-        get "${url}/slow/a"
-        capture a = body.id
-      }
-      step "b" {
-        get "${url}/slow/b"
-        capture b = body.id
-      }
-    }
-  }
-}
-`, srv.URL)), 0o600)
-	path := filepath.Join(dir, "s.art")
-	os.WriteFile(path, []byte(`scenario "reads the suite" {
-  step "joined" {
-    get "${suite.url}/joined/${suite.a}/${suite.b}"
-    expect body.path == "/joined/a/b"
-  }
-}
-`), 0o600)
-	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
-	if !run.Passed() {
-		t.Fatalf("run failed:\n%s", describeRun(run))
-	}
-	if _, hit := asked.Load("/joined/a/b"); !hit {
-		t.Error("the scenario did not read both of the suite's parallel captures")
-	}
-}
-
 // Blocks nest at run time: a repeat and an if inside one parallel block.
 func TestNestedBlocksRun(t *testing.T) {
 	srv, _ := flowServer(t)
@@ -389,29 +351,6 @@ scenario "seeded" {}
 	}
 	if first[0][3:] == first[1][3:] {
 		t.Errorf("the two branches drew the same value: %v", first)
-	}
-}
-
-// A data-driven scenario's rows each take their own branch.
-func TestRowsTakeTheirOwnBranches(t *testing.T) {
-	srv, asked := flowServer(t)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "row ${n}" for n in [1, 2] {
-  var url = %q
-
-  if n == 1 {
-    step "one" { get "${url}/one" }
-  } else {
-    step "two" { get "${url}/two" }
-  }
-}
-`, srv.URL))
-	if !run.Passed() || len(run.Scenarios) != 2 {
-		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
-	}
-	for _, p := range []string{"/one", "/two"} {
-		if _, hit := asked.Load(p); !hit {
-			t.Errorf("%s was not requested", p)
-		}
 	}
 }
 

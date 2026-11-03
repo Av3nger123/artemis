@@ -66,15 +66,12 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 	defer func() { e.res.Uses = uses }()
 
 	vars := paramVars(inputs(it))
-	sc := newScope(vars)
 	steps := []ast.Decl{requestStep(it, it.Name.Value, nil, identity)}
 
 	e.rootCaptures(item)
 	ok := !e.bag.HasErrors() && e.silent == silent
 	if ok {
-		// Hoisted secret vars go above the steps that read them: the checker
-		// binds a var for what comes after it.
-		body := append(append(vars, *sc.hoisted...), steps...)
+		body := append(vars, steps...)
 		file := &ast.File{Scenarios: []ast.Decl{&ast.Scenario{
 			Keyword: synth(token.Ident, "scenario", "scenario", token.Span{}),
 			Name:    synth(token.String, quote(c.Name.Value+"."+name.Value), c.Name.Value+"."+name.Value, token.Span{}),
@@ -105,7 +102,7 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 }
 
 // paramVars is a var for each input, parameter or var, in order: its default
-// as its value, or null for a required one, `secret` carried over. Each is
+// as its value, or null for a required one. Each is
 // placed at the input's name, so a diagnostic on it points at the input.
 func paramVars(list []input) []ast.Decl {
 	if len(list) == 0 {
@@ -119,7 +116,6 @@ func paramVars(list []input) []ast.Decl {
 			value = ast.Clone(p.Default, identity)
 		}
 		out = append(out, &ast.VarDecl{
-			Secret:  p.Secret,
 			Keyword: synth(token.Ident, "var", "var", at),
 			Name:    p.Name,
 			Assign:  synth(token.Assign, "=", "", at),

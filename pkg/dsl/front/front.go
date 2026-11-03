@@ -12,6 +12,7 @@ package front
 
 import (
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"artemis/pkg/dsl/ast"
@@ -66,24 +67,34 @@ type Unit struct {
 // The checker runs on the expanded tree, so a fault in a step a use brought in
 // is reported where the step was written, in the collection, and carries the
 // use lines that brought it in as UsedFrom.
+//
+// A file in an old form (oldform.go) is reported as one and goes no further:
+// what it would draw from expansion and the checker is about a file migrate
+// rewrites. An old form in a file it reads -- a flow's capture, a collection's
+// parameters -- is reported beside the rest.
 func CompileWith(file, src string, l expand.Loader) *Unit {
 	tree, bag := parser.Parse(file, src)
-	pre, outer := prelude(file, l)
-	checkSuiteFile(file, tree, outer, bag)
+	if oldForms(file, tree, bag) {
+		info, _ := check.Check(nil)
+		return &Unit{Tree: tree, Expanded: tree, Info: info, Sources: map[string]string{file: src}, Bag: bag}
+	}
 	res, eb := expand.ExpandParsed(tree, l, !bag.HasErrors())
 	bag.Merge(eb)
-	info, checked := check.CheckWith(res.File, res.Chain, pre)
+	info, checked := check.CheckChained(res.File, res.Chain)
 	for _, d := range checked.All() {
 		d.UsedFrom = res.Chain(d.Span)
 		bag.Add(d)
 	}
 	checkData(res.File, l, bag, res.Chain)
-	bag = once(bag)
 	sources := map[string]string{file: src}
-	for k, v := range res.Sources {
-		sources[k] = v
+	for _, name := range sortedKeys(res.Sources) {
+		sources[name] = res.Sources[name]
+		if name != file {
+			read, _ := parser.Parse(name, res.Sources[name])
+			oldForms(name, read, bag)
+		}
 	}
-	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: bag, Uses: res.Uses}
+	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: once(bag), Uses: res.Uses}
 }
 
 // Compile lexes, parses and name-checks src, and returns every diagnostic in
@@ -105,10 +116,11 @@ func Compile(file, src string) (*ast.File, *check.Info, *diag.Bag) {
 	return u.Tree, u.Info, u.Bag
 }
 
-// once is bag with each diagnostic once. A data-driven scenario is checked as
-// one scenario per row, and a mistake in its body is the same mistake in every
-// row -- the same span, code and words -- so fifty rows would report it fifty
-// times. A diagnostic that differs, because a row's own value made it, stays.
+// once is bag with each diagnostic once. A flow is run by each scenario of a
+// scenario file, and a mistake its scenarios share is the same mistake in
+// each -- the same span, code and words -- so fifty scenarios would report it
+// fifty times. A diagnostic that differs, because a scenario's own value made
+// it, stays.
 func once(bag *diag.Bag) *diag.Bag {
 	type key struct {
 		span    token.Span
@@ -125,5 +137,14 @@ func once(bag *diag.Bag) *diag.Bag {
 		seen[k] = true
 		out.Add(d)
 	}
+	return out
+}
+
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
 	return out
 }

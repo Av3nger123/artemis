@@ -138,13 +138,6 @@ func ExpandParsed(tree *ast.File, l Loader, parsed bool) (*Result, *diag.Bag) {
 			}
 			cp := *v
 			cp.Body = e.body(root, v.Body)
-			if cp.For != nil {
-				// After the uses, so each row is a copy of the scenario as
-				// it runs; a scenario whose rows could not be made is
-				// dropped, its fault already reported.
-				out.Scenarios = append(out.Scenarios, e.rows(&cp)...)
-				continue
-			}
 			out.Scenarios = append(out.Scenarios, &cp)
 		default:
 			out.Scenarios = append(out.Scenarios, d)
@@ -170,9 +163,6 @@ func needsExpansion(tree *ast.File) bool {
 		case *ast.Import, *ast.Collection, *ast.Flow, *ast.FlowRef:
 			return true
 		case *ast.Scenario:
-			if v.For != nil {
-				return true
-			}
 			if hasUse(v.Body) {
 				return true
 			}
@@ -219,10 +209,7 @@ func fileName(tree *ast.File) string {
 	return "main.art"
 }
 
-// body is a scenario body with each use replaced by its steps. The secret
-// vars a use hoisted sit directly above its
-// steps, in use order: there they see the vars the use's arguments see, and
-// the checker binds them for the steps that read them.
+// body is a scenario body with each use replaced by its steps.
 func (e *expander) body(u *unit, decls []ast.Decl) []ast.Decl {
 	return e.bodyIn(u, decls, newScope(decls))
 }
@@ -248,10 +235,7 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 			continue
 		}
 		if use, ok := d.(*ast.UseDecl); ok {
-			steps := e.expandUse(u, use, sc.at(nil, out))
-			out = append(out, *sc.hoisted...)
-			*sc.hoisted = (*sc.hoisted)[:0]
-			out = append(out, steps...)
+			out = append(out, e.expandUse(u, use, sc.below(out))...)
 			continue
 		}
 		out = append(out, d)
@@ -340,20 +324,8 @@ func (e *expander) loadSource(name, src string) *unit {
 	return u
 }
 
-// preparsed is a Loader that hands over some files already parsed. Tests use
-// it to give expansion flow files built as trees, which the parser does not
-// read yet; parse falls back to the parser for a file it does not hold.
-type preparsed interface {
-	preparsed(name string) *ast.File
-}
-
 // parse is the tree of the file name, read from src.
 func (e *expander) parse(name, src string) (*ast.File, *diag.Bag) {
-	if p, ok := e.l.(preparsed); ok {
-		if tree := p.preparsed(name); tree != nil {
-			return tree, diag.New()
-		}
-	}
 	return parser.Parse(name, src)
 }
 
@@ -483,7 +455,7 @@ func keys(m map[string]*ast.Collection) []string {
 // expandUse returns the step one use stands for: its request written out,
 // its parameters bound to the use's arguments, then its override lines
 // applied, then `as` renaming the step's captures. u is the scenario's file,
-// and sc what the use's arguments can read, for secret parameters.
+// and sc the context the use reads a missing input from.
 func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 	e.res.Uses = append(e.res.Uses, Use{Span: use.Span(), Ref: use.Ref()})
 	via := len(e.res.Uses)
@@ -500,7 +472,7 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, inputs(it), sc, varPrefix(use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, inputs(it), sc, stamp)
 		if !ok {
 			return nil
 		}
