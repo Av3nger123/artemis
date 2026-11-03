@@ -305,13 +305,74 @@
                 "offset": 444
               },
               "class": "simple"
+            },
+            {
+              "kind": "capture",
+              "keyword": "var",
+              "name": "pay_status",
+              "value": {
+                "kind": "ident",
+                "name": "status",
+                "span": {
+                  "file": "../parser/testdata/flows.art",
+                  "line": 16,
+                  "col": 22,
+                  "endLine": 16,
+                  "endCol": 28,
+                  "offset": 486
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 16,
+                "col": 5,
+                "endLine": 16,
+                "endCol": 28,
+                "offset": 469
+              }
+            },
+            {
+              "kind": "capture",
+              "name": "order_id",
+              "value": {
+                "kind": "member",
+                "x": {
+                  "kind": "ident",
+                  "name": "body",
+                  "span": {
+                    "file": "../parser/testdata/flows.art",
+                    "line": 17,
+                    "col": 24,
+                    "endLine": 17,
+                    "endCol": 28,
+                    "offset": 516
+                  }
+                },
+                "name": "id",
+                "span": {
+                  "file": "../parser/testdata/flows.art",
+                  "line": 17,
+                  "col": 24,
+                  "endLine": 17,
+                  "endCol": 31,
+                  "offset": 516
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 17,
+                "col": 5,
+                "endLine": 17,
+                "endCol": 31,
+                "offset": 497
+              }
             }
           ],
           "span": {
             "file": "../parser/testdata/flows.art",
             "line": 11,
             "col": 3,
-            "endLine": 16,
+            "endLine": 18,
             "endCol": 4,
             "offset": 357
           },
@@ -331,13 +392,117 @@
           "comments": {
             "blankAbove": true
           }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"read the order\"",
+            "value": "read the order"
+          },
+          "action": {
+            "kind": "request",
+            "method": "get",
+            "url": {
+              "kind": "interp",
+              "segments": [
+                {
+                  "delim": "\"${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "url",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 21,
+                      "col": 12,
+                      "endLine": 21,
+                      "endCol": 15,
+                      "offset": 566
+                    }
+                  }
+                },
+                {
+                  "delim": "}/orders/${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "order_id",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 21,
+                      "col": 26,
+                      "endLine": 21,
+                      "endCol": 34,
+                      "offset": 580
+                    }
+                  }
+                },
+                {
+                  "delim": "}?after=${",
+                  "expr": {
+                    "kind": "ident",
+                    "name": "pay_status",
+                    "span": {
+                      "file": "../parser/testdata/flows.art",
+                      "line": 21,
+                      "col": 44,
+                      "endLine": 21,
+                      "endCol": 54,
+                      "offset": 598
+                    }
+                  }
+                }
+              ],
+              "end": "}\"",
+              "span": {
+                "file": "../parser/testdata/flows.art",
+                "line": 21,
+                "col": 9,
+                "endLine": 21,
+                "endCol": 56,
+                "offset": 563
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/flows.art",
+              "line": 21,
+              "col": 5,
+              "endLine": 21,
+              "endCol": 56,
+              "offset": 559
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flows.art",
+            "line": 20,
+            "col": 3,
+            "endLine": 22,
+            "endCol": 4,
+            "offset": 531
+          },
+          "stepType": "api",
+          "scope": [
+            "status",
+            "body",
+            "raw",
+            "headers",
+            "cookies",
+            "duration_ms",
+            "sku",
+            "user",
+            "url",
+            "private",
+            "pay_status",
+            "order_id"
+          ],
+          "comments": {
+            "blankAbove": true
+          }
         }
       ],
       "span": {
         "file": "../parser/testdata/flows.art",
         "line": 5,
         "col": 1,
-        "endLine": 17,
+        "endLine": 23,
         "endCol": 2,
         "offset": 219
       },

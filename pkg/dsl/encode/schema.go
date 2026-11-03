@@ -344,7 +344,9 @@ var nodeSchemas = []nodeSchema{
 				"expression field. Output only"},
 		commentsField,
 	}},
-	{Kind: kindCapture, Doc: "`capture token = body.data.access_token`", Fields: []fieldSchema{
+	{Kind: kindCapture, Doc: "`capture token = body.data.access_token`, or `var token = ...` after a step's action", Fields: []fieldSchema{
+		{Name: "keyword", Type: "string", Optional: true,
+			Doc: "`var` for a capture written `var token = ...`; absent means `capture`"},
 		{Name: "secret", Type: "boolean", Optional: true,
 			Doc: "the `secret` modifier: no report prints this binding's value, nor any value built from it. Absent means false"},
 		word("name", "the identifier bound for every later step in the scenario"),

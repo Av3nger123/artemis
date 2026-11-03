@@ -13,5 +13,11 @@ scenario "flow forms" {
       body = {"sku": sku, "user": user}
     }
     expect status == 200
+    var pay_status = status
+    capture order_id = body.id
+  }
+
+  step "read the order" {
+    get "${url}/orders/${order_id}?after=${pay_status}"
   }
 }

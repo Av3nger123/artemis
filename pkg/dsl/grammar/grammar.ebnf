@@ -69,7 +69,7 @@ BrowserAct    = "goto"   Expr
 
 StepStmt      = Expect | Capture | Retry | Timeout ;
 Expect        = "expect" Expr [ "within" String ] ;
-Capture       = [ "secret" ] "capture" Ident "=" Expr ;
+Capture       = [ "secret" ] "capture" Ident "=" Expr | "var" Ident "=" Expr ;
 Retry         = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
 RetryField    = "times" "=" Number | "delay" "=" String ;
 Timeout       = "timeout" "=" String ;

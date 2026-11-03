@@ -113,6 +113,16 @@ func TestScopeRules(t *testing.T) {
 				"  step \"two\" {\n    get \"/y\" {\n      header \"Authorization\" = \"Bearer ${tok}\"\n    }\n  }\n}\n",
 		},
 		{
+			name: "a step var is in scope in a later step, as a capture is",
+			src: "scenario \"s\" {\n  step \"one\" {\n    get \"/x\"\n    var tok = body.tok\n  }\n" +
+				"  step \"two\" {\n    get \"/y/${tok}\"\n  }\n}\n",
+		},
+		{
+			name: "a step var is not in scope in its own step",
+			src:  step("api", `get "/x"`, `var tok = body.tok`, `expect tok exists`),
+			want: []string{"unknown-identifier@5:12"},
+		},
+		{
 			name: "a capture is not in scope in its own step",
 			src:  step("api", `get "/x"`, `capture tok = body.tok`, `expect tok exists`),
 			want: []string{"unknown-identifier@5:12"},

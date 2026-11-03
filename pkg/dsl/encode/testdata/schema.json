@@ -851,8 +851,14 @@
     },
     {
       "kind": "capture",
-      "doc": "`capture token = body.data.access_token`",
+      "doc": "`capture token = body.data.access_token`, or `var token = ...` after a step's action",
       "fields": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "optional": true,
+          "doc": "`var` for a capture written `var token = ...`; absent means `capture`"
+        },
         {
           "name": "secret",
           "type": "boolean",

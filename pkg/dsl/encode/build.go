@@ -492,8 +492,20 @@ func capture(f fields) (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	keyword, err := f.optStr("keyword")
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case keyword == "":
+		keyword = "capture"
+	case keyword != "capture" && keyword != "var":
+		return nil, fmt.Errorf("%s: keyword is %q, want capture or var", f.path, keyword)
+	case keyword == "var" && secret:
+		return nil, fmt.Errorf("%s: a step var cannot be secret; write it as a secret capture", f.path)
+	}
 	c := &ast.Capture{
-		Keyword: syn(token.Ident, "capture"),
+		Keyword: syn(token.Ident, keyword),
 		Name:    syn(token.Ident, name),
 		Assign:  syn(token.Assign, "="),
 	}
