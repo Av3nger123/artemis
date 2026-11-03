@@ -215,3 +215,30 @@ func TestDuplicateBindingHintNamesTheFirstUse(t *testing.T) {
 		t.Fatalf("hint is %q, want %q", got[0].Hint, want)
 	}
 }
+
+// Review Focus 4: an item input that the use does not pass is read from the
+// context, and a name that only one if branch creates is not bound on every
+// path. That is capture-maybe-unbound at compile time -- where the item reads
+// the input, with the call as the chain -- not missing-argument, and not a
+// runtime error.
+func TestContextInputFromOneBranchIsMaybeUnbound(t *testing.T) {
+	files := expand.MapLoader{
+		"api.art": "collection \"api\" {\n  request me(token) {\n    get \"http://h/me/${token}\"\n  }\n}\n",
+		"main.art": "import \"api.art\"\n\nscenario \"s\" {\n  var x = true\n  if x {\n    step \"a\" {\n      get \"http://h/\"\n" +
+			"      capture token = body.t\n    }\n  }\n  use api.me { }\n}\n",
+	}
+	u := front.CompileWith("main.art", files["main.art"], files)
+	var got []diag.Diagnostic
+	for _, d := range u.Bag.All() {
+		if d.Severity == diag.Error {
+			got = append(got, d)
+		}
+	}
+	if len(got) != 1 || got[0].Code != diag.CaptureMaybeUnbound {
+		t.Fatalf("want one capture-maybe-unbound, got %v", u.Bag.All())
+	}
+	d := got[0]
+	if d.Span.File != "api.art" || d.Span.Line != 3 || len(d.UsedFrom) != 1 || d.UsedFrom[0].File != "main.art" || d.UsedFrom[0].Line != 11 {
+		t.Fatalf("want it at api.art:3 used from the call at main.art:11, got %+v", d)
+	}
+}

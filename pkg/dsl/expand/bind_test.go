@@ -174,3 +174,138 @@ func TestCommandItemExpands(t *testing.T) {
 		t.Fatalf("got\n%s", got)
 	}
 }
+
+// --- Task 8: an input the use does not pass is read from the context: a var
+// of the scenario or a capture above the use, before the item's default.
+// These use today's syntax: `request r(params)`, `use`, `capture`.
+
+const contextLogin = "collection \"auth\" {\n  request login(url, user = \"admin\") {\n" +
+	"    post \"${url}/l\" { body = {\"u\": user} }\n  }\n}\n"
+
+func TestMissingInputComesFromTheContext(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"auth.art": contextLogin,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  var url = \"http://x\"\n  var user = \"bob\"\n  use auth.login { }\n}\n",
+	})
+	noDiags(t, diags)
+	// The context name itself, not a copy of its value; and the scenario's
+	// user wins over the item's default.
+	if !contains(got, `post "${url}/l" { body = {"u": user} }`) {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestPassedValueBeatsTheContext(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"auth.art": contextLogin,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  var url = \"http://x\"\n  var user = \"bob\"\n  use auth.login { user = \"carol\" }\n}\n",
+	})
+	noDiags(t, diags)
+	if !contains(got, `body = {"u": "carol"}`) {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestTheDefaultIsUsedWhenTheContextLacksTheName(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"auth.art": contextLogin,
+		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  var url = \"http://x\"\n  use auth.login { }\n}\n",
+	})
+	noDiags(t, diags)
+	if !contains(got, `body = {"u": "admin"}`) {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+const meItem = "collection \"api\" {\n  request me(token) {\n    get \"/me/${token}\"\n  }\n}\n"
+
+func TestEarlierCaptureFeedsALaterItem(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"api.art": meItem,
+		"main.art": "import \"api.art\"\n\nscenario \"s\" {\n  step \"a\" {\n    get \"/t\"\n    capture token = body.t\n  }\n" +
+			"  use api.me { }\n}\n",
+	})
+	noDiags(t, diags)
+	if !contains(got, `get "/me/${token}"`) {
+		t.Fatalf("got\n%s", got)
+	}
+}
+
+func TestACaptureBelowTheUseIsNotInItsContext(t *testing.T) {
+	_, diags := run(t, map[string]string{
+		"api.art":  meItem,
+		"main.art": "import \"api.art\"\n\nscenario \"s\" {\n  use api.me { }\n  step \"a\" {\n    get \"/t\"\n    capture token = body.t\n  }\n}\n",
+	})
+	if diags != "main.art: missing-argument: api.me needs token" {
+		t.Fatalf("got\n%s", diags)
+	}
+}
+
+// A capture an earlier use brings in is in the context too, under the name
+// as gives it.
+func TestAnEarlierUsesCaptureFeedsALaterItem(t *testing.T) {
+	got, diags := run(t, map[string]string{
+		"auth.art": "collection \"auth\" {\n  request login() {\n    post \"/l\"\n    capture token = body.t\n  }\n}\n",
+		"api.art":  meItem,
+		"main.art": "import \"auth.art\"\nimport \"api.art\"\n\nscenario \"s\" {\n  use auth.login\n  use api.me\n}\n",
+	})
+	noDiags(t, diags)
+	if !contains(got, `get "/me/${token}"`) {
+		t.Fatalf("got\n%s", got)
+	}
+	_, diags = run(t, map[string]string{
+		"auth.art": "collection \"auth\" {\n  request login() {\n    post \"/l\"\n    capture token = body.t\n  }\n}\n",
+		"api.art":  meItem,
+		"main.art": "import \"auth.art\"\nimport \"api.art\"\n\nscenario \"s\" {\n  use auth.login as admin\n  use api.me\n}\n",
+	})
+	if diags != "main.art: missing-argument: api.me needs token" {
+		t.Fatalf("as renames the capture to admin_token, so token is not in the context; got\n%s", diags)
+	}
+}
+
+// A capture in setup, or in a branch of a block above, is in the context of a
+// use after it, and so is one above the block for a use inside it.
+func TestCapturesAboveAndAroundABlockAreInTheContext(t *testing.T) {
+	for name, body := range map[string]string{
+		"setup":     "  setup {\n    step \"a\" {\n      get \"/t\"\n      capture token = body.t\n    }\n  }\n  use api.me\n",
+		"if branch": "  var x = true\n  if x {\n    step \"a\" {\n      get \"/t\"\n      capture token = body.t\n    }\n  }\n  use api.me\n",
+		"inside a block": "  var x = true\n  step \"a\" {\n    get \"/t\"\n    capture token = body.t\n  }\n" +
+			"  if x {\n    use api.me\n  }\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, diags := run(t, map[string]string{
+				"api.art":  meItem,
+				"main.art": "import \"api.art\"\n\nscenario \"s\" {\n" + body + "}\n",
+			})
+			noDiags(t, diags)
+			if !contains(got, `get "/me/${token}"`) {
+				t.Fatalf("got\n%s", got)
+			}
+		})
+	}
+}
+
+// The context name sits where the item reads the input, stamped with the
+// use: a diagnostic on it points into the item, with the use as its chain.
+func TestAContextNameIsPlacedAtTheItemsRead(t *testing.T) {
+	tree, _ := parser.Parse("main.art", "import \"api.art\"\n\nscenario \"s\" {\n  var token = \"t\"\n  use api.me\n}\n")
+	res, bag := Expand(tree, MapLoader{"api.art": meItem})
+	if bag.HasErrors() {
+		t.Fatal(bag.All())
+	}
+	var id *ast.Ident
+	ast.Inspect(res.File, func(n ast.Node) {
+		if v, ok := n.(*ast.Ident); ok && v.Tok.Value == "token" && v.Tok.Span.File == "api.art" {
+			id = v
+		}
+	})
+	if id == nil {
+		t.Fatalf("no token read in api.art:\n%s", ast.Source(res.File))
+	}
+	if sp := id.Tok.Span; sp.Line != 3 || sp.Col != 16 || sp.Via != 1 {
+		t.Fatalf("want the read at api.art:3:16 with Via 1, got %+v", sp)
+	}
+	if ch := res.Chain(id.Tok.Span); len(ch) != 1 || ch[0].File != "main.art" || ch[0].Line != 5 {
+		t.Fatalf("want the chain main.art:5, got %+v", ch)
+	}
+}

@@ -38,13 +38,17 @@ func inputs(r *ast.RequestDecl) []input {
 // expression each input stands for at this use, already substituted so a
 // default that names an earlier input sees that input's value.
 //
-// An input takes the argument the use passes, or else the item's own
-// default. With neither, it is missing-argument. A private input takes only
-// its default.
+// An input takes the first of these that has a value: the argument the use
+// passes, the name in the context at the use -- a var of the scenario, or a
+// capture above the use, as sc.has reports -- and the item's own default.
+// With none, it is missing-argument. A private input takes only its default.
 //
 // An argument is the expression written at the use and keeps its own span; a
-// default is copied out of the collection and stamped. A secret input's value
-// goes through secretArg, with sc saying what the use can read, pre naming a
+// default is copied out of the collection and stamped. A context name is the
+// bare identifier, placed where the item reads the input: the checker then
+// judges whether the name is bound at that point, and a diagnostic on it
+// points into the item with the use as its chain. A secret input's value goes
+// through secretArg, with sc saying what the use can read, pre naming a
 // hoisted var and ref naming the item in a diagnostic.
 func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope, pre, ref string, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
 	declared := map[string]input{}
@@ -91,6 +95,10 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope
 		switch {
 		case args[name] != nil:
 			env[name] = args[name].Value
+		case !in.Private && sc.has(name):
+			// At the input's name in the item, stamped: subst moves it onto
+			// each place the item reads the input.
+			env[name] = &ast.Ident{Tok: synth(token.Ident, name, name, stamp(in.Name).Span)}
 		case !isNil(in.Default):
 			env[name] = subst(ast.Clone(in.Default, stamp), env)
 		default:
