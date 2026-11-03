@@ -327,12 +327,19 @@ func (p *parser) parseVar() ast.Decl {
 // turns a step whose author wrote `expect` above `get` into a cascade of
 // unexpected tokens from the first line onward; this way one mistake produces
 // one diagnostic and the rest of the step still lands in the tree.
+//
+// `step "name" = auth.login { ... }` is the other form, a step that calls a
+// collection item: the "=" after the name decides it, and parseStepCall reads
+// the rest.
 func (p *parser) parseStep() ast.Decl {
 	s := &ast.StepDecl{Keyword: p.next()}
 
 	name, ok := p.expectIdentOrString("a step name in quotes")
 	if !ok {
 		return p.badFrom(s.Keyword)
+	}
+	if p.at(token.Assign) {
+		return p.parseStepCall(s.Keyword, name)
 	}
 
 	body := p.parseStepBody("step", name)
@@ -350,12 +357,22 @@ func (p *parser) parseStep() ast.Decl {
 // missing-action diagnostic points at. It returns nil, having consumed
 // nothing, when there is no "{".
 func (p *parser) parseStepBody(what string, name token.Token) *ast.StepDecl {
+	return p.parseStepBodyWith(what, name, nil)
+}
+
+// parseStepBodyWith is parseStepBody with head, when it is not nil, reading
+// what an item writes between its "{" and its action -- its input vars --
+// before the step's own loop starts.
+func (p *parser) parseStepBodyWith(what string, name token.Token, head func(*ast.StepDecl)) *ast.StepDecl {
 	s := &ast.StepDecl{}
 	open, ok := p.expect(token.LBrace, "\"{\" to open the "+what)
 	if !ok {
 		return nil
 	}
 	s.LBrace = open
+	if head != nil {
+		head(s)
+	}
 
 	var firstAction token.Span // where the action block already seen began
 	sawStmt := false

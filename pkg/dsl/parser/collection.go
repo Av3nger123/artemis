@@ -28,7 +28,7 @@ func (p *parser) parseImport() ast.Decl {
 	return imp
 }
 
-// parseCollection is `collection String "{" { RequestDecl } "}"`.
+// parseCollection is `collection String "{" { ItemDecl } "}"`.
 func (p *parser) parseCollection() ast.Decl {
 	c := &ast.Collection{Keyword: p.next()}
 	name, ok := p.expectIdentOrString("a collection name in quotes")
@@ -45,8 +45,8 @@ func (p *parser) parseCollection() ast.Decl {
 	for !p.at(token.RBrace) && !p.at(token.EOF) {
 		before := p.i
 		switch {
-		case p.atWord("request"):
-			c.Items = append(c.Items, p.parseRequestDecl())
+		case p.at(token.Ident) && token.IsCollectionItem(p.peek().Value):
+			c.Items = append(c.Items, p.parseItemDecl())
 		case p.atWord("flow"):
 			// A collection is single requests; steps in order are a scenario's.
 			p.errorf(p.peek(), diag.UnexpectedToken, "a collection holds requests, one action each: steps in order are a scenario").
@@ -54,7 +54,7 @@ func (p *parser) parseCollection() ast.Decl {
 			c.Items = append(c.Items, p.recoverTo())
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
-				"expected \"request\", found %s", describe(p.peek())).
+				"expected \"request\", \"command\" or \"query\", found %s", describe(p.peek())).
 				DidYouMean(p.peek().Value, token.CollectionItems)
 			c.Items = append(c.Items, p.recoverTo())
 		}
@@ -121,44 +121,171 @@ func (p *parser) parseParams() (*ast.Params, bool) {
 	return ps, true
 }
 
-// parseRequestDecl is `request Ident Params "{" Action { StepStmt } "}"`.
+// parseItemDecl is
+// `( "request" | "command" | "query" ) Ident [ Params ] "{" { VarDecl } Action { StepStmt } "}"`.
 //
-// The body is parsed by the same loop as a step's, so every rule a step has --
-// one action, action first -- holds here with the same diagnostics.
-func (p *parser) parseRequestDecl() ast.Decl {
+// The keyword is the item's type. An item with no parameter list declares its
+// inputs as the var lines above its action; one with a list is the older form
+// and reads no vars there. The body is parsed by the same loop as a step's,
+// so every rule a step has -- one action, action first -- holds here with the
+// same diagnostics, and then the action is held to the keyword.
+func (p *parser) parseItemDecl() ast.Decl {
 	r := &ast.RequestDecl{Keyword: p.next()}
-	name, ok := p.expectIdent("a request name")
+	what := r.Keyword.Value
+	name, ok := p.expectIdent("a " + what + " name")
 	if !ok {
 		return p.badFrom(r.Keyword)
 	}
 	r.Name = name
-	params, ok := p.parseParams()
-	r.Params = params
-	if !ok {
-		return p.badFrom(r.Tokens(nil)...)
+	if p.at(token.LParen) {
+		params, ok := p.parseParams()
+		r.Params = params
+		if !ok {
+			return p.badFrom(r.Tokens(nil)...)
+		}
 	}
 	if !p.at(token.LBrace) {
-		p.errorf(p.peek(), diag.UnexpectedToken, "expected \"{\" to open the request, found %s", describe(p.peek()))
+		p.errorf(p.peek(), diag.UnexpectedToken, "expected \"{\" to open the %s, found %s", what, describe(p.peek()))
 		return p.badFrom(r.Tokens(nil)...)
 	}
-	step := p.parseStepBody("request", r.Name)
+	var head func(*ast.StepDecl)
+	if r.Params == nil {
+		head = func(s *ast.StepDecl) { p.parseInputs(r, s) }
+	}
+	step := p.parseStepBodyWith(what, r.Name, head)
 	r.LBrace, r.Action, r.Body, r.RBrace = step.LBrace, step.Action, step.Body, step.RBrace
-	p.endDecl("a request")
+	p.checkItemAction(r)
+	p.endDecl("a " + what)
 	return r
+}
+
+// parseInputs reads an item's input vars, `var` and `private var` lines,
+// until the first line that is neither. A var that does not parse ends them:
+// its Bad goes to the step body, s, which keeps every byte in source order.
+func (p *parser) parseInputs(r *ast.RequestDecl, s *ast.StepDecl) {
+	for p.atWord("var") || p.atWord("private") && p.peekWordAt(1, "var") {
+		d := p.parseVar()
+		v, ok := d.(*ast.VarDecl)
+		if !ok {
+			s.Body = append(s.Body, &ast.Bad{Toks: d.Tokens(nil)})
+			return
+		}
+		if token.IsUseLine(v.Name.Value) {
+			p.errorf(v.Name, diag.ReservedParam,
+				"an input cannot be named %s: a step that calls the item reads %s as an override", v.Name.Value, v.Name.Value).
+				Hintf("rename it, for example %s_value", v.Name.Value)
+		}
+		r.Inputs = append(r.Inputs, v)
+	}
+}
+
+// itemActions is, for each step type, the item keyword that holds it and the
+// words that open its action, as a hint writes them.
+var itemActions = map[string]struct{ keyword, words string }{
+	"api":      {"request", "get, post, put, patch or delete"},
+	"terminal": {"command", "run"},
+	"db":       {"query", "db"},
+	"browser":  {"", "browser"},
+}
+
+// checkItemAction reports an item whose action is not the type its keyword
+// names: `run` in a request, `get` in a command. An old-form request, with
+// parameters in parentheses, held any action, so it is not judged until the
+// old forms are retired.
+func (p *parser) checkItemAction(r *ast.RequestDecl) {
+	if r.Params != nil && r.Keyword.Value == "request" {
+		return
+	}
+	got := actionType(r.Action)
+	want := r.Type()
+	if got == "" || got == want {
+		return
+	}
+	word := tokenAt(r.Action)
+	ref := p.errorf(word, diag.ItemActionMismatch,
+		"a %s holds %s %s action, and this one is %s", r.Keyword.Value, article(want), want, word.Value)
+	if kw := itemActions[got].keyword; kw != "" {
+		ref.Hintf("make it a %s, or use %s", kw, itemActions[want].words)
+	} else {
+		ref.Hintf("use %s", itemActions[want].words)
+	}
+}
+
+// actionType is the step type an action makes, "" for no action.
+func actionType(a ast.Action) string {
+	if isNilAction(a) {
+		return ""
+	}
+	switch a.(type) {
+	case *ast.Request:
+		return "api"
+	case *ast.Run:
+		return "terminal"
+	case *ast.DB:
+		return "db"
+	case *ast.Browser:
+		return "browser"
+	}
+	return ""
+}
+
+// article is "an" before a word that starts with a vowel, else "a".
+func article(word string) string {
+	if word != "" && strings.ContainsRune("aeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 // parseUse is `use ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ]`.
 func (p *parser) parseUse() ast.Decl {
 	u := &ast.UseDecl{Keyword: p.next()}
-	first, ok := p.expectIdent("what to use, like auth.login")
+	if !p.parseItemRef(u, "what to use, like auth.login") {
+		return p.badFrom(u.Tokens(nil)...)
+	}
+	if p.at(token.LBrace) {
+		u.LBrace, u.Lines, u.RBrace = p.parseUseLines("use")
+	}
+	p.endDecl("a use")
+	return u
+}
+
+// parseStepCall is the rest of `step String "=" ItemRef [ "as" Ident ] "{"
+// { UseLine } "}"`, once parseStep has read the keyword and the name and seen
+// the "=": a step that calls a collection item. It is the same node as a use,
+// with the step's keyword, name and "=" in place of `use`.
+func (p *parser) parseStepCall(kw, name token.Token) ast.Decl {
+	u := &ast.UseDecl{Step: kw, Name: name, Assign: p.next()}
+	if !p.parseItemRef(u, "the item the step calls, like auth.login") {
+		return p.badFrom(u.Tokens(nil)...)
+	}
+	if p.at(token.LBrace) {
+		u.LBrace, u.Lines, u.RBrace = p.parseUseLines("step")
+	} else {
+		// The step keeps what it parsed, and whatever follows is the next
+		// line's to read: recovering here would take that line with it.
+		p.errorf(p.peek(), diag.UnexpectedToken,
+			"expected \"{\" after %s, found %s", u.Ref(), describe(p.peek())).
+			Hintf("a step that calls an item has a block, even an empty one: step %s = %s { }", name.Text, u.Ref())
+	}
+	p.endDecl("a step")
+	return u
+}
+
+// parseItemRef is `ItemRef [ "as" Ident ]` into u: `auth.login`, or a bare
+// `login` for a sibling, then the alias. what describes the reference for the
+// diagnostic when there is none. It reports false having consumed only what
+// u now holds, and the caller abandons the declaration into a Bad.
+func (p *parser) parseItemRef(u *ast.UseDecl, what string) bool {
+	first, ok := p.expectIdent(what)
 	if !ok {
-		return p.badFrom(u.Keyword)
+		return false
 	}
 	if p.at(token.Dot) {
 		u.Collection, u.Dot = first, p.next()
 		item, ok := p.expectIdent("the request after the dot")
 		if !ok {
-			return p.badFrom(u.Tokens(nil)...)
+			return false
 		}
 		u.Item = item
 	} else {
@@ -168,15 +295,11 @@ func (p *parser) parseUse() ast.Decl {
 		u.As = p.next()
 		alias, ok := p.expectIdent("a name after \"as\"")
 		if !ok {
-			return p.badFrom(u.Tokens(nil)...)
+			return false
 		}
 		u.Alias = alias
 	}
-	if p.at(token.LBrace) {
-		u.LBrace, u.Lines, u.RBrace = p.parseUseLines("use")
-	}
-	p.endDecl("a use")
-	return u
+	return true
 }
 
 // parseUseLines reads `"{" { UseLine } "}"`. A line's first word decides what
@@ -206,7 +329,7 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 		default:
 			p.errorf(p.peek(), diag.UnexpectedToken,
 				"expected an argument or an override, found %s", describe(p.peek())).
-				Hintf("a use block holds: name = value, header, query, body, drop expects, drop captures, expect")
+				Hintf("%s", useLinesHint(what))
 			lines = append(lines, p.recoverTo())
 		}
 		if p.i == before {
@@ -220,14 +343,22 @@ func (p *parser) parseUseLines(what string) (token.Token, []ast.Stmt, token.Toke
 	return open, lines, p.next()
 }
 
+// useLinesHint is what a use block, or a step that calls an item, may hold.
+func useLinesHint(what string) string {
+	if what == "step" {
+		return "a step that calls an item holds: name = value, header, query, body, drop expects, drop vars, expect"
+	}
+	return "a use block holds: name = value, header, query, body, drop expects, drop captures, expect"
+}
+
 func (p *parser) parseDrop() ast.Stmt {
 	d := &ast.Drop{Keyword: p.next()}
-	what, ok := p.expectIdent("\"expects\" or \"captures\" after \"drop\"")
+	what, ok := p.expectIdent("\"expects\", \"captures\" or \"vars\" after \"drop\"")
 	if !ok {
 		return p.badFrom(d.Keyword)
 	}
 	if !token.IsDropTarget(what.Value) {
-		p.errorf(what, diag.UnexpectedToken, "expected \"expects\" or \"captures\" after \"drop\", found %s", describe(what)).
+		p.errorf(what, diag.UnexpectedToken, "expected \"expects\", \"captures\" or \"vars\" after \"drop\", found %s", describe(what)).
 			DidYouMean(what.Value, token.DropTargets)
 	}
 	d.What = what

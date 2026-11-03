@@ -308,9 +308,16 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.Name)
 		p.node(v.Params, c)
 		p.tok(v.LBrace)
-		p.list(stepItems(&ast.StepDecl{Action: v.Action, Body: v.Body}), c)
+		items := make([]ast.Node, 0, len(v.Inputs)+len(v.Body)+1)
+		for _, in := range v.Inputs {
+			items = append(items, in)
+		}
+		p.list(append(items, stepItems(&ast.StepDecl{Action: v.Action, Body: v.Body})...), c)
 		p.tok(v.RBrace)
 	case *ast.UseDecl:
+		p.tok(v.Step)
+		p.tok(v.Name)
+		p.tok(v.Assign)
 		p.tok(v.Keyword)
 		p.tok(v.Collection)
 		p.tok(v.Dot)

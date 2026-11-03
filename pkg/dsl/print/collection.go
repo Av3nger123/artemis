@@ -44,19 +44,29 @@ func (c *canon) params(ps *ast.Params) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-// requestDecl prints exactly as a step does, with `request name(params)` as
-// the head.
+// requestDecl prints exactly as a step does, with `request name(params)` --
+// or `command name` for an item with no list -- as the head. An item's input
+// vars come first, a paragraph of their own above the action.
 func (c *canon) requestDecl(r *ast.RequestDecl) {
-	head := r.Keyword.Text + " " + r.Name.Text + c.params(r.Params)
+	head := r.Keyword.Text + " " + r.Name.Text
+	if r.Params != nil {
+		head += c.params(r.Params)
+	}
 	lead := append(toks(r.Keyword, r.Name), nodeToks(r.Params)...)
 	items := stepItems(&ast.StepDecl{Action: r.Action, Body: r.Body})
-	if len(items) == 0 && !hasComment(r) {
+	if len(items) == 0 && len(r.Inputs) == 0 && !hasComment(r) {
 		c.line(append(lead, toks(r.LBrace, r.RBrace)...), join(" ", head, braces(r.LBrace, r.RBrace)))
 		return
 	}
 	c.line(append(lead, toks(r.LBrace)...), join(" ", head, r.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
+	for _, v := range r.Inputs {
+		c.varDecl(v)
+	}
+	if len(r.Inputs) > 0 && len(items) > 0 {
+		c.w.blank()
+	}
 	for _, it := range items {
 		switch v := it.(type) {
 		case ast.Action:
@@ -69,10 +79,12 @@ func (c *canon) requestDecl(r *ast.RequestDecl) {
 	c.close(r.RBrace)
 }
 
-// useDecl is `use a.b as x` and, when there is a block, its lines.
+// useDecl is `use a.b as x`, or `step "name" = a.b as x`, and, when there is
+// a block, its lines.
 func (c *canon) useDecl(u *ast.UseDecl) {
-	head := join(" ", u.Keyword.Text, u.Collection.Text+u.Dot.Text+u.Item.Text, u.As.Text, u.Alias.Text)
-	lead := toks(u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias)
+	head := join(" ", u.Step.Text, u.Name.Text, u.Assign.Text, u.Keyword.Text,
+		u.Collection.Text+u.Dot.Text+u.Item.Text, u.As.Text, u.Alias.Text)
+	lead := toks(u.Step, u.Name, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias)
 	if u.LBrace.Text == "" {
 		c.line(lead, head)
 		return

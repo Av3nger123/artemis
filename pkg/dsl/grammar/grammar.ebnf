@@ -14,8 +14,12 @@ FlowRef       = "flow" String ;
 DataScenario  = "scenario" String "{" { TagsDecl | Set } "}" ;
 Set           = Ident "=" ( Expr | "skip" ) ;
 Import        = "import" String [ "as" Ident ] ;
-Collection    = "collection" String "{" { RequestDecl } "}" ;
-RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;
+Collection    = "collection" String "{" { ItemDecl } "}" ;
+(* The keyword is the item's type, and the action must be one it holds: a
+   request an HTTP verb, a command run, a query db. The vars above the action
+   are the item's inputs; an item with a Params list has none. *)
+ItemDecl      = ( "request" | "command" | "query" ) Ident [ Params ]
+                "{" { VarDecl } Action { StepStmt } "}" ;
 Params        = "(" [ Param { "," Param } ] ")" ;
 Param         = [ "secret" ] Ident [ "=" Expr ] ;
 
@@ -37,12 +41,15 @@ RepeatOption  = ( "every" | "within" | "max" ) Expr ;
 FlowBody      = "{" { StepDecl | UseDecl | Flow } "}" ;
 (* One scenario per row: the name may interpolate the row, and nothing else. *)
 ForClause     = "for" [ "secret" ] Ident "in" Expr ;
-UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
+(* The step form calls an item as a use does, and the step it expands to takes
+   the quoted name. *)
+UseDecl       = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ]
+              | "step" String "=" ItemRef [ "as" Ident ] "{" { UseLine } "}" ;
 ItemRef       = Ident "." Ident ;
 UseLine       = Ident "=" Expr
               | ReqField
               | "body" "." Ident { "." Ident } "=" Expr
-              | "drop" ( "expects" | "captures" )
+              | "drop" ( "expects" | "captures" | "vars" )
               | Expect ;
 
 ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting } ] "}"

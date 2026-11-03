@@ -52,10 +52,25 @@ func (e *enc) param(p *ast.Param) *obj {
 		set("default", e.node(p.Default)).done()
 }
 
+// requestDecl writes keyword only for a command or a query, so a request
+// encodes as it did before items had types. params is present, an empty list
+// included, exactly when the item has a parenthesised list: `request r()` and
+// `request r` are both items with nothing to pass, and only the key tells
+// Decode which one to write.
 func (e *enc) requestDecl(r *ast.RequestDecl) *obj {
-	return start(kindRequestDecl, r).
-		set("name", r.Name.Text).
-		set("params", e.params(r.Params)).
+	o := start(kindRequestDecl, r)
+	if r.Keyword.Value != "request" {
+		o.set("keyword", r.Keyword.Value)
+	}
+	o.set("name", r.Name.Text)
+	if r.Params != nil {
+		o.present("params", e.params(r.Params))
+	}
+	inputs := make([]ast.Node, 0, len(r.Inputs))
+	for _, in := range r.Inputs {
+		inputs = append(inputs, in)
+	}
+	return o.set("inputs", e.list(inputs)).
 		set("action", e.node(r.Action)).
 		set("body", e.list(toNodes(r.Body))).
 		span().
@@ -65,14 +80,34 @@ func (e *enc) requestDecl(r *ast.RequestDecl) *obj {
 // useDecl leaves collection out for a bare ref and alias out when
 // there is no `as`: absent, not empty, which is obj.set's rule for a missing
 // value and what the schema promises.
+//
+// The step form, `step "log in" = auth.login { ... }`, is the same kind with
+// the step's name: a use has no name, so its presence is the form.
 func (e *enc) useDecl(u *ast.UseDecl) *obj {
-	return start(kindUse, u).
+	b := start(kindUse, u)
+	if u.Name.Text != "" {
+		b.set("name", nameObj(u.Name))
+	}
+	return b.
 		set("collection", optional(u.Collection.Text)).
 		set("item", u.Item.Text).
 		set("alias", optional(u.Alias.Text)).
 		set("lines", e.list(toNodes(u.Lines))).
 		span().
-		comments(toks(u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
+		comments(toks(u.Step, u.Name, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
+}
+
+// present records key even when list is empty, for the one field whose
+// presence is itself the information.
+func (b *builder) present(key string, list []any) *builder {
+	if list == nil {
+		list = []any{}
+	}
+	if _, seen := b.o.vals[key]; !seen {
+		b.o.keys = append(b.o.keys, key)
+	}
+	b.o.vals[key] = list
+	return b
 }
 
 // optional is s, or nil -- which set drops -- when s is empty.
@@ -154,8 +189,8 @@ func collectionItem(f fields) (ast.Decl, error) {
 	return nil, badKind(f, kind, "a collection item")
 }
 
-// paramsOf builds the parenthesised list, which is always written: `()` when
-// there are no parameters.
+// paramsOf builds the parenthesised list, which is written whenever the
+// document has the params key: `()` when it is empty.
 func paramsOf(f fields) (*ast.Params, error) {
 	ps := &ast.Params{LParen: syn(token.LParen, "("), RParen: syn(token.RParen, ")")}
 	items, err := f.list("params")
@@ -210,14 +245,41 @@ func requestDecl(f fields) (*ast.RequestDecl, error) {
 	if err != nil {
 		return nil, err
 	}
+	keyword, err := f.optStr("keyword")
+	if err != nil {
+		return nil, err
+	}
+	if keyword == "" {
+		keyword = "request"
+	}
+	if !token.IsCollectionItem(keyword) {
+		return nil, fmt.Errorf("%s: %q is %q; want one of %s", f.path, "keyword", keyword, strings.Join(token.CollectionItems, ", "))
+	}
 	r := &ast.RequestDecl{
-		Keyword: syn(token.Ident, "request"),
+		Keyword: syn(token.Ident, keyword),
 		Name:    syn(token.Ident, name),
 		LBrace:  syn(token.LBrace, "{"),
 		RBrace:  syn(token.RBrace, "}"),
 	}
-	if r.Params, err = paramsOf(f); err != nil {
+	if f.has("params") {
+		if r.Params, err = paramsOf(f); err != nil {
+			return nil, err
+		}
+	}
+	inputs, err := f.list("inputs")
+	if err != nil {
 		return nil, err
+	}
+	for _, it := range inputs {
+		o, err := it.object()
+		if err != nil {
+			return nil, err
+		}
+		v, err := itemInput(o)
+		if err != nil {
+			return nil, err
+		}
+		r.Inputs = append(r.Inputs, v)
 	}
 	if r.Action, err = action(f); err != nil {
 		return nil, err
@@ -230,6 +292,18 @@ func requestDecl(f fields) (*ast.RequestDecl, error) {
 		return nil, err
 	}
 	return r, braced(f, &r.Keyword, &r.LBrace, &r.RBrace)
+}
+
+// itemInput is one input of an item: a var.
+func itemInput(f fields) (*ast.VarDecl, error) {
+	kind, err := f.kind()
+	if err != nil {
+		return nil, err
+	}
+	if kind != kindVar {
+		return nil, badKind(f, kind, "an item input")
+	}
+	return varDecl(f)
 }
 
 // useDecl writes a block when there are lines for it, or comments that were
@@ -248,6 +322,18 @@ func useDecl(f fields) (*ast.UseDecl, error) {
 		return nil, err
 	}
 	u := &ast.UseDecl{Keyword: syn(token.Ident, "use"), Item: syn(token.Ident, item)}
+	// A name makes it the step form, which always has a block.
+	stepForm := f.has("name")
+	if stepForm {
+		if u.Name, err = nameTok(f, "name"); err != nil {
+			return nil, err
+		}
+		u.Keyword, u.Step, u.Assign = token.Token{}, syn(token.Ident, "step"), syn(token.Assign, "=")
+	}
+	first := &u.Keyword
+	if stepForm {
+		first = &u.Step
+	}
 	if coll != "" {
 		u.Collection, u.Dot = syn(token.Ident, coll), syn(token.Dot, ".")
 	}
@@ -265,11 +351,11 @@ func useDecl(f fields) (*ast.UseDecl, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(u.Lines) > 0 || len(c.open) > 0 || len(c.beforeClose) > 0 || len(c.afterClose) > 0 {
+	if stepForm || len(u.Lines) > 0 || len(c.open) > 0 || len(c.beforeClose) > 0 || len(c.afterClose) > 0 {
 		u.LBrace, u.RBrace = syn(token.LBrace, "{"), syn(token.RBrace, "}")
-		return u, braced(f, &u.Keyword, &u.LBrace, &u.RBrace)
+		return u, braced(f, first, &u.LBrace, &u.RBrace)
 	}
-	return u, plain(f, &u.Keyword)
+	return u, plain(f, first)
 }
 
 // useLine is one line of a use block: an argument (a field), a body field, a
@@ -292,8 +378,8 @@ func useLine(f fields) (ast.Stmt, error) {
 	return nil, badKind(f, kind, "a use line")
 }
 
-// drop is `drop expects` or `drop captures`. what is required: a document
-// that left it out would otherwise silently mean one of the two.
+// drop is `drop expects`, `drop captures` or `drop vars`. what is required: a
+// document that left it out would otherwise silently mean one of them.
 func drop(f fields) (ast.Stmt, error) {
 	what, err := f.str("what")
 	if err != nil {

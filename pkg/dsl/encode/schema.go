@@ -110,6 +110,7 @@ var groupSchemas = []groupSchema{
 	{"browserAction", []string{kindBrowserAct}},
 	{"block", []string{kindBlock}},
 	{"collectionItem", []string{kindRequestDecl}},
+	{"itemInput", []string{kindVar}},
 	{"param", []string{kindParam}},
 	{"useLine", []string{kindField, kindBodySet, kindDrop, kindExpect}},
 	{"expression", []string{
@@ -374,14 +375,21 @@ var nodeSchemas = []nodeSchema{
 		optChild("default", "expression"),
 		spanField,
 	}},
-	{Kind: kindRequestDecl, Doc: "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised", Fields: []fieldSchema{
+	{Kind: kindRequestDecl, Doc: "`request login { var user = \"admin\" <action> <statement>... }`: a collection item, a step's body named and given inputs. `command` and `query` items are this kind too", Fields: []fieldSchema{
+		{Name: "keyword", Type: "string", Optional: true,
+			Doc: "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"},
 		word("name", "the identifier a use names it by"),
-		list("params", "param"),
+		{Name: "params", Type: "node[]", Accepts: "param", Optional: true,
+			Doc: "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"},
+		{Name: "inputs", Type: "node[]", Accepts: "itemInput", Optional: true,
+			Doc: "the var lines above the action: the item's inputs, which a step passes, the flow's context supplies, or a default fills"},
 		child("action", "action"),
 		list("body", "stepStatement"),
 		spanField, commentsField,
 	}},
-	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`", Fields: []fieldSchema{
+	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`", Fields: []fieldSchema{
+		{Name: "name", Type: "name", Optional: true,
+			Doc: "the step form's quoted name, which the expanded step is called; absent for a use"},
 		{Name: "collection", Type: "string", Optional: true,
 			Doc: "the collection before the dot"},
 		word("item", "the request used"),
@@ -394,8 +402,8 @@ var nodeSchemas = []nodeSchema{
 		child("value", "expression"),
 		spanField, commentsField,
 	}},
-	{Kind: kindDrop, Doc: "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed", Fields: []fieldSchema{
-		{Name: "what", Type: "string", InputRequired: true, Doc: "expects or captures: what the line removes"},
+	{Kind: kindDrop, Doc: "`drop expects`, `drop captures` or `drop vars` in a use block: the used item's expects, or its outputs, are removed", Fields: []fieldSchema{
+		{Name: "what", Type: "string", InputRequired: true, Doc: "expects, captures or vars: what the line removes; captures and vars both remove the outputs"},
 		spanField, commentsField,
 	}},
 	{Kind: kindFlowDecl, Doc: "`flow checkout { ... }`: a flow file's one flow, the steps of a test in order and the vars its scenarios set", Fields: []fieldSchema{

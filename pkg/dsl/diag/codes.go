@@ -120,6 +120,11 @@ const (
 	// scenario of a scenario file. Such a scenario changes the flow's data,
 	// never its shape.
 	DataOnlyScenario Code = "data-only-scenario"
+
+	// ItemActionMismatch is a collection item whose action is not the one its
+	// keyword names: `run` in a request, `get` in a command. The keyword is
+	// the item's type, so the two must agree.
+	ItemActionMismatch Code = "item-action-mismatch"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -302,6 +307,7 @@ var registry = []CodeInfo{
 	{SecondFlow, Error, "a file declares or names a second flow"},
 	{FlowFileHolds, Error, "a flow file holds a collection or a scenario"},
 	{DataOnlyScenario, Error, "a scenario in a scenario file holds a line that is not name = value or tags"},
+	{ItemActionMismatch, Error, "a collection item's action is not the kind its keyword names"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},

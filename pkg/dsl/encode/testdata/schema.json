@@ -66,6 +66,9 @@
     "collectionItem": [
       "requestDecl"
     ],
+    "itemInput": [
+      "var"
+    ],
     "param": [
       "param"
     ],
@@ -989,8 +992,14 @@
     },
     {
       "kind": "requestDecl",
-      "doc": "`request create(sku) { <action> <statement>... }`: a step's body, named and parameterised",
+      "doc": "`request login { var user = \"admin\" <action> <statement>... }`: a collection item, a step's body named and given inputs. `command` and `query` items are this kind too",
       "fields": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "optional": true,
+          "doc": "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"
+        },
         {
           "name": "name",
           "type": "string",
@@ -1000,7 +1009,15 @@
           "name": "params",
           "type": "node[]",
           "accepts": "param",
-          "optional": true
+          "optional": true,
+          "doc": "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"
+        },
+        {
+          "name": "inputs",
+          "type": "node[]",
+          "accepts": "itemInput",
+          "optional": true,
+          "doc": "the var lines above the action: the item's inputs, which a step passes, the flow's context supplies, or a default fills"
         },
         {
           "name": "action",
@@ -1028,8 +1045,14 @@
     },
     {
       "kind": "use",
-      "doc": "`use auth.login as admin { user = \"alice\" ... }`",
+      "doc": "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`",
       "fields": [
+        {
+          "name": "name",
+          "type": "name",
+          "optional": true,
+          "doc": "the step form's quoted name, which the expanded step is called; absent for a use"
+        },
         {
           "name": "collection",
           "type": "string",
@@ -1094,13 +1117,13 @@
     },
     {
       "kind": "drop",
-      "doc": "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed",
+      "doc": "`drop expects`, `drop captures` or `drop vars` in a use block: the used item's expects, or its outputs, are removed",
       "fields": [
         {
           "name": "what",
           "type": "string",
           "inputRequired": true,
-          "doc": "expects or captures: what the line removes"
+          "doc": "expects, captures or vars: what the line removes; captures and vars both remove the outputs"
         },
         {
           "name": "span",

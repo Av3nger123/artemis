@@ -136,10 +136,16 @@
       ]
     },
     "collectionItem": {
-      "doc": "What a collection body holds: requests.",
+      "doc": "What a collection body holds, one keyword per item type: request (an api action), command (run) and query (db).",
       "values": [
         {
           "value": "request"
+        },
+        {
+          "value": "command"
+        },
+        {
+          "value": "query"
         }
       ]
     },
@@ -514,6 +520,11 @@
           "severity": "error"
         },
         {
+          "value": "item-action-mismatch",
+          "doc": "a collection item's action is not the kind its keyword names",
+          "severity": "error"
+        },
+        {
           "value": "missing-action",
           "doc": "a step block contains no action block, so the step has no type",
           "severity": "error"
@@ -711,13 +722,16 @@
       ]
     },
     "dropTarget": {
-      "doc": "What a drop line in a use block removes from the template: drop expects or drop captures.",
+      "doc": "What a drop line in a use block removes from the template: drop expects its expects, drop captures or drop vars its outputs.",
       "values": [
         {
           "value": "expects"
         },
         {
           "value": "captures"
+        },
+        {
+          "value": "vars"
         }
       ]
     },

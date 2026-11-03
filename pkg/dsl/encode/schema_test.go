@@ -90,6 +90,7 @@ func TestEveryGroupKindIsAcceptedThere(t *testing.T) {
 		"block":          func(f fields) error { _, err := blockOf(wrap("block", f), "block", true); return err },
 		"expression":     func(f fields) error { _, err := exprIn(f); return err },
 		"collectionItem": func(f fields) error { _, err := collectionItem(f); return err },
+		"itemInput":      func(f fields) error { _, err := itemInput(f); return err },
 		"param":          func(f fields) error { _, err := param(f); return err },
 		"useLine":        func(f fields) error { _, err := useLine(f); return err },
 		"forClause":      func(f fields) error { _, err := forNode(f); return err },

@@ -9,9 +9,12 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// prefix is what a use's step is named: its alias when it has one, else the
-// ref as the use writes it, "orders.create".
+// prefix is what a use's step is named: the step form's own name, else its
+// alias when it has one, else the ref as the use writes it, "orders.create".
 func prefix(use *ast.UseDecl, item string) string {
+	if use.Name.Text != "" {
+		return use.StepName()
+	}
 	if use.Alias.Text != "" {
 		return use.Alias.Value
 	}

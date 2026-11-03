@@ -37,6 +37,7 @@ import-placement	error	an import appears below a collection or a scenario
 invalid-duration	error	a string in a duration position is not a duration
 invalid-escape	error	a string literal contains an escape the language does not define
 invalid-regex	error	a regex literal does not compile
+item-action-mismatch	error	a collection item's action is not the kind its keyword names
 missing-action	error	a step block contains no action block, so the step has no type
 missing-argument	error	a use does not pass a parameter that has no default
 missing-separator	error	two statements run together with no newline or comma between them
