@@ -102,6 +102,24 @@ const (
 	// ReservedParam is a parameter named like a use-block override word, which
 	// no use could ever pass.
 	ReservedParam Code = "reserved-param"
+
+	// FlowRefPlacement is a scenario file's flow "..." header below the first
+	// line. The header says what every scenario under it runs, so it comes
+	// first.
+	FlowRefPlacement Code = "flow-ref-placement"
+
+	// SecondFlow is a second flow declaration in a flow file, or a second
+	// header, or one of each: a file holds one flow, or names one.
+	SecondFlow Code = "second-flow"
+
+	// FlowFileHolds is a collection or a scenario in a flow file, which holds
+	// one flow and its imports.
+	FlowFileHolds Code = "flow-file-holds"
+
+	// DataOnlyScenario is a step, an expect, a var, a use or a block in a
+	// scenario of a scenario file. Such a scenario changes the flow's data,
+	// never its shape.
+	DataOnlyScenario Code = "data-only-scenario"
 )
 
 // The checker's codes, named in docs/artemis-dsl-design.md and emitted by
@@ -280,6 +298,10 @@ var registry = []CodeInfo{
 	{UnclosedInterpolationExpr, Error, `a "${" expression is followed by neither "}" nor more string`},
 	{ImportPlacement, Error, "an import appears below a collection or a scenario"},
 	{ReservedParam, Error, "a parameter is named like a use-block override word, so no use can pass it"},
+	{FlowRefPlacement, Error, `a scenario file's flow "..." header is not its first line`},
+	{SecondFlow, Error, "a file declares or names a second flow"},
+	{FlowFileHolds, Error, "a flow file holds a collection or a scenario"},
+	{DataOnlyScenario, Error, "a scenario in a scenario file holds a line that is not name = value or tags"},
 	{UnknownField, Error, "an identifier names no field of anything in scope"},
 	{NotInScope, Error, "a name is not bound in this step's type"},
 	{UnknownIdentifier, Error, "a name is bound nowhere in the file"},

@@ -1,0 +1,17 @@
+# A flow file that also holds a collection and a scenario. Each kind of file
+# does one job: items go in a collection file that the flow imports, and data
+# goes in a scenario file that names the flow. Both are reported, wherever they
+# stand, and each hint says where the thing belongs.
+collection "auth" {
+  request login() {
+    post "/login"
+  }
+}
+
+flow checkout {
+  step "pay" {
+    post "/cart/pay"
+  }
+}
+
+scenario "full price" {}

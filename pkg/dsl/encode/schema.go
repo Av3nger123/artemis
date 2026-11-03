@@ -97,9 +97,9 @@ type groupSchema struct {
 }
 
 var groupSchemas = []groupSchema{
-	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite}},
+	{"declaration", []string{kindScenario, kindImport, kindCollection, kindSuite, kindFlowDecl, kindFlowRef}},
 	{"forClause", []string{kindFor}},
-	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindBlockDecl}},
+	{"scenarioBody", []string{kindConfig, kindVar, kindStep, kindUse, kindPhase, kindTags, kindBlockDecl, kindSet}},
 	{"phaseBody", []string{kindStep, kindUse, kindBlockDecl}},
 	{"flowBody", []string{kindStep, kindUse, kindBlockDecl, kindClause, kindVar}},
 	{"clause", []string{kindClause}},
@@ -396,6 +396,20 @@ var nodeSchemas = []nodeSchema{
 	}},
 	{Kind: kindDrop, Doc: "`drop expects` or `drop captures` in a use block: the used item's expects, or its captures, are removed", Fields: []fieldSchema{
 		{Name: "what", Type: "string", InputRequired: true, Doc: "expects or captures: what the line removes"},
+		spanField, commentsField,
+	}},
+	{Kind: kindFlowDecl, Doc: "`flow checkout { ... }`: a flow file's one flow, the steps of a test in order and the vars its scenarios set", Fields: []fieldSchema{
+		word("name", "the identifier naming the flow in reports"),
+		list("body", "scenarioBody"),
+		spanField, commentsField,
+	}},
+	{Kind: kindFlowRef, Doc: "`flow \"../flows/checkout.art\"`: a scenario file's first line, naming the flow its scenarios run", Fields: []fieldSchema{
+		word("path", "the flow file, relative to the scenario file, decoded: escapes resolved, no quotes"),
+		spanField, commentsField,
+	}},
+	{Kind: kindSet, Doc: "`coupon = \"TEN\"` in a scenario of a scenario file: the value it gives one of its flow's vars; the ident `skip` turns off the expects that read it", Fields: []fieldSchema{
+		word("name", "the flow var being set"),
+		child("value", "expression"),
 		spanField, commentsField,
 	}},
 	{Kind: kindIdent, Doc: "a name: a variable, a capture, or a bound root like `status`", Fields: []fieldSchema{

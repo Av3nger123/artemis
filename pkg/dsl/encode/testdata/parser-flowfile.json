@@ -1,0 +1,681 @@
+{
+  "schemaVersion": 1,
+  "file": "../parser/testdata/flowfile.art",
+  "scenarios": [
+    {
+      "kind": "import",
+      "path": "../collections/auth.art",
+      "span": {
+        "file": "../parser/testdata/flowfile.art",
+        "line": 3,
+        "col": 1,
+        "endLine": 3,
+        "endCol": 33,
+        "offset": 136
+      },
+      "comments": {
+        "above": [
+          {
+            "text": "# A flow file: its imports, then one flow. The flow's vars are the values a"
+          },
+          {
+            "text": "# scenario file may set; the steps after them run in order."
+          }
+        ]
+      }
+    },
+    {
+      "kind": "flowDecl",
+      "name": "checkout",
+      "body": [
+        {
+          "kind": "var",
+          "name": "sku",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"SKU-1\"",
+            "value": "SKU-1",
+            "span": {
+              "file": "../parser/testdata/flowfile.art",
+              "line": 6,
+              "col": 13,
+              "endLine": 6,
+              "endCol": 20,
+              "offset": 198
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 6,
+            "col": 3,
+            "endLine": 6,
+            "endCol": 20,
+            "offset": 188
+          }
+        },
+        {
+          "kind": "var",
+          "name": "quantity",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "1",
+            "value": "1",
+            "span": {
+              "file": "../parser/testdata/flowfile.art",
+              "line": 7,
+              "col": 18,
+              "endLine": 7,
+              "endCol": 19,
+              "offset": 223
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 7,
+            "col": 3,
+            "endLine": 7,
+            "endCol": 19,
+            "offset": 208
+          }
+        },
+        {
+          "kind": "var",
+          "name": "coupon",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"\"",
+            "value": "",
+            "span": {
+              "file": "../parser/testdata/flowfile.art",
+              "line": 8,
+              "col": 16,
+              "endLine": 8,
+              "endCol": 18,
+              "offset": 240
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 8,
+            "col": 3,
+            "endLine": 8,
+            "endCol": 18,
+            "offset": 227
+          }
+        },
+        {
+          "kind": "var",
+          "name": "code",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "200",
+            "value": "200",
+            "span": {
+              "file": "../parser/testdata/flowfile.art",
+              "line": 9,
+              "col": 14,
+              "endLine": 9,
+              "endCol": 17,
+              "offset": 256
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 9,
+            "col": 3,
+            "endLine": 9,
+            "endCol": 17,
+            "offset": 245
+          }
+        },
+        {
+          "kind": "phase",
+          "phase": "setup",
+          "body": [
+            {
+              "kind": "use",
+              "collection": "auth",
+              "item": "login",
+              "lines": [
+                {
+                  "kind": "field",
+                  "name": "user",
+                  "value": {
+                    "kind": "literal",
+                    "literal": "string",
+                    "text": "\"bob\"",
+                    "value": "bob",
+                    "span": {
+                      "file": "../parser/testdata/flowfile.art",
+                      "line": 12,
+                      "col": 29,
+                      "endLine": 12,
+                      "endCol": 34,
+                      "offset": 299
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 12,
+                    "col": 22,
+                    "endLine": 12,
+                    "endCol": 34,
+                    "offset": 292
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 12,
+                "col": 5,
+                "endLine": 12,
+                "endCol": 36,
+                "offset": 275
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 13,
+            "endCol": 4,
+            "offset": 263
+          },
+          "comments": {
+            "blankAbove": true
+          }
+        },
+        {
+          "kind": "step",
+          "name": {
+            "text": "\"pay\"",
+            "value": "pay"
+          },
+          "action": {
+            "kind": "request",
+            "method": "post",
+            "url": {
+              "kind": "literal",
+              "literal": "string",
+              "text": "\"/cart/pay\"",
+              "value": "/cart/pay",
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 17,
+                "col": 10,
+                "endLine": 17,
+                "endCol": 21,
+                "offset": 364
+              }
+            },
+            "block": {
+              "kind": "block",
+              "fields": [
+                {
+                  "kind": "field",
+                  "name": "body",
+                  "value": {
+                    "kind": "object",
+                    "entries": [
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"sku\"",
+                          "value": "sku",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 18,
+                            "col": 15,
+                            "endLine": 18,
+                            "endCol": 20,
+                            "offset": 392
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "sku",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 18,
+                            "col": 22,
+                            "endLine": 18,
+                            "endCol": 25,
+                            "offset": 399
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"quantity\"",
+                          "value": "quantity",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 18,
+                            "col": 27,
+                            "endLine": 18,
+                            "endCol": 37,
+                            "offset": 404
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "quantity",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 18,
+                            "col": 39,
+                            "endLine": 18,
+                            "endCol": 47,
+                            "offset": 416
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "kind": "literal",
+                          "literal": "string",
+                          "text": "\"coupon\"",
+                          "value": "coupon",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 18,
+                            "col": 49,
+                            "endLine": 18,
+                            "endCol": 57,
+                            "offset": 426
+                          }
+                        },
+                        "value": {
+                          "kind": "ident",
+                          "name": "coupon",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 18,
+                            "col": 59,
+                            "endLine": 18,
+                            "endCol": 65,
+                            "offset": 436
+                          }
+                        }
+                      }
+                    ],
+                    "span": {
+                      "file": "../parser/testdata/flowfile.art",
+                      "line": 18,
+                      "col": 14,
+                      "endLine": 18,
+                      "endCol": 66,
+                      "offset": 391
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 18,
+                    "col": 7,
+                    "endLine": 18,
+                    "endCol": 66,
+                    "offset": 384
+                  }
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 17,
+                "col": 22,
+                "endLine": 19,
+                "endCol": 6,
+                "offset": 376
+              }
+            },
+            "span": {
+              "file": "../parser/testdata/flowfile.art",
+              "line": 17,
+              "col": 5,
+              "endLine": 19,
+              "endCol": 6,
+              "offset": 359
+            }
+          },
+          "body": [
+            {
+              "kind": "expect",
+              "value": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "status",
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 20,
+                    "col": 12,
+                    "endLine": 20,
+                    "endCol": 18,
+                    "offset": 461
+                  }
+                },
+                "y": {
+                  "kind": "ident",
+                  "name": "code",
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 20,
+                    "col": 22,
+                    "endLine": 20,
+                    "endCol": 26,
+                    "offset": 471
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/flowfile.art",
+                  "line": 20,
+                  "col": 12,
+                  "endLine": 20,
+                  "endCol": 26,
+                  "offset": 461
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 20,
+                "col": 5,
+                "endLine": 20,
+                "endCol": 26,
+                "offset": 454
+              },
+              "class": "complex"
+            },
+            {
+              "kind": "capture",
+              "name": "pay_status",
+              "value": {
+                "kind": "ident",
+                "name": "status",
+                "span": {
+                  "file": "../parser/testdata/flowfile.art",
+                  "line": 21,
+                  "col": 26,
+                  "endLine": 21,
+                  "endCol": 32,
+                  "offset": 501
+                }
+              },
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 21,
+                "col": 5,
+                "endLine": 21,
+                "endCol": 32,
+                "offset": 480
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 16,
+            "col": 3,
+            "endLine": 22,
+            "endCol": 4,
+            "offset": 342
+          },
+          "stepType": "unknown",
+          "comments": {
+            "above": [
+              {
+                "text": "# pay is written in place",
+                "blank": true
+              }
+            ]
+          }
+        },
+        {
+          "kind": "flow",
+          "clauses": [
+            {
+              "kind": "clause",
+              "keyword": "if",
+              "expr": {
+                "kind": "binary",
+                "op": "==",
+                "x": {
+                  "kind": "ident",
+                  "name": "pay_status",
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 24,
+                    "col": 6,
+                    "endLine": 24,
+                    "endCol": 16,
+                    "offset": 518
+                  }
+                },
+                "y": {
+                  "kind": "literal",
+                  "literal": "number",
+                  "text": "400",
+                  "value": "400",
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 24,
+                    "col": 20,
+                    "endLine": 24,
+                    "endCol": 23,
+                    "offset": 532
+                  }
+                },
+                "span": {
+                  "file": "../parser/testdata/flowfile.art",
+                  "line": 24,
+                  "col": 6,
+                  "endLine": 24,
+                  "endCol": 23,
+                  "offset": 518
+                }
+              },
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"read the error\"",
+                    "value": "read the error"
+                  },
+                  "action": {
+                    "kind": "request",
+                    "method": "get",
+                    "url": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"/errors/last\"",
+                      "value": "/errors/last",
+                      "span": {
+                        "file": "../parser/testdata/flowfile.art",
+                        "line": 26,
+                        "col": 11,
+                        "endLine": 26,
+                        "endCol": 25,
+                        "offset": 576
+                      }
+                    },
+                    "span": {
+                      "file": "../parser/testdata/flowfile.art",
+                      "line": 26,
+                      "col": 7,
+                      "endLine": 26,
+                      "endCol": 25,
+                      "offset": 572
+                    }
+                  },
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 25,
+                    "col": 5,
+                    "endLine": 27,
+                    "endCol": 6,
+                    "offset": 542
+                  },
+                  "stepType": "unknown"
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 24,
+                "col": 3,
+                "endLine": 28,
+                "endCol": 4,
+                "offset": 515
+              },
+              "comments": {
+                "blankAbove": true
+              }
+            },
+            {
+              "kind": "clause",
+              "keyword": "else",
+              "body": [
+                {
+                  "kind": "step",
+                  "name": {
+                    "text": "\"check the order\"",
+                    "value": "check the order"
+                  },
+                  "action": {
+                    "kind": "request",
+                    "method": "get",
+                    "url": {
+                      "kind": "literal",
+                      "literal": "string",
+                      "text": "\"/orders/latest\"",
+                      "value": "/orders/latest",
+                      "span": {
+                        "file": "../parser/testdata/flowfile.art",
+                        "line": 30,
+                        "col": 11,
+                        "endLine": 30,
+                        "endCol": 27,
+                        "offset": 647
+                      }
+                    },
+                    "span": {
+                      "file": "../parser/testdata/flowfile.art",
+                      "line": 30,
+                      "col": 7,
+                      "endLine": 30,
+                      "endCol": 27,
+                      "offset": 643
+                    }
+                  },
+                  "body": [
+                    {
+                      "kind": "expect",
+                      "value": {
+                        "kind": "binary",
+                        "op": "==",
+                        "x": {
+                          "kind": "member",
+                          "x": {
+                            "kind": "ident",
+                            "name": "body",
+                            "span": {
+                              "file": "../parser/testdata/flowfile.art",
+                              "line": 31,
+                              "col": 14,
+                              "endLine": 31,
+                              "endCol": 18,
+                              "offset": 677
+                            }
+                          },
+                          "name": "sku",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 31,
+                            "col": 14,
+                            "endLine": 31,
+                            "endCol": 22,
+                            "offset": 677
+                          }
+                        },
+                        "y": {
+                          "kind": "ident",
+                          "name": "sku",
+                          "span": {
+                            "file": "../parser/testdata/flowfile.art",
+                            "line": 31,
+                            "col": 26,
+                            "endLine": 31,
+                            "endCol": 29,
+                            "offset": 689
+                          }
+                        },
+                        "span": {
+                          "file": "../parser/testdata/flowfile.art",
+                          "line": 31,
+                          "col": 14,
+                          "endLine": 31,
+                          "endCol": 29,
+                          "offset": 677
+                        }
+                      },
+                      "span": {
+                        "file": "../parser/testdata/flowfile.art",
+                        "line": 31,
+                        "col": 7,
+                        "endLine": 31,
+                        "endCol": 29,
+                        "offset": 670
+                      },
+                      "class": "complex"
+                    }
+                  ],
+                  "span": {
+                    "file": "../parser/testdata/flowfile.art",
+                    "line": 29,
+                    "col": 5,
+                    "endLine": 32,
+                    "endCol": 6,
+                    "offset": 612
+                  },
+                  "stepType": "unknown"
+                }
+              ],
+              "span": {
+                "file": "../parser/testdata/flowfile.art",
+                "line": 28,
+                "col": 5,
+                "endLine": 33,
+                "endCol": 4,
+                "offset": 601
+              }
+            }
+          ],
+          "span": {
+            "file": "../parser/testdata/flowfile.art",
+            "line": 24,
+            "col": 3,
+            "endLine": 33,
+            "endCol": 4,
+            "offset": 515
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/flowfile.art",
+        "line": 5,
+        "col": 1,
+        "endLine": 34,
+        "endCol": 2,
+        "offset": 170
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    }
+  ]
+}

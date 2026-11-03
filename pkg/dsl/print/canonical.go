@@ -100,6 +100,12 @@ func (c *canon) decl(d ast.Decl) {
 		c.requestDecl(v)
 	case *ast.UseDecl:
 		c.useDecl(v)
+	case *ast.Flow:
+		c.flowDecl(v)
+	case *ast.FlowRef:
+		c.line(v.Tokens(nil), join(" ", v.Keyword.Text, v.Path.Text))
+	case *ast.Set:
+		c.line(v.Tokens(nil), assign(v.Name.Text, v.Assign, c.expr(v.Value)))
 	case *ast.Bad:
 		c.bad(v)
 	}
@@ -110,6 +116,10 @@ func (c *canon) decl(d ast.Decl) {
 // is the exception, because `scenario "s" {}` reads better than three lines of
 // nothing.
 func (c *canon) scenario(s *ast.Scenario) {
+	if isDataScenario(s) {
+		c.dataScenario(s)
+		return
+	}
 	head := join(" ", s.Keyword.Text, s.Name.Text)
 	headToks := toks(s.Keyword, s.Name)
 	if f := s.For; f != nil {

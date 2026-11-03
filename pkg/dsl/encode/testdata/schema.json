@@ -8,7 +8,9 @@
       "scenario",
       "import",
       "collection",
-      "suite"
+      "suite",
+      "flowDecl",
+      "flowRef"
     ],
     "forClause": [
       "for"
@@ -20,7 +22,8 @@
       "use",
       "phase",
       "tags",
-      "flow"
+      "flow",
+      "set"
     ],
     "phaseBody": [
       "step",
@@ -1098,6 +1101,79 @@
           "type": "string",
           "inputRequired": true,
           "doc": "expects or captures: what the line removes"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "flowDecl",
+      "doc": "`flow checkout { ... }`: a flow file's one flow, the steps of a test in order and the vars its scenarios set",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the identifier naming the flow in reports"
+        },
+        {
+          "name": "body",
+          "type": "node[]",
+          "accepts": "scenarioBody",
+          "optional": true
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "flowRef",
+      "doc": "`flow \"../flows/checkout.art\"`: a scenario file's first line, naming the flow its scenarios run",
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "doc": "the flow file, relative to the scenario file, decoded: escapes resolved, no quotes"
+        },
+        {
+          "name": "span",
+          "type": "span"
+        },
+        {
+          "name": "comments",
+          "type": "comments",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "kind": "set",
+      "doc": "`coupon = \"TEN\"` in a scenario of a scenario file: the value it gives one of its flow's vars; the ident `skip` turns off the expects that read it",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "the flow var being set"
+        },
+        {
+          "name": "value",
+          "type": "node",
+          "accepts": "expression",
+          "optional": true,
+          "inputRequired": true
         },
         {
           "name": "span",

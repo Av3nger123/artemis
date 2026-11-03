@@ -8,7 +8,8 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// parseFile is `File = { Import } { Collection | Scenario }`.
+// parseFile is `File = { Import } { Collection | Scenario }`, or a flow file
+// or a scenario file, which flowfile.go reads.
 //
 // An empty file is valid and yields a File with no scenarios. Anything at the
 // top level that is none of the three is reported once and recovered past, so
@@ -33,6 +34,12 @@ func (p *parser) parseFile() *ast.File {
 		case p.atWord("collection"):
 			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseCollection())
+		case p.atWord("flow"):
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseFlowHead(len(file.Scenarios) == 0))
+		case p.atWord("scenario") && p.scenarioFile:
+			seenBody = true
+			file.Scenarios = append(file.Scenarios, p.parseDataScenario())
 		case p.atWord("scenario"):
 			seenBody = true
 			file.Scenarios = append(file.Scenarios, p.parseScenario())
@@ -55,6 +62,7 @@ func (p *parser) parseFile() *ast.File {
 		}
 	}
 
+	p.flowFileHolds(file)
 	file.EOF = p.peek()
 	return file
 }

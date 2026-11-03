@@ -62,12 +62,13 @@ func wordTables() map[string][]string {
 
 // soleWords are terminals that belong to no table because each is the only
 // word its position admits: `secret` before a var, a capture or a parameter,
-// `private` before a var, and `as` after a use's item. A table is a choice
+// `private` before a var, `as` after a use's item, and `skip` as a scenario's
+// value for a var whose expects it turns off. A table is a choice
 // point -- a dropdown -- and a position with one option is not one, so the
 // parser spells these directly. Listing them here is what keeps that a
 // decision rather than an accident: a new terminal still has to be put in a
 // table or argued onto this list.
-var soleWords = []string{"secret", "private", "as"}
+var soleWords = []string{"secret", "private", "as", "skip"}
 
 // TestEveryTableWordIsATerminal is half of the issue's drift gate. A browser
 // action or a comparison operator added to a token table and not written into

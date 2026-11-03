@@ -199,6 +199,12 @@ func TestEveryNamedFaultHasAFixture(t *testing.T) {
 		"page_member",         // a typo in page's closed member set
 		"capture_same_step",   // a capture read in the step that writes it
 		"reserved_ai",         // `ai`, and the agentic-assertion note in its hint
+
+		// Flow files and scenario files.
+		"flow_ref_placement", // a scenario file's header below its first line
+		"second_flow",        // two flows in a flow file
+		"flow_file_holds",    // a collection and a scenario in a flow file
+		"data_only_scenario", // a step and an expect in a data scenario
 	}
 	for _, name := range want {
 		for _, ext := range []string{".art", ".golden"} {

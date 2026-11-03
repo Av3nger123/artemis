@@ -3,6 +3,16 @@
    under LEXICAL TOKENS below. Nothing in a .art file is outside this. *)
 
 File          = { Import } { Collection | Scenario } ;
+(* A flow file: its imports and one flow, whose name is what reports print.
+   The vars at the top of the flow are the values its scenarios may set. *)
+FlowFile      = { Import } FlowDecl ;
+FlowDecl      = "flow" Ident "{" { ConfigDecl | VarDecl | StepDecl | UseDecl | PhaseDecl | Flow } "}" ;
+(* A scenario file: the flow it runs, relative to it, on its first line, then
+   scenarios that hold data only. Sets may share a line. *)
+ScenarioFile  = FlowRef { DataScenario } ;
+FlowRef       = "flow" String ;
+DataScenario  = "scenario" String "{" { TagsDecl | Set } "}" ;
+Set           = Ident "=" ( Expr | "skip" ) ;
 Import        = "import" String [ "as" Ident ] ;
 Collection    = "collection" String "{" { RequestDecl } "}" ;
 RequestDecl   = "request" Ident Params "{" Action { StepStmt } "}" ;

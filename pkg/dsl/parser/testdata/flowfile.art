@@ -1,0 +1,34 @@
+# A flow file: its imports, then one flow. The flow's vars are the values a
+# scenario file may set; the steps after them run in order.
+import "../collections/auth.art"
+
+flow checkout {
+  var sku = "SKU-1"
+  var quantity = 1
+  var coupon = ""
+  var code = 200
+
+  setup {
+    use auth.login { user = "bob" }
+  }
+
+  # pay is written in place
+  step "pay" {
+    post "/cart/pay" {
+      body = {"sku": sku, "quantity": quantity, "coupon": coupon}
+    }
+    expect status == code
+    capture pay_status = status
+  }
+
+  if pay_status == 400 {
+    step "read the error" {
+      get "/errors/last"
+    }
+  } else {
+    step "check the order" {
+      get "/orders/latest"
+      expect body.sku == sku
+    }
+  }
+}
