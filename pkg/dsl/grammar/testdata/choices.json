@@ -541,6 +541,11 @@
           "severity": "error"
         },
         {
+          "value": "private-input",
+          "doc": "a use passes a private var of the item, which takes only its own default",
+          "severity": "error"
+        },
+        {
           "value": "repeat-unbounded",
           "doc": "a repeat has neither within nor max, so nothing stops it",
           "severity": "error"

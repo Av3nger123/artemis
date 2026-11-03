@@ -59,13 +59,13 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 	if !isRequest {
 		return true
 	}
-	name, params := &it.Name, it.Params
+	name := &it.Name
 
 	uses, bag, silent := e.res.Uses, e.bag, e.silent
 	e.res.Uses, e.bag = nil, diag.New()
 	defer func() { e.res.Uses = uses }()
 
-	vars := paramVars(params)
+	vars := paramVars(inputs(it))
 	sc := newScope(vars)
 	steps := []ast.Decl{requestStep(it, it.Name.Value, nil, identity)}
 
@@ -92,23 +92,27 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 		d.Span.Via = 0
 		if d.Code == diag.UnknownIdentifier && len(d.Suggestions) == 0 {
 			// Not a near miss: a name the scenario would have to supply,
-			// which a collection only ever takes as a parameter.
-			d.Hint = "add it as a parameter of " + ref + "\n" + d.Hint
+			// which a collection only ever takes as an input.
+			add := "add it as a parameter of " + ref
+			if it.Params == nil {
+				add = "add it as an input of " + ref + ": a var above the action"
+			}
+			d.Hint = add + "\n" + d.Hint
 		}
 		e.bag.Add(d)
 	}
 	return ok
 }
 
-// paramVars is a var for each parameter, in order: its default as its value,
-// or null for a required one, `secret` carried over. Each is placed at the
-// parameter's name, so a diagnostic on it points at the parameter.
-func paramVars(params *ast.Params) []ast.Decl {
-	if params == nil {
+// paramVars is a var for each input, parameter or var, in order: its default
+// as its value, or null for a required one, `secret` carried over. Each is
+// placed at the input's name, so a diagnostic on it points at the input.
+func paramVars(list []input) []ast.Decl {
+	if len(list) == 0 {
 		return nil
 	}
-	out := make([]ast.Decl, 0, len(params.List))
-	for _, p := range params.List {
+	out := make([]ast.Decl, 0, len(list))
+	for _, p := range list {
 		at := p.Name.Span
 		var value ast.Expr = &ast.Literal{Tok: synth(token.Null, "null", "", at)}
 		if !isNil(p.Default) {

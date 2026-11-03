@@ -206,7 +206,7 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 	for _, d := range decls {
 		if phase, ok := d.(*ast.PhaseDecl); ok {
 			cp := *phase
-			cp.Body = e.bodyIn(u, phase.Body, sc)
+			cp.Body = e.bodyIn(u, phase.Body, sc.below(out))
 			out = append(out, &cp)
 			continue
 		}
@@ -214,7 +214,7 @@ func (e *expander) bodyIn(u *unit, decls []ast.Decl, sc *scope) []ast.Decl {
 			cp := *flow
 			cp.Clauses = make([]*ast.Clause, len(flow.Clauses))
 			for i, c := range flow.Clauses {
-				cp.Clauses[i] = e.clauseIn(u, c, sc)
+				cp.Clauses[i] = e.clauseIn(u, c, sc.below(out))
 			}
 			out = append(out, &cp)
 			continue
@@ -449,7 +449,7 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, inputs(it), sc, varPrefix(use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}

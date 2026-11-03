@@ -43,6 +43,7 @@ not-in-scope	error	a name is not bound in this step's type
 parallel-browser	error	two branches of a parallel block drive the browser, which has one page
 parallel-capture-clash	error	two branches of a parallel block capture the same name
 parallel-sibling-capture	error	a branch of a parallel block reads a capture another branch makes at the same time
+private-input	error	a use passes a private var of the item, which takes only its own default
 repeat-unbounded	error	a repeat has neither within nor max, so nothing stops it
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-word	error	a word reserved for a later tier is used as a name
