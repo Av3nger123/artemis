@@ -1,71 +1,77 @@
 # Commands
 
-`artemis run` runs scenarios. The other commands read the language without
-running any of it -- they check, format, expand and print a file through the
-same front end `run` uses, so none of them can disagree with it about what a
-file means. Reports, traces and logs are in [reports.md](reports.md), and
-running a large suite is in [suites.md](suites.md).
+`artemis run` runs scenario files. The other commands read the language
+without running any of it -- they check, format, expand and print a file
+through the same front end `run` uses, so none of them can disagree with it
+about what a file means. Reports, traces and logs are in
+[reports.md](reports.md), and running a large folder is in
+[suites.md](suites.md).
 
 ## `artemis run`
 
 ```sh
-artemis run checkout.art     # one file
-artemis run ./suite          # every scenario under a folder
+artemis run scenarios/checkout.art   # one scenario file
+artemis run tests/                   # every scenario file under a folder
 ```
 
-`run` takes one path. A file is run on its own. A folder is walked recursively
-for `*.art` files, which are run in path order -- the same order on every
-machine -- as **one run**: one summary, one exit code. Nothing is shared between
-files or between scenarios: each gets its own variables, so what one captures is
-invisible to the next.
+`run` takes one path. A scenario file is run on its own: every scenario in it
+is one run of its flow. A folder is walked recursively for `*.art` files, which
+are run in path order -- the same order on every machine -- as **one run**: one
+summary, one exit code. A flow file or a collection file in the folder is
+skipped, because only a scenario file runs; a flow file named as the path is an
+error whose hint names the scenario files that run it. Nothing is shared
+between files or between scenarios: each starts with its flow's vars and its
+own values, so what one writes is invisible to the next.
 
 A path that holds no scenario file is an error, not an empty run that passes. A
 file that does not compile is reported as an errored scenario, with its
 diagnostics, and the files after it still run -- one typo does not hide the rest
-of the suite.
+of the folder. A mistake in a flow is reported at the flow's line, with the
+scenario file that ran it as `used from`.
 
 A run prints a line per step as it finishes, the checks that did not pass under
 the step that made them, the blocks to go and fix, and a summary. It exits 0
 only if everything passed:
 
 ```
-scenario: login (suite/01_login.art)
-  ok    get a token                   4ms
-scenario: items (suite/02_items.art)
-  FAIL  list items                   <1ms
-         body.data.count > 0, got 0
-  FAIL  missing route                <1ms
-         status == 200, got 404
-suite/nested/03_broken.art:4:5: unknown field "timeot"
+tests/flows/broken.art:4:5: unknown field "timeot"
    4 |     timeot = "5s"
      |     ^^^^^^
    hint: did you mean "timeout"?
-scenario: suite/nested/03_broken.art
-  ERROR suite/nested/03_broken.art:4:5: unknown field "timeot"
+   used from tests/scenarios/broken.art:1:1: flow "../flows/broken.art"
+scenario: tests/scenarios/broken.art
+  ERROR tests/flows/broken.art:4:5: unknown field "timeot"
+scenario: items (tests/scenarios/items.art)
+  FAIL  list items                    1ms
+         body.data.count >= 1, got 0
+  FAIL  missing route                <1ms
+         status == 200, got 404
+scenario: login (tests/scenarios/login.art)
+  ok    get a token                  <1ms
 
 3 failures:
 
-1) suite/02_items.art:7
+1) tests/scenarios/broken.art
+     error     tests/flows/broken.art:4:5: unknown field "timeot"
+
+2) tests/flows/items.art:7
      scenario  items
      step      list items
-     assert    expect body.data.count >
-     expected  0
+     assert    expect body.data.count >=
+     expected  1
      actual    0
 
-2) suite/02_items.art:12
+3) tests/flows/items.art:12
      scenario  items
      step      missing route
      assert    expect status ==
      expected  200
      actual    404
 
-3) suite/nested/03_broken.art
-     error     suite/nested/03_broken.art:4:5: unknown field "timeot"
-
 Scenarios     3  (1 passed, 1 failed, 1 errored)
 Steps         3  (1 passed, 2 failed)
 Assertions    4  (2 passed, 2 failed)
-FAIL in 6ms
+FAIL in 3ms
 ```
 
 `artemis test -f checkout.art` is the old name for a one-file run. It still
@@ -77,12 +83,12 @@ line: use `artemis run`.
 Under the step list, a failing run prints one block per thing to go and fix.
 Each block stands alone -- it names the file and the line, the scenario and the
 step, so nothing above it has to be read -- because the reader is as often the
-agent that wrote the scenario as a person scrolling a CI log.
+agent that wrote the test as a person scrolling a CI log.
 
 | Field | What it is |
 | --- | --- |
-| the heading | `file:line` -- the line of the scenario to edit: the `expect` that failed, or the `capture` that could not be read. A step that could not run at all points at its own first line. A line artemis does not know is left off rather than printed as `:0`. |
-| `scenario` | The scenario's name. Absent for a file that would not compile: there was no name to read. |
+| the heading | `file:line` -- the line to edit, in the flow or in the collection a step called: the `expect` that failed, or the step `var` that could not be written. A step that could not run at all points at its own first line. A line artemis does not know is left off rather than printed as `:0`. |
+| `scenario` | The scenario's title. Absent for a file that would not compile: there was no title to read. |
 | `step` | The step's name. Absent for a file that would not compile, which never ran one. |
 | `assert` | What was checked: the statement it came from, the subject's source text, and the comparison applied -- `expect body.data.count >`. |
 | `expected` / `actual` | The two values as evaluated. A string is quoted and a number is not, so `"200"` and `200` do not read alike; when the two sides are different JSON types each is followed by its type. |
@@ -92,7 +98,7 @@ A step that could not run, and a scenario whose file would not compile, each get
 a block too:
 
 ```
-1) refused.art:2
+1) flows/down.art:3
      scenario  down
      step      ping
      error     performing request: Get "http://127.0.0.1:1/orders": dial tcp 127.0.0.1:1: connect: connection refused
@@ -112,39 +118,41 @@ still the last thing a run writes. The same list is in the JSON report, flat, as
 ## `artemis parse`
 
 ```sh
-artemis parse -f checkout.art
+artemis parse -f scenarios/broken.art
 ```
 
 `parse` lexes, parses and name-checks the file and runs nothing: no request is
 sent, no command is run. It prints every problem it finds -- all of them, in
 file order, with the source line echoed -- and exits non-zero if any is an
-error:
+error. A flow is checked as the scenarios that run it, so parse a scenario
+file to check it, its flow and the collections the flow calls:
 
 ```
-suite/nested/03_broken.art:4:5: unknown field "timeot"
+tests/flows/broken.art:4:5: unknown field "timeot"
    4 |     timeot = "5s"
      |     ^^^^^^
    hint: did you mean "timeout"?
-1 error in suite/nested/03_broken.art
+   used from tests/scenarios/broken.art:1:1: flow "../flows/broken.art"
+1 error in tests/scenarios/broken.art
 ```
 
 A clean file says so, because a command whose only job is to tell you something
 has to say something when the answer is yes:
 
 ```
-suite/01_login.art: ok
+tests/scenarios/login.art: ok
 ```
 
-**Newly enforced:** a `capture` or a `var` may not rebind a name that a `var` or
-an earlier capture already binds. SPEC.md always said so; it is now the compile
-error `duplicate-binding`, where before the last value quietly won. A file that
-reuses a name -- a refresh that captures `token` again -- renames the second
-binding, e.g. `token_2`, and reads that name after it.
+**Changed with flows:** a step that writes a name that is already bound -- a
+refresh that writes `token` again, a step that writes a flow var -- replaces
+it, and the steps after it read the new value. The one fault left is two
+declarations of a name in the same place, two vars at the top of a flow or two
+inputs of one item, which is the compile error `duplicate-binding`.
 
 ### `--json`
 
-`artemis parse -f checkout.art --json` writes the same diagnostics to stdout as
-one document instead, which is what an editor or a UI reads:
+`artemis parse -f scenarios/broken.art --json` writes the same diagnostics to
+stdout as one document instead, which is what an editor or a UI reads:
 
 ```json
 {
@@ -153,13 +161,23 @@ one document instead, which is what an editor or a UI reads:
       "code": "unknown-field",
       "severity": "error",
       "span": {
-        "file": "suite/nested/03_broken.art",
+        "file": "tests/flows/broken.art",
         "line": 4,
         "col": 5,
         "endLine": 4,
         "endCol": 11,
-        "offset": 78
+        "offset": 68
       },
+      "usedFrom": [
+        {
+          "file": "tests/scenarios/broken.art",
+          "line": 1,
+          "col": 1,
+          "endLine": 1,
+          "endCol": 27,
+          "offset": 0
+        }
+      ],
       "message": "unknown field \"timeot\"",
       "hint": "did you mean \"timeout\"?",
       "suggestions": [
@@ -173,6 +191,8 @@ one document instead, which is what an editor or a UI reads:
 ```
 
 The `code` is stable and the `message` is not, so key behaviour off the code.
+`usedFrom` is the chain that brought the line in: the scenario file that ran
+the flow, and the step that called an item, outermost last.
 The span's `offset` and `endCol` locate the text to underline. A suggestion's
 `replace` is a mechanical fix, so a client can offer one-click correction. A
 clean file writes `{"diagnostics": []}`. The exit status is the same either way:
@@ -182,8 +202,8 @@ clean file writes `{"diagnostics": []}`. The exit status is the same either way:
 ## `artemis fmt`
 
 ```sh
-artemis fmt checkout.art       # the formatted file on stdout
-artemis fmt -w checkout.art    # rewrite it in place
+artemis fmt flows/checkout.art       # the formatted file on stdout
+artemis fmt -w flows/checkout.art    # rewrite it in place
 ```
 
 Canonical layout: two-space indentation, one space either side of an operator,
@@ -202,41 +222,35 @@ broken file is a formatter that loses someone's work.
 ## `artemis ast`
 
 ```sh
-artemis ast -f checkout.art          # the syntax tree as JSON
+artemis ast -f flows/login.art       # the syntax tree as JSON
 artemis ast --from-json < tree.json  # that tree back to .art source
 ```
 
-The same tree, from the same front end that runs the suite, so a UI, a
+The same tree, from the same front end that runs the tests, so a UI, a
 transpiler and the runtime cannot drift apart. Every node carries its span --
-`file`, `line`, `col`, `endLine`, `endCol`, `offset` -- and the document carries
-a `schemaVersion`, because a UI ships and upgrades independently of the CLI:
+`file`, `line`, `col`, `endLine`, `endCol`, `offset` (left out below) -- and the
+document carries a `schemaVersion`, because a UI ships and upgrades
+independently of the CLI. A flow is `"kind": "flowDecl"`, a scenario file's
+header `"flowRef"` and a scenario's `name = value` line `"set"`; a block such
+as `parallel` or `if` is `"kind": "flow"`, the name it had before flows:
 
 ```json
 {
   "schemaVersion": 1,
-  "file": "suite/01_login.art",
+  "file": "flows/login.art",
   "scenarios": [
     {
-      "kind": "scenario",
-      "name": {
-        "text": "\"login\"",
-        "value": "login"
-      },
+      "kind": "flowDecl",
+      "name": "login",
       "body": [
         {
           "kind": "var",
-          "name": "url",
+          "name": "user",
           "value": {
-            "kind": "call",
-            "callee": "env",
-            "args": [
-              {
-                "kind": "literal",
-                "literal": "string",
-                "text": "\"API_URL\"",
-                "value": "API_URL"
-              }
-            ]
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"alice\"",
+            "value": "alice"
           }
         }
       ]
@@ -257,15 +271,14 @@ the document decodes, and refuses a tree holding a node that did not parse.
 ## `artemis expand`
 
 ```sh
-artemis expand checkout.art                      # to stdout
-artemis expand checkout.art -o checkout.flat.art # to a file
+artemis expand scenarios/checkout.art                      # to stdout
+artemis expand scenarios/checkout.art -o checkout.flat.art # to a file
 ```
 
-The scenario file that will actually run: imports resolved from disk, and every
-`use` replaced by the steps it stands for, each preceded by a comment naming
-the request, the line it is declared on, and the `use` line that
-brought it in. A `secret` parameter's argument appears as a `secret var` just
-above the steps that read it.
+What will actually run: each scenario of the file as its flow with the
+scenario's values in its vars, imports resolved from disk, `skip` applied, and
+every item call replaced by the step it stands for, preceded by a comment
+naming the item, the line it is declared on, and the step that called it.
 
 The file is checked first, exactly as `artemis run` checks it, and nothing is
 printed for a file with errors. `-o` will not replace an existing file without

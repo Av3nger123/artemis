@@ -1,8 +1,8 @@
 # The MCP server
 
 `artemis mcp` serves the Model Context Protocol on stdin and stdout, so an agent
-can author scenarios against the real grammar and the real checker instead of
-from memory.
+can author collections, flows and scenario files against the real grammar and
+the real checker instead of from memory.
 
 ```sh
 artemis mcp --workspace /path/to/repo
@@ -15,20 +15,20 @@ Six tools:
 | `artemis_grammar` | Every finite option set in the language | | | |
 | `artemis_validate` | Every diagnostic in a piece of source text, with codes and suggestions | | | |
 | `artemis_format` | The same source in canonical layout: the bytes `artemis fmt` writes | | | |
-| `artemis_list` | The `.art` files in the workspace, in path order, and under `collections` the `collection.item` names each file declares | disk | | |
+| `artemis_list` | The `.art` files in the workspace, in path order; under `collections` the `collection.item` names each collection file declares; and under `scenario_files` each scenario file's flow file, flow name and scenario titles | disk | | |
 | `artemis_write` | Checks source, makes it canonical, writes it | disk | disk | |
-| `artemis_run` | Runs the scenarios and returns the full JSON report | disk | | **yes** |
+| `artemis_run` | Runs a scenario file, or the scenario files under a folder, and returns the full JSON report | disk | | **yes** |
 
 The loop is `list` to see what exists, `validate` until `ok` is true, `write`,
 then `run`.
 
-`artemis_write` checks before it writes, so it cannot leave a scenario on disk
-that the runner would then refuse, and the file it writes is always `fmt`-clean
+`artemis_write` checks before it writes, so it cannot leave a file on disk that
+the runner would then refuse, and the file it writes is always `fmt`-clean
 -- which is what makes the next edit to it a one-line diff instead of a
 whole-file reformat. It writes the canonical form rather than the bytes it was
 handed, for the same reason.
 
-**`artemis_run` executes the scenario.** A `terminal` step runs a shell command,
+**`artemis_run` executes the tests.** A `terminal` step runs a shell command,
 a `browser` step drives a real browser, and an `api` step sends real requests to
 whatever URL it names. It is annotated `readOnlyHint: false` and
 `openWorldHint: true` so a host knows to ask before running it; `artemis_write`
@@ -56,4 +56,9 @@ directory the server was started in. A path that leaves the workspace is
 refused, including one that leaves it through a symlink, and `artemis_write`
 will not create a directory to write into. An `import` is held to the same
 rule: `artemis_validate`, `artemis_format`, `artemis_write` and `artemis_run` resolve imports
-inside the workspace, and an import that leaves it is an error, not a read.
+and a scenario file's `flow "..."` header inside the workspace, and one that
+leaves it is an error, not a read.
+
+A flow is checked as the scenarios that run it, so validate a scenario file to
+hear about its flow and the collections the flow calls: each diagnostic in
+them carries the chain that brought it in as `usedFrom`.

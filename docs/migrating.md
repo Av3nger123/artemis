@@ -133,7 +133,8 @@ runs it.
 
 ```sh
 artemis migrate -f checkout.yaml                 # to stdout
-artemis migrate -f checkout.yaml -o checkout.art
+artemis migrate -f checkout.yaml -o old/checkout.art
+artemis migrate -f old/checkout.art -o new/      # then into a flow and a scenario file
 ```
 
 This is the input:
@@ -180,9 +181,10 @@ steps:
     timeout: "5s"
 ```
 
-And this is what `artemis migrate -f checkout.yaml` writes:
+And this is what `artemis migrate -f checkout.yaml` writes. It is a `.art`
+scenario in the form written before flows, with its steps in the scenario:
 
-```art
+```text
 # The scenario the README documented before the DSL landed.
 scenario "API Collection" {
   var url = env("API_URL")
@@ -207,6 +209,13 @@ scenario "API Collection" {
 }
 ```
 
+That form does not compile any more, so the second command converts it, as
+[Old `.art` files](#old-art-files) below describes, into
+`new/flows/checkout.art`, a flow named `checkout` holding the var and the two
+steps with `capture token` written `var token`, and
+`new/scenarios/checkout.art`, which names the flow and holds
+`scenario "API Collection" {}`.
+
 The YAML file is checked as strictly as it ever was -- a strict decode, and
 every step type validated -- so a scenario artemis would have refused to run is
 refused here too and nothing is written. The comment above the file and the
@@ -221,9 +230,10 @@ from YAML*](../SPEC.md#coming-from-yaml) lists the habits that do not carry over
 and what to write instead.
 
 A YAML scenario may capture one name twice -- a login and a refresh that both
-keep `token` -- and a .art file binds a name once. The second capture is written
-`token_2` (the first free suffix), every later read follows it, and a line in the
-header says so.
+keep `token`. The second capture is written `token_2` (the first free suffix),
+every later read follows it, and a line in the header says so. A flow would
+let the second write replace the first; the rename keeps the two values apart
+as the YAML did.
 
 ## Old `.art` files
 
@@ -268,3 +278,85 @@ What changed in meaning is noted on stderr: each `secret` removed, because a
 report now prints that value; and each suite, because its setup now runs once
 per scenario rather than once per run. A suite var that the scenario declares
 too is an error, because a flow declares a name once: rename one first.
+
+This old file and the collection it imports:
+
+```text
+# checkout.art
+import "collections/auth.art"
+
+scenario "orders need a token" {
+  tags = ["smoke"]
+  var url = env("API_URL")
+  use auth.login { user = "alice", password = env("API_PASSWORD") }
+
+  step "list the orders" {
+    get "${url}/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 200
+    capture count = body.data.count
+  }
+}
+
+# collections/auth.art
+collection "auth" {
+
+  request login(user, secret password, base = env("API_URL")) {
+    post "${base}/token" {
+      body = {"username": user, "password": password}
+    }
+    expect status == 200
+    secret capture token = body.data.access_token
+  }
+}
+```
+
+become, under `artemis migrate -f checkout.art -o new/`:
+
+```text
+# new/collections/auth.art
+collection "auth" {
+  request login {
+    var user
+    var password
+    var base = env("API_URL")
+
+    post "${base}/token" { body = {"username": user, "password": password} }
+    expect status == 200
+    var token = body.data.access_token
+  }
+}
+
+# new/flows/checkout.art
+import "../collections/auth.art"
+
+flow checkout {
+  var url = env("API_URL")
+
+  step "auth.login" = auth.login { user = "alice", password = env("API_PASSWORD") }
+
+  step "list the orders" {
+    get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 200
+    var count = body.data.count
+  }
+}
+
+# new/scenarios/checkout.art
+flow "../flows/checkout.art"
+
+scenario "orders need a token" {
+  tags = ["smoke"]
+}
+```
+
+with two notes on stderr:
+
+```
+note: collections/auth.art:3: secret is removed from the input password of login, and reports no longer withhold its value
+note: collections/auth.art:8: secret is removed from capture token, and reports no longer withhold its value
+```
+
+An old form left in a file `artemis run` reads is a compile error, and its
+hint names this command.

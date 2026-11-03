@@ -7,9 +7,11 @@ database -- `postgres://`, `mysql://`, `sqlite:`, `sqlserver://` or `oracle://`
 SQL and the values bound to its placeholders:
 
 ```art
-scenario "an order is saved as paid" {
-  var url = env("API_URL")
-  secret var orders_db = env("ORDERS_DB")
+# flows/paid.art
+flow order_saved_as_paid {
+  var sku = "A-1"
+  private var url = env("API_URL")
+  private var orders_db = env("ORDERS_DB")
 
   setup {
     step "seed" {
@@ -18,9 +20,9 @@ scenario "an order is saved as paid" {
   }
 
   step "pay" {
-    post "${url}/orders" { body = {"sku": "A-1", "pay": true} }
+    post "${url}/orders" { body = {"sku": sku, "pay": true} }
     expect status == 201
-    capture order_id = body.id
+    var order_id = body.id
   }
 
   step "the row says paid" {
@@ -52,7 +54,12 @@ SQLite, `@p1` for SQL Server, `:1` for Oracle. An SQL file run with no `args` is
 a script, every statement in it -- split at `GO` lines on SQL Server and the
 SQL*Plus way on Oracle -- which is how the setup above seeds the database. A connection is opened once per run
 and shared by every step that names the same URL, and a trace never prints the
-password in it. [SPEC.md's *`db` steps*](../SPEC.md#db-steps) specifies how each
+password in it. The URL is a `private` var, so no scenario file sets it to a
+value written out.
+
+A query written once for many flows is a `query` item in a collection: its
+inputs are the URL and the values it binds, and its outputs what it reads
+back. [SPEC.md's *Collections*](../SPEC.md#collections) has one. [SPEC.md's *`db` steps*](../SPEC.md#db-steps) specifies how each
 column type reads.
 
 `make build` includes PostgreSQL, MySQL and SQLite; `make build-full`, which
@@ -63,14 +70,15 @@ as `db.runCommand()` takes it, the words `redis-cli` takes -- and the reply is
 `result`:
 
 ```art
-scenario "the session is cached" {
-  secret var mongo = env("MONGO_URL")
-  secret var cache = env("REDIS_URL")
+flow session_cached {
+  var email = "a@example.test"
+  private var mongo = env("MONGO_URL")
+  private var cache = env("REDIS_URL")
 
   step "the user" {
-    db mongo { command = {"find": "users", "filter": {"email": "a@example.test"}} }
+    db mongo { command = {"find": "users", "filter": {"email": email}} }
     expect len(rows) == 1
-    capture user_id = rows[0]._id
+    var user_id = rows[0]._id
   }
 
   step "their session" {
