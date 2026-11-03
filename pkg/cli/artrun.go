@@ -387,7 +387,7 @@ func execute(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file strin
 		index := 0
 		f := &flowRun{
 			ctx: ctx, rt: rt, sc: sc, file: file, scenario: scenario, rep: rep,
-			scope: scope, gen: gen, live: true, index: &index,
+			scope: scope, unset: map[string]string{}, gen: gen, live: true, index: &index,
 		}
 		// Setup first. One that does not pass leaves nothing for the
 		// scenario's own steps to stand on, so the rest of setup and every
@@ -446,13 +446,25 @@ func missingNeeds(st *lower.Step, scope executor.Scope) []string {
 	return out
 }
 
+// unwrite unsets every name st writes. It is what a step that never got as far
+// as reading a response did to them: each write failed, so a later read must
+// not find the value a name had before, any more than after a capture that
+// could not be read (lower.Step.Apply).
+func unwrite(st *lower.Step, scope executor.Scope) {
+	for _, c := range st.Captures {
+		scope.Unset(c.Name)
+	}
+}
+
 // runArtStep attempts st until it passes or its attempts run out, and records
 // on stepResult what the attempt it stopped on produced.
 //
 // A later attempt replaces an earlier one whole, so a recorded step is never a
 // mix of two tries. An attempt is one worth stopping on when it ran at all and
 // every assertion it made -- every `expect`, and every `capture` that had to be
-// read -- passed.
+// read -- passed. That goes for the scope too: what the step writes is what
+// the last attempt wrote, and a step that stopped on an error wrote nothing,
+// so every name it writes is unset.
 func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, gen *eval.Gen, stepResult *result.StepResult) {
 	start := time.Now()
 
@@ -471,15 +483,18 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 	model, err := st.Model(env)
 	if err != nil {
 		stepResult.Fail(time.Since(start), err)
+		unwrite(st, scope)
 		return
 	}
 	delay, err := model.Retry.Wait()
 	if err != nil {
 		stepResult.Fail(time.Since(start), err)
+		unwrite(st, scope)
 		return
 	}
 	if err := model.CheckTimeout(); err != nil {
 		stepResult.Fail(time.Since(start), err)
+		unwrite(st, scope)
 		return
 	}
 	attempts := model.Retry.Attempts()
@@ -515,6 +530,9 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 		// And the case a trace helps most: there is no response to read, so
 		// what was sent is the whole of the evidence.
 		record(rt, scenario, st, model, scope, stepResult, roots, lastErr)
+		// After the trace, which scrubs the secrets the scope still holds: an
+		// earlier attempt may have written one this attempt's request carried.
+		unwrite(st, scope)
 		return
 	}
 	for _, a := range asserts {

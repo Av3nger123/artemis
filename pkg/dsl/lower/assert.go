@@ -170,16 +170,19 @@ func (s *Step) Assert(env *eval.Env) []result.AssertionResult {
 //   - a capture that succeeds records no assertion. A capture is plumbing, not a
 //     check, and a run that printed a line per captured token would bury the
 //     checks that matter;
-//   - a capture that fails writes nothing and records exactly one errored
-//     assertion naming it, and the captures after it are still read. Two
-//     mistyped paths should take one run to find. Writing nothing is what makes
-//     a later step fail on an unknown name rather than on a value that is
-//     quietly wrong.
+//   - a capture that fails unsets the name, even one that held a value before,
+//     and records exactly one errored assertion naming it, and the captures
+//     after it are still read. Two mistyped paths should take one run to find.
+//     Unsetting is what makes a later step fail on a name this step did not
+//     write rather than on the old value, which is quietly wrong: the last
+//     write wins, and this one was the last. A retry's later attempt that
+//     reads the value writes it again.
 func (s *Step) Apply(env *eval.Env, scope executor.Scope) []result.AssertionResult {
 	var out []result.AssertionResult
 	for _, c := range s.Captures {
 		v, err := eval.Eval(c.Value, env)
 		if err != nil {
+			scope.Unset(c.Name)
 			out = append(out, c.errored(s.Name, err))
 			continue
 		}
