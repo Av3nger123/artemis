@@ -350,7 +350,7 @@
         },
         {
           "value": "capture-maybe-unbound",
-          "doc": "a step reads a capture that only some branches of an if or a switch make",
+          "doc": "a step reads a name that only some branches of an if, a switch or a catch write",
           "severity": "error"
         },
         {
@@ -580,12 +580,12 @@
         },
         {
           "value": "parallel-capture-clash",
-          "doc": "two branches of a parallel block capture the same name",
+          "doc": "two branches of a parallel block write the same name",
           "severity": "error"
         },
         {
           "value": "parallel-sibling-capture",
-          "doc": "a branch of a parallel block reads a capture another branch makes at the same time",
+          "doc": "a branch of a parallel block reads a name another branch writes at the same time",
           "severity": "error"
         },
         {
@@ -620,7 +620,7 @@
         },
         {
           "value": "root-capture",
-          "doc": "a collection's template captures under the name of a step's observation, such as body",
+          "doc": "a collection item writes a step var under the name of a step's observation, such as body",
           "severity": "error"
         },
         {

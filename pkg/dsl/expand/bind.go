@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -85,7 +86,7 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope
 	}
 
 	env := map[string]ast.Expr{}
-	var missing, required []string
+	var missing []string
 	for _, in := range list {
 		name := in.Name.Value
 		switch {
@@ -100,16 +101,27 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope
 		default:
 			missing = append(missing, name)
 		}
-		if isNil(in.Default) && !in.Private {
-			required = append(required, name)
-		}
 	}
 	if len(missing) > 0 {
 		e.bag.Error(use.Item.Span, diag.MissingArgument, "%s needs %s", use.Ref(), strings.Join(missing, ", ")).
-			Hintf("%s requires %s", use.Ref(), strings.Join(required, ", "))
+			Hintf("%s", missingHint(missing))
 		ok = false
 	}
 	return env, ok
+}
+
+// missingHint is the hint for the inputs a call leaves without a value: only
+// those, since an input the context supplies is not missing, and the two ways
+// to give one a value.
+func missingHint(missing []string) string {
+	lines := make([]string, len(missing))
+	for i, name := range missing {
+		lines[i] = name + " = ..."
+	}
+	if len(missing) == 1 {
+		return fmt.Sprintf("pass it, %s, or write var %s above this step", lines[0], missing[0])
+	}
+	return fmt.Sprintf("pass them, %s, or write those vars above this step", strings.Join(lines, ", "))
 }
 
 // arguments is the use block's argument lines: the fields that are not an

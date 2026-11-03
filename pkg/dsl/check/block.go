@@ -1,8 +1,6 @@
 package check
 
 import (
-	"fmt"
-
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/token"
@@ -55,7 +53,7 @@ func (c *checker) flow(f *ast.BlockDecl, sc *scope) {
 		}
 		last := f.Clauses[len(f.Clauses)-1]
 		exhaustive := last.Keyword.Value == "else" && last.If.Text == ""
-		c.branches(f.Clauses, sc, exhaustive, fmt.Sprintf("the if at line %d", first.Keyword.Span.Line))
+		c.branches(f.Clauses, sc, exhaustive, place{"the if", first.Keyword.Span})
 	case ast.BlockSwitch:
 		c.expr(first.Expr, sc.view(Unknown))
 		var cases []*ast.Clause
@@ -67,13 +65,13 @@ func (c *checker) flow(f *ast.BlockDecl, sc *scope) {
 				exhaustive = exhaustive || cl.Keyword.Value == "default"
 			}
 		}
-		c.branches(cases, sc, exhaustive, fmt.Sprintf("the switch at line %d", first.Keyword.Span.Line))
+		c.branches(cases, sc, exhaustive, place{"the switch", first.Keyword.Span})
 	case ast.BlockTry:
 		c.items(first.Body, sc)
 		for _, cl := range f.Clauses[1:] {
 			switch cl.Keyword.Value {
 			case "catch":
-				c.branches([]*ast.Clause{cl}, sc, false, fmt.Sprintf("the catch at line %d", cl.Keyword.Span.Line))
+				c.branches([]*ast.Clause{cl}, sc, false, place{"the catch", cl.Keyword.Span})
 			case "finally":
 				was := sc.cleanup
 				sc.cleanup = true
@@ -139,7 +137,7 @@ func (c *checker) parallel(cl *ast.Clause, sc *scope) {
 			wrote[name] = true
 			if prev, dup := made[name]; dup {
 				c.bag.Error(w.tok.Span, diag.ParallelCaptureClash,
-					"%q is captured by two branches of this parallel block, which run at once", name).
+					"%q is written by two branches of this parallel block, which run at once", name).
 					Hintf("the other is at line %d; give one of them another name", prev.Span.Line)
 				continue
 			}
@@ -175,7 +173,7 @@ func (c *checker) parallel(cl *ast.Clause, sc *scope) {
 // stays bound: after the block it holds the value of the branch that ran, or
 // the old one if that branch did not write it. b.captures[base:] is exactly
 // the names a branch made, since an overwrite adds no entry.
-func (c *checker) branches(cls []*ast.Clause, sc *scope, exhaustive bool, where string) {
+func (c *checker) branches(cls []*ast.Clause, sc *scope, exhaustive bool, where place) {
 	count := map[string]int{}
 	var order []string
 	for _, cl := range cls {

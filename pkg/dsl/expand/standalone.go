@@ -153,7 +153,7 @@ func (e *expander) rootCaptures(item ast.Decl) {
 			if !ok || !observationRoots[c.Name.Value] {
 				continue
 			}
-			e.bag.Error(c.Name.Span, diag.RootCapture, "a collection may not capture %q: it names a step's observation", c.Name.Value).
+			e.bag.Error(c.Name.Span, diag.RootCapture, "an item may not write %q: it names a step's observation", c.Name.Value).
 				Hintf("rename it, e.g. %s_value; a later step's `%s` would be ambiguous", c.Name.Value, c.Name.Value)
 		}
 	}

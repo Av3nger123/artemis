@@ -10,14 +10,11 @@ import (
 	"artemis/pkg/dsl/encode"
 )
 
-// labelledArt is a scenario with its steps written in it, in the old form.
-// The checker's labels -- class, stepType, scope -- are on the steps of a
-// scenario it checked, and `artemis ast` of a flow file has none, because a
-// flow is checked only through a scenario file that names it, whose own tree
-// holds no step. So this one source stays in the old form until a flow file's
-// tree carries the labels.
-const labelledArt = `scenario "checkout" {
-  var url = env("API_URL")
+// labelledArt is a flow file. The checker's labels -- class, stepType, scope
+// -- are on the steps of a flow file's own tree, because a flow file is
+// checked as its flow alone, the check a scenario file's flow gets.
+const labelledArt = `flow checkout {
+  var url
 
   step "login" {
     post "${url}/token"

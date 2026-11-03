@@ -8,9 +8,10 @@ import "strings"
 // "Did you mean" is only useful when it is nearly always right, so the
 // threshold is deliberately tight: at most two edits, and never more than a
 // third of the word's length rounded down -- so a 3-character word tolerates
-// one edit and nothing tolerates a guess that rewrites most of it. A pure
-// difference in case ("Status" for "status") always wins, because that is a
-// certainty rather than a guess.
+// one edit and nothing tolerates a guess that rewrites most of it -- except
+// that a word of two characters tolerates one, so `ur` finds `url`. A single
+// character is never guessed at. A pure difference in case ("Status" for
+// "status") always wins, because that is a certainty rather than a guess.
 //
 // Candidates are compared in the order given and the first of an equal-distance
 // tie wins, so a caller that passes the names in scope in a meaningful order --
@@ -28,6 +29,9 @@ func Nearest(word string, candidates []string) (string, bool) {
 	limit := len(word) / 3
 	if limit > 2 {
 		limit = 2
+	}
+	if limit < 1 && len(word) >= 2 {
+		limit = 1
 	}
 	if limit < 1 {
 		return "", false

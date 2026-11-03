@@ -1,3 +1,4 @@
+# from checkout (testdata/collections/flows/checkout.art:3) via testdata/collections/scenarios/checkout.art:3
 scenario "checkout" {
   var url = env("API_URL")
 
@@ -14,7 +15,6 @@ scenario "checkout" {
     expect status == 401
   }
 
-  # from checkout (testdata/collections/flows/checkout.art:3) via testdata/collections/scenarios/checkout.art:3
   step "orders" {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200

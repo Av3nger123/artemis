@@ -80,7 +80,7 @@ func (p *parser) parseCapture() ast.Stmt {
 	}
 	c.Keyword = p.next()
 
-	name, ok := p.expectIdent("a name to capture into")
+	name, ok := p.expectIdent("a name for the step var")
 	if !ok {
 		return p.badFrom(c.Secret, c.Keyword)
 	}
@@ -92,6 +92,6 @@ func (p *parser) parseCapture() ast.Stmt {
 	}
 	c.Assign = assign
 	c.Value = p.parseExpr()
-	c.Comma = p.endStatement("a capture")
+	c.Comma = p.endStatement("a step var")
 	return c
 }

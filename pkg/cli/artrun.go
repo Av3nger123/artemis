@@ -128,6 +128,13 @@ func compileArtWith(path, src string, l expand.Loader, diagOut io.Writer) ([]*lo
 	// and the runner never meet one. A diagnostic may point into an imported
 	// collection, so every file the front end read is there to render it.
 	u := front.CompileWith(path, src, l)
+	if u.FlowFile {
+		// A flow runs only through a scenario file that names it, and that
+		// file reports what is wrong with the flow. A run that finds a flow
+		// file in a folder skips it; one named on the command line has been
+		// refused already, as flow-not-runnable.
+		return nil, nil, nil
+	}
 	diags := u.Bag.All()
 	if len(diags) > 0 {
 		if err := diag.Terminal(diagOut, sourceFiles(u), diags); err != nil {

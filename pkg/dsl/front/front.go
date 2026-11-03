@@ -54,6 +54,10 @@ type Unit struct {
 	// Uses is the expansion's use table, which a span's Via indexes (Via-1):
 	// what `artemis expand` reads to say where each step came from.
 	Uses []expand.Use
+	// FlowFile is whether the file is a flow file: one flow and its imports,
+	// with no header. It runs only through a scenario file that names it, so
+	// Expanded holds no scenario, and a run that finds it in a folder skips it.
+	FlowFile bool
 }
 
 // CompileWith is the whole front end: parse, expand, check. l reads imported
@@ -66,7 +70,10 @@ type Unit struct {
 //
 // The checker runs on the expanded tree, so a fault in a step a use brought in
 // is reported where the step was written, in the collection, and carries the
-// use lines that brought it in as UsedFrom.
+// use lines that brought it in as UsedFrom. A flow file expands to no scenario
+// -- it runs only through a scenario file -- and is checked as its flow alone,
+// the check a scenario file's flow gets, with each required var at a
+// placeholder: Info is then about the flow's own steps.
 //
 // A file in an old form (oldform.go) is reported as one and goes no further:
 // what it would draw from expansion and the checker is about a file migrate
@@ -76,16 +83,20 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 	tree, bag := parser.Parse(file, src)
 	if oldForms(file, tree, bag) {
 		info, _ := check.Check(nil)
-		return &Unit{Tree: tree, Expanded: tree, Info: info, Sources: map[string]string{file: src}, Bag: bag}
+		return &Unit{Tree: tree, Expanded: tree, Info: info, Sources: map[string]string{file: src}, Bag: bag, FlowFile: isFlowFile(tree)}
 	}
 	res, eb := expand.ExpandParsed(tree, l, !bag.HasErrors())
 	bag.Merge(eb)
-	info, checked := check.CheckChained(res.File, res.Chain)
-	for _, d := range checked.All() {
+	checked := res.File
+	if res.Check != nil {
+		checked = res.Check
+	}
+	info, cb := check.CheckChained(checked, res.Chain)
+	for _, d := range cb.All() {
 		d.UsedFrom = res.Chain(d.Span)
 		bag.Add(d)
 	}
-	checkData(res.File, l, bag, res.Chain)
+	checkData(checked, l, bag, res.Chain)
 	sources := map[string]string{file: src}
 	for _, name := range sortedKeys(res.Sources) {
 		sources[name] = res.Sources[name]
@@ -94,7 +105,22 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 			oldForms(name, read, bag)
 		}
 	}
-	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: once(bag), Uses: res.Uses}
+	return &Unit{Tree: tree, Expanded: res.File, Info: info, Sources: sources, Bag: once(bag), Uses: res.Uses, FlowFile: isFlowFile(tree)}
+}
+
+// isFlowFile reports whether tree declares a flow and names none: a flow
+// file, rather than a scenario file.
+func isFlowFile(tree *ast.File) bool {
+	flow := false
+	for _, d := range tree.Scenarios {
+		switch d.(type) {
+		case *ast.Flow:
+			flow = true
+		case *ast.FlowRef:
+			return false
+		}
+	}
+	return flow
 }
 
 // Compile lexes, parses and name-checks src, and returns every diagnostic in

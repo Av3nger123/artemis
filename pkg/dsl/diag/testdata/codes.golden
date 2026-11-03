@@ -4,7 +4,7 @@ bad-override	error	a line in a use block is not an argument or an override that 
 bad-tag	error	a tag is not a lower-case word written out as a string, or is listed twice
 bad-value	error	a value is the wrong kind for the position it is in
 body-conflict	error	a request says what its body is more than one way
-capture-maybe-unbound	error	a step reads a capture that only some branches of an if or a switch make
+capture-maybe-unbound	error	a step reads a name that only some branches of an if, a switch or a catch write
 data-file-missing	error	json(), csv() or file() names a path where there is no file
 data-not-csv	error	csv() names a file that is not CSV
 data-not-json	error	json() names a file that is not JSON
@@ -50,15 +50,15 @@ old-secret	error	a var, a capture, a parameter or a for clause is marked secret,
 old-suite	error	a file is a suite, which folders, --tags and each flow's own setup replace
 old-use	error	a use calls an item, which step "name" = <collection>.<item> replaces
 parallel-browser	error	two branches of a parallel block drive the browser, which has one page
-parallel-capture-clash	error	two branches of a parallel block capture the same name
-parallel-sibling-capture	error	a branch of a parallel block reads a capture another branch makes at the same time
+parallel-capture-clash	error	two branches of a parallel block write the same name
+parallel-sibling-capture	error	a branch of a parallel block reads a name another branch writes at the same time
 private-input	error	a use passes a private var of the item, which takes only its own default
 private-param	error	a scenario sets a private var of its flow
 repeat-unbounded	error	a repeat has neither within nor max, so nothing stops it
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-tags	error	a flow declares a var named tags, which is each scenario's own list
 reserved-word	error	a word reserved for a later tier is used as a name
-root-capture	error	a collection's template captures under the name of a step's observation, such as body
+root-capture	error	a collection item writes a step var under the name of a step's observation, such as body
 scenario-in-collection-file	error	a file holding a collection also holds a scenario
 scenario-value-reads-name	error	a scenario's value reads a name, where only literals and builtins are allowed
 second-collection	error	a file holds more than one collection

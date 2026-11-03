@@ -547,10 +547,18 @@ func (c *checker) step(s *ast.StepDecl, sc *scope) {
 // copied in by a use -- its span is stamped with Via, or it sits in another
 // file than the scenario -- the fix is usually `as`, which prefixes the vars a
 // use hoists, so the hint says so.
+//
+// Two vars one use copied in together -- two at the top of a flow a scenario
+// file runs, two inputs of one item -- are one place written twice, and `as`
+// would rename both: the hint names the first by its own line.
 func (c *checker) clash(name token.Token, first binding, sc *scope) {
 	where := fmt.Sprintf("the %s at line %d", first.kind, first.tok.Span.Line)
 	if first.tok.Span.File != name.Span.File {
 		where += " of " + first.tok.Span.File
+	}
+	if first.tok.Span.Via == name.Span.Via && first.tok.Span.File == name.Span.File {
+		c.bag.Error(name.Span, diag.DuplicateBinding, "%q is already bound", name.Value).Hintf("%s binds it first", where)
+		return
 	}
 	if first.tok.Span.Via != 0 && c.chain != nil {
 		if ch := c.chain(first.tok.Span); len(ch) > 0 {
@@ -586,7 +594,7 @@ func (c *checker) capture(cap *ast.Capture, v *view) {
 	if cap == nil {
 		return
 	}
-	if c.reserved(cap.Name, "capture") {
+	if c.reserved(cap.Name, "step var") {
 		return
 	}
 	c.expr(cap.Value, v)

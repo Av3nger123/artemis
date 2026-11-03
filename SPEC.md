@@ -1553,10 +1553,10 @@ paths have -- are reported at the line in the collection they concern,
 followed by the step that called it and the scenario file that ran the flow:
 
 ```
-collections/orders.art:11:42: "token" is captured in only some branches of the if at line 7, so it may not exist here
+collections/orders.art:11:42: "token" is written in only some branches of the if at line 7 of flows/maybe.art, so it may not exist here
    11 |       header "Authorization" = "Bearer ${token}"
       |                                          ^^^^^
-   hint: capture it in every branch, give the block an else or a default that does, or read it inside the branch
+   hint: write it in every branch, give the block an else or a default that does, or read it inside the branch
    used from flows/maybe.art:14:3: step "order" = orders.create { sku = "A-1" }
    used from scenarios/maybe.art:1:1: flow "../flows/maybe.art"
 ```
@@ -1593,11 +1593,14 @@ checker's error and stops the run before anything is sent.
 
 `artemis expand scenarios/checkout.art` prints what will run: each scenario of
 the file as the flow with that scenario's values in its vars, every import gone
-and every item call replaced by its step. A comment names the flow, where it
-is declared, and the scenario that ran it. For
-[the whole test](#a-whole-test), the third scenario starts:
+and every item call replaced by its step. A comment above each scenario names
+the flow, where it is declared, and the scenario that ran it, and one above
+each step an item call brought in names the item, where it is declared, and
+the line that called it. For [the whole test](#a-whole-test), the third
+scenario starts:
 
 ```text
+# from checkout (flows/checkout.art:4) via scenarios/checkout.art:13
 scenario "bad coupon" {
   tags = ["errors"]
   var sku = "A-1"
@@ -1607,6 +1610,7 @@ scenario "bad coupon" {
   var url = env("API_URL")
 
   setup {
+    # from auth.login (collections/auth.art:4) via flows/checkout.art:13
     step "log in" {
       post "${url}/token" {
         header "Content-Type" = "application/json"
@@ -1617,7 +1621,6 @@ scenario "bad coupon" {
     }
   }
 
-  # from checkout (flows/checkout.art:4) via scenarios/checkout.art:13
   step "pay" {
     post "${url}/cart/pay" {
       header "Authorization" = "Bearer ${token}"

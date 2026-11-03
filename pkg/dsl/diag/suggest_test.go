@@ -19,6 +19,10 @@ func TestNearest(t *testing.T) {
 		// because a wrong "did you mean" sends the reader after the wrong fix.
 		{"unrelated", "elephant", "", false},
 		{"too short to guess", "abc", "", false},
+		// Two letters tolerate one edit, so a clipped name is found; one
+		// letter is never guessed at.
+		{"two letters, one edit", "ra", "raw", true},
+		{"one letter", "b", "", false},
 		{"empty", "", "", false},
 		// An exact match is not a near miss. The caller is reporting that the
 		// name is wrong for some other reason, and "did you mean status?"

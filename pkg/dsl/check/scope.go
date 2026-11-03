@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"strings"
 
 	"artemis/pkg/dsl/builtin"
@@ -172,7 +173,7 @@ type scope struct {
 	// maybe are captures only some branches of an if or a switch make: name
 	// to the block that made them. A step after the block may not read one --
 	// it may not exist -- unless it is cleanup, which skips when it does not.
-	maybe map[string]string
+	maybe map[string]place
 	// cleanup is whether the steps being walked are teardown or a finally,
 	// whose reads of a maybe-capture are allowed.
 	cleanup bool
@@ -183,13 +184,31 @@ type scope struct {
 	siblings map[string]int
 }
 
+// place is a block some of whose branches wrote a name: what it is, "the if",
+// and where its keyword is.
+type place struct {
+	what string
+	at   token.Span
+}
+
+// from is the block as a diagnostic in file names it: by its line, and by its
+// file too when that is another one -- a read in a collection item of a name
+// only some branches of the calling flow's if wrote.
+func (p place) from(file string) string {
+	s := fmt.Sprintf("%s at line %d", p.what, p.at.Line)
+	if p.at.File != "" && p.at.File != file {
+		s += " of " + p.at.File
+	}
+	return s
+}
+
 // binding is one binding of a name: what bound it and its name token.
 type binding struct {
 	kind string // "var" or "capture"
 	tok  token.Token
 }
 
-func newScope() *scope { return &scope{first: map[string]binding{}, maybe: map[string]string{}} }
+func newScope() *scope { return &scope{first: map[string]binding{}, maybe: map[string]place{}} }
 
 // fork is a copy of the scope for one branch of a block: what the branch
 // binds stays in the copy until the block decides what the scope after it
@@ -203,7 +222,7 @@ func (s *scope) fork() *scope {
 	for k, v := range s.first {
 		cp.first[k] = v
 	}
-	cp.maybe = make(map[string]string, len(s.maybe))
+	cp.maybe = make(map[string]place, len(s.maybe))
 	for k, v := range s.maybe {
 		cp.maybe[k] = v
 	}
@@ -279,7 +298,7 @@ type view struct {
 	roots    []string
 	vars     []string
 	captures []string
-	maybe    map[string]string
+	maybe    map[string]place
 	siblings map[string]int
 }
 
@@ -346,8 +365,8 @@ func (v *view) hint() string { return scopeHints[v.typ] }
 func (c *checker) notFound(span token.Span, name string, v *view) {
 	if where, ok := v.maybe[name]; ok {
 		c.bag.Error(span, diag.CaptureMaybeUnbound,
-			"%q is captured in only some branches of %s, so it may not exist here", name, where).
-			Hintf("capture it in every branch, give the block an else or a default that does, or read it inside the branch")
+			"%q is written in only some branches of %s, so it may not exist here", name, where.from(span.File)).
+			Hintf("write it in every branch, give the block an else or a default that does, or read it inside the branch")
 		return
 	}
 	if t, ok := allRoots[name]; ok && t != v.typ {
@@ -385,7 +404,7 @@ func (c *checker) sibling(span token.Span, name string, v *view) bool {
 		return false
 	}
 	c.bag.Error(span, diag.ParallelSiblingCapture,
-		"%q is captured by the branch at line %d, which runs at the same time as this one", name, line).
+		"%q is written by the branch at line %d, which runs at the same time as this one", name, line).
 		Hintf("read it after the parallel block, or put both steps in one branch")
 	return true
 }

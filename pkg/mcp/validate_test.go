@@ -66,6 +66,27 @@ func TestValidateRejectsSourceWithAnError(t *testing.T) {
 	}
 }
 
+// A flow file is checked as its flow alone, as a scenario file's flow is: a
+// name the flow never binds is an error in it, not something only a scenario
+// file that names it would find.
+func TestValidateChecksAFlowFileOnItsOwn(t *testing.T) {
+	cs := connect(t, t.TempDir())
+	res := call(t, cs, "artemis_validate", map[string]any{
+		"source": "flow broken {\n  var url\n  step \"s\" {\n    get \"${url}/${nope}\"\n  }\n}\n",
+	})
+	var doc struct {
+		Diagnostics []struct {
+			Code string `json:"code"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(documentBytes(t, res), &doc); err != nil {
+		t.Fatalf("the document is not JSON: %v", err)
+	}
+	if len(doc.Diagnostics) != 1 || doc.Diagnostics[0].Code != "unknown-identifier" {
+		t.Fatalf("want one unknown-identifier for nope and nothing for the required url, got %+v", doc.Diagnostics)
+	}
+}
+
 // With no file given, a span names the source label rather than a path that
 // does not exist.
 func TestValidateLabelsSpansWhenGivenNoFile(t *testing.T) {

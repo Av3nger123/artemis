@@ -81,14 +81,17 @@ func runExpand(cmd *cobra.Command, args []string) error {
 }
 
 // withOrigins is the expanded tree laid out for a reader, with a comment above
-// every step a use brought in:
+// every step an item call brought in, at any depth -- in setup, teardown and
+// every block:
 //
-//	# from auth.login (auth.art:2) via checkout.art:6
+//	# from auth.login (auth.art:2) via flows/checkout.art:6
 //
 // The step's name token carries the Via of the innermost use that copied it
-// in, so that use's item is what `from` names; `via` names the scenario's own
-// use line, at the root of the chain. A step written in the scenario itself
-// has Via 0 and gets nothing.
+// in, so that use's item is what `from` names, and `via` is the line that
+// called it. A scenario a scenario file made of a flow gets one above itself,
+// naming the flow and the scenario's own line; the flow's own steps, which
+// that scenario's use stamped, get nothing more. A step written in a plain
+// scenario has Via 0 and gets nothing.
 //
 // Trivia is replaced with a new slice and never appended to: ast.Clone shares
 // trivia with the collection's tree, and an append into its spare capacity
@@ -99,15 +102,35 @@ func withOrigins(u *front.Unit) *ast.File {
 		if !ok {
 			continue
 		}
-		for _, b := range sc.Body {
-			if s, ok := b.(*ast.StepDecl); ok {
-				if text, ok := origin(u, s.Name.Span.Via); ok {
-					s.Keyword.Leading = withComment(s.Keyword.Leading, text)
-				}
-			}
+		flowUse := 0
+		if sc.Flow != "" {
+			flowUse = useAt(u, sc.Name.Span)
 		}
+		if text, ok := origin(u, flowUse); ok {
+			sc.Keyword.Leading = withComment(sc.Keyword.Leading, text)
+		}
+		ast.Inspect(sc, func(n ast.Node) {
+			s, ok := n.(*ast.StepDecl)
+			if !ok || s == nil || s.Name.Span.Via == flowUse {
+				return
+			}
+			if text, ok := origin(u, s.Name.Span.Via); ok {
+				s.Keyword.Leading = withComment(s.Keyword.Leading, text)
+			}
+		})
 	}
 	return u.Expanded
+}
+
+// useAt is the number of the use whose line is at -- what Span.Via holds for
+// it -- or 0 when there is none.
+func useAt(u *front.Unit, at token.Span) int {
+	for i, use := range u.Uses {
+		if use.Span == at {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // origin is the comment for a step copied in by use number via, and false for

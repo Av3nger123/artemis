@@ -218,23 +218,17 @@ func (e *expander) checkFlow(fu *unit, f *ast.Flow, via int) bool {
 		return false
 	}
 	e.flows[f] = checking
-	ok := e.flowShape(f)
 
-	bag, silent := e.bag, e.silent
+	bag := e.bag
 	e.bag = diag.New()
-	body := e.body(fu, flowBody(f, nil, stampVia(via)))
-	if !e.bag.HasErrors() && e.silent == silent {
-		file := &ast.File{Scenarios: []ast.Decl{&ast.Scenario{
-			Keyword: synth(token.Ident, "scenario", "scenario", token.Span{}),
-			Name:    synth(token.String, quote(f.Name.Value), f.Name.Value, token.Span{}),
-			Body:    body,
-		}}}
+	file := e.flowCheckTree(fu, f, stampVia(via))
+	if file != nil {
 		_, cb := check.CheckChained(file, e.res.Chain)
 		e.bag.Merge(cb)
 	}
-	ok = ok && !e.bag.HasErrors() && e.silent == silent
+	ok := file != nil && !e.bag.HasErrors()
 	scratch := e.bag
-	e.bag, e.silent = bag, silent
+	e.bag = bag
 	e.bag.Merge(scratch)
 
 	e.flows[f] = broken
@@ -244,17 +238,62 @@ func (e *expander) checkFlow(fu *unit, f *ast.Flow, via int) bool {
 	return ok
 }
 
-// flowBody is f's body cloned through stamp, with each parameter given the
-// value values holds for it, or else its default, or else null. The vars come
-// out plain: what a scenario runs has no private var and none without a value.
+// flowFile is the tree the checker reads for a flow file compiled on its own:
+// the check a scenario file's flow gets, with the flow's tokens where they are
+// written. Its steps are the flow's own nodes, so the checker's Info about
+// them is about the file as written, which `artemis ast` encodes. It is nil
+// when the file did not parse or a call in the flow did not expand, each of
+// which has been reported.
+func (e *expander) flowFile(u *unit, f *ast.Flow) *ast.File {
+	if !u.ok {
+		return nil
+	}
+	return e.flowCheckTree(u, f, nil)
+}
+
+// flowCheckTree reports what is wrong with f's shape and returns its body as
+// one scenario for the checker: each parameter at its default, a required one
+// at null, its item calls expanded. stamp marks every token copied; nil copies
+// none but the parameters, which are given a value. It is nil when an item
+// call did not expand, which has been reported: a check of what is left would
+// only cascade.
+func (e *expander) flowCheckTree(u *unit, f *ast.Flow, stamp func(token.Token) token.Token) *ast.File {
+	e.flowShape(f)
+	bag, silent := e.bag, e.silent
+	e.bag = diag.New()
+	body := e.body(u, flowBody(f, nil, stamp))
+	expanded := !e.bag.HasErrors() && e.silent == silent
+	scratch := e.bag
+	e.bag, e.silent = bag, silent
+	e.bag.Merge(scratch)
+	if !expanded {
+		return nil
+	}
+	return &ast.File{Scenarios: []ast.Decl{&ast.Scenario{
+		Keyword: synth(token.Ident, "scenario", "scenario", token.Span{}),
+		Name:    synth(token.String, quote(f.Name.Value), f.Name.Value, token.Span{}),
+		Body:    body,
+		Flow:    f.Name.Value,
+	}}}
+}
+
+// flowBody is f's body through stamp, with each parameter given the value
+// values holds for it, or else its default, or else null. The vars come out
+// plain: what a scenario runs has no private var and none without a value.
+// With a stamp every declaration is a clone; with none, only the parameters
+// are copied, and the rest is f's own.
 func flowBody(f *ast.Flow, values map[string]ast.Expr, stamp func(token.Token) token.Token) []ast.Decl {
 	n := top(f)
 	out := make([]ast.Decl, 0, len(f.Body))
 	for i, d := range f.Body {
-		d = ast.Clone(d, stamp)
+		if stamp != nil {
+			d = ast.Clone(d, stamp)
+		}
 		if v, ok := d.(*ast.VarDecl); ok && i < n {
+			cp := *v
+			v = &cp
 			if v.Private.Text != "" {
-				v.Keyword.Leading = append(v.Private.Leading, v.Keyword.Leading...)
+				v.Keyword.Leading = append(append([]token.Trivia(nil), v.Private.Leading...), v.Keyword.Leading...)
 				v.Private = token.Token{}
 			}
 			if x, set := values[v.Name.Value]; set {
@@ -266,6 +305,7 @@ func flowBody(f *ast.Flow, values map[string]ast.Expr, stamp func(token.Token) t
 			if v.Assign.Text == "" {
 				v.Assign = synth(token.Assign, "=", "", v.Name.Span)
 			}
+			d = v
 		}
 		out = append(out, d)
 	}

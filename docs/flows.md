@@ -197,6 +197,7 @@ artemis expand scenarios/orders.art
 ```
 
 ```text
+# from orders (flows/orders.art:4) via scenarios/orders.art:5
 scenario "bob" {
   var user = "bob"
   var url = env("API_URL")
@@ -211,7 +212,6 @@ scenario "bob" {
     var token = body.data.access_token
   }
 
-  # from orders (flows/orders.art:4) via scenarios/orders.art:5
   step "list the orders" {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200

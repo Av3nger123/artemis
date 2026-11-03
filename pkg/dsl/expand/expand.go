@@ -32,6 +32,12 @@ type Result struct {
 	File    *ast.File         // only scenarios, vars, configs and steps
 	Uses    []Use             // what Span.Via indexes (Via-1)
 	Sources map[string]string // every file read, by name, for rendering diagnostics
+
+	// Check is what the checker reads in place of File, or nil when that is
+	// File. For a flow file it is the flow as one scenario, the flow's own
+	// standalone check (FlowCheck): File holds no scenario, since a flow runs
+	// only through a scenario file that names it.
+	Check *ast.File
 }
 
 // Chain is the use lines that brought a span in, innermost first. A span
@@ -126,8 +132,13 @@ func ExpandParsed(tree *ast.File, l Loader, parsed bool) (*Result, *diag.Bag) {
 	out := &ast.File{EOF: tree.EOF}
 	for _, d := range tree.Scenarios {
 		switch v := d.(type) {
-		case *ast.Import, *ast.Collection, *ast.Flow:
-			// A flow runs only through a scenario file that names it.
+		case *ast.Flow:
+			// A flow runs only through a scenario file that names it; on its
+			// own it is checked, and the parser has reported a second one.
+			if ref == nil && res.Check == nil {
+				res.Check = e.flowFile(root, v)
+			}
+		case *ast.Import, *ast.Collection:
 		case *ast.FlowRef:
 			if v == ref {
 				out.Scenarios = append(out.Scenarios, e.scenarios(root, v)...)
