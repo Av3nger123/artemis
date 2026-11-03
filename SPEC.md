@@ -2655,8 +2655,9 @@ and their output.
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
 
 A test is converted into this language once, never translated on the fly:
-`artemis migrate -f old.yaml` for a YAML scenario, `artemis migrate -f old.art
--o new/` for a `.art` file in [the old forms](#the-old-forms), and `artemis
+`artemis migrate -f old.yaml -o new/` for a YAML scenario, which writes a flow
+and a scenario file, `artemis migrate -f old.art -o new/` for a `.art` file in
+[the old forms](#the-old-forms), and `artemis
 generate -f collection.json -o x.art` for a Postman collection, which writes a
 collection, a flow and a scenario file. All of them write through `artemis
 fmt`'s printer, so what they produce is already canonical.

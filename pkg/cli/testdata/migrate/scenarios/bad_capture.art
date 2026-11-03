@@ -1,0 +1,3 @@
+flow "../flows/bad_capture.art"
+
+scenario "captures that cannot be read" {}

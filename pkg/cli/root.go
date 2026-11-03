@@ -126,7 +126,7 @@ func Init() {
 	if err := migrateCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
-	migrateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout; for .art input, the folder to write the new files in")
+	migrateCmd.Flags().StringP(outFlag, "o", "", "The folder to write the new flow, scenario and collection files in")
 
 	// Generate command: a Postman collection in, .art out, once -- the other
 	// adoption path, onto the same printer as migrate (ART-41).
@@ -156,6 +156,6 @@ var RootCmd = &cobra.Command{
     Scenarios are written in the Artemis DSL, in .art files: artemis parses,
     checks and runs them, and converts an old YAML scenario with migrate.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml>' to convert an old YAML scenario to one, and 'artemis grammar' for the language itself.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Use 'artemis run <path>' to run a scenario file or a folder of them, 'artemis parse -f <file>' to check one without calling anything, 'artemis fmt [-w] <file.art>' to format it, and 'artemis ast -f <file.art>' for its syntax tree as JSON, and 'artemis migrate -f <file.yaml> -o <dir>' to convert an old YAML scenario to a flow and a scenario file, and 'artemis grammar' for the language itself.")
 	},
 }
