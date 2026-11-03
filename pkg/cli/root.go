@@ -117,14 +117,16 @@ func Init() {
 	testCmd.Flags().Int(jobsFlag, 1,
 		"How many scenario files to run at once. More than one buffers each file's console output and prints it in file order")
 
-	// Migrate command: YAML in, .art out, once. The one remaining YAML reader
-	// in the binary, now that ART-40 has taken the format off the run path.
+	// Migrate command: YAML in, .art out, once -- the one remaining YAML
+	// reader in the binary, now that ART-40 has taken the format off the run
+	// path -- and old-form .art files in, the new collections, flows and
+	// scenario files out.
 	RootCmd.AddCommand(migrateCmd)
-	migrateCmd.Flags().StringP("file", "f", "", "Path to the YAML scenario to convert")
+	migrateCmd.Flags().StringP("file", "f", "", "The YAML scenario, or the old-form .art file or folder, to convert")
 	if err := migrateCmd.MarkFlagRequired("file"); err != nil {
 		slog.Error("Error marking flag as required", "error", err)
 	}
-	migrateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout")
+	migrateCmd.Flags().StringP(outFlag, "o", "", "Write the .art file here instead of printing it to stdout; for .art input, the folder to write the new files in")
 
 	// Generate command: a Postman collection in, .art out, once -- the other
 	// adoption path, onto the same printer as migrate (ART-41).

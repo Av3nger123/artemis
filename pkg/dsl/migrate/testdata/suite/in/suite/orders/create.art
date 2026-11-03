@@ -1,0 +1,10 @@
+scenario "create an order" {
+  tags = ["orders"]
+
+  step "create" {
+    post "${suite.url}/orders" {
+      header "Authorization" = "Bearer ${suite.token}"
+    }
+    expect status == 201
+  }
+}

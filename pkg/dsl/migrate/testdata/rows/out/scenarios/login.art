@@ -1,0 +1,5 @@
+flow "../flows/login.art"
+
+scenario "login as admin" { user = {"email": "a@x.io", "role": "admin", "status": 200} }
+
+scenario "login as guest" { user = {"email": "g@x.io", "role": "guest", "status": 403} }

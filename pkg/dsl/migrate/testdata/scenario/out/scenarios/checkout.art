@@ -1,0 +1,5 @@
+flow "../flows/checkout.art"
+
+scenario "checkout" {
+  tags = ["smoke"]
+}

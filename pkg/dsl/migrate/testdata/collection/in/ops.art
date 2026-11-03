@@ -1,0 +1,16 @@
+collection "ops" {
+  request login(user, secret password, base = env("API_URL")) {
+    post "${base}/token" {
+      body = {"username": user, "password": password}
+    }
+    expect status == 200
+    secret capture token = body.token
+  }
+
+  request migrate(target = "migrate") {
+    run "make" {
+      args = [target]
+    }
+    expect exit_code == 0
+  }
+}

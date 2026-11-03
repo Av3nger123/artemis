@@ -1,0 +1,25 @@
+import "../collections/auth.art"
+
+flow checkout {
+  step "bad" = auth.login as bad {
+    user = "alice"
+    password = "wrong"
+    drop expects
+    drop vars
+    expect status == 401
+  }
+
+  step "auth.login" = auth.login { user = "alice", password = env("PW") }
+
+  step "order" {
+    post "https://example.com/orders" { header "Authorization" = "Bearer ${token}" }
+    expect status == 201
+    # the order to pay
+    var order_id = body.id
+  }
+
+  step "pay" {
+    post "https://example.com/orders/${order_id}/pay"
+    expect status == 200
+  }
+}

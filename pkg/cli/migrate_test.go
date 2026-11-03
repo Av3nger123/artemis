@@ -181,12 +181,16 @@ steps:
 	}
 }
 
-// The two arguments that are the wrong kind of file. Saying so beats writing a
-// file somebody has to diff to discover nothing happened.
+// The arguments that cannot work. A .art file becomes several files, so it
+// needs a folder to write them in; and YAML becomes one .art file.
 func TestMigrateRefusesTheWrongExtensions(t *testing.T) {
 	art := writeArt(t, "already.art", "scenario \"n\" {\n}\n")
-	if _, _, err := executeArgs(t, "migrate", "-f", art); err == nil {
-		t.Error("migrate -f already.art = nil error, want one")
+	if _, _, err := executeArgs(t, "migrate", "-f", art); err == nil || !strings.Contains(err.Error(), "-o <dir>") {
+		t.Errorf("migrate -f already.art = %v, want an error asking for -o <dir>", err)
+	}
+	file := writeArt(t, "taken.art", "")
+	if _, _, err := executeArgs(t, "migrate", "-f", art, "-o", file); err == nil {
+		t.Error("migrate -f already.art -o taken.art = nil error, want one: -o names a folder")
 	}
 
 	yaml := writeYAML(t, "ping.yaml", smallYAML)

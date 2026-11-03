@@ -1,0 +1,14 @@
+# Buys one cart.
+scenario "checkout" {
+  tags = ["smoke"]
+  var url = env("API_URL")
+
+  step "pay" {
+    post "${url}/pay" {
+      body = file("data/cart.json")
+    }
+    expect status == 200
+  }
+
+  var currency = "EUR"
+}

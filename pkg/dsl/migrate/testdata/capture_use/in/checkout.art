@@ -1,0 +1,27 @@
+import "collections/auth.art"
+
+scenario "checkout" {
+  use auth.login as bad {
+    user = "alice"
+    password = "wrong"
+    drop expects
+    drop captures
+    expect status == 401
+  }
+
+  use auth.login { user = "alice", password = env("PW") }
+
+  step "order" {
+    post "https://example.com/orders" {
+      header "Authorization" = "Bearer ${token}"
+    }
+    expect status == 201
+    # the order to pay
+    capture order_id = body.id
+  }
+
+  step "pay" {
+    post "https://example.com/orders/${order_id}/pay"
+    expect status == 200
+  }
+}

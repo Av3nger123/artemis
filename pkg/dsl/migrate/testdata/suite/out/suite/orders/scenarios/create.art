@@ -1,0 +1,5 @@
+flow "../flows/create.art"
+
+scenario "create an order" {
+  tags = ["api", "orders"]
+}

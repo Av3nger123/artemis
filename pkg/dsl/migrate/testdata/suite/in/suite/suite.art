@@ -1,0 +1,20 @@
+suite {
+  tags = ["api"]
+  var url = env("API_URL")
+
+  setup {
+    step "log in" {
+      post "${url}/login"
+      expect status == 200
+      capture token = body.token
+    }
+  }
+
+  teardown {
+    step "log out" {
+      post "${url}/logout" {
+        header "Authorization" = "Bearer ${token}"
+      }
+    }
+  }
+}
