@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 1,
+  "file": "../parser/testdata/scenariofile.art",
+  "scenarios": [
+    {
+      "kind": "flowRef",
+      "path": "../flows/checkout.art",
+      "span": {
+        "file": "../parser/testdata/scenariofile.art",
+        "line": 3,
+        "col": 1,
+        "endLine": 3,
+        "endCol": 29,
+        "offset": 147
+      },
+      "comments": {
+        "above": [
+          {
+            "text": "# A scenario file: the flow it runs on its first line, then one scenario per"
+          },
+          {
+            "text": "# set of data. A scenario only sets the flow's vars, and tags itself."
+          }
+        ]
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"full price\"",
+        "value": "full price"
+      },
+      "span": {
+        "file": "../parser/testdata/scenariofile.art",
+        "line": 5,
+        "col": 1,
+        "endLine": 5,
+        "endCol": 25,
+        "offset": 177
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"with a coupon\"",
+        "value": "with a coupon"
+      },
+      "body": [
+        {
+          "kind": "set",
+          "name": "quantity",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "3",
+            "value": "3",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 7,
+              "col": 39,
+              "endLine": 7,
+              "endCol": 40,
+              "offset": 241
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 7,
+            "col": 28,
+            "endLine": 7,
+            "endCol": 40,
+            "offset": 230
+          }
+        },
+        {
+          "kind": "set",
+          "name": "coupon",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"TEN\"",
+            "value": "TEN",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 7,
+              "col": 51,
+              "endLine": 7,
+              "endCol": 56,
+              "offset": 253
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 7,
+            "col": 42,
+            "endLine": 7,
+            "endCol": 56,
+            "offset": 244
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/scenariofile.art",
+        "line": 7,
+        "col": 1,
+        "endLine": 7,
+        "endCol": 58,
+        "offset": 203
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"bad coupon\"",
+        "value": "bad coupon"
+      },
+      "body": [
+        {
+          "kind": "tags",
+          "value": {
+            "kind": "array",
+            "elems": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"errors\"",
+                "value": "errors",
+                "span": {
+                  "file": "../parser/testdata/scenariofile.art",
+                  "line": 10,
+                  "col": 11,
+                  "endLine": 10,
+                  "endCol": 19,
+                  "offset": 296
+                }
+              },
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"payments\"",
+                "value": "payments",
+                "span": {
+                  "file": "../parser/testdata/scenariofile.art",
+                  "line": 10,
+                  "col": 21,
+                  "endLine": 10,
+                  "endCol": 31,
+                  "offset": 306
+                }
+              }
+            ],
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 10,
+              "col": 10,
+              "endLine": 10,
+              "endCol": 32,
+              "offset": 295
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 10,
+            "col": 3,
+            "endLine": 10,
+            "endCol": 32,
+            "offset": 288
+          }
+        },
+        {
+          "kind": "set",
+          "name": "coupon",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"NOPE\"",
+            "value": "NOPE",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 11,
+              "col": 12,
+              "endLine": 11,
+              "endCol": 18,
+              "offset": 329
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 11,
+            "col": 3,
+            "endLine": 11,
+            "endCol": 18,
+            "offset": 320
+          }
+        },
+        {
+          "kind": "set",
+          "name": "code",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "422",
+            "value": "422",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 12,
+              "col": 10,
+              "endLine": 12,
+              "endCol": 13,
+              "offset": 345
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 12,
+            "col": 3,
+            "endLine": 12,
+            "endCol": 13,
+            "offset": 338
+          },
+          "comments": {
+            "after": [
+              "# the server refuses it"
+            ]
+          }
+        },
+        {
+          "kind": "set",
+          "name": "total",
+          "value": {
+            "kind": "ident",
+            "name": "skip",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 13,
+              "col": 11,
+              "endLine": 13,
+              "endCol": 15,
+              "offset": 383
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 13,
+            "col": 3,
+            "endLine": 13,
+            "endCol": 15,
+            "offset": 375
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/scenariofile.art",
+        "line": 9,
+        "col": 1,
+        "endLine": 14,
+        "endCol": 2,
+        "offset": 262
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    },
+    {
+      "kind": "scenario",
+      "name": {
+        "text": "\"many\"",
+        "value": "many"
+      },
+      "body": [
+        {
+          "kind": "set",
+          "name": "sku",
+          "value": {
+            "kind": "literal",
+            "literal": "string",
+            "text": "\"SKU-2\"",
+            "value": "SKU-2",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 17,
+              "col": 9,
+              "endLine": 17,
+              "endCol": 16,
+              "offset": 417
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 17,
+            "col": 3,
+            "endLine": 17,
+            "endCol": 16,
+            "offset": 411
+          }
+        },
+        {
+          "kind": "set",
+          "name": "quantity",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "2",
+            "value": "2",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 18,
+              "col": 14,
+              "endLine": 18,
+              "endCol": 15,
+              "offset": 438
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 18,
+            "col": 3,
+            "endLine": 18,
+            "endCol": 15,
+            "offset": 427
+          }
+        },
+        {
+          "kind": "set",
+          "name": "coupon",
+          "value": {
+            "kind": "call",
+            "callee": "env",
+            "args": [
+              {
+                "kind": "literal",
+                "literal": "string",
+                "text": "\"COUPON\"",
+                "value": "COUPON",
+                "span": {
+                  "file": "../parser/testdata/scenariofile.art",
+                  "line": 19,
+                  "col": 16,
+                  "endLine": 19,
+                  "endCol": 24,
+                  "offset": 455
+                }
+              }
+            ],
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 19,
+              "col": 12,
+              "endLine": 19,
+              "endCol": 25,
+              "offset": 451
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 19,
+            "col": 3,
+            "endLine": 19,
+            "endCol": 25,
+            "offset": 442
+          }
+        },
+        {
+          "kind": "set",
+          "name": "code",
+          "value": {
+            "kind": "literal",
+            "literal": "number",
+            "text": "201",
+            "value": "201",
+            "span": {
+              "file": "../parser/testdata/scenariofile.art",
+              "line": 20,
+              "col": 10,
+              "endLine": 20,
+              "endCol": 13,
+              "offset": 474
+            }
+          },
+          "span": {
+            "file": "../parser/testdata/scenariofile.art",
+            "line": 20,
+            "col": 3,
+            "endLine": 20,
+            "endCol": 13,
+            "offset": 467
+          }
+        }
+      ],
+      "span": {
+        "file": "../parser/testdata/scenariofile.art",
+        "line": 16,
+        "col": 1,
+        "endLine": 21,
+        "endCol": 2,
+        "offset": 391
+      },
+      "comments": {
+        "blankAbove": true
+      }
+    }
+  ]
+}

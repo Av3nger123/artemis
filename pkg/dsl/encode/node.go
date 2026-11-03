@@ -123,6 +123,12 @@ func (e *enc) node(n ast.Node) *obj {
 		return e.bodySet(v)
 	case *ast.Drop:
 		return e.drop(v)
+	case *ast.Flow:
+		return e.flowDecl(v)
+	case *ast.FlowRef:
+		return e.flowRef(v)
+	case *ast.Set:
+		return e.setLine(v)
 	case *ast.Bad:
 		return e.bad(v)
 	}

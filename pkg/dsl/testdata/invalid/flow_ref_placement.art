@@ -1,0 +1,9 @@
+# A scenario file's header below its first declaration. The header says which
+# flow every scenario in the file runs, so it comes first; the scenarios below
+# it are still read as data, so the one mistake is one diagnostic. The parser
+# reports it, because it is where the header stands, not what it names.
+scenario "full price" {}
+
+flow "../flows/checkout.art"
+
+scenario "with a coupon" { coupon = "TEN" }

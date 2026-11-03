@@ -1,0 +1,14 @@
+=== terminal
+flow_file_holds.art:5:1: a flow file holds one flow and its imports, and this is a collection
+   5 | collection "auth" {
+     | ^^^^^^^^^^
+   hint: put collection "auth" in a file of its own, and import it here
+
+flow_file_holds.art:17:1: a flow file holds one flow and its imports, and this is a scenario
+   17 | scenario "full price" {}
+      | ^^^^^^^^
+   hint: put it in a scenario file whose first line is flow "<path to this file>"
+
+=== codes
+flow-file-holds	error	5:1-5:11
+flow-file-holds	error	17:1-17:9

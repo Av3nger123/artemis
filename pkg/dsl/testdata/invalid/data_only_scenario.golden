@@ -1,0 +1,14 @@
+=== terminal
+data_only_scenario.art:8:3: a scenario holds data only: name = value lines and tags
+   8 |   step "read the error" {
+     |   ^^^^
+   hint: put steps in the flow, ../flows/checkout.art
+
+data_only_scenario.art:11:3: a scenario holds data only: name = value lines and tags
+   11 |   expect status == 422
+      |   ^^^^^^
+   hint: put steps in the flow, ../flows/checkout.art
+
+=== codes
+data-only-scenario	error	8:3-8:7
+data-only-scenario	error	11:3-11:9

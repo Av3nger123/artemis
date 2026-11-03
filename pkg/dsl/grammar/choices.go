@@ -86,7 +86,7 @@ func Choices() ChoicePoints {
 		SchemaVersion: SchemaVersion,
 		Choices: map[string]Choice{
 			"declaration": words(
-				"The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
+				"The declarations of a file -- import, collection, scenario, flow -- and those a scenario body holds, use among them.",
 				token.Blocks),
 			"stepType":     stepTypes(),
 			"method":       words("The HTTP verbs. A step whose action opens with one is an api step.", token.Methods),

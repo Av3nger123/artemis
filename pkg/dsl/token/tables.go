@@ -40,9 +40,10 @@ var (
 	Comparisons = []string{"==", "!=", "<", "<=", ">", ">=", "contains", "matches"}
 
 	// Blocks are the top-level declarations of a file -- `import`,
-	// `collection` and `scenario` -- and the declarations a scenario body
-	// holds, `use` among them.
-	Blocks = []string{"import", "collection", "scenario", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
+	// `collection`, `scenario` and `flow`, which is a flow file's flow or a
+	// scenario file's header -- and the declarations a scenario body holds,
+	// `use` among them.
+	Blocks = []string{"import", "collection", "scenario", "flow", "suite", "tags", "config", "var", "step", "use", "setup", "teardown"}
 
 	// BlockWords are the words that open a control-flow block where a step could
 	// be written, and FlowClauses the words of the clauses that follow one:

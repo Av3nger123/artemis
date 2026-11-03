@@ -1,0 +1,13 @@
+# A step and an expect in a scenario of a scenario file. A scenario changes the
+# flow's data and never its shape, so each is reported and recovered past as a
+# whole, braces and all, and the sets around them still parse.
+flow "../flows/checkout.art"
+
+scenario "bad coupon" {
+  coupon = "NOPE"
+  step "read the error" {
+    get "/errors/last"
+  }
+  expect status == 422
+  code = 422
+}

@@ -74,6 +74,12 @@ func decl(v value) (ast.Decl, error) {
 		return flowDecl(f)
 	case kindClause:
 		return clause(f)
+	case kindFlowDecl:
+		return flowOf(f)
+	case kindFlowRef:
+		return flowRefOf(f)
+	case kindSet:
+		return setOf(f)
 	case kindTags:
 		d := &ast.TagsDecl{Keyword: syn(token.Ident, "tags"), Assign: syn(token.Assign, "=")}
 		var err error

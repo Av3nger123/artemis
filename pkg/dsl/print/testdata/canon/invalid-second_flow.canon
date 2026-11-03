@@ -1,0 +1,17 @@
+# Two flows in one flow file. A flow file holds one flow, so a test is one file
+# to open; the diagnostic points at the second and names the first. The parser
+# reports it, because it is the shape of the file.
+flow checkout {
+  var code = 200
+
+  step "pay" {
+    post "/cart/pay"
+    expect status == code
+  }
+}
+
+flow refund {
+  step "refund" {
+    post "/cart/refund"
+  }
+}

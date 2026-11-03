@@ -275,7 +275,7 @@
       ]
     },
     "declaration": {
-      "doc": "The declarations of a file -- import, collection, scenario -- and those a scenario body holds, use among them.",
+      "doc": "The declarations of a file -- import, collection, scenario, flow -- and those a scenario body holds, use among them.",
       "values": [
         {
           "value": "import"
@@ -285,6 +285,9 @@
         },
         {
           "value": "scenario"
+        },
+        {
+          "value": "flow"
         },
         {
           "value": "suite"
@@ -371,6 +374,11 @@
           "severity": "error"
         },
         {
+          "value": "data-only-scenario",
+          "doc": "a scenario in a scenario file holds a line that is not name = value or tags",
+          "severity": "error"
+        },
+        {
           "value": "db-args-without-sql",
           "doc": "a db step binds args with no sql to bind them to",
           "severity": "error"
@@ -433,6 +441,16 @@
         {
           "value": "duplicate-tags",
           "doc": "a scenario or a suite has more than one tags list",
+          "severity": "error"
+        },
+        {
+          "value": "flow-file-holds",
+          "doc": "a flow file holds a collection or a scenario",
+          "severity": "error"
+        },
+        {
+          "value": "flow-ref-placement",
+          "doc": "a scenario file's flow \"...\" header is not its first line",
           "severity": "error"
         },
         {
@@ -568,6 +586,11 @@
         {
           "value": "second-collection",
           "doc": "a file holds more than one collection",
+          "severity": "error"
+        },
+        {
+          "value": "second-flow",
+          "doc": "a file declares or names a second flow",
           "severity": "error"
         },
         {

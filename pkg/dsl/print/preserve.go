@@ -317,6 +317,19 @@ func (p *pres) descend(n ast.Node, c ctx) {
 		p.tok(v.LBrace)
 		p.list(stmts(v.Lines), c)
 		p.tok(v.RBrace)
+	case *ast.Flow:
+		p.tok(v.Keyword)
+		p.tok(v.Name)
+		p.tok(v.LBrace)
+		p.list(decls(v.Body), c)
+		p.tok(v.RBrace)
+	case *ast.FlowRef:
+		p.tok(v.Keyword)
+		p.tok(v.Path)
+	case *ast.Set:
+		p.tok(v.Name)
+		p.tok(v.Assign)
+		p.node(v.Value, c)
 	case *ast.BodySet:
 		p.tok(v.Body)
 		for _, pp := range v.Path {
@@ -400,7 +413,8 @@ func lineOriented(n ast.Node) bool {
 		*ast.Request, *ast.Run, *ast.DB, *ast.Browser, *ast.BrowserAct,
 		*ast.Field, *ast.Expect, *ast.Capture,
 		*ast.Import, *ast.Collection, *ast.RequestDecl, *ast.UseDecl,
-		*ast.BodySet, *ast.Drop:
+		*ast.BodySet, *ast.Drop,
+		*ast.Flow, *ast.FlowRef, *ast.Set:
 		return true
 	}
 	return false
