@@ -22,7 +22,7 @@ import (
 //
 // The events, in the order a run writes them:
 //
-//	run-start       the files the run will try, in run order
+//	run-start       the scenario files the run will try, in run order
 //	scenario-start  a scenario and the names of its steps, before any runs
 //	step-start      a step about to run, by its index in the scenario
 //	step-end        that step's result, assertions and all
@@ -95,7 +95,8 @@ type runEndEvent struct {
 	Result jsonRunSummary `json:"result"`
 }
 
-// RunStart announces the files the run will try, in the order it will try them.
+// RunStart announces the scenario files the run will try, in the order it will
+// try them -- not the flow and collection files they read.
 func (e *Events) RunStart(files []string) {
 	if files == nil {
 		files = []string{}
