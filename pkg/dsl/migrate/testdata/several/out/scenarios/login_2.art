@@ -1,0 +1,3 @@
+flow "../flows/login_2.art"
+
+scenario "bad password" {}

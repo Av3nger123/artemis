@@ -1,0 +1,18 @@
+collection "ops" {
+  request login {
+    var user
+    var password
+    var base = env("API_URL")
+
+    post "${base}/token" { body = {"username": user, "password": password} }
+    expect status == 200
+    var token = body.token
+  }
+
+  command migrate {
+    var target = "migrate"
+
+    run "make" { args = [target] }
+    expect exit_code == 0
+  }
+}

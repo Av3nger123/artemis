@@ -1,0 +1,2 @@
+ops.art:2: secret is removed from the input password of login, and reports no longer withhold its value
+ops.art:7: secret is removed from capture token, and reports no longer withhold its value

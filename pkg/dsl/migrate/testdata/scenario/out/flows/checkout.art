@@ -1,0 +1,11 @@
+# Buys one cart.
+flow checkout {
+  var url = env("API_URL")
+
+  var currency = "EUR"
+
+  step "pay" {
+    post "${url}/pay" { body = file("../data/cart.json") }
+    expect status == 200
+  }
+}

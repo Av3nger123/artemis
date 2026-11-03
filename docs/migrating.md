@@ -1,10 +1,10 @@
-# Coming from Postman or YAML
+# Coming from Postman, YAML or old .art files
 
-Both conversions are one-shot: they read the old file, write `.art` source, and
-never touch the original. Nothing translates on the fly, because a format that
+Every conversion is one-shot: it reads the old file, writes `.art` source, and
+never touches the original. Nothing translates on the fly, because a format that
 is only ever read through a converter is a format nobody has to learn.
 
-Both write through the same printer `artemis fmt` uses, so what comes out is
+Each writes through the same printer `artemis fmt` uses, so what comes out is
 already canonically formatted and `artemis fmt` over it changes nothing.
 
 ## A Postman collection
@@ -200,3 +200,47 @@ A YAML scenario may capture one name twice -- a login and a refresh that both
 keep `token` -- and a .art file binds a name once. The second capture is written
 `token_2` (the first free suffix), every later read follows it, and a line in the
 header says so.
+
+## Old `.art` files
+
+`.art` files written before flows -- a scenario that holds its steps,
+`capture`, `use`, a collection's params, `secret`, `suite.art` and `for` rows --
+are converted by `artemis migrate` too. One old file becomes several new ones,
+so `-o` names a folder, and the originals are never changed:
+
+```sh
+artemis migrate -f checkout.art -o new/     # one file, and the collections it imports
+artemis migrate -f suite/ -o new/           # every .art file in a folder
+```
+
+The paths under `-o` are the paths under the folder `-f` names, or under the
+file's own folder, so laying `new/` over the originals replaces them:
+
+```text
+suite/suite.art                ->  (copied into each flow under it; not written)
+suite/collections/auth.art     ->  new/collections/auth.art
+suite/orders/create.art        ->  new/orders/flows/create.art
+                                   new/orders/scenarios/create.art
+```
+
+| Old | New |
+| --- | --- |
+| `scenario "x" { ... }` in `a/b.art` | the flow `b` in `a/flows/b.art`, with the vars at its top, and `a/scenarios/b.art` holding `scenario "x" {}` with the old tags. A file of several scenarios makes `b_1`, `b_2`, ... |
+| `capture x = ...` | `var x = ...` after the action |
+| `use a.b as x { ... }` | `step "x" = a.b as x { ... }`, named as the old step was: the alias, or `a.b` |
+| `drop captures` | `drop vars` |
+| `request r(p, q = 1)` | `request r { var p  var q = 1 ... }`; an item whose action is `run` is a `command`, and one whose action is `db` is a `query` |
+| `scenario "..." for row in ...` | one scenario for each row, each setting `row`; the flow declares `var row` with the first row |
+| `suite.art` | its vars, setup and teardown are copied into each flow under it, `suite.x` reads `x`, and its tags go onto each scenario |
+| `secret` | removed |
+| `json()`, `csv()`, `file()` and `import` paths | rewritten for the flow's folder, so they name the same files |
+
+A step fills an item's input from the flow's names before the item's own
+default, where an old `use` took the default. So when a flow binds a name that
+an item input left to its default also has, the step is passed that default
+explicitly, and sends what the old file sent.
+
+What changed in meaning is noted on stderr: each `secret` removed, because a
+report now prints that value; and each suite, because its setup now runs once
+per scenario rather than once per run. A suite var that the scenario declares
+too is an error, because a flow declares a name once: rename one first.

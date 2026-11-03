@@ -16,12 +16,25 @@ import (
 const outFlag = "out"
 
 var migrateCmd = &cobra.Command{
-	Use:   "migrate -f <file.yaml> [-o <file.art>]",
-	Short: "Convert a YAML scenario to a .art file, once",
-	Long: `Read a YAML scenario and write the same scenario as Artemis DSL source.
+	Use:   "migrate -f <file.yaml|file.art|dir> [-o <file.art|dir>]",
+	Short: "Convert a YAML scenario, or .art files in the old forms, once",
+	Long: `Read a YAML scenario and write the same scenario as Artemis DSL source,
+or read .art files written in the old forms and write the collections, flows
+and scenario files that replace them.
 
 	artemis migrate -f checkout.yaml              # to stdout
 	artemis migrate -f checkout.yaml -o checkout.art
+	artemis migrate -f checkout.art -o new/       # an old .art file
+	artemis migrate -f suite/ -o new/             # every .art file in a folder
+
+An old .art file becomes several files, so -o names a folder for them, and the
+originals are never changed. A scenario in a/b.art becomes the flow
+a/flows/b.art and the scenario file a/scenarios/b.art; a collection keeps its
+path; a suite.art is copied into each flow under it and is not written. What
+changed in meaning -- each secret removed, each suite whose setup now runs once
+per scenario -- is noted on stderr. The paths under -o are the paths under the
+folder -f names, or under the file's own folder; lay them over the originals to
+replace them.
 
 This is the one place artemis still reads YAML. The file is checked exactly as
 'artemis parse' checks it -- a strict decode, and every step type validated
@@ -53,15 +66,11 @@ a stream, an unclosed '{{'. Migration will not guess at one.`,
 	},
 }
 
-// migrateFile is the whole command.
-//
-// It refuses a .art file, because migrating one is already done and reprinting
-// it is what `artemis fmt` is for; saying so is better than writing a file
-// somebody then has to diff to discover nothing happened.
+// migrateFile is the whole command: a .art file or a folder goes to
+// migrateArt, and anything else is read as YAML.
 func migrateFile(cmd *cobra.Command, path, out string) error {
-	if isArtFile(path) {
-		return fmt.Errorf("%s is already %s; artemis migrate converts a YAML scenario, and artemis fmt formats a %s file",
-			path, artExt, artExt)
+	if info, err := os.Stat(path); isArtFile(path) || (err == nil && info.IsDir()) {
+		return migrateArt(cmd, path, out)
 	}
 	if out != "" && !isArtFile(out) {
 		return fmt.Errorf("artemis migrate writes %s files; -o %s is not one", artExt, out)

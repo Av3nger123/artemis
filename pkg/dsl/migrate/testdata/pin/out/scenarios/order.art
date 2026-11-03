@@ -1,0 +1,3 @@
+flow "../flows/order.art"
+
+scenario "order five" {}

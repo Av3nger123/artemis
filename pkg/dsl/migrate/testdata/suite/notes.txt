@@ -1,0 +1,1 @@
+suite/suite.art: its setup now runs once per scenario, not once per run

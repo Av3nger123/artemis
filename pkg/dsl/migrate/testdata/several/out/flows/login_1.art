@@ -1,0 +1,6 @@
+flow login_1 {
+  step "log in" {
+    post "https://example.com/login" { body = {"password": "right"} }
+    expect status == 200
+  }
+}
