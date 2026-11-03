@@ -42,7 +42,7 @@ breaking change.
 
 - **Functions and loops over a list.** `fn`, `return`, `group` and `while` are
   reserved words, not features. Reusing a request is a
-  [collection](docs/scenarios.md#reusing-requests), running a scenario per row of
+  [collection](docs/flows.md#reusing-requests), running a scenario per row of
   data is a `for` clause on the scenario, and polling is
   [`repeat ... until`](docs/blocks.md) -- all of them expand or lower into plain
   steps the checker can see through.

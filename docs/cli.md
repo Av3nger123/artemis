@@ -269,7 +269,7 @@ above the steps that read it.
 
 The file is checked first, exactly as `artemis run` checks it, and nothing is
 printed for a file with errors. `-o` will not replace an existing file without
-`--force`. See [Reusing requests](scenarios.md#reusing-requests).
+`--force`. See [Reusing requests](flows.md#reusing-requests).
 
 ## `artemis grammar`
 

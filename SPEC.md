@@ -1,8 +1,8 @@
 # The Artemis scenario language
 
-This is the normative reference for `.art`, the language artemis scenarios are
+This is the normative reference for `.art`, the language artemis tests are
 written in. It is written to be read start to finish by whoever -- or whatever --
-is about to author a scenario: every section opens with an example you can copy
+is about to author a test: every section opens with an example you can copy
 and then states the rules that example obeys.
 
 If this document and anything else disagree, this document is right.
@@ -20,99 +20,157 @@ If this document and anything else disagree, this document is right.
 
 ---
 
-## A whole scenario
+## A whole test
+
+A test is three kinds of file, and each does one job. A **collection** holds
+units of work written once. A **flow** holds steps in order. A **scenario
+file** holds data: each scenario in it is one run of the flow, with its own
+values.
 
 ```art
-scenario "checkout" {
-  var url = env("API_URL")
-  var pw  = env("API_PASSWORD")
+# collections/auth.art
+collection "auth" {
 
-  step "seed the database" {
-    run "psql" {
-      args = ["-f", "seed.sql"]
-      cwd  = "db"
-      env  { PGPASSWORD = pw }
-    }
-    expect exit_code == 0
-    expect stdout contains "COPY 42"
-  }
+  request login {
+    var url
+    var user = "alice"
+    var password
 
-  step "login" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
-      body = {"username": "alice", "password": pw}
+      body = {"username": user, "password": password}
     }
     expect status == 200
-    capture token = body.data.access_token
+    var token = body.data.access_token
+  }
+}
+```
+
+```art
+# flows/checkout.art
+import "../collections/auth.art"
+
+flow checkout {
+  var sku      = "A-1"
+  var quantity = 1
+  var coupon   = ""
+  var code     = 200
+  var total    = 100
+  private var url = env("API_URL")
+
+  setup {
+    step "log in" = auth.login { password = env("API_PASSWORD") }
   }
 
-  step "orders" {
-    get "${url}/orders" {
+  step "pay" {
+    post "${url}/cart/pay" {
       header "Authorization" = "Bearer ${token}"
-      query "limit" = 10
+      body = {"sku": sku, "quantity": quantity, "coupon": coupon}
     }
     timeout = "5s"
     retry { times = 3, delay = "2s" }
 
-    expect status == 200
-    expect body.data.count > 0
-    expect body.data.email matches /.+@.+/
-    expect body.data.roles contains "admin"
-    expect body.data.token exists
-    expect body.data.count is number
+    expect status == code
+    expect body.total == total
+    var paid = status
+  }
+
+  if paid == 200 {
+    step "the order is there" {
+      get "${url}/orders/latest" {
+        header "Authorization" = "Bearer ${token}"
+        query "limit" = 1
+      }
+      expect status == 200
+      expect body.total == total
+      expect body.items[0].sku == sku
+      expect body.email matches /.+@.+/
+      expect body.id is number
+    }
+  } else {
+    step "the error says why" {
+      get "${url}/errors/last" {
+        header "Authorization" = "Bearer ${token}"
+      }
+      expect body.code exists
+    }
   }
 }
 ```
 
-Everything in this document is a rule that example follows.
+```art
+# scenarios/checkout.art
+flow "../flows/checkout.art"
+
+scenario "full price" {}
+
+scenario "with a coupon" {
+  tags     = ["smoke"]
+  quantity = 3
+  coupon   = "TEN"
+  total    = 270
+}
+
+scenario "bad coupon" {
+  tags   = ["errors"]
+  coupon = "NOPE"
+  code   = 422
+  total  = skip
+}
+```
+
+```sh
+artemis run scenarios/checkout.art
+```
+
+That runs the flow three times, once per scenario, and reports three
+scenarios. Everything in this document is a rule those three files follow.
 
 ---
 
-## The file
+## The three files
 
-A scenario file has the extension `.art` and holds one or more scenarios:
-
-```art
-scenario "first" {
-  step "ping" {
-    get "https://example.com/health"
-    expect status == 200
-  }
-}
-
-scenario "second" {
-  step "ping again" {
-    get "https://example.com/health"
-    expect status == 200
-  }
-}
-```
+| | Collection file | Flow file | Scenario file |
+| --- | --- | --- | --- |
+| Holds | One `collection "<title>" { ... }` of items | `import` lines, then one `flow <name> { ... }` | A `flow "<path>"` header on its first line, then `scenario "<title>" { ... }` blocks |
+| Its job | Units of work, written once: see [Collections](#collections) | Steps in order: see [Inside a flow](#inside-a-flow) | Data: see [Scenario files](#scenario-files) |
+| Runs | One item at a time, with [`--item`](#running-one-item) | Never alone: through a scenario file that names it | Yes: each scenario is one run of the flow |
 
 | | |
 | --- | --- |
-| Extension | `.art` |
-| Top level | `import` lines first, then `collection` and `scenario` blocks. Scenarios run in the order they are written; see [Collections](#collections) for the other two |
+| Extension | `.art`, for all three |
 | Comments | `#` to the end of the line |
 | Statement separator | A newline, or a comma inside `{ }` where the grammar allows one. No semicolons |
 | Trailing commas | Permitted in objects and arrays |
 | Encoding | UTF-8 |
 
-Nothing is shared between scenarios: each gets its own variables, so what one
-captures is invisible to the next. Nothing is shared between files except what a
-file imports: see [Collections](#collections).
+Each kind of file holds one thing, and each of these is a compile error:
+
+| | Code |
+| --- | --- |
+| A flow file that also holds a collection or a scenario | `flow-file-holds` |
+| A file with a second flow, or a second `flow "..."` header | `second-flow` |
+| A scenario file whose `flow "..."` header is not its first line | `flow-ref-placement` |
+| A header whose path cannot be read, or names a file that holds no flow | `flow-not-found`, `not-a-flow-file` |
+| A second `collection` in a collection file | `second-collection` |
+
+Nothing is shared between scenarios: each run of a flow starts with the flow's
+vars and the scenario's values and nothing else, so what one scenario's steps
+wrote is invisible to the next. Nothing is shared between files except what a
+flow imports and what a scenario file names.
 
 ---
 
-## Inside a scenario
+## Inside a flow
 
-A scenario holds these declarations, in any order:
+A flow holds these declarations:
 
 ```art
-scenario "orders" {
+flow list_orders {
   config browser { headless = true }   # settings for a step type
 
-  var url = env("API_URL")             # a value the steps can name
-  var limit = 10
+  var limit = 10                       # a value a scenario can set
+  private var url = env("API_URL")     # a value only the flow sets
 
   step "list" {                        # a thing to do, and what to expect of it
     get "${url}/orders?limit=${limit}"
@@ -124,16 +182,20 @@ scenario "orders" {
 | Declaration | Form | What it is |
 | --- | --- | --- |
 | `config` | `config <ident> { <key> = <expr>, ... }` | Settings for one step type, named by the ident |
-| `var` | `var <ident> = <expr>` | A value every step of the scenario can name |
-| `secret` | `secret var ...`, `secret capture ...` | A binding whose value no report prints |
+| `var` | `var <ident> = <expr>`, `var <ident>` | A parameter of the flow: a value every step can name, and a scenario can set |
+| `private var` | `private var <ident> = <expr>` | A value every step can name, and no scenario can set |
 | `step` | `step "<name>" { ... }` | One action and what to expect of it |
-| `use` | `use <collection>.<item> { ... }` | Steps written once in a collection, expanded in place -- see [Collections](#collections) |
+| an item call | `step "<name>" = <collection>.<item> { ... }` | A step written once in a collection -- see [Collections](#collections) |
+| `setup`, `teardown` | `setup { ... }`, `teardown { ... }` | Steps that run first, and steps that run last whatever happened -- see [setup and teardown](#setup-and-teardown) |
 | a block | `parallel { ... }`, `if`, `switch`, `try`, `repeat` | Steps that run at the same time, on a condition, under try, or in a loop -- see [Blocks](#blocks) |
 
+The flow's name is an identifier, and reports print it. A flow is the
+function, its vars are its parameters, and a scenario is one call of it.
+
 Steps run in the order they are written, one after another: a step reads what
-the steps above it captured, so the order is the meaning. A block is how a
-scenario asks for anything else -- steps at the same time, on a condition, or
-until something holds -- and it says so where it is written.
+the steps above it wrote, so the order is the meaning. A block is how a flow
+asks for anything else -- steps at the same time, on a condition, or until
+something holds -- and it says so where it is written.
 
 Whole scenario *files* are a different question, and one the language does not
 answer. `artemis run --jobs N` runs N of them at once; see
@@ -141,98 +203,66 @@ answer. `artemis run --jobs N` runs N of them at once; see
 
 ### `var`
 
-A `var`'s value is any expression, evaluated once, before the first step runs:
+The vars at the top of a flow, above its first `setup`, step or block, are its
+parameters:
 
 ```art
-var base    = env("API_URL")
-var version = "v2"
-var root    = "${base}/${version}"
-var retries = 3
-var headers = {"Accept": "application/json"}
-```
+# flows/orders.art
+flow orders {
+  var version = "v2"
+  var limit   = 10
+  var user
+  var accept  = "application/json"
+  private var base = env("API_URL")
+  private var root = "${base}/${version}"
 
-A `var` may name an earlier `var`, as `root` does. It may not name a later one,
-and it may not name a `capture`: captures do not exist yet when variables are
-evaluated. Both are compile errors.
-
-### `secret`
-
-`secret` is a modifier before `var` and before `capture`:
-
-```art
-scenario "checkout" {
-  secret var pw = env("API_PASSWORD")
-  var url = env("API_URL")
-
-  step "get a token" {
-    post "${url}/token" {
-      body = {"username": "alice", "password": pw}
-    }
-    expect status == 200
-    secret capture token = body.data.access_token
-  }
-
-  step "list the orders" {
-    get "${url}/orders" {
-      header "Authorization" = "Bearer ${token}"
+  step "list" {
+    get "${root}/orders?limit=${limit}&user=${user}" {
+      header "Accept" = accept
     }
     expect status == 200
   }
 }
 ```
 
-Three things are true of it.
+| Form | Meaning |
+| --- | --- |
+| `var x = <expr>` | A default. A scenario can set it |
+| `var x` | **Required.** Every scenario of the flow must set it: one that does not is `missing-param`, naming the var |
+| `private var x = <expr>` | Internal. No scenario can set it -- one that tries is `private-param` -- and it is not one of the names a scenario's did-you-mean offers |
 
-**It changes no request.** A `secret` binding sends the same bytes as a plain
-one. The modifier says what a *report* may print, and nothing else. It is not
-protection in transit.
+A var's value is any expression, evaluated once, before the first step runs.
+A var may name an earlier var, as `root` does. It may not name a later one,
+and it may not name a value a step writes: no step has run yet when vars are
+evaluated. Both are compile errors.
 
-**A value built from a secret binding is secret too.** The `Authorization`
-header above is withheld because it interpolates `token`. This holds through
-interpolation, a call, a comparison, an object field and an array element. A
-`capture` whose own expression reads a secret binding is secret with no modifier
-on it, so `capture part = match(pw, /^(.{3})/)` needs none.
+**Vars go at the top.** A `var` below the flow's first setup, step or block is
+the compile error `var-after-step`: every var is evaluated before the first
+step runs, so a var written lower would suggest an order the runner does not
+follow. A value a step makes is a [step var](#step-vars), written after the
+step's action.
 
-**It is positional, not a keyword.** `secret` means the modifier only
-immediately before `var` or `capture`. `var secret = "x"` and `capture secret =
-body.kind` are both legal, as `capture body = ...` already is.
-
-A report prints `***` in place of a withheld value. The length is fixed, so it
-does not report the length of the value. The two operands of a comparison are
-withheld separately, so `expect pw == "hunter2"` still shows which side was
-which. A failure between two types keeps naming both types: the type of a
-credential is not the credential.
-
-What a report withholds is decided per field. A request body written as an
-object literal is withheld field by field, so one secret password does not hide
-the rest of a body. A body that is not a literal -- `body = payload` -- has no
-field to address, so all of it is withheld. The same is true of a secret under
-an interpolated key, `{"${k}": pw}`: no path can name it, so the whole body
-goes.
-
-A `secret` binding that no step reads is not an error. A file under edit must
-still compile.
-
-`secret` reaches artemis's own reports and traces, and no further.
+Two vars of one name at the top of a flow are `duplicate-binding`. A var may
+not be named `tags`, which is each scenario's own list (`reserved-tags`).
 
 ### `setup` and `teardown`
 
 ```art
-scenario "checkout" {
-  var url = env("API_URL")
+flow checkout {
+  private var url = env("API_URL")
 
   setup {
     step "make a cart" {
       post "${url}/carts"
       expect status == 201
-      capture cart_id = body.id
+      var cart_id = body.id
     }
   }
 
   step "pay" {
     post "${url}/carts/${cart_id}/pay"
     expect status == 200
-    capture order_id = body.id
+    var order_id = body.id
   }
 
   teardown {
@@ -247,20 +277,20 @@ scenario "checkout" {
 }
 ```
 
-`setup` runs before the scenario's own steps and `teardown` after them. Each
-holds steps and [`use`](#use) lines, and a scenario has at most one of each.
-**The file is in run order**: `setup` is written above the first step and
-`teardown` below the last -- `setup-after-step`, `teardown-before-step` and
-`duplicate-phase` are compile errors otherwise -- so the [scope](#what-is-in-scope)
-rule is unchanged: setup's captures are in scope for every step below them,
-and teardown sees every capture above it.
+`setup` runs before the flow's own steps and `teardown` after them, once for
+each scenario. Each holds steps, item calls and blocks, and a flow has at most
+one of each. **The file is in run order**: `setup` is written above the first
+step and `teardown` below the last -- `setup-after-step`,
+`teardown-before-step` and `duplicate-phase` are compile errors otherwise -- so
+the [scope](#what-is-in-scope) rule is unchanged: what setup writes is in
+scope for every step below it, and teardown sees everything written above it.
 
 | | |
 | --- | --- |
-| A setup step does not pass | The rest of setup and every one of the scenario's own steps is **skipped**, each naming the setup step that failed. Teardown still runs |
-| One of the scenario's own steps fails | The steps after it run, as they always have. Teardown runs |
+| A setup step does not pass | The rest of setup and every one of the flow's own steps is **skipped**, each naming the setup step that failed. Teardown still runs |
+| One of the flow's own steps fails | The steps after it run, as they always have. Teardown runs |
 | Teardown | Always runs, every step of it -- after a failure as after a pass, and after a teardown step that failed |
-| A teardown step reads a capture no step made | It is **skipped**, naming the capture: there is nothing to clean up. `cancel the order` above is skipped when `pay` failed before capturing `order_id` |
+| A teardown step reads a name no step wrote | It is **skipped**, naming it: there is nothing to clean up. `cancel the order` above is skipped when `pay` failed before writing `order_id` |
 | A teardown step fails | The scenario fails: cleanup that did not happen is a fault, and the next run may meet what it left |
 
 A skipped step is `"status": "skip"` in the [JSON report](#the-json-report),
@@ -268,108 +298,15 @@ with the reason in `error`, and setup and teardown steps carry `"phase":
 "setup"` or `"phase": "teardown"`. The console prints them as `setup: make a
 cart`, and JUnit names them `[setup] make a cart`.
 
-### `tags`
-
-```art
-scenario "checkout" {
-  tags = ["smoke", "payments"]
-
-  step "pay" {
-    post "https://example.com/pay"
-    expect status == 200
-  }
-}
-```
-
-`tags` is the words a run selects scenarios by: `artemis run suite/ --tags
-"smoke and not slow"`. A scenario has its own tags and every tag of the
-[suites](#suites-suiteart) above it. They are written out -- a list of string
-literals, because a run selects before it evaluates anything -- and each is one
-lower-case word of letters, digits, `_`, `.` and `-`, so a tag is always one word
-of a `--tags` expression. A tag that is not, or is listed twice, is `bad-tag`;
-a second `tags` is `duplicate-tags`.
-
-`--tags` takes an expression of tags joined by `and`, `or` and `not`, with
-parentheses; `not` binds tightest and `or` loosest. `--grep` takes a regular
-expression over the scenario's name. A scenario a run does not select is in the
-[JSON report](#the-json-report) with `"status": "skip"` and why in `error`, and
-is not on the console. A selection of nothing is an error, and a tag the
-expression names that no scenario has is a warning naming the nearest one.
-
-Only what is selected is checked before the run: an `env()` only an unselected
-scenario reads is not [required](#builtins), and a suite with no selected
-scenario under it is not set up.
-
-### Suites: `suite.art`
-
-```art
-# suite/suite.art
-suite {
-  var url = env("API_URL")
-
-  setup {
-    step "log in" {
-      post "${url}/login" {
-        body = {"user": env("ADMIN"), "password": env("ADMIN_PW")}
-      }
-      expect status == 200
-      capture token = body.token
-    }
-  }
-
-  teardown {
-    step "log out" {
-      post "${url}/logout" {
-        header "Authorization" = "Bearer ${token}"
-      }
-    }
-  }
-}
-```
-
-```art
-# suite/orders/create.art
-scenario "create an order" {
-  step "create" {
-    post "${suite.url}/orders" {
-      header "Authorization" = "Bearer ${suite.token}"
-    }
-    expect status == 201
-  }
-}
-```
-
-A file named `suite.art` holds one `suite { ... }` block -- vars, `config`, and
-a [`setup` and `teardown`](#setup-and-teardown) -- for **every scenario in its
-folder and every folder below it**. Its setup runs **once per run**, before any
-scenario under it, and its teardown once, after all of them. Every scenario
-under it reads what the suite set up through one name, `suite`: its vars and
-its setup's captures, as `suite.url`, `suite.token`. `suite`'s members are a
-closed set, like [`page`](#what-a-browser-step-binds)'s, so `suite.tokn` is a
-compile error with a did-you-mean, and `suite.token` cannot collide with a name
-the scenario declares.
-
-| | |
-| --- | --- |
-| Which suites apply | Every `suite.art` from the scenario file's folder up to the working directory. An inner suite's setup runs after its parent's and reads it as `suite.<name>` too; its names join the parent's, and a name both give is `duplicate-suite-name` |
-| Cookies | A suite's api steps keep a [cookie jar](#cookies), and every scenario under it starts with a copy of it: a suite that logs in with a cookie logs every scenario in. A copy, so what one scenario's responses set reaches no other |
-| A suite's setup fails | No scenario under it runs: each is reported with its steps skipped, naming the suite. The suite's teardown still runs |
-| In the report | The setup and the teardown are each an entry in `scenarios`, named `suite setup` and `suite teardown`, with the suite file as `file` and `"kind": "suite"` |
-| Secrets | A `secret var` or a `secret` capture of a suite makes `suite` secret: a report withholds every value read through it |
-| What it may hold | A suite runs setup and teardown, not steps of its own (`suite-has-step`). A suite block belongs in a file named `suite.art` (`suite-file-name`), and a `suite.art` holds the suite and no scenario (`suite-has-scenario`) |
-
-`artemis run suite/` never runs `suite.art` as a scenario file; it runs with the
-scenarios under it.
-
 ### `config`
 
 **Spec decision.** `config` takes a subject and settings for it. There are two:
 `config browser`, which belongs to the browser step type and is specified with
 it -- see [`config browser`](#config-browser) -- and `config http`, how the
-scenario's api steps talk:
+flow's api steps talk:
 
 ```art
-scenario "anonymous" {
+flow anonymous {
   config http { cookies = false }
 
   step "no session" {
@@ -381,20 +318,21 @@ scenario "anonymous" {
 
 | Setting | Value | Default |
 | --- | --- | --- |
-| `cookies` | `true` or `false` | `true`: the scenario's api steps share a [cookie jar](#cookies) |
+| `cookies` | `true` or `false` | `true`: the api steps of each run share a [cookie jar](#cookies) |
 
 A `config` block naming a subject that does not exist, or setting a key that
 subject does not define, is a compile error.
 
 ### Cookies
 
-A scenario's api steps share one cookie jar, as a browser's pages do: a cookie a
-response sets is sent on the scenario's later requests to the site that set it,
-so an API that keeps its session in a cookie is tested by logging in once.
+The api steps of one run of a flow share one cookie jar, as a browser's pages
+do: a cookie a response sets is sent on the later requests to the site that
+set it, so an API that keeps its session in a cookie is tested by logging in
+once.
 
 ```art
-scenario "a cookie session" {
-  var url = env("API_URL")
+flow cookie_session {
+  private var url = env("API_URL")
 
   step "log in" {
     post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
@@ -417,8 +355,133 @@ after it. `config http { cookies = false }` keeps no jar: every request sends
 only the headers it wrote.
 
 `cookies` reads what *this* response set; what the jar holds is not a value a
-scenario can read. A [trace](#tracing-a-step) withholds every cookie's value,
-in `cookies` and in `headers["Set-Cookie"]`, as it withholds a `secret`.
+step can read. A [trace](#tracing-a-step) withholds every cookie's value, in
+`cookies` and in `headers["Set-Cookie"]`.
+
+---
+
+## Scenario files
+
+```art
+# scenarios/orders.art
+flow "../flows/orders.art"
+
+scenario "alice"        { user = "alice" }
+scenario "bob, limit 1" { user = "bob"  limit = 1 }
+scenario "from the env" {
+  tags = ["smoke"]
+  user = env("SMOKE_USER", "alice")
+}
+```
+
+A scenario file names its flow **once**, on its first line: `flow "<path>"`,
+relative to the scenario file. Every scenario in the file is one run of that
+flow, named by its title, and the file's scenarios run in the order they are
+written.
+
+### Setting a var
+
+Inside a scenario's braces each line is `<name> = <value>`, or `tags`, and
+nothing else. Several may share a line, as in `bob, limit 1`.
+
+| | |
+| --- | --- |
+| The name | A var at the top of the flow, not `private`. A name the flow has no such var for is `unknown-param`, with a did-you-mean or the list of the flow's vars; a private one is `private-param`; a name set twice is `duplicate-argument` |
+| The value | Any expression that reads no name: a literal, an array or object of them, `env()`, `json()`, `file()` and the other [builtins](#builtins). A value that reads a name -- `total = quantity * 90` -- is `scenario-value-reads-name`: the flow's vars have no value yet where a scenario's are given |
+| A var not set | Keeps the flow's default. A required var not set is `missing-param`, at the scenario's title |
+| Anything else | A `step`, an `expect`, a `var` or an override line is `data-only-scenario`: **a scenario changes data, never the shape of the flow.** A test that needs other steps is another flow |
+
+A scenario that sets nothing, `scenario "full price" {}`, runs the flow with
+its defaults.
+
+A scenario has no routing of its own. The flow does all of it, with
+[`if` and `switch`](#blocks) on the values it is given -- `if paid == 200` in
+[the whole test](#a-whole-test) above -- and a flow has to cover every case
+its scenarios can cause.
+
+### `tags`
+
+```art
+# scenarios/smoke.art
+flow "../flows/orders.art"
+
+scenario "smoke" {
+  tags = ["smoke", "payments"]
+  user = "alice"
+}
+```
+
+`tags` is the words a run selects scenarios by: `artemis run scenarios/
+--tags "smoke and not slow"`. They are written out -- a list of string
+literals, because a run selects before it evaluates anything -- and each is
+one lower-case word of letters, digits, `_`, `.` and `-`, so a tag is always
+one word of a `--tags` expression. A tag that is not, or is listed twice, is
+`bad-tag`; a second `tags` is `duplicate-tags`.
+
+`--tags` takes an expression of tags joined by `and`, `or` and `not`, with
+parentheses; `not` binds tightest and `or` loosest. `--grep` takes a regular
+expression over the scenario's title. A scenario a run does not select is in
+the [JSON report](#the-json-report) with `"status": "skip"` and why in `error`,
+and is not on the console. A selection of nothing is an error, and a tag the
+expression names that no scenario has is a warning naming the nearest one.
+
+Only what is selected is checked before the run: an `env()` only an unselected
+scenario reads is not [required](#builtins).
+
+### `skip`
+
+```art
+# scenarios/any_total.art
+flow "../flows/checkout.art"
+
+scenario "any total" {
+  coupon = "NOPE"
+  total  = skip
+}
+```
+
+A scenario can set a var to `skip`. It turns checks off, and is the one way a
+scenario reaches past data:
+
+| Where the flow reads the var | With `skip` |
+| --- | --- |
+| In an `expect` | The `expect` is removed, for this scenario |
+| As an object field's value: `{"sku": sku, "coupon": coupon}` | The field is left out: `{"sku": "A-1"}` is sent |
+| Anywhere else -- a URL, an interpolation, a condition, arithmetic | The compile error `skip-read`, naming the scenario |
+
+`skip` reaches into the steps an item call brings in: a skipped var that
+supplies an item's input, by name or [through the context](#how-an-item-gets-its-values),
+removes the item's `expect`s and object fields that read it, by the same
+rules.
+
+A step that writes the name gives it a normal value again, and the `expect`s
+after that step run as usual. Where only some paths have written it -- one
+branch of an `if` -- an `expect` after the block that reads it is
+`skip-maybe-written`: it may still be `skip` there.
+
+`skip` is a reserved word, so no var is named it.
+
+### Running scenario files
+
+| Command | What runs |
+| --- | --- |
+| `artemis run scenarios/checkout.art` | Every scenario in the file, each one run of the flow |
+| `artemis run scenarios/ --tags smoke` | Every scenario file under the folder, then the scenarios their tags select |
+| `artemis run scenarios/checkout.art --grep "coupon"` | The scenarios whose titles match |
+| `artemis run flows/checkout.art` | Nothing: `flow-not-runnable`, whose hint names the scenario files near it that name this flow |
+| `artemis run collections/auth.art --item auth.login` | One item alone -- see [Running one item](#running-one-item) |
+
+A folder is walked for `.art` files and each scenario file in it is run. A flow
+file or a collection file found there is skipped, not an error: a folder holds
+all three kinds, and only one kind runs. A flow file is an error only when it
+is the path the command was given.
+
+An environment file supplies `env("...")` and nothing else: it does not set a
+flow's vars by name. A value that should come from the environment is written
+`env("...")` in the scenario or in the flow.
+
+Each scenario is one entry in the report, named by its title, carrying the
+scenario file's path as `file` and the flow's name as `flow`.
 
 ---
 
@@ -450,8 +513,9 @@ A step with no action block, and a step with two, are both compile errors. The
 type is known before any name in the step is resolved, which is what makes
 [scope](#what-is-in-scope) per step type.
 
-Besides its action, a step may hold `expect`, `capture`, `retry` and `timeout`
-statements, in any order and any number:
+Besides its action, a step may hold `expect`, `retry` and `timeout`
+statements and [step vars](#step-vars), below the action, in any order and any
+number:
 
 ```art
 step "orders" {
@@ -459,9 +523,12 @@ step "orders" {
   timeout = "5s"
   retry { times = 3, delay = "2s" }
   expect status == 200
-  capture first = body.data[0].id
+  var first = body.data[0].id
 }
 ```
+
+A step can also call an item a collection holds instead of writing its own
+action: `step "log in" = auth.login { ... }`. See [Collections](#collections).
 
 ---
 
@@ -502,13 +569,13 @@ no body, which is what you want for a health check.
 body = {"username": "alice", "roles": ["admin"], "quota": limit}
 ```
 
-That is serialised to JSON. So a captured object reaches a body as a value:
+That is serialised to JSON. So an object a step wrote reaches a body as a value:
 
 ```art
 step "read the user" {
   get "${url}/users/1"
   expect status == 200
-  capture user = body.data
+  var user = body.data
 }
 
 step "write it back" {
@@ -563,7 +630,7 @@ step "the tag exists" {
   }
   expect exit_code == 0
   expect stderr matches /^\s*$/
-  capture sha = match(stdout, /^([0-9a-f]{40})/)
+  var sha = match(stdout, /^([0-9a-f]{40})/)
   timeout = "5s"
 }
 ```
@@ -578,7 +645,7 @@ step "the tag exists" {
 
 **There is no shell.** The command is executed directly with its arguments: no
 word splitting, no globbing, no `~` expansion. `run "ls *.go"` looks for a binary
-with a space in its name and does not find one. A scenario that wants a pipeline
+with a space in its name and does not find one. A step that wants a pipeline
 or a glob names a shell itself:
 
 ```art
@@ -600,17 +667,17 @@ immediately at end of file, so a command that reads stdin cannot hang the run.
 Each stream is kept up to **1 MiB per attempt**; a command that prints more than
 that has the rest counted and dropped.
 
-A whole scenario of terminal steps:
+A whole flow of terminal steps:
 
 ```art
-scenario "release checks" {
+flow release_checks {
   var tag = env("RELEASE_TAG")
 
   step "the tag exists" {
     run "git" { args = ["rev-parse", "--verify", "${tag}^{commit}"] }
     expect exit_code == 0
     expect stderr matches /^\s*$/
-    capture sha = match(stdout, /^([0-9a-f]{40})/)
+    var sha = match(stdout, /^([0-9a-f]{40})/)
     timeout = "5s"
   }
 
@@ -637,7 +704,7 @@ scenario "release checks" {
 The action is `browser` and a block of what to do in the page:
 
 ```art
-scenario "upgrade to pro" {
+flow upgrade_to_pro {
   config browser { headless = true, viewport = "1280x720" }
 
   var url = env("APP_URL")
@@ -653,7 +720,7 @@ scenario "upgrade to pro" {
     expect page.url contains "/settings/billing"
     expect text("[role=status]") contains "Pro" within "10s"
     expect count(".invoice") > 0
-    capture plan = match(text(".plan-badge"), /plan: (\w+)/)
+    var plan = match(text(".plan-badge"), /plan: (\w+)/)
   }
 }
 ```
@@ -756,9 +823,10 @@ error listing what *is* in scope there. The same holds the other way --
 config browser { headless = true, viewport = "1280x720" }
 ```
 
-It is scenario-wide: one browser, one context, shared by every browser step of
-that scenario in the order they are written, so a step can sign in and the next
-step is still signed in. A scenario with no browser step opens no browser.
+It holds for the whole flow: one browser and one context for each run of it,
+shared by every browser step of that run in the order they are written, so a
+step can sign in and the next step is still signed in. A flow with no browser
+step opens no browser.
 
 An assertion in a browser step has a default [`within`](#within) of **5s**,
 because a page settles asynchronously and an assertion that reads it once is a
@@ -779,19 +847,19 @@ artemis run upgrade.art --screenshots ""           # none
 
 ### Running files at once
 
-Steps within a scenario are ordered, and so are the scenarios within one file.
-Separate files share nothing at run time: `SPEC.md` already says a scenario's
-captures are invisible to the next, and an import copies a collection's steps
-into the importing file before anything runs rather than sharing a value. So separate
-files can run at the same time, and `--jobs` says how many:
+Steps within a flow are ordered, and so are the scenarios within one file.
+Separate files share nothing at run time: what one scenario's steps write is
+invisible to the next, and an item call copies the item's step into the flow
+before anything runs rather than sharing a value. So separate scenario files
+can run at the same time, and `--jobs` says how many:
 
 ```sh
-artemis run suite/ --jobs 6      # six files at once
-artemis run suite/               # one at a time, the default
+artemis run scenarios/ --jobs 6      # six files at once
+artemis run scenarios/               # one at a time, the default
 ```
 
-This is a property of the runner. Steps of one scenario at the same time are
-the language's: a [`parallel`](#blocks) block.
+This is a property of the runner. Steps of one flow at the same time are the
+language's: a [`parallel`](#blocks) block.
 
 The order of a report does not change. A scenario keeps the place its file had in
 discovery order, however early or late that file finished, so a golden file and a
@@ -803,7 +871,7 @@ Two files printing to one terminal at once produce something no reader can
 follow. A run with one job still streams, which is why one is the default.
 
 One is the default for a second reason: the limit on a run like this is the
-service under test. A suite pointed at a staging API meets a rate limit long
+service under test. A run pointed at a staging API meets a rate limit long
 before it saturates the machine.
 
 ### Tracing a step
@@ -827,26 +895,26 @@ A trace records the step's observation under the names its type binds --
 of a retried step is recorded, because a later attempt replaces an earlier one
 whole.
 
-A value a [`secret`](#secret) binding named is withheld, written as `***` rather
-than left out, so a withheld header and an absent one do not read the same. Both
-directions are withheld: a secret value the step *sent*, and the place in the
-response a `secret capture` read its value *from* -- a
-`secret capture token = body.data.access_token` withholds `/data/access_token`
-of that step's body, and leaves the rest of the response readable.
+A cookie's value and the password in a db step's URL are withheld, written as
+`***` rather than left out, so a withheld value and an absent one do not read
+the same. Everything else the step sent and got back is recorded as it was --
+a password in a request body, a token in a header -- because nothing in the
+language marks a value as a credential. Masking credentials without marking
+them is an open item on [the roadmap](ROADMAP.md).
 
 A string longer than 64 KiB is cut, the value says so, and the trace's
 `truncated` list names what was cut.
 
-Tracing is off unless asked for, and a trace file holds whatever the service
-answered. Withholding covers what the scenario declared, so treat the folder as
-sensitive regardless.
+Tracing is off unless asked for, and a trace file holds whatever the step sent
+and the service answered, credentials included, so treat the folder as
+sensitive.
 
 The name is `<scenario>-<step>.png`, lower-cased with everything that is not a
 letter or a digit collapsed to a hyphen, and it has no timestamp: a rerun
 overwrites the file from the run before it, so the path in the report is
 predictable enough for a CI job to name the artifact it is about to upload. Two
 steps that share a name in one run get `-2` and `-3`. The folder is created only
-when a browser step actually fails, so a suite of `api` steps never grows one.
+when a browser step actually fails, so a run of `api` steps never grows one.
 
 ---
 
@@ -855,9 +923,9 @@ when a browser step actually fails, so a suite of `api` steps never grows one.
 The action is `db`, the database to connect to, and the SQL to run there:
 
 ```art
-scenario "an order lands in the database" {
-  var url = env("API_URL")
-  secret var orders_db = env("ORDERS_DB")   # postgres://app:pw@localhost:5432/orders
+flow order_saved {
+  private var url = env("API_URL")
+  private var orders_db = env("ORDERS_DB")   # postgres://app:pw@localhost:5432/orders
 
   setup {
     step "seed" {
@@ -868,7 +936,7 @@ scenario "an order lands in the database" {
   step "place an order" {
     post "${url}/orders" { body = {"sku": "A-1"} }
     expect status == 201
-    capture order_id = body.id
+    var order_id = body.id
   }
 
   step "the row is there" {
@@ -879,7 +947,7 @@ scenario "an order lands in the database" {
     retry { times = 5, delay = "1s" }
     expect len(rows) == 1
     expect rows[0].status == "paid"
-    capture total = rows[0].total
+    var total = rows[0].total
   }
 
   teardown {
@@ -920,9 +988,9 @@ MongoDB and Redis are in a full build -- `make build-full`, or `go build -tags
 db_all` -- because their drivers add about 28 MB; a step naming one a binary was
 built without is a step error naming the build tag that adds it.
 
-A connection is a value, so it lives where a credential does: a `secret var`, a
-[suite](#suites-suiteart)'s var read as `suite.db`, an `env()` call. A URL written
-out is checked when the file compiles -- `postgress://` is `unknown-db-scheme`
+A connection is a value, so it lives where a credential does: a flow's var,
+`private` so no scenario prints it into a scenario file, read with `env()`. A
+URL written out is checked when the file compiles -- `postgress://` is `unknown-db-scheme`
 with the fix -- and one from a variable when the step runs.
 
 **SQL is sent as written.** Artemis never rewrites a statement, so its
@@ -978,7 +1046,7 @@ database would reject, is dropped.
 
 | | |
 | --- | --- |
-| Connections | One per URL for the whole run, opened by the first step that names it and closed when the run ends, shared by every scenario, suite and `--jobs` worker. A step has no connection of its own, so a `SET` or a temporary table may not be there for the next step |
+| Connections | One per URL for the whole run, opened by the first step that names it and closed when the run ends, shared by every scenario and `--jobs` worker. A step has no connection of its own, so a `SET` or a temporary table may not be there for the next step |
 | Transactions | None: every statement commits on its own. A test cleans up in [teardown](#setup-and-teardown) |
 | More than 10,000 rows | A step error: a cut `rows` would make `len(rows)` a quiet lie. Ask for a `LIMIT`, or `count(*)` |
 | Two columns alike | `SELECT a.id, b.id` is a step error naming the column: a row holds one `id`. Name one with `AS` |
@@ -988,22 +1056,22 @@ database would reject, is dropped.
 A database that refuses the connection, SQL it rejects and a timeout are
 **step errors**: the step could not run. A row that holds the wrong value is an
 **assertion failure**. A [trace](#tracing-a-step) of a db step records the URL
-with its password replaced by `***` whether or not the URL is secret, the
+with its password replaced by `***`, the
 statement, and the args.
 
 ### MongoDB and Redis: `command`
 
 ```art
-scenario "a paid order is cached" {
-  secret var mongo = env("MONGO_URL")
-  secret var cache = env("REDIS_URL")
+flow order_cached {
+  private var mongo = env("MONGO_URL")
+  private var cache = env("REDIS_URL")
 
   step "the order" {
     db mongo {
       command = {"find": "orders", "filter": {"status": "paid"}, "sort": {"_id": -1}, "limit": 1}
     }
     expect len(rows) == 1
-    capture order_id = rows[0]._id
+    var order_id = rows[0]._id
   }
 
   step "by its id" {
@@ -1032,7 +1100,7 @@ from a var has no written order and is sent with its keys sorted. A whole
 number is sent as a 32-bit integer when it fits and a double when not, as
 `mongosh` sends them. A value of a BSON type JSON has no spelling for is written
 in **Extended JSON**: `{"$oid": id}` is an ObjectId -- how a filter finds a
-document by an `_id` a step captured -- `{"$date": "2026-10-26T09:30:15Z"}` a
+document by an `_id` a step wrote -- `{"$date": "2026-10-26T09:30:15Z"}` a
 date, `{"$numberDecimal": "19.99"}` a decimal, `{"$numberLong": "42"}` a 64-bit
 integer. A reply reads the other way: an ObjectId is its hex string, a date an
 RFC 3339 time, a decimal a number by the rule above.
@@ -1042,22 +1110,22 @@ RFC 3339 time, a decimal a number by the rule above.
 ## Blocks
 
 ```art
-scenario "checkout" {
-  var url = env("API_URL")
+flow checkout {
+  private var url = env("API_URL")
 
   step "log in" {
     post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
-    capture token = body.token
+    var token = body.token
   }
 
   parallel {
     step "cart" {
       post "${url}/carts" { header "Authorization" = "Bearer ${token}" }
-      capture cart_id = body.id
+      var cart_id = body.id
     }
     step "profile" {
       get "${url}/me" { header "Authorization" = "Bearer ${token}" }
-      capture tier = body.tier
+      var tier = body.tier
     }
   }
 
@@ -1077,7 +1145,7 @@ scenario "checkout" {
     step "pay" {
       post "${url}/carts/${cart_id}/pay"
       expect status == 201
-      capture order_id = body.id
+      var order_id = body.id
     }
   } catch {
     step "refund" {
@@ -1092,7 +1160,7 @@ scenario "checkout" {
   repeat every "2s" within "2m" {
     step "order status" {
       get "${url}/orders/${order_id}"
-      capture state = body.state
+      var state = body.state
     }
   } until state == "shipped" or state == "failed"
 
@@ -1103,8 +1171,8 @@ scenario "checkout" {
 }
 ```
 
-A scenario's steps run one after another. A **block** runs the steps inside it
-another way, and holds steps, `use` lines and other blocks; it can be written
+A flow's steps run one after another. A **block** runs the steps inside it
+another way, and holds steps, item calls and other blocks; it can be written
 wherever a step can, setup and teardown included.
 
 | Block | Form | What runs |
@@ -1115,14 +1183,14 @@ wherever a step can, setup and teardown included.
 | `try` | `try { ... } catch { ... } finally { ... }` | The try's steps until one does not pass; then the `catch`, when one did not; then the `finally`, whatever happened. Either of catch and finally may be left out, not both |
 | `repeat` | `repeat [every <d>] [within <d>] [max <n>] { ... } until <cond>` | The body, a round at a time, until the condition holds after a round |
 
-A condition, a subject, a case value and a repeat's options read the vars and
-the captures above the block; a block has no observation of its own, so
+A condition, a subject, a case value and a repeat's options read the
+[context](#the-context) above the block; a block has no observation of its own, so
 `status` is not in scope in one. A condition that is not `true` or `false` is a
 step error, reported where the block is.
 
 ### What each block reports
 
-Every step of the scenario is in the report, run or not, in the order it is
+Every step of the flow is in the report, run or not, in the order it is
 written -- whatever order parallel branches finished in -- so a report reads top
 to bottom like the file.
 
@@ -1131,15 +1199,15 @@ to bottom like the file.
 | A branch not taken | Its steps are skipped, saying which branch ran instead: `not taken: the if at line 18 ran if tier == "gold"` |
 | A failed step in a try | The rest of the try is skipped, naming it; the catch runs. A **catch is compensation, not a cure**: the step that failed still fails the scenario |
 | A failed step anywhere else | The steps after it run, as they do outside a block |
-| A parallel branch | Its steps run one after another, as a scenario's do; a failure in one branch does not stop the others |
+| A parallel branch | Its steps run one after another, as a flow's do; a failure in one branch does not stop the others |
 | A repeat | Only its **last round** is reported, each step with `"round": n` in the [JSON report](#the-json-report) and `(round n)` on the console -- the rule [`retry`](#retry) follows for attempts. A round with a step that did not pass ends the loop |
 | A repeat that runs out | A step error named for its condition, giving the bound and what the condition read last: `until state == "shipped" never held within 2m0s (60 rounds); state was "packed"` |
 
 ### Polling
 
-`repeat` is how a scenario polls. `every` is the pause between rounds -- never
+`repeat` is how a flow polls. `every` is the pause between rounds -- never
 before the first -- and `within` and `max` are its bounds: **at least one is
-required**, so a condition that never holds cannot run a scenario forever, and
+required**, so a condition that never holds cannot run a flow forever, and
 a repeat with neither is the compile error `repeat-unbounded`. With both, the
 first to run out ends it.
 
@@ -1150,18 +1218,19 @@ step after it can assert which -- and a bound in time rather than in tries.
 
 ### What a block lets the steps after it read
 
-The [scope rule](#what-is-in-scope) -- a capture is in scope below the step
-that makes it -- follows what each block guarantees:
+The [scope rule](#what-is-in-scope) -- a name is in scope below the step that
+writes it, and [the last write wins](#the-context) -- follows what each block
+guarantees:
 
 | Block | Inside it | After it |
 | --- | --- | --- |
-| `parallel` | Each branch sees the captures above the block and **none of its siblings'**, which may not exist yet: reading one is `parallel-sibling-capture`. Two branches capturing one name is `parallel-capture-clash` | Every branch's captures |
-| `if`, `switch` | Each branch sees the captures above it | A capture **every** branch makes, which needs an `else` or a `default`. One only some branches make may not exist, and reading it is `capture-maybe-unbound` -- except in teardown or a finally, where a step whose capture is missing is skipped, as teardown already does |
-| `try` | The try's steps as a sequence; the catch and finally see the try's | The try's and the finally's captures; a catch's, as an `if` branch's |
-| `repeat` | The body as a sequence; a capture is written again every round | The last round's captures. The body runs at least once |
+| `parallel` | Each branch sees the context above the block and **nothing its siblings write**, which may not be written yet: reading a name a sibling writes is `parallel-sibling-capture`, even when the name existed before the block. Two branches writing one name is `parallel-capture-clash`, whether or not it existed before | What every branch wrote |
+| `if`, `switch` | Each branch sees the context above it, and may overwrite a name in it | A name that existed before the block, holding the value the branch that ran wrote, or its old value when that branch did not write it. A name created in **every** branch, which needs an `else` or a `default`. One created in only some branches may not exist, and reading it is `capture-maybe-unbound` -- except in teardown or a finally, where a step whose name is missing is skipped, as teardown already does |
+| `try` | The try's steps as a sequence; the catch and finally see the try's | What the try and the finally wrote; what a catch wrote, as an `if` branch's |
+| `repeat` | The body as a sequence. A name is written again every round, and a read before the write in a round sees the previous round's value, or the value from before the block in the first | The last round's values. The body runs at least once |
 
-Two branches of a parallel block cannot both drive the browser: a scenario has
-one page, and two steps cannot drive it at once (`parallel-browser`). The cookie
+Two branches of a parallel block cannot both drive the browser: a run of a
+flow has one page, and two steps cannot drive it at once (`parallel-browser`). The cookie
 jar, database connections and traces are shared safely. Each branch draws its
 [random values](#making-and-converting-values) from a generator of its own,
 seeded from the run's seed and the branch, so `--seed` draws the same values
@@ -1171,41 +1240,39 @@ whatever order branches finished in.
 
 ## Collections
 
-A **collection** is a named set of single requests -- each one action, with
-its expects and captures -- written once and used from many scenarios. A `use`
-names one of them, passes it arguments, and may change what it sends and what
-it expects. Steps in order are a scenario's job: a collection holds no
-multi-step item, and a scenario is never used from another.
+A **collection** is a named set of items, each one unit of work -- one action,
+with its expects and the vars it writes -- written once and called from many
+flows. A step calls an item by name, may pass it values, and may change what it
+sends and what it expects. Steps in order are a flow's job: a collection holds
+no multi-step item, and a flow does not call another flow.
 
-```art
-# collections/auth.art
-collection "auth" {
-
-  request login(user, secret password, base = env("API_URL")) {
-    post "${base}/token" {
-      body = {"username": user, "password": password}
-    }
-    expect status == 200
-    secret capture token = body.data.access_token
-  }
-}
-```
+`collections/auth.art` is in [the whole test](#a-whole-test). With two more:
 
 ```art
 # collections/orders.art
 collection "orders" {
 
-  request create(sku, qty = 1, base = env("API_URL")) {
-    post "${base}/orders" {
+  request create {
+    var url
+    var token
+    var sku
+    var qty = 1
+
+    post "${url}/orders" {
       header "Content-Type" = "application/json"
+      header "Authorization" = "Bearer ${token}"
       body = {"sku": sku, "qty": qty}
     }
     expect status == 201
-    capture order_id = body.data.id
+    var order_id = body.data.id
   }
 
-  request pay(id, token, base = env("API_URL")) {
-    post "${base}/orders/${id}/pay" {
+  request pay {
+    var url
+    var token
+    var order_id
+
+    post "${url}/orders/${order_id}/pay" {
       header "Authorization" = "Bearer ${token}"
     }
     expect status == 200
@@ -1214,67 +1281,102 @@ collection "orders" {
 ```
 
 ```art
-# checkout.art
-import "collections/orders.art"
-import "collections/auth.art"
+# collections/ops.art
+collection "ops" {
 
-scenario "bad password is rejected" {
-  use auth.login as bad {
-    user = "alice"
-    password = "wrong"
-    drop expects
-    drop captures
-    expect status == 401
+  command migrate {
+    var dir = "db"
+
+    run "make" {
+      args = ["migrate"]
+      cwd  = dir
+    }
+    expect exit_code == 0
+  }
+
+  query order_status {
+    var orders_db
+    var order_id
+
+    db orders_db {
+      sql  = "SELECT status FROM orders WHERE id = $1"
+      args = [order_id]
+    }
+    expect len(rows) == 1
+    var order_state = rows[0].status
   }
 }
+```
 
-scenario "rush order" {
-  var url = env("API_URL")
-  use auth.login { user = "alice", password = env("PW") }
+```art
+# flows/rush.art
+import "../collections/auth.art"
+import "../collections/orders.art"
+import "../collections/ops.art"
 
-  use orders.create as rush {
-    sku = "A-1"
+flow rush {
+  var sku = "A-1"
+  private var url = env("API_URL")
+  private var orders_db = env("ORDERS_DB")
+
+  setup {
+    step "migrate" = ops.migrate {}
+    step "log in" = auth.login { password = env("PW") }
+  }
+
+  step "a wrong password" = auth.login as bad {
+    password = "wrong"
+    drop expects
+    drop vars
+    expect status == 401
+  }
+
+  step "rush order" = orders.create as rush {
     header "X-Priority" = "high"
     body.qty = 5
     expect body.data.eta < 3600
   }
+
+  step "pay for it" = orders.pay { order_id = rush_order_id }
+
+  step "it is paid" = ops.order_status { order_id = rush_order_id }
 
   step "check it" {
     get "${url}/orders/${rush_order_id}" {
       header "Authorization" = "Bearer ${token}"
     }
     expect status == 200
+    expect body.state == order_state
   }
-}
-
-scenario "checkout" {
-  use auth.login { user = "alice", password = env("PW") }
-  use orders.create { sku = "A-1", qty = 2 }
-  use orders.pay { id = order_id, token = token }
 }
 ```
 
-**A use is expanded, not called.** Before a file is checked, every `use` in it
-is replaced by the plain steps it stands for, with its arguments substituted and
-its overrides applied. What is checked, run and reported is a file made only of `scenario`, `var` and `step` -- the
-language the rest of this document specifies. There is no runtime function, no
-call stack, and no value shared between scenarios. Expansion works on the syntax
-tree, not on text: an argument is substituted as an expression, so `qty = limit
-+ 1` means what it says, and every copied line keeps its place in the
-collection file, so an error in it points there.
+**An item call is expanded, not called.** Before a flow is checked, every item
+call in it is replaced by the plain step it stands for, with its inputs
+substituted and its overrides applied. What is checked, run and reported is
+made only of vars, steps and blocks -- the language the rest of this document
+specifies. There is no runtime function, no call stack, and no value shared
+between scenarios. Expansion works on the syntax tree, not on text: a value is
+substituted as an expression, so `qty = limit + 1` means what it says, and
+every copied line keeps its place in the collection file, so an error in it
+points there.
 
 ### A collection file
 
 | Form | What it is |
 | --- | --- |
-| `collection "<title>" { ... }` | A set of `request` items. The title is any text, for people: a `use` reaches the collection by the name its file is [imported](#importing) as |
-| `request <name>(<params>) { ... }` | Exactly the body of a `step`: one action, then `expect`, `capture`, `retry` and `timeout` |
-| `<ident>` | A required parameter |
-| `<ident> = <expr>` | A parameter with a default. The default may name an earlier parameter, as a `var` may name an earlier `var` |
-| `secret <ident>` | A [secret parameter](#secret-parameters). Either form above may follow `secret` |
+| `collection "<title>" { ... }` | A set of items. The title is any text, for people: a flow reaches the collection by the name its file is [imported](#importing) as |
+| `request <name> { ... }` | An item whose action is an HTTP verb: an `api` step |
+| `command <name> { ... }` | An item whose action is `run`: a `terminal` step |
+| `query <name> { ... }` | An item whose action is `db`: a `db` step |
+| `var <ident>` above the action | A required **input** |
+| `var <ident> = <expr>` above the action | An input with a default. The default may name an earlier input, as a flow's var may name an earlier var |
+| `private var <ident> = <expr>` above the action | An input no step can pass: it takes only its own default |
+| the action, then `expect`, `var`, `retry` and `timeout` | Exactly the body of a step. A `var` after the action is an **output**: a [step var](#step-vars) the item writes |
 
-Required parameters may follow defaulted ones, because arguments are always
-passed by name.
+The keyword is the item's type, and its action has to be one that type holds:
+`run` in a `request` is `item-action-mismatch`, whose hint names the keyword
+that would hold it. (`browser` items are not in the language yet.)
 
 A collection file holds **one** collection and nothing else, so an import
 names exactly one collection, the file's own. Each of these is a compile
@@ -1283,21 +1385,19 @@ error, wherever the file is read from:
 | Error | Code | Hint |
 | --- | --- | --- |
 | a second `collection` in the file | `second-collection` | move it to a file of its own |
-| a `scenario` in the file | `scenario-in-collection-file` | move the scenario to a scenario file, which imports this one |
+| a `scenario` in the file | `scenario-in-collection-file` | move the scenario to a scenario file |
 
-A collection has no `var` of its own. Anything its items share is a parameter
-with a default, so every name a request reads is in its own signature.
+A collection has no var of its own. Anything its items share is an input with
+a default, so every name an item reads is in its own body.
 
-A `use` names an item with the name its collection is imported as -- `use
-auth.login`. A bare `use login` is a compile error.
-
-A parameter may not be named `header`, `query`, `body`, `drop` or `expect`. A [use line](#use-lines) is read by its first word, so such a parameter
-could never be passed. Declaring one is a compile error at the parameter:
+An item's input may not be named `header`, `query`, `body`, `drop` or `expect`.
+A [step's line](#lines-of-an-item-call) is read by its first word, so such an
+input could never be passed. Declaring one is a compile error at the input:
 
 ```
-orders.art:2:13: a parameter cannot be named body: a use block reads body as an override
-   2 |   request r(body, base) {
-     |             ^^^^
+collections/orders.art:3:9: an input cannot be named body: a step that calls the item reads body as an override
+   3 |     var body
+     |         ^^^^
    hint: rename it, for example body_value
 ```
 
@@ -1306,43 +1406,42 @@ orders.art:2:13: a parameter cannot be named body: a use block reads body as an 
 | | |
 | --- | --- |
 | Form | `import "<path>" [as <ident>]` |
-| Where | At the top of the file, before any `collection` or `scenario` |
+| Where | At the top of a flow file, before the flow |
 | Path | Relative to the importing file. Local files only: no URL, no package, no version |
 | Effect | The file's collection is in scope by the name after `as`, or else by the file's name less `.art` -- and less a `.collection` before it, so `orders.art` and `orders.collection.art` are both `orders` |
-| Not transitive | `orders.art` importing `auth.art` puts `auth` in scope in `orders.art`, not in a file that imports `orders.art` |
+| Not transitive | A flow reaches only the collections it imports itself |
 
 ```art
-import "collections/orders.art" as shop
-import "collections/auth.art"
+# flows/buy.art
+import "../collections/orders.art" as shop
+import "../collections/auth.art"
 
-scenario "buy" {
-  use auth.login { user = "alice", password = env("PW") }
-  use shop.create { sku = "A-1", qty = 2 }
+flow buy {
+  private var url = env("API_URL")
+
+  step "log in" = auth.login { password = env("PW") }
+  step "order" = shop.create { sku = "A-1", qty = 2 }
 }
 ```
 
-A file named `Backend APIs.art` is imported the same way, `as` a name a use
+A file named `Backend APIs.art` is imported the same way, `as` a name a step
 can read.
 
-The collection's title plays no part: the import line alone says what a use
+The collection's title plays no part: the import line alone says what a step
 reads. Each of these is a compile error at the import:
 
 | Error | Code | Hint |
 | --- | --- | --- |
 | no `as`, and a file name that cannot be one, like `Backend APIs.art` | `import-needs-name` | name it: import "collections/Backend APIs.art" as Backend_APIs |
-| a file with no collection | `import-no-collection` | import a collection file: a scenario file is run, never imported |
+| a file with no collection | `import-no-collection` | import a collection file: a flow or a scenario file is never imported |
 | two imports under one name | `duplicate-import-name` | name one of them another way with as |
 
 So is an import cycle, named as its chain: `a.art -> b.art -> a.art`.
 
-A file holds a collection or scenarios, never both. Only scenarios run:
-`artemis run` on a collection file runs nothing and passes, so a folder run is
-not upset by a `collections/` folder inside it.
-
-### `use`
+### Calling an item
 
 ```art
-use orders.create as rush {
+step "rush order" = orders.create as rush {
   sku = "A-1"
   body.qty = 5
 }
@@ -1350,222 +1449,224 @@ use orders.create as rush {
 
 | | |
 | --- | --- |
-| Form | `use <collection>.<item> [as <ident>] [{ <use line> ... }]` |
-| Where | In a scenario body, wherever a `step` may be |
-| Effect | Replaced, in place, by the request's step. It runs where the `use` is written |
+| Form | `step "<name>" = <collection>.<item> [as <ident>] { <line> ... }` |
+| Where | In a flow, wherever a `step` may be: setup, teardown and blocks included |
+| Effect | Replaced, in place, by the item's step, named `<name>`. It runs where it is written |
 
-### Use lines
+The name in quotes is required, and it is the step's name in every report.
+Two steps may share a name, as they may anywhere else. The braces are required
+too, and may be empty: `step "pay" = orders.pay {}`.
 
-A use line is read by its first word. A line that opens with `header`, `query`,
-`body`, `drop` or `expect` is an override; any other line is an argument.
+### How an item gets its values
+
+Each input of the item takes its value from the first of these that has one:
+
+1. **The value the step passes**: `step "log in" = auth.login { user = "bob" }`.
+2. **The name in the flow's [context](#what-is-in-scope)** at that point: a
+   flow var, or a var an earlier step wrote. In `rush` above, `orders.create`
+   reads `url` from the flow and `token` from what `log in` wrote, and neither
+   is passed.
+3. **The item's own default**.
+
+With none of them, it is `missing-argument` at the step, naming the input. A
+private input takes only its own default, and passing it is `private-input`.
+
+The context is read where the item reads the input, so a name the context has
+on only some paths -- written in one branch of an `if` -- is
+`capture-maybe-unbound`, reported in the item at the line that reads it, with
+the step that called it as its chain. It is never a run-time surprise.
+
+The item's **outputs** go into the context, so the steps after the call read
+them by name: `token` after `auth.login`. Its inputs' names do not.
+
+### Lines of an item call
+
+A line is read by its first word. A line that opens with `header`, `query`,
+`body`, `drop` or `expect` is an override; any other line passes an input.
 Lines apply in the order they are written, and a block may put several on one
 line, separated by commas.
 
 | Line | Target | Effect |
 | --- | --- | --- |
-| `<param> = <expr>` | any | Passes an argument. An unknown parameter, a parameter passed twice, and a required one not passed are compile errors at the `use` |
+| `<input> = <expr>` | any | Passes an input. An unknown input is `unknown-argument`, with a did-you-mean; one passed twice is `duplicate-argument` |
 | `header "<name>" = <expr>` | api step | Replaces the header of that name, compared case-insensitively, or adds one |
 | `query "<name>" = <expr>` | api step | Replaces the same key, or appends one |
 | `body = <expr>` | api step | Replaces the whole body |
-| `body.<path> = <expr>` | api step whose body is an object literal | Sets or adds that field. A template body that is not an object literal is a compile error: override it whole with `body = ...` |
-| `drop expects` | any step | Removes every `expect` the template wrote. It must come before the `use`'s own `expect` lines |
-| `drop captures` | any step | Removes every `capture` the template wrote. It may come anywhere in the block |
-| `expect <expr> [within <dur>]` | any step | Added after the template's remaining expects |
+| `body.<path> = <expr>` | api step whose body is an object literal | Sets or adds that field. An item body that is not an object literal is a compile error: override it whole with `body = ...` |
+| `drop expects` | any step | Removes every `expect` the item wrote. It must come before the call's own `expect` lines (`drop-after-expect`) |
+| `drop vars` | any step | Removes every output the item writes. It may come anywhere in the block |
+| `expect <expr> [within <dur>]` | any step | Added after the item's remaining expects |
 
 An override that does not fit its target is a compile error: `header` on a
 terminal step, for one.
 
-An override applies to an `api` step only. To vary a `terminal` or `browser`
-request, make the value a parameter and pass it as an argument. The error for an
-override on such a step gives the same hint.
+An override applies to an `api` step only. To vary a `command` or a `query`,
+make the value an input and pass it. The error for an override on such a step
+gives the same hint.
 
-A negative test drops both. `auth.login` captures a token, and a 401 has none:
-a capture the response cannot supply is an [errored assertion](#capture), so
-the bad-password test above writes `drop captures` beside `drop expects`.
+A negative test drops both. `auth.login` writes a token, and a 401 has none: a
+step var the response cannot supply is an [errored assertion](#step-vars), so
+`a wrong password` above writes `drop vars` beside `drop expects`.
 
 ### `as`
 
-`as <ident>` names one use of an item:
+`as <ident>` prefixes every output of one call with `<ident>_`.
+`orders.create as rush` writes `rush_order_id`, and the steps after it read
+that name; `auth.login as bad` would write `bad_token`.
 
-- The request's step is named `<ident>`.
-- Every capture the step makes is prefixed with `<ident>_`.
-  `use orders.create as rush` captures `rush_order_id`, and the steps after it
-  read that name.
-
-A capture may not reuse a name already bound (see
-[What is in scope](#what-is-in-scope)), and that holds after expansion: two
-uses of a request that captures, without `as`, are the compile error
-`duplicate-binding`, with the hint `use ... as <name> to keep both`.
-
-### Step names
-
-The expanded step's name is what every report shows:
-
-| Use | Expanded step name |
-| --- | --- |
-| `use orders.create` | `orders.create` |
-| `use orders.create as rush` | `rush` |
-
-Two steps may share a name, as they may anywhere else.
+Two calls of one item write the same outputs, and [the last write
+wins](#what-is-in-scope): a second `auth.login` replaces the first one's
+`token` for every step after it. `as` is how a flow keeps both.
 
 ### Checking a collection
 
-Every collection is checked on its own, once, before any `use` of it expands.
+Every collection is checked on its own, once, before any call of it expands.
 An error in it is reported once, against the collection file, and not again per
-use. A collection with an error is never expanded: its uses report nothing more.
+call. A collection with an error is never expanded: its calls report nothing
+more.
 
-A template may read **only** its parameters and its own step's observation. Any other name --
-one a scenario would have to supply -- is a compile error, in the collection.
+An item may read **only** its inputs and its own step's observation. Any other
+name -- one a flow would have to supply -- is a compile error, in the
+collection, whose hint is to add it as an input:
+
+```
+collections/orders.art:11:42: unknown name "session"
+   11 |       header "Authorization" = "Bearer ${session}"
+      |                                          ^^^^^^^
+   hint: add it as an input of orders.create: a var above the action
+         an api step binds status, body, raw, headers, cookies, duration_ms
+         also in scope: url, token, sku, qty
+```
+
 That is the price of a collection that checks on its own and means the same
-thing from every scenario that uses it: everything it needs from outside is a
-parameter.
+thing from every flow that calls it: everything it needs from outside is an
+input.
 
-A template may not `capture` a name a step observes -- `status`, `body`, `raw`,
-`headers`, `exit_code`, `stdout`, `stderr`, `page` -- because [`as`](#as)
-renames a use's captures and every read of them, and a later step's `body` would
-be ambiguous. It is the compile error `root-capture`, at the capture's name.
+An item may not write an output named like a step's observation -- `status`,
+`body`, `raw`, `headers`, `exit_code`, `stdout`, `stderr`, `page` -- because
+[`as`](#as) renames a call's outputs and every read of them, and a later
+step's `body` would be ambiguous. It is the compile error `root-capture`, at
+the output's name.
 
-Errors that depend on the use site -- arguments, overrides, a capture clash --
-are reported at the line in the collection they concern, followed by the use
-line that brought it in. Two uses of `auth.login` without
-`as`, on lines 4 and 5 of `twice.art`, bind its hoisted secret var and its
-capture twice:
-
-```
-collections/auth.art:4:30: "login_password" is already bound
-   4 |   request login(user, secret password, base = env("API_URL")) {
-     |                              ^^^^^^^^
-   hint: the use at twice.art:4 binds it first
-         use ... as <name> to keep both
-   used from twice.art:5:3: use auth.login { user = "b", password = "y" }
-
-collections/auth.art:9:20: "token" is already bound
-   9 |     secret capture token = body.data.access_token
-     |                    ^^^^^
-   hint: the use at twice.art:4 binds it first
-         use ... as <name> to keep both
-   used from twice.art:5:3: use auth.login { user = "b", password = "y" }
-```
-
-When a use brought the first binding in, the hint names that use's line in the
-scenario; a `var` declared below the second binding "also binds it".
-
-`artemis parse --json` carries the use line as `usedFrom`: a list holding its
-span, absent when the diagnostic was written where it is reported.
-
-### Secret parameters
-
-A [`secret`](#secret) binding is secret by name, so a `secret` parameter's
-argument is hoisted into a `secret var` of the scenario and the template reads
-that var:
-
-| | |
-| --- | --- |
-| Name | Every enclosing `as` name, then the `as` name or the item name, then the parameter, joined by `_`: `login_password`, `bad_password`, `co_login_password` |
-| Place | Immediately before the expanded steps of the top-level `use` that introduced it, in use order |
-
-A hoisted var is a `var` like any other, so its name is bound once: two uses of
-one item with a secret argument, without `as`, hoist the same name and are
-`duplicate-binding`, as is a scenario `var` of that name. `as` gives each use its
-own var.
-
-A `var` cannot read a capture, so an argument that reads a capture is not
-hoisted: it is substituted as written, and it has to be secret already -- a
-secret capture, or a value built from one. An argument that reads a plain
-capture is a compile error:
+Errors that depend on the call -- inputs, overrides, a context name only some
+paths have -- are reported at the line in the collection they concern,
+followed by the step that called it and the scenario file that ran the flow:
 
 ```
-checkout.art:8:43: password is secret in auth.login, so its argument must be secret too
-   8 |   use auth.login { user = "a", password = tok }
-     |                                           ^^^
-   hint: make tok a secret capture
+collections/orders.art:11:42: "token" is captured in only some branches of the if at line 7, so it may not exist here
+   11 |       header "Authorization" = "Bearer ${token}"
+      |                                          ^^^^^
+   hint: capture it in every branch, give the block an else or a default that does, or read it inside the branch
+   used from flows/maybe.art:14:3: step "order" = orders.create { sku = "A-1" }
+   used from scenarios/maybe.art:1:1: flow "../flows/maybe.art"
 ```
 
-A `secret capture` in a template stays secret after expansion.
+`artemis parse --json` carries those lines as `usedFrom`: a list of spans,
+absent when the diagnostic was written where it is reported.
 
 ### Running one item
 
-Only scenarios run, so a request is sent by a scenario that uses it. `--item`
-writes that scenario, which is what an API client's Send needs:
+An item runs alone with `--item`, which is what an API client's Send needs:
 
 ```sh
-artemis run collections/auth.art --item auth.login --arg user=alice --args secret.json \
-  --trace traces --captures captures.json
+artemis run collections/auth.art --item auth.login --arg url=https://api.test \
+  --args login.json --trace traces --captures out.json
 artemis run collections/orders.art --item orders      # every item, in the order written
 ```
 
 | Flag | |
 | --- | --- |
-| `--item <name>.<item>` | Run that request |
-| `--item <name>` | Run every request of the collection in order, captures passing down as in a scenario. Each request is passed the arguments it has a parameter for |
-| `--arg name=value` | A parameter. The value is a string and is sent as written: `${` in it is not an interpolation. Repeatable |
-| `--args <file>` | Parameters from a JSON object, so a secret stays off the command line. Values keep their JSON type. `--arg` wins over it |
-| `--captures <file>` | Every value the item's captures got, `secret` ones included, as `{"values": {...}, "secret": [...]}`, mode 0600 |
+| `--item <name>.<item>` | Run that item |
+| `--item <name>` | Run every item of the collection in order, the outputs of one in the context of the next, as in a flow. Each item is passed the values it has an input for |
+| `--arg name=value` | An input. The value is a string and is sent as written: `${` in it is not an interpolation. Repeatable |
+| `--args <file>` | Inputs from a JSON object, so a password stays off the command line. Values keep their JSON type. `--arg` wins over it |
+| `--captures <file>` | Every value the item's outputs got, as `{"values": {...}, "secret": [...]}`, mode 0600 |
 
-`<name>` is any name a use can read: the scenario imports the collection file
-`as` it, whatever the collection is titled. The scenario is a file of its own,
-in memory, beside the collection file and importing it, so every line of the collection keeps its number and nothing is
-written to disk; the run is reported under the collection file's path. It is
-named for the item (`auth.login`), and its steps are named as any use's are. A
-missing or unknown argument is the checker's error and stops the run before
-anything is sent.
-
-`--captures` is the one place a secret value leaves a run. A report and a trace
-still withhold it.
+`<name>` is any name an import can give it: the run imports the collection
+file `as` it, whatever the collection is titled. The run is made in memory,
+beside the collection file, so every line of the collection keeps its number
+and nothing is written to disk; it is reported under the collection file's
+path, named for the item (`auth.login`). A missing or unknown input is the
+checker's error and stops the run before anything is sent.
 
 ### `artemis expand`
 
-`artemis expand checkout.art` prints the file that will run: every import,
-collection and `use` gone, every step a use brought in preceded by a comment
-naming the item, where it is declared, and the scenario's `use` line that
-brought it in. For `checkout.art` above, the second scenario:
+`artemis expand scenarios/checkout.art` prints what will run: each scenario of
+the file as the flow with that scenario's values in its vars, every import gone
+and every item call replaced by its step. A comment names the flow, where it
+is declared, and the scenario that ran it. For
+[the whole test](#a-whole-test), the third scenario starts:
 
-```art
-scenario "rush order" {
+```text
+scenario "bad coupon" {
+  tags = ["errors"]
+  var sku = "A-1"
+  var quantity = 1
+  var coupon = "NOPE"
+  var code = 422
   var url = env("API_URL")
-  secret var login_password = env("PW")
 
-  # from auth.login (collections/auth.art:4) via checkout.art:17
-  step "auth.login" {
-    post "${env("API_URL")}/token" { body = {"username": "alice", "password": login_password} }
-    expect status == 200
-    secret capture token = body.data.access_token
-  }
-
-  # from orders.create (collections/orders.art:6) via checkout.art:19
-  step "rush" {
-    post "${env("API_URL")}/orders" {
-      header "Content-Type" = "application/json"
-      body = {"sku": "A-1", "qty": 5}
-      header "X-Priority" = "high"
+  setup {
+    step "log in" {
+      post "${url}/token" {
+        header "Content-Type" = "application/json"
+        body = {"username": "alice", "password": env("API_PASSWORD")}
+      }
+      expect status == 200
+      var token = body.data.access_token
     }
-    expect status == 201
-    capture rush_order_id = body.data.id
-    expect body.data.eta < 3600
   }
 
-  step "check it" {
-    get "${url}/orders/${rush_order_id}" { header "Authorization" = "Bearer ${token}" }
-    expect status == 200
+  # from checkout (flows/checkout.art:4) via scenarios/checkout.art:13
+  step "pay" {
+    post "${url}/cart/pay" {
+      header "Authorization" = "Bearer ${token}"
+      body = {"sku": sku, "quantity": quantity, "coupon": coupon}
+    }
+    timeout = "5s"
+    retry { times = 3, delay = "2s" }
+
+    expect status == code
+    var paid = status
+  }
+
+  if paid == 200 {
+    step "the order is there" {
+      get "${url}/orders/latest" {
+        header "Authorization" = "Bearer ${token}"
+        query "limit" = 1
+      }
+      expect status == 200
+      expect body.items[0].sku == sku
+      expect body.email matches /.+@.+/
+      expect body.id is number
+    }
+  } else {
+    step "the error says why" {
+      get "${url}/errors/last" { header "Authorization" = "Bearer ${token}" }
+      expect body.code exists
+    }
   }
 }
 ```
 
-The file is checked first, exactly as `artemis run` checks it, and a file with
-errors prints nothing. `-o <out.art>` writes the result to a file instead, and
+`total = skip` has removed the var and the two `expect`s that read it, and the
+private `url` is a plain var: what runs has no private var. The file
+is checked first, exactly as `artemis run` checks it, and a file with errors
+prints nothing. `-o <out.art>` writes the result to a file instead, and
 refuses to replace one that is there unless `--force` is given.
 
 A failure in an expanded step names the file its line was written in -- the
-collection's, not the scenario's -- on the console, in the reports, in
-`--events` and in `--trace`. The JSON report's step and assertion entries carry
-that file as `file`; see [The JSON report](#the-json-report).
+flow's or the collection's, not the scenario file's -- on the console, in the
+reports, in `--events` and in `--trace`. The JSON report's step and assertion
+entries carry that file as `file`; see [The JSON report](#the-json-report).
 
 ---
 
 ## What is in scope
 
-An expression can name three things: the step's own observation, the scenario's
-variables, and whatever an earlier step captured.
+An expression can name three things: the step's own observation, the flow's
+vars, and whatever an earlier step wrote.
 
 What the observation binds depends on the step's type:
 
@@ -1584,7 +1685,7 @@ What the observation binds depends on the step's type:
 | `raw` | string | The response body as unparsed text. This is what a regex reads when the body is not JSON |
 | `headers` | object | The response headers, keyed by name. Lookup is case-insensitive |
 | `cookies` | object | The cookies this response set, keyed by name. Each is `{value, domain, path, expires, secure, http_only, same_site}`; an attribute the response did not send is `null`, and `expires` is an RFC 3339 time in UTC. See [cookies](#cookies) |
-| `duration_ms` | number | How long the attempt took, in milliseconds: for an api step, from sending the request to having read the whole body; for a terminal step, the command's run; for a browser step, its actions. Bound in every step, and in no `var`'s value |
+| `duration_ms` | number | How long the attempt took, in milliseconds: for an api step, from sending the request to having read the whole body; for a terminal step, the command's run; for a browser step, its actions. Bound in every step, and in no flow var's value |
 | `exit_code` | number | The command's exit code |
 | `stdout`, `stderr` | string | The two streams, as text |
 | `page.url` | string | The page's current address |
@@ -1597,28 +1698,45 @@ Naming a root that the step's type does not bind is a **compile error**, and the
 message lists the roots that are in scope:
 
 ```
-checkout.art:31:10: "status" is not in scope in a terminal step
+flows/release.art:31:10: "status" is not in scope in a terminal step
    31 |   expect status == 200
       |          ^^^^^^
    hint: a terminal step binds exit_code, stdout, stderr, duration_ms
 ```
 
-Every `var` of the scenario and every `capture` of an **earlier** step is in
-scope in every step, by name. Naming a capture from a later step, or from this
-step, is a compile error -- the value does not exist yet.
+### The context
 
-A name that is in scope twice is not possible: a `capture` may not reuse the name
-of a `var` or of an earlier capture, and a `var` may not reuse the name of an
-earlier `var`, because silently shadowing a value is how a scenario comes to
-assert against the wrong one. It is the compile error
-`duplicate-binding`, and it holds after [expansion](#collections): two uses of a
-request that captures need an [`as`](#as) to keep both.
+Each run of a flow has one set of named values, its **context**. A name gets
+into it in two ways:
 
-This rule was always here and is newly enforced: a file that reused a name used
-to run with the last value winning, and is now refused at compile time. The fix
-is to rename the second binding -- `capture token_2 = ...` -- and read that name
-after it. `artemis migrate` does this for a YAML scenario that captures a name
-twice, and says so in the file's header.
+1. **A flow var**: its default, or the value the scenario gives it.
+2. **A step**: a [step var](#step-vars), written after the action of a step in
+   the flow or brought in as an item's output, creates a name or overwrites
+   one.
+
+Every name in the context above a step is in scope in it. Naming a value a
+later step writes, or one this step writes, is a compile error -- the value
+does not exist yet.
+
+**The last write wins.** A step that writes a name that already exists
+overwrites it, and the steps after it read the new value. A scenario sets
+`code = 400`; a step says `var code = status` and the server answers 201; from
+that step on, `code` is 201. An item that reads `code` through the context
+after that step is given 201 too.
+
+The one error is a **duplicate declaration in the same place**: two vars of one
+name at the top of a flow, or two inputs of one item, are `duplicate-binding`,
+because both would be evaluated before any step runs and leave one value for
+two lines.
+
+**A write that fails** -- the response has no `body.data.access_token` --
+**unsets the name**, even if it had a value before. A later step that reads it
+fails, naming the step whose write failed, rather than quietly using the old
+value. Teardown and a `finally` skip a step that reads an unset name, as they
+skip one that reads a name no step wrote.
+
+How each block changes this is in
+[What a block lets the steps after it read](#what-a-block-lets-the-steps-after-it-read).
 
 ---
 
@@ -1761,9 +1879,9 @@ design adopts the old format's regex captures wholesale without giving a way to
 spell one:
 
 ```art
-capture sha      = match(stdout, /^([0-9a-f]{40})/)   # group 1
-capture itemId   = match(raw, /\/items\/([0-9]+)/)    # group 1
-capture whole    = match(stdout, /v[0-9.]+/)          # the whole match
+var sha      = match(stdout, /^([0-9a-f]{40})/)   # group 1
+var itemId   = match(raw, /\/items\/([0-9]+)/)    # group 1
+var whole    = match(stdout, /v[0-9.]+/)          # the whole match
 ```
 
 Five things about it, each settled here because the design document left the
@@ -1778,12 +1896,12 @@ surface syntax unwritten:
 | Where it is legal | Anywhere an expression is, exactly like `env()` |
 
 A pattern with two or more capturing groups has an author who meant one of
-them, and guessing which is how a capture goes quietly wrong -- so the checker
+them, and guessing which is how a value goes quietly wrong -- so the checker
 rejects it rather than taking the first, and names the rewrite:
 
 ```art
-capture id = match(raw, /\/(items|orders)\/([0-9]+)/)      # error: two groups
-capture id = match(raw, /\/(?:items|orders)\/([0-9]+)/)    # one group, group 1
+var id = match(raw, /\/(items|orders)\/([0-9]+)/)      # error: two groups
+var id = match(raw, /\/(?:items|orders)\/([0-9]+)/)    # one group, group 1
 ```
 
 The pattern is counted at compile time when it is a regex literal, which it
@@ -1791,13 +1909,13 @@ almost always is. A pattern that arrives as a string in a variable is counted
 at run time and gives the same reason as an errored assertion.
 
 `match()` returns a string -- the text that matched, not a guess at what it
-meant, because reading `"007"` as seven loses data. So `capture itemId =
+meant, because reading `"007"` as seven loses data. So `var itemId =
 match(raw, /\/items\/([0-9]+)/)` against `moved to /items/42` makes `itemId`
 the string `"42"`: `itemId is string` is true and `itemId is number` is false,
 and `"${itemId}"` renders `42` either way.
 
 A pattern that matches nothing is an evaluation that could not be performed, not
-a value: in a `capture` it is one errored assertion naming the capture, and in
+a value: in a step var it is one errored assertion naming the var, and in
 an `expect` it is an errored assertion naming the expression. It is not an
 *absent path*, so `expect match(raw, /x/) exists` reports the reason rather than
 answering false -- the text was there and the question was asked.
@@ -1809,8 +1927,8 @@ follows, so a pattern can live in a `var`.
 ### Making and converting values
 
 ```art
-scenario "sign up" {
-  var url   = env("API_URL")
+flow sign_up {
+  private var url = env("API_URL")
   var id    = uuid()
   var email = "user-${random_string(8)}@example.test"
   var basic = base64("admin:secret")
@@ -1853,15 +1971,15 @@ answer for -- `number("abc")`, `len(1)`, `base64_decode("%%")`, a token that is
 not a JWT -- is an errored assertion with the reason.
 
 A value is made where it is written and then kept. A `var` is evaluated once,
-so `var id = uuid()` is one UUID for the whole scenario; a step's request is
+so `var id = uuid()` is one UUID for each run of the flow; a step's request is
 evaluated once, so a [`retry`](#retry) resends the same `random_string()`; an
 `expect` is evaluated on every attempt.
 
 **Random values are reproducible.** Each scenario draws from its own generator,
 seeded from the run's seed, the scenario's name and its file's path within what
 was run -- not from the order scenarios run in, so `--jobs 8` draws what
-`--jobs 1` does, and `artemis run suite` and `artemis run .` inside `suite/`
-draw alike. A run that
+`--jobs 1` does, and `artemis run scenarios` and `artemis run .` inside
+`scenarios/` draw alike. A run that
 drew a random value and failed prints its seed, and `artemis run --seed <n>`
 draws the same values again. The [JSON report](#the-json-report) carries it as
 `seed`. `now()` reads the clock and is not reproducible; assert on its shape.
@@ -1869,8 +1987,8 @@ draws the same values again. The [JSON report](#the-json-report) carries it as
 ### Data and files
 
 ```art
-scenario "import the users" {
-  var url   = env("API_URL")
+flow import_users {
+  private var url = env("API_URL")
   var users = json("data/users.json")
   var plans = csv("data/plans.csv")
 
@@ -1899,9 +2017,10 @@ scenario "import the users" {
 | `file(path)` | The file, as a value of type `file` |
 
 A path is relative to **the file it is written in**: `json("data/users.json")`
-in `suite/users/login.art` reads `suite/users/data/users.json`, and a `file()`
-inside a collection's request is found next to the collection, not next to the
-scenario that used it. An absolute path is itself.
+in `flows/login.art` reads `flows/data/users.json`, one in a scenario's value
+is read next to the scenario file, and a `file()` inside a collection's item is
+found next to the collection, not next to the flow that called it. An absolute
+path is itself.
 
 A literal path is read **when the file compiles**, because the data is in the
 same repository as the scenario: a path that names nothing is the compile error
@@ -1927,39 +2046,6 @@ that names the two ways to send one: as a `multipart` part, or its contents as
 `base64(file(p))`. `is file` asks whether a value is one, and two files are
 equal when they are the same path. A trace records a file it sent by its path
 and size, never its contents.
-
-### Data-driven scenarios
-
-```art
-scenario "login as ${user.role}" for user in json("data/users.json") {
-  var url = env("API_URL")
-
-  step "log in" {
-    post "${url}/login" {
-      body = {"email": user.email, "password": user.password}
-    }
-    expect status == user.expect_status
-  }
-}
-```
-
-A `for` clause makes a scenario **one scenario per row** of its data. Each row's
-scenario opens with `var user = <that row>`, so the steps read it like any var,
-and runs, passes and fails on its own: two rows are two lines on the console and
-two entries in the report, each saying which [`row`](#the-json-report) it is.
-
-The rows are made when the file compiles, so they have to be known before the
-run: an array written out, or `json()` or `csv()` of a path written out,
-optionally followed by a member or an index (`json("data.json").admins`).
-`artemis expand` prints every row's scenario, and the checker checks each one --
-a mistake every row shares is reported once.
-
-| | |
-| --- | --- |
-| The name | May interpolate the row -- `"login as ${user.role}"` -- and nothing else: not a var, and not a call, so a name is something the report can repeat. A name that does not interpolate gets the row's number: `"smoke [1]"`, `"smoke [2]"`. Two rows that name their scenario alike are the compile error `duplicate-row-name` |
-| The rows | An array. Data that is not one is `for-source-not-array`; an empty one is `for-no-rows`, because a run of nothing would pass; a source known only at run time -- `json(env("DATA"))` -- is `for-source-not-static` |
-| `for secret` | `for secret user in ...` makes each row's var a [`secret`](#secret) one, for rows that hold credentials |
-| Types | A JSON row keeps its types. A CSV row's every cell is a string: compare with a string, or convert with [`number()`](#making-and-converting-values) |
 
 ### How a value renders
 
@@ -2067,10 +2153,10 @@ They are not the same thing -- see [the three timers](#retry-timeout-and-within)
 
 ---
 
-## `capture`
+## Step vars
 
 A step can pull a value out of what it produced and leave it for the steps after
-it:
+it, with a `var` after its action:
 
 ```art
 step "login" {
@@ -2078,7 +2164,7 @@ step "login" {
     body = {"username": "alice", "password": pw}
   }
   expect status == 200
-  capture token = body.data.access_token
+  var token = body.data.access_token
 }
 
 step "orders" {
@@ -2091,42 +2177,43 @@ step "orders" {
 
 | | |
 | --- | --- |
-| Form | `capture <ident> = <expr>` |
-| Scope | Available by name in every later step of the same scenario, and nowhere else |
+| Form | `var <ident> = <expr>`, below the step's action. Above it, it is `action-not-first`, as any statement above the action is |
+| Scope | In the [context](#the-context) from the next step on, until a later step writes the name again |
 | Step types | Every type. It is not an HTTP-only statement |
-| Name | May not reuse a `var`'s name or an earlier capture's |
+| Name | Any name, a flow var's included: [the last write wins](#the-context). In a collection, not a root of the step's observation (`root-capture`) |
 
 The expression is evaluated against the same observation an `expect` sees, so
 every root in scope is available:
 
 ```art
-capture id    = body.data.id                        # from a parsed JSON body
-capture sha   = match(stdout, /^([0-9a-f]{40})/)    # from a command's output
-capture type  = headers["content-type"]             # from a response header
-capture count = body.data.items[0].quantity
+var id    = body.data.id                        # from a parsed JSON body
+var sha   = match(stdout, /^([0-9a-f]{40})/)    # from a command's output
+var type  = headers["content-type"]             # from a response header
+var count = body.data.items[0].quantity
 ```
 
-A captured value **keeps its type**: a number stays a number, an object stays an
+A step var **keeps its type**: a number stays a number, an object stays an
 object, so it can be compared with `>` or templated into a `body` as a value.
 [`match()`](#builtins) is the exception and is always a string, even when the
 text it matched is all digits.
 
-A capture is plumbing, not a check. One that succeeds records nothing -- a run
-that printed a line per captured token would bury the assertions that matter, and
-a captured value is often a secret. One that fails is a single **errored
-assertion** naming the capture, and the step fails. The other captures of the
-step are still attempted, so two mistyped paths take one run to find rather than
-two.
+A step var is plumbing, not a check. One that is written records nothing -- a
+run that printed a line per token would bury the assertions that matter. One
+that cannot be written is a single **errored assertion** naming the var, and
+the step fails. The step's other vars are still attempted, so two mistyped
+paths take one run to find rather than two.
 
-A failed capture writes nothing, so a later step naming it fails for the honest
-reason that the value was never captured -- not on a value that is quietly wrong.
+A write that fails **unsets the name**, even when it held a value before, so a
+later step naming it fails for the honest reason that the value was never
+written -- not on an older value that is quietly wrong. The failure names the
+step whose write failed.
 
 ---
 
 ## `retry`, `timeout` and `within`
 
 Three different clocks. Getting them confused is the most common mistake in a
-scenario, so:
+flow, so:
 
 | Statement | Scope | Default |
 | --- | --- | --- |
@@ -2177,12 +2264,12 @@ duration that will not parse is a compile error.
 ## Reserved keywords
 
 These are reserved and cannot be used as a name. Using one is a parse error
-saying what it is reserved for, or, for the two the language now uses, what it
+saying what it is reserved for, or, for the ones the language now uses, what it
 does:
 
 ```
 if  else  for  in  while  parallel  group  fn  return  import  use  let
-setup  teardown  ai
+setup  teardown  ai  skip
 ```
 
 `if`, `else` and `parallel` open [blocks](#blocks); `switch`, `case`, `default`,
@@ -2191,12 +2278,12 @@ keywords of the same blocks and are not reserved.
 
 | Word | Purpose |
 | --- | --- |
-| `import` | Imports a collection file: `import "collections/auth.art"`, or `import "collections/Backend APIs.art" as api` |
-| `use` | Expands a collection's request in place: `use auth.login { ... }` |
-| `tags` | A scenario's or a suite's tags: `tags = ["smoke"]` -- see [tags](#tags). Positional, not reserved |
-| `setup`, `teardown` | Steps that run before a scenario's own, and after them whatever happened -- see [setup and teardown](#setup-and-teardown) |
+| `import` | Imports a collection file into a flow: `import "../collections/auth.art"`, or `import "../collections/Backend APIs.art" as api` |
+| `setup`, `teardown` | Steps that run before a flow's own, and after them whatever happened -- see [setup and teardown](#setup-and-teardown) |
 | `if`, `else`, `parallel` | Open a [block](#blocks): `if cond { ... } else { ... }`, `parallel { ... }` |
-| `for`, `in` | Make a scenario one per row of data: `scenario "..." for user in json("users.json") { ... }` -- see [data-driven scenarios](#data-driven-scenarios) |
+| `skip` | A scenario's value that turns off the checks reading a var -- see [`skip`](#skip) |
+| `use`, `for`, `in` | How an item was called, and a scenario made one per row of data, before flows. A file that still uses them is a compile error that names `artemis migrate` -- see [The old forms](#the-old-forms) |
+| `tags` | A scenario's tags: `tags = ["smoke"]` -- see [tags](#tags). Positional, not reserved, and not a flow var's name |
 
 `ai` is reserved for a possible future agentic assertion. It is **not
 implemented** and will not parse. A CI gate's most valuable property is
@@ -2204,102 +2291,115 @@ determinism, and an assertion that flakes for unreproducible reasons is worse
 than a missing one.
 
 The keywords the language actually uses are positional, not reserved:
-`scenario`, `config`, `var`, `step`, `run`, `browser`, `db`, `sql`, `command`, `expect`, `capture`,
-`retry`, `timeout`, `within`, `header`, `query`, `body`, `args`, `cwd`, `stdin`,
-`env`, `times`, `delay`, `collection`, `request`, `secret`, `as`,
-`drop`, `expects` and `captures` (only after `drop`), the seven HTTP verbs, and
-the operators `and`, `or`, `not`, `contains`, `matches`, `exists`, `is`. Each
-means the keyword only where the grammar expects it, so `var request = 1` and
-`capture body = ...` are legal. The literals `true`, `false` and `null` are the
-exception: they are never a name.
+`collection`, `request`, `command`, `query`, `flow`, `scenario`, `config`,
+`var`, `private`, `step`, `run`, `browser`, `db`, `sql`, `expect`, `retry`,
+`timeout`, `within`, `header`, `body`, `args`, `cwd`, `stdin`, `env`,
+`times`, `delay`, `as`, `drop`, `expects` and `vars` (only after `drop`), the
+seven HTTP verbs, and the operators `and`, `or`, `not`, `contains`, `matches`,
+`exists`, `is`. Each means the keyword only where the grammar expects it, so
+`var request = 1` and `var body_text = raw` are legal. The literals `true`,
+`false` and `null` are the exception: they are never a name.
 
 ---
 
 ## Grammar
 
-The complete grammar, carried over from the approved design
-(`docs/artemis-dsl-design.md`) rather than paraphrased, because a paraphrase of a
-grammar is how two grammars come to disagree.
+The complete grammar. `artemis grammar` prints the one the parser is built
+from, with its lexical tokens and the rules the checker enforces after
+parsing.
 
 ```ebnf
-File        = { Import } { Collection | Scenario } ;
-Import      = "import" String [ "as" Ident ] ;
-Collection  = "collection" String "{" { RequestDecl } "}" ;
-RequestDecl = "request" Ident Params "{" Action { StepStmt } "}" ;
-Params      = "(" [ Param { "," Param } ] ")" ;
-Param       = [ "secret" ] Ident [ "=" Expr ] ;
+File          = CollectionFile | FlowFile | ScenarioFile ;
+Import        = "import" String [ "as" Ident ] ;
 
-Scenario    = "scenario" String "{" { ConfigDecl | VarDecl | StepDecl | UseDecl | Flow } "}" ;
-Flow        = "parallel" FlowBody
-            | "if" Expr FlowBody { "else" "if" Expr FlowBody } [ "else" FlowBody ]
-            | "switch" Expr "{" { "case" Expr FlowBody } [ "default" FlowBody ] "}"
-            | "try" FlowBody [ "catch" FlowBody ] [ "finally" FlowBody ]
-            | "repeat" { RepeatOption } FlowBody "until" Expr ;
-RepeatOption = ( "every" | "within" | "max" ) Expr ;
-FlowBody    = "{" { StepDecl | UseDecl | Flow } "}" ;
-UseDecl     = "use" ItemRef [ "as" Ident ] [ "{" { UseLine } "}" ] ;
-ItemRef     = Ident "." Ident ;
-UseLine     = Ident "=" Expr
-            | ReqField
-            | "body" "." Ident { "." Ident } "=" Expr
-            | "drop" ( "expects" | "captures" )
-            | Expect ;
-ConfigDecl  = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
-Setting     = Ident "=" Expr ;
-VarDecl     = [ "secret" ] "var" Ident "=" Expr ;
-StepDecl    = "step" String "{" Action { StepStmt } "}" ;
+CollectionFile = "collection" String "{" { ItemDecl } "}" ;
+ItemDecl      = ( "request" | "command" | "query" ) Ident
+                "{" { VarDecl } Action { StepStmt } "}" ;
 
-Action      = Request | Run | Browser | DB ;
-Request     = Method String [ "{" { ReqField } "}" ] ;
-Method      = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
-ReqField    = "header" String "=" Expr
-            | "query"  String "=" Expr
-            | "body"   "=" Expr ;
-Run         = "run" Expr [ "{" { RunField } "}" ] ;
-RunField    = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
-            | "env" "{" [ Setting { Sep Setting } ] "}" ;
-DB          = "db" Expr [ "{" { DBField } "}" ] ;
-DBField     = "sql" "=" Expr | "args" "=" Array | "command" "=" Expr ;
-Browser     = "browser" "{" { BrowserAct } "}" ;
-BrowserAct  = "goto"   Expr
-            | "click"  Expr
-            | "fill"   Expr "=" Expr
-            | "select" Expr "=" Expr
-            | "press"  Expr
-            | "hover"  Expr
-            | "upload" Expr "=" Expr
-            | "wait"   Expr ;
+FlowFile      = { Import } FlowDecl ;
+FlowDecl      = "flow" Ident "{" { ConfigDecl | VarDecl | StepDecl | ItemCall | PhaseDecl | Block } "}" ;
+PhaseDecl     = ( "setup" | "teardown" ) BlockBody ;
+Block         = "parallel" BlockBody
+              | "if" Expr BlockBody { "else" "if" Expr BlockBody } [ "else" BlockBody ]
+              | "switch" Expr "{" { "case" Expr BlockBody } [ "default" BlockBody ] "}"
+              | "try" BlockBody [ "catch" BlockBody ] [ "finally" BlockBody ]
+              | "repeat" { RepeatOption } BlockBody "until" Expr ;
+RepeatOption  = ( "every" | "within" | "max" ) Expr ;
+BlockBody     = "{" { StepDecl | ItemCall | Block } "}" ;
+ItemCall      = "step" String "=" ItemRef [ "as" Ident ] "{" { CallLine } "}" ;
+ItemRef       = Ident "." Ident ;
+CallLine      = Ident "=" Expr
+              | ReqField
+              | "body" "." Ident { "." Ident } "=" Expr
+              | "drop" ( "expects" | "vars" )
+              | Expect ;
 
-StepStmt    = Expect | Capture | Retry | Timeout ;
-Expect      = "expect" Expr [ "within" String ] ;
-Capture     = [ "secret" ] "capture" Ident "=" Expr ;
-Retry       = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
-RetryField  = "times" "=" Int | "delay" "=" String ;
-Timeout     = "timeout" "=" String ;
-Sep         = "," | newline ;
+ScenarioFile  = FlowRef { DataScenario } ;
+FlowRef       = "flow" String ;
+DataScenario  = "scenario" String "{" { TagsDecl | Set } "}" ;
+TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
+Set           = Ident "=" ( Expr | "skip" ) ;
 
-Expr        = Or ;
-Or          = And { "or" And } ;
-And         = Not { "and" Not } ;
-Not         = "not" Not | Cmp ;
-Cmp         = Unary [ BinOp Unary | "exists" | "is" TypeName ] ;
-BinOp       = "==" | "!=" | "<" | "<=" | ">" | ">="
-            | "contains" | "matches" ;
-TypeName    = "string" | "number" | "boolean" | "object" | "array" | "null" ;
-Unary       = "-" Unary | Postfix ;
-Postfix     = Primary { "." Ident | "[" Expr "]" } ;
-Primary     = Number | String | Regex | Bool | "null" | Ident
-            | Object | Array | Call | "(" Expr ")" ;
-Call        = Ident "(" [ Expr { "," Expr } ] ")" ;
-Object      = "{" [ String ":" Expr { "," String ":" Expr } ] "}" ;
-Array       = "[" [ Expr { "," Expr } ] "]" ;
+ConfigDecl    = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
+Setting       = Ident "=" Expr ;
+VarDecl       = [ "private" ] "var" Ident [ "=" Expr ] ;
+StepDecl      = "step" String "{" Action { StepStmt } "}" ;
+
+Action        = Request | Run | Browser | DB ;
+Request       = Method String [ "{" { ReqField } "}" ] ;
+Method        = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" ;
+ReqField      = "header" String "=" Expr
+              | "query"  String "=" Expr
+              | "body"   "=" Expr
+              | "form"   String "=" Expr
+              | "multipart" String "=" Expr ;
+Run           = "run" Expr [ "{" { RunField } "}" ] ;
+RunField      = "args" "=" Array | "cwd" "=" Expr | "stdin" "=" Expr
+              | "env" "{" [ Setting { Sep Setting } ] "}" ;
+DB            = "db" Expr [ "{" { DBField } "}" ] ;
+DBField       = "sql" "=" Expr | "args" "=" Array | "command" "=" Expr ;
+Browser       = "browser" "{" { BrowserAct } "}" ;
+BrowserAct    = "goto"   Expr
+              | "click"  Expr
+              | "fill"   Expr "=" Expr
+              | "select" Expr "=" Expr
+              | "press"  Expr
+              | "hover"  Expr
+              | "upload" Expr "=" Expr
+              | "wait"   Expr ;
+
+StepStmt      = Expect | StepVar | Retry | Timeout ;
+Expect        = "expect" Expr [ "within" String ] ;
+StepVar       = "var" Ident "=" Expr ;
+Retry         = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
+RetryField    = "times" "=" Int | "delay" "=" String ;
+Timeout       = "timeout" "=" String ;
+Sep           = "," | newline ;
+
+Expr          = Or ;
+Or            = And { "or" And } ;
+And           = Not { "and" Not } ;
+Not           = "not" Not | Cmp ;
+Cmp           = Unary [ BinOp Unary | "exists" | "is" TypeName ] ;
+BinOp         = "==" | "!=" | "<" | "<=" | ">" | ">="
+              | "contains" | "matches" ;
+TypeName      = "string" | "number" | "boolean" | "object" | "array" | "null" | "file" ;
+Unary         = "-" Unary | Postfix ;
+Postfix       = Primary { "." Ident | "[" Expr "]" } ;
+Primary       = Number | String | Regex | Bool | "null" | Ident
+              | Object | Array | Call | "(" Expr ")" ;
+Call          = Ident "(" [ Expr { "," Expr } ] ")" ;
+Object        = "{" [ String ":" Expr { "," String ":" Expr } ] "}" ;
+Array         = "[" [ Expr { "," Expr } ] "]" ;
 ```
 
 Comments are `#` to end of line. Trailing commas are permitted in objects and
 arrays. Statements separate by newline; no semicolons.
 
-Use lines separate like statements: by a newline or a comma. A collection file
-holds one collection and no scenario ([A collection file](#a-collection-file)).
+The lines of an item call separate like statements: by a newline or a comma.
+So do a scenario's sets, and several may share a line. A flow file holds one
+flow and its imports, a collection file one collection, and a scenario file
+one header and its scenarios ([The three files](#the-three-files)).
 
 `BrowserAct`'s semantics -- which actions take a value, what `wait` waits for,
 what a selector means -- are specified with [`browser` steps](#browser-steps)
@@ -2314,9 +2414,9 @@ and in what it decides to retry:
 
 | | What it is | Examples |
 | --- | --- | --- |
-| **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse, an import that does not resolve, a `use` whose arguments or overrides do not fit |
+| **Compile error** | The file is not one artemis can run. Nothing executes | a parse error, an unknown field, an out-of-scope root, a reserved word, an unclosed `${`, an unknown name, a regex that will not compile, a duration that will not parse, an import or a flow header that does not resolve, an item call whose inputs or overrides do not fit, a scenario that sets a var its flow does not have |
 | **Environment error** | The run cannot start: a variable an `env()` call needs has no value. Nothing executes | an absent `API_URL`, an `API_URL=` with no value |
-| **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, SQL the database rejects, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a capture that read nothing |
+| **Step error** | The step could not run, or could not be judged | a refused connection, a timeout, a command not on the `PATH`, SQL the database rejects, a `cwd` that does not exist, a path that did not resolve, `>` against an object, a step var that read nothing |
 | **Assertion failure** | The step ran and gave the wrong answer | `status == 200` against a 404 |
 
 A compile error is reported before anything executes, and **every** error in the
@@ -2331,7 +2431,7 @@ environment takes one run to correct rather than one run per variable.
 The diagnostic bar is a compiler's:
 
 ```
-checkout.art:12:10: unknown field "statu"
+flows/checkout.art:12:10: unknown field "statu"
    12 |   expect statu == 200
       |          ^^^^^
    hint: did you mean "status"?
@@ -2369,7 +2469,7 @@ passed**: a CI job whose artifact silently vanished is worse off than one that
 went red.
 
 ```sh
-artemis run ./suite && echo "everything passed"
+artemis run scenarios/ && echo "everything passed"
 ```
 
 ---
@@ -2380,14 +2480,14 @@ artemis run ./suite && echo "everything passed"
 job or an agent to read. Its value is `format[=path]`:
 
 ```sh
-artemis run ./suite --report json               # the document on stdout
-artemis run ./suite --report json=results.json  # the document in a file
-artemis run ./suite --report junit=junit.xml    # JUnit XML for a CI reporter
-artemis run ./suite --report json --report junit=junit.xml   # both
+artemis run scenarios/ --report json               # the document on stdout
+artemis run scenarios/ --report json=results.json  # the document in a file
+artemis run scenarios/ --report junit=junit.xml    # JUnit XML for a CI reporter
+artemis run scenarios/ --report json --report junit=junit.xml   # both
 ```
 
 With no path the document goes to stdout and the console report moves to stderr,
-so stdout holds exactly one document and `artemis run ./suite --report json | jq`
+so stdout holds exactly one document and `artemis run scenarios/ --report json | jq`
 works. With a path, the document is written there, truncating whatever was there
 before, and the console report stays on stdout. A document is written whether the
 run passed or failed. The exit code is unchanged by the flag.
@@ -2412,7 +2512,8 @@ so a reader can tell "nothing failed" from "nothing ran":
   "scenarios": [
     {
       "name": "items",
-      "file": "suite/items.art",
+      "file": "scenarios/items.art",
+      "flow": "items",
       "status": "fail",
       "duration_ms": 13,
       "error": "",
@@ -2423,6 +2524,7 @@ so a reader can tell "nothing failed" from "nothing ran":
           "duration_ms": 12.5,
           "attempts": 1,
           "line": 5,
+          "file": "flows/items.art",
           "error": "",
           "assertions": [
             {
@@ -2433,7 +2535,8 @@ so a reader can tell "nothing failed" from "nothing ran":
               "actual": 200,
               "status": "pass",
               "error": "",
-              "line": 11
+              "line": 11,
+              "file": "flows/items.art"
             },
             {
               "kind": "expect",
@@ -2443,7 +2546,8 @@ so a reader can tell "nothing failed" from "nothing ran":
               "actual": "pending",
               "status": "fail",
               "error": "",
-              "line": 14
+              "line": 14,
+              "file": "flows/items.art"
             }
           ]
         }
@@ -2452,7 +2556,7 @@ so a reader can tell "nothing failed" from "nothing ran":
   ],
   "failures": [
     {
-      "file": "suite/items.art",
+      "file": "flows/items.art",
       "line": 14,
       "scenario": "items",
       "step": "get item",
@@ -2473,8 +2577,8 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `schema_version` | run | `1`. It goes up when a key is removed or its meaning changes; a new key does not change it |
 | `started_at` | run | When the run began, RFC 3339 |
 | `duration_ms` | run, scenario, step | Milliseconds, to microsecond precision. Not nanoseconds, and not the seconds the JUnit report uses |
-| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. A step is skipped when a [setup](#setup-and-teardown) step before it did not pass, or when it is a teardown step reading a capture no step made; its `error` says which |
-| `phase` | step | `"setup"` or `"teardown"` for a step of a scenario's [setup or teardown](#setup-and-teardown) block. **Omitted** on the scenario's own steps |
+| `status` | run, scenario, step, assertion | `pass`, `fail`, `error` or `skip`. Every level above an assertion is the worst of its children, and a `skip` never drags a parent down. A step is skipped when a [setup](#setup-and-teardown) step before it did not pass, or when it is a teardown step reading a name no step wrote; its `error` says which |
+| `phase` | step | `"setup"` or `"teardown"` for a step of a flow's [setup or teardown](#setup-and-teardown) block. **Omitted** on the flow's own steps |
 | `round` | step | For a step of a [`repeat`](#blocks) block, which round its result is from: the last that ran. **Omitted** on every other step |
 | `passed` | run | `false` if anything failed or errored. The same thing the exit code says, for a consumer that does not want to learn the vocabulary |
 | `error` | run | Why the run could not proceed at all, and `""` for every run that reached its scenarios. An environment error is the one thing that sets it |
@@ -2482,19 +2586,17 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `counts` | run | Totals per level, each a `{total, passed, failed, errored, skipped}` tally, so nobody walks the tree to say "2 of 5 assertions failed" |
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
-| `kind` | scenario | `"suite"` for a [suite's](#suites-suiteart) setup or teardown. **Omitted** on a scenario |
-| `tags` | scenario | The scenario's [tags](#tags), its own and its suites'. **Omitted** when it has none |
-| `flow` | scenario | For a scenario of a scenario file, the name of the flow it ran: `"checkout"`. **Omitted** on every other scenario |
-| `row` | scenario | For a [data-driven scenario](#data-driven-scenarios), the row it was made from: `{"source": "users.json", "index": 0}`, where `source` is the file its rows were read from, or `"rows"` for an array written out. **Absent** on every other scenario |
-| `name` | scenario, step | As written in the file. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
-| `file` | scenario, failure, step, assertion | On a scenario, the path it was read from. On a failure, the file its `line` was written in: the scenario's, or the [collection's](#collections) a `use` brought the step in from. On a step or an assertion, that collection file, and **omitted** when it is the scenario's own -- so a run that uses no collection writes the document it always did |
+| `tags` | scenario | The scenario's [tags](#tags). **Omitted** when it has none |
+| `flow` | scenario | The name of the flow the scenario ran: `"checkout"`. **Omitted** when it ran none, as for a file that would not compile |
+| `name` | scenario, step | As written: a scenario's title, a step's name. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
+| `file` | scenario, failure, step, assertion | On a scenario, the scenario file it was read from. On a failure, the file its `line` was written in: the flow's, or the [collection's](#collections) an item call brought the step in from. On a step or an assertion, the same, and **omitted** when it is the scenario's own file |
 | `error` | scenario, step, assertion, failure | Why it could not run, or `""`. A scenario's error is a file that would not compile, and such a scenario has no steps |
 | `steps` | scenario | One entry per step the scenario reached |
 | `attempts` | step | How many times the step was tried; `1` unless `retry` asked for more |
-| `line` | step, assertion, failure | The 1-based line it was written on -- in the scenario file, or in the file `file` names -- and `0` when artemis does not know |
-| `assertions` | step | One entry per `expect` the step evaluated, plus one per capture that failed, in the order they were made |
-| `kind` | assertion, failure | What made the assertion: `expect` for every `expect`, whatever its expression does, and `capture` for a capture that could not be read. There is no per-operator kind and no per-step-type one |
-| `path` | assertion, failure | The source text of what was inspected: `body.data.count`. For an expression with no single subject -- an `or` chain, a bare call -- the whole expression; for a capture, the name it captures under |
+| `line` | step, assertion, failure | The 1-based line it was written on, in the file `file` names, and `0` when artemis does not know |
+| `assertions` | step | One entry per `expect` the step evaluated, plus one per [step var](#step-vars) that could not be written, in the order they were made |
+| `kind` | assertion, failure | What made the assertion: `expect` for every `expect`, whatever its expression does, and `capture` for a step var that could not be written. There is no per-operator kind and no per-step-type one |
+| `path` | assertion, failure | The source text of what was inspected: `body.data.count`. For an expression with no single subject -- an `or` chain, a bare call -- the whole expression; for a step var, its name |
 | `operator` | assertion, failure | The expression's top-level comparison token -- `==`, `contains`, `exists`, `is`, or `not` prefixed to one of them -- and `""` for an expression with no single one |
 | `expected`, `actual` | assertion, failure | The two sides as evaluated, each keeping its JSON type. `null` when there was no such value -- a path that did not resolve |
 | `failures` | run | Everything the run says to go and fix, flat and in run order. One entry per failing assertion, per step that could not run, and per file that would not compile, each naming its own `file`, `line`, `scenario` and `step` so an entry stands alone. `[]` for a run that passed |
@@ -2506,7 +2608,8 @@ Every key is always present, with its zero value rather than omitted, so a `jq`
 expression never has to tell absent from empty. `expected` and `actual` are one
 exception: they are `null`, because either may legitimately be any JSON type. A
 step's and an assertion's `file` is the other: it is absent unless the line is in
-another file than the scenario's. The `--events` stream's step results carry it
+another file than the scenario's -- which, for a scenario of a scenario file,
+it always is. The `--events` stream's step results carry it
 the same way.
 Every list is a list, empty rather than `null`.
 
@@ -2548,43 +2651,71 @@ and their output.
 | `artemis parse -f x.art` | Every diagnostic the file produces, and a non-zero exit if any is an error. `--json` writes them as one document instead, for an editor or a UI |
 | `artemis fmt [-w] x.art` | The file in canonical layout. Layout only: no string requoted, no expression reassociated, no comment dropped |
 | `artemis ast -f x.art` | The syntax tree as JSON, with every node's span and every step's inferred type. `--from-json` goes the other way, tree to source |
-| `artemis expand x.art [-o out.art] [--force]` | The file that will run: every `use` replaced by its steps, each preceded by a comment naming where it came from. See [`artemis expand`](#artemis-expand) |
+| `artemis expand x.art [-o out.art] [--force]` | What will run: each scenario of a scenario file as its flow with the scenario's values, every item call replaced by its step, each preceded by a comment naming where it came from. See [`artemis expand`](#artemis-expand) |
 | `artemis grammar` | The grammar below, with its precedence and its post-parse rules, as one piece of text. `--json` gives the enumerable choice points -- methods, operators, type names, block fields, reserved words, diagnostic codes -- read out of the tables the parser and the checker themselves consult |
 
-A scenario is converted into this language once, never translated on the fly:
-`artemis migrate -f old.yaml` for a YAML scenario and `artemis generate -f
-collection.json -o x.art` for a Postman collection. Both write through `artemis fmt`'s
-printer, so what they produce is already canonical.
+A test is converted into this language once, never translated on the fly:
+`artemis migrate -f old.yaml` for a YAML scenario, `artemis migrate -f old.art
+-o new/` for a `.art` file in [the old forms](#the-old-forms), and `artemis
+generate -f collection.json -o x.art` for a Postman collection, which writes a
+collection, a flow and a scenario file. All of them write through `artemis
+fmt`'s printer, so what they produce is already canonical.
 
 ---
 
 ## Not in this spec
 
-Everything here is deliberate. A scenario that uses one of these does not run.
+Everything here is deliberate. A file that uses one of these does not run.
 
-Reuse of requests and steps is [collections](#collections), which expand into
-plain steps before anything runs; there is still no runtime function or module
-concept. Copying the same login into every file was the reuse a scenario author
-needed most, it needs no real abstraction, and expansion delivers it without
-adding one: after expansion the language is unchanged.
+Reuse of requests is [collections](#collections), whose items expand into plain
+steps before anything runs, and reuse of steps is a [flow](#inside-a-flow) that
+scenarios run with other data. There is still no runtime function or module
+concept. Copying the same login into every file was the reuse an author needed
+most, it needs no real abstraction, and expansion delivers it without adding
+one: after expansion the language is unchanged.
 
 | | |
 | --- | --- |
-| **More control flow** | `while` and `group` stay reserved. Looping is a bounded [`repeat`](#polling), and running a scenario once per row of data is [data-driven scenarios](#data-driven-scenarios), which expand before the run rather than loop during it |
-| **Functions** | `fn`, `return`, `let`. Reserved words. A general-purpose language -- a test framework an AI assistant can translate a scenario into -- is the answer to "I need real abstraction"; what runs before and after a scenario's steps is [setup and teardown](#setup-and-teardown) |
+| **A flow calling a flow** | A flow calls collection items, and nothing else. Steps two flows share are an item, or a `setup` written in each |
+| **Scenarios from a data file** | A scenario's values are written in its scenario file. There is no `for row in json(...)`: each row is a scenario, written out |
+| **Masking credentials in reports** | A report prints both operands of a failed `expect`, so one against a password prints the password -- on the console and in `report.json`. Withholding a credential without new syntax is an open item on [the roadmap](ROADMAP.md) |
+| **More control flow** | `while` and `group` stay reserved. Looping is a bounded [`repeat`](#polling) |
+| **Functions** | `fn`, `return`, `let`. Reserved words. A general-purpose language -- a test framework an AI assistant can translate a flow into -- is the answer to "I need real abstraction"; what runs before and after a flow's steps is [setup and teardown](#setup-and-teardown) |
 | **Agentic assertions** | `ai`. Reserved, not implemented, and a parse error with a pointer |
-| **Parallelism outside a block** | A scenario's steps run one after another unless a [`parallel`](#blocks) block says otherwise; scenarios in one file run in order, and files at once only with `--jobs` |
+| **Parallelism outside a block** | A flow's steps run one after another unless a [`parallel`](#blocks) block says otherwise; scenarios in one file run in order, and files at once only with `--jobs` |
 | **A `wait_until` statement** | Waiting for a *condition* is per assertion and is spelled [`within`](#within), which names the condition being waited for. A browser block's [`wait "1s"`](#browser-steps) is a fixed pause and not a condition. There is no step-level wait: re-running a whole step is what [`retry`](#retry) is for, and the two are not interchangeable |
 | **Request and response detail in a report** | Neither report carries a body or a header |
 | **YAML** | Not a runtime format. See below |
 
 ---
 
+## The old forms
+
+`.art` files written before flows have a scenario that holds its own steps, and
+forms this language no longer has. Each is a compile error whose hint says
+what replaced it and that `artemis migrate -f <file> -o <dir>` rewrites the
+file:
+
+| Old form | What replaces it |
+| --- | --- |
+| `scenario "x" { steps }`, in a file with no `flow "..."` header | A flow file, and a scenario file that names it |
+| `capture x = ...` | `var x = ...` after the step's action: a [step var](#step-vars) |
+| `use a.b { ... }` | `step "<name>" = a.b { ... }`: [calling an item](#calling-an-item) |
+| `drop captures` | `drop vars` |
+| `request name(params)` | `var`s above the item's action: [its inputs](#a-collection-file) |
+| `suite.art` and `suite { }` | Folders and `--tags`. A suite's setup, which ran once per run, is a `setup` in each flow, which runs once per scenario |
+| `secret var`, `secret capture`, `secret` parameters, `for secret` | Nothing, for now: see **Masking credentials in reports** above |
+| `scenario "..." for row in json(...)` | A scenario for each row, written out |
+
+[docs/migrating.md](docs/migrating.md#old-art-files) shows what `artemis
+migrate` writes for each.
+
+---
+
 ## Coming from YAML
 
-YAML survives as an input to `artemis migrate -f old.yaml -o new.art`, which is
-the only YAML reader left in the binary. Nothing runs it. Six habits do not
-carry over:
+YAML survives as an input to `artemis migrate -f old.yaml`, which is the only
+YAML reader left in the binary. Nothing runs it. Six habits do not carry over:
 
 | In YAML | Here |
 | --- | --- |

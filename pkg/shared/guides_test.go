@@ -3,6 +3,7 @@ package shared
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"artemis/pkg/shared/migrate"
@@ -20,11 +21,12 @@ const (
 // -- so the list is written out here.
 var knownTypes = []string{"api", "exec"}
 
-// wantGuideScenarios is the number of whole-scenario examples the README and
-// the guides are expected to carry between them. The test asserts it found at
-// least this many, so an edit that renames the fences or deletes the examples
-// fails here instead of leaving a test that passes on nothing.
-const wantGuideScenarios = 5
+// wantGuideTests is the number of whole tests -- flow files and scenario
+// files -- the README and the guides are expected to carry between them. The
+// test asserts it found at least this many, so an edit that renames the fences
+// or deletes the examples fails here instead of leaving a test that passes on
+// nothing.
+const wantGuideTests = 5
 
 // guides is every document written for someone using artemis: the README and
 // each page under docs/. SPEC.md is the reference, and spec_test.go holds it
@@ -44,41 +46,43 @@ func guides(t *testing.T) []string {
 
 // TestGuideArtExamplesCompile holds every fenced art block in the README and
 // the guides to the language artemis actually reads -- the fragments included,
-// since a fragment a reader copies has to belong somewhere in a scenario too.
+// since a fragment a reader copies has to belong somewhere in a flow too.
 //
-// A whole scenario is parsed and name-checked as the file it is; a fragment is
-// wrapped in the part of a scenario its prose puts it in and has to parse. An
+// A whole file is parsed and name-checked as the file it is, against SPEC.md's
+// collections and the guide's own flows and scenario files; a fragment is
+// wrapped in the part of a flow its prose puts it in and has to parse. An
 // example here that artemis would reject is a failing test, not a surprise for
 // whoever copies it, and that is what keeps the guides and the language from
 // drifting apart the way they did before the DSL landed.
 func TestGuideArtExamplesCompile(t *testing.T) {
-	collections := docLoader{docCollections(t)}
-	scenarios := 0
+	tests := 0
 	for _, doc := range guides(t) {
+		files := docLoaderFor(t, doc)
 		for _, b := range fencedBlocks(t, doc, "art") {
-			if isArtScenario(b) {
-				scenarios++
+			if isArtTest(b) {
+				tests++
 			}
-			compileBlock(t, doc, b, collections)
+			compileBlock(t, doc, b, files)
 		}
 	}
 
-	if scenarios < wantGuideScenarios {
-		t.Errorf("found %d whole-scenario examples in the README and docs/, want at least %d -- did the examples move or lose their ```art fences?",
-			scenarios, wantGuideScenarios)
+	if tests < wantGuideTests {
+		t.Errorf("found %d flow and scenario files in the README and docs/, want at least %d -- did the examples move or lose their ```art fences?",
+			tests, wantGuideTests)
 	}
 }
 
 // TestGuideCollectionsAreSPECs holds a collection file a guide shows to the one
 // SPEC.md shows under the same path. Examples that import are compiled against
 // SPEC.md's collection blocks, so a guide's copy that drifted would be a file
-// the guide shows and no test compiles anything against.
+// the guide shows and no test compiles anything against. A guide's flows and
+// scenario files are its own, and are not held to SPEC.md's.
 func TestGuideCollectionsAreSPECs(t *testing.T) {
 	spec := docCollections(t)
 	for _, doc := range guides(t) {
 		for _, b := range fencedBlocks(t, doc, "art") {
-			name := collectionPath(b)
-			if name == "" {
+			name := docPath(b)
+			if !strings.HasPrefix(name, "collections/") {
 				continue
 			}
 			want, ok := spec[name]

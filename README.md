@@ -67,12 +67,12 @@ artemis run checkout.art
 is what the step does, `expect` is one assertion and one line of the report,
 and `capture` keeps a value for the steps after it. A failure names the file and
 line, the scenario, the step, what was expected and what came back, and the run
-exits non-zero. [Writing scenarios](docs/scenarios.md) goes through it properly.
+exits non-zero. [Writing scenarios](docs/flows.md) goes through it properly.
 
 ## What it can check
 
 - **HTTP APIs** -- requests, headers, bodies, forms and file uploads, with a
-  cookie jar per scenario. [Writing scenarios](docs/scenarios.md)
+  cookie jar per scenario. [Writing scenarios](docs/flows.md)
 - **Commands** -- a CLI, a migration script, a release gate: exit code, stdout
   and stderr. [Checking a command](docs/terminal.md)
 - **Web pages** -- `browser` steps on Playwright, with per-assertion waiting and
@@ -86,7 +86,7 @@ exits non-zero. [Writing scenarios](docs/scenarios.md) goes through it properly.
 - Scenarios in a real language: lexed, parsed and name-checked before anything runs, with compiler-grade diagnostics -- the source line, a caret, and `did you mean "status"?`
 - Assertions as expressions: `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `matches`, `exists`, `is <type>`, `not`, `and`, `or`
 - Values captured from one step and used in the next, keeping their JSON type
-- [Collections](docs/scenarios.md#reusing-requests): write a request once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
+- [Collections](docs/flows.md#reusing-requests): write a request once, `import` it, and `use` it with arguments, overrides and different expects; `artemis expand` shows what will run
 - A `suite.art` per folder: one login, once per run, for every scenario below it; `setup` and `teardown` in a scenario, teardown always running
 - [Blocks](docs/blocks.md) inside a scenario: `parallel`, `if`/`else`, `switch`, `try`/`catch`/`finally`, and `repeat ... until` for polling
 - [Selection](docs/suites.md#running-part-of-a-suite) by tag and name, and whole files run at once with [`--jobs`](docs/suites.md#running-a-suite-faster)
@@ -101,7 +101,7 @@ exits non-zero. [Writing scenarios](docs/scenarios.md) goes through it properly.
 
 | | |
 | --- | --- |
-| [Writing scenarios](docs/scenarios.md) | A scenario step by step, and reusing requests through collections |
+| [Writing scenarios](docs/flows.md) | A scenario step by step, and reusing requests through collections |
 | [Commands](docs/cli.md) | `run`, `parse`, `fmt`, `ast`, `expand`, `grammar`, and reading a failure |
 | [Reports, traces and logs](docs/reports.md) | JSON and JUnit reports, the event stream, screenshots, logs, traces |
 | [Environment and secrets](docs/environment.md) | `env()`, `.env` files, and keeping a credential out of a report |

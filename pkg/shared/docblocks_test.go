@@ -3,9 +3,11 @@ package shared
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"testing"
 
+	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
 	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/front"
@@ -77,33 +79,33 @@ func docText(t *testing.T, path string) string {
 	return string(data)
 }
 
-// isArtScenario reports whether a block is a whole scenario file rather than an
-// excerpt: its first line that is neither blank nor a comment opens a
-// `scenario`. Everything else -- a lone `expect`, a single `body =` line -- is a
-// fragment the prose has already placed inside something. It is what the doc
-// tests count; isArtFile is what they compile whole.
-func isArtScenario(b docBlock) bool {
-	for _, line := range strings.Split(b.body, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+// isArtTest reports whether a block is a whole test rather than an excerpt or
+// a collection: a flow file, `flow checkout { ... }`, or a scenario file, whose
+// first line is `flow "../flows/checkout.art"`. It is what the doc tests
+// count, so that an edit which loses the examples fails rather than leaving a
+// test that passes on nothing; isArtFile is what they compile whole.
+func isArtTest(b docBlock) bool {
+	tree, _ := parser.Parse("doc.art", b.body)
+	for _, d := range tree.Scenarios {
+		switch d.(type) {
+		case *ast.Flow, *ast.FlowRef:
+			return true
 		}
-		return strings.HasPrefix(line, "scenario ")
 	}
 	return false
 }
 
 // isArtFile reports whether a block is a whole file rather than an excerpt:
-// its first line that is neither blank nor a comment opens a scenario, an
-// import or a collection. A file of collections and a file that imports them
-// are as whole as a scenario is, and are compiled as one.
+// its first line that is neither blank nor a comment opens an import, a
+// collection, a flow, a scenario file's flow header or a scenario. Every kind
+// of file is as whole as another, and is compiled as one.
 func isArtFile(b docBlock) bool {
 	for _, line := range strings.Split(b.body, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		for _, opener := range []string{"scenario ", "import ", "collection ", "suite {"} {
+		for _, opener := range []string{"import ", "collection ", "flow ", "scenario "} {
 			if strings.HasPrefix(line, opener) {
 				return true
 			}
@@ -113,40 +115,65 @@ func isArtFile(b docBlock) bool {
 	return false
 }
 
-// collectionPath is the path a documented collection or suite file names in
-// its first line -- `# collections/auth.art`, `# suite/suite.art` -- and "" for
-// any other block. It is how the documents say which file an example is, so
-// that an example importing "collections/auth.art", or under "suite/", can be
-// compiled against the block that is that file.
-func collectionPath(b docBlock) string {
+// docDirs are the folders a documented file can name itself under: the three
+// kinds of file, each in the folder the documents keep it in.
+var docDirs = []string{"collections/", "flows/", "scenarios/"}
+
+// docPath is the path a documented file names in its first line --
+// `# collections/auth.art`, `# flows/checkout.art`, `# scenarios/checkout.art`
+// -- and "" for any other block. It is how the documents say which file an
+// example is, so that a flow importing "../collections/auth.art", or a
+// scenario file naming "../flows/checkout.art", can be compiled against the
+// block that is that file.
+func docPath(b docBlock) string {
 	first, _, _ := strings.Cut(b.body, "\n")
 	name, ok := strings.CutPrefix(strings.TrimSpace(first), "# ")
-	named := strings.HasPrefix(name, "collections/") || strings.HasPrefix(name, "suite/")
-	if !ok || !named || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
+	if !ok || !strings.HasSuffix(name, ".art") || strings.ContainsAny(name, " \t") {
 		return ""
 	}
-	return name
+	for _, dir := range docDirs {
+		if strings.HasPrefix(name, dir) {
+			return name
+		}
+	}
+	return ""
 }
 
-// docCollections is the map loader both doc tests compile importing examples
-// against: SPEC.md's collection blocks, keyed by the path each names in its
-// first line. They are read out of SPEC.md rather than written here, so the
-// collections an example imports are the ones the document shows and the two
-// cannot drift. A block naming a path twice is a fatal error: one of the two
-// would silently be the one that was tested.
-func docCollections(t *testing.T) expand.MapLoader {
+// docFiles is every block in the document at doc that names its path, keyed
+// by that path. A document's flows and scenario files are its own -- two
+// guides may each show a flows/checkout.art -- but within one document a
+// path is one file, and a second block for it is a fatal error: one of the
+// two would silently be the one that was tested.
+func docFiles(t *testing.T, doc string) expand.MapLoader {
 	t.Helper()
 
 	files := expand.MapLoader{}
-	for _, b := range docBlocks(t, specPath, "art") {
-		name := collectionPath(b)
+	for _, b := range fencedBlocks(t, doc, "art") {
+		name := docPath(b)
 		if name == "" {
 			continue
 		}
 		if _, dup := files[name]; dup {
-			t.Fatalf("SPEC.md line %d: a second block for %s", b.line, name)
+			t.Fatalf("%s line %d: a second block for %s", doc, b.line, name)
 		}
 		files[name] = b.body
+	}
+	return files
+}
+
+// docCollections is SPEC.md's collection blocks, keyed by the path each names
+// in its first line. Every document's examples are compiled against them, so
+// the collections an example imports are the ones the reference shows, and a
+// guide that shows a collection has to show SPEC.md's (see
+// TestGuideCollectionsAreSPECs).
+func docCollections(t *testing.T) expand.MapLoader {
+	t.Helper()
+
+	files := expand.MapLoader{}
+	for name, src := range docFiles(t, specPath) {
+		if strings.HasPrefix(name, "collections/") {
+			files[name] = src
+		}
 	}
 	if len(files) == 0 {
 		t.Fatalf("SPEC.md has no block whose first line is # collections/<name>.art -- did the collections examples move?")
@@ -154,18 +181,30 @@ func docCollections(t *testing.T) expand.MapLoader {
 	return files
 }
 
-// docLoader is docCollections for the files an example imports, and a stand-in
-// for every data file it reads: json() and csv() in a document name files the
+// docLoaderFor is the loader the examples of the document at doc compile
+// against: SPEC.md's collections, and the document's own named files over
+// them.
+func docLoaderFor(t *testing.T, doc string) docLoader {
+	t.Helper()
+
+	files := docCollections(t)
+	for name, src := range docFiles(t, doc) {
+		files[name] = src
+	}
+	return docLoader{files: files}
+}
+
+// docLoader serves the files an example imports or names, and a stand-in for
+// every data file it reads: json() and csv() in a document name files the
 // document does not show, and what they hold is beside the point of the
 // example. A .json path serves one row holding the fields the documents'
-// examples read, and a .csv path a header and a row, so a data-driven example
-// has a row to make and compiles exactly as it would beside real data; whether
-// a path names a file at all is pkg/dsl/front's test, not the documents'.
-type docLoader struct{ collections expand.MapLoader }
+// examples read, and a .csv path a header and a row; whether a path names a
+// file at all is pkg/dsl/front's test, not the documents'.
+type docLoader struct{ files expand.MapLoader }
 
 func (d docLoader) Load(from, p string) (string, string, error) {
 	if strings.HasSuffix(p, ".art") {
-		return d.collections.Load(from, p)
+		return d.files.Load(from, p)
 	}
 	switch {
 	case strings.HasSuffix(p, ".json"):
@@ -176,13 +215,25 @@ func (d docLoader) Load(from, p string) (string, string, error) {
 	return p, "", nil
 }
 
+// with is d serving src at name as well.
+func (d docLoader) with(name, src string) docLoader {
+	files := expand.MapLoader{name: src}
+	for k, v := range d.files {
+		if k != name {
+			files[k] = v
+		}
+	}
+	return docLoader{files: files}
+}
+
 // docRow is the one row a documented JSON file holds.
 const docRow = `[{"id": 1, "name": "alice", "role": "admin", "email": "alice@example.com",
   "password": "s3cret", "plan": "pro", "expect_status": 200}]`
 
 // frontEnd is the whole front end over one documented file -- parse, expand
-// its uses against the documented collections, name-check -- with every bag
-// merged, through front.CompileWith, the function `artemis run` compiles with.
+// its imports and item calls against the documented files, name-check -- with
+// every bag merged, through front.CompileWith, the function `artemis run`
+// compiles with.
 //
 // Merging rather than short-circuiting is the point: a block with a syntax
 // error on one line and an unknown field on another reports both, so one test
@@ -216,16 +267,17 @@ func errorsIn(bag *diag.Bag) string {
 //
 // A doc example is prose-placed rather than a file: SPEC.md shows one `expect`
 // line under its operator table and one `body =` line under "Bodies", and
-// demanding a whole scenario around each would make the document worse to read
-// in exchange for making it testable. So the test supplies what the prose
-// already said, and these are the three levels a fragment can be at: a
-// scenario's declarations, a step's statements, and an action block's fields --
-// and a collection's items, for a lone request or flow.
+// demanding a whole flow around each would make the document worse to read in
+// exchange for making it testable. So the test supplies what the prose already
+// said, and these are the levels a fragment can be at: a flow's declarations,
+// a collection's items, a step's statements, an action block's fields, and
+// the lines of a scenario in a scenario file.
 var fragmentContexts = []string{
-	"scenario \"doc\" {\nBLOCK\n}\n",
+	"flow doc {\nBLOCK\n}\n",
 	"collection \"doc\" {\nBLOCK\n}\n",
-	"scenario \"doc\" {\n  step \"doc\" {\n    get \"https://example.test\"\nBLOCK\n  }\n}\n",
-	"scenario \"doc\" {\n  step \"doc\" {\n    post \"https://example.test\" {\nBLOCK\n    }\n  }\n}\n",
+	"flow doc {\n  step \"doc\" {\n    get \"https://example.test\"\nBLOCK\n  }\n}\n",
+	"flow doc {\n  step \"doc\" {\n    post \"https://example.test\" {\nBLOCK\n    }\n  }\n}\n",
+	"flow \"doc.art\"\n\nscenario \"doc\" {\nBLOCK\n}\n",
 }
 
 // compileBlock holds one `art` block to compiling.
@@ -233,25 +285,36 @@ var fragmentContexts = []string{
 // A whole file is parsed as the file it is and must also name-check clean:
 // every step's type inferred, every name resolvable, every field known. That is
 // the strong check, and it is why a README example cannot drift from the
-// language again. A file that imports is expanded against l, the documented
-// collections; a documented collection file is compiled under the path it
-// names, so its own imports resolve beside it.
+// language again. A file is compiled under the path it names, so its imports
+// and its flow header resolve beside it against l, the documented files.
+//
+// A flow is checked when a scenario file names it, so a flow file is also
+// compiled through a scenario file of its own, made here, that names it and
+// sets each var it requires: a flow no document's scenario file runs is still
+// held to the checker.
 //
 // A fragment is wrapped in each context in turn and has to parse clean in one
 // of them. Parse only, not check: a fragment names values its surrounding prose
 // declares -- `url`, `token`, `limit` -- so resolving names would report an
 // unknown identifier for an example that is correct, and SPEC.md's
 // deliberately-rejected `match()` example is a checker error by design.
-func compileBlock(t *testing.T, doc string, b docBlock, l expand.Loader) {
+func compileBlock(t *testing.T, doc string, b docBlock, l docLoader) {
 	t.Helper()
 
 	if isArtFile(b) {
-		name := collectionPath(b)
+		name := docPath(b)
 		if name == "" {
 			name = "doc.art"
 		}
 		if bag := frontEnd(name, b.body, l); bag.HasErrors() {
 			t.Errorf("%s line %d: this file does not compile:%s\n%s", doc, b.line, errorsIn(bag), b.body)
+			return
+		}
+		if src, ok := flowCheck(name, b.body); ok {
+			check := path.Join(path.Dir(name), "doc-check.art")
+			if bag := frontEnd(check, src, l.with(name, b.body)); bag.HasErrors() {
+				t.Errorf("%s line %d: this flow does not compile when a scenario runs it:%s\n%s", doc, b.line, errorsIn(bag), b.body)
+			}
 		}
 		return
 	}
@@ -267,8 +330,36 @@ func compileBlock(t *testing.T, doc string, b docBlock, l expand.Loader) {
 		}
 	}
 	// The outermost context's diagnostics, because a fragment that is not a
-	// scenario declaration, a step statement or an action field is usually
+	// flow declaration, a step statement or an action field is usually
 	// nothing at all, and the first report is the one with the least scaffolding
 	// of ours in it.
-	t.Errorf("%s line %d: this fragment parses in no part of a scenario:%s\n%s", doc, b.line, errorsIn(first), b.body)
+	t.Errorf("%s line %d: this fragment parses in no part of a flow:%s\n%s", doc, b.line, errorsIn(first), b.body)
+}
+
+// flowCheck is a scenario file beside the flow file name that runs it once,
+// setting each var the flow requires to null, and false when src declares no
+// flow.
+func flowCheck(name, src string) (string, bool) {
+	tree, _ := parser.Parse(name, src)
+	for _, d := range tree.Scenarios {
+		f, ok := d.(*ast.Flow)
+		if !ok {
+			continue
+		}
+		var sets []string
+	top:
+		for _, d := range f.Body {
+			switch v := d.(type) {
+			case *ast.VarDecl:
+				if v.Required() && v.Private.Text == "" {
+					sets = append(sets, "  "+v.Name.Value+" = null\n")
+				}
+			case *ast.ConfigDecl:
+			default:
+				break top
+			}
+		}
+		return fmt.Sprintf("flow %q\n\nscenario \"doc\" {\n%s}\n", path.Base(name), strings.Join(sets, "")), true
+	}
+	return "", false
 }
