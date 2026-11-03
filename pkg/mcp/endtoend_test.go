@@ -15,7 +15,7 @@ import (
 // as the input of the next.
 func TestListValidateFormatLoop(t *testing.T) {
 	root := t.TempDir()
-	src := "scenario    \"checkout\" {\n  step \"s\" {\n    get \"http://example.test\"\n    expect status == 200\n  }\n}\n"
+	src := "flow    checkout {\n  step \"s\" {\n    get \"http://example.test\"\n    expect status == 200\n  }\n}\n"
 	if err := os.WriteFile(filepath.Join(root, "checkout.art"), []byte(src), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}

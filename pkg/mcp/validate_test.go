@@ -48,7 +48,7 @@ func validate(t *testing.T, cs *mcp.ClientSession, args map[string]any) map[stri
 func TestValidateAcceptsCleanSource(t *testing.T) {
 	cs := connect(t, t.TempDir())
 	got := validate(t, cs, map[string]any{
-		"source": "scenario \"ok\" {\n  step \"s\" {\n    get \"http://example.test\"\n    expect status == 200\n  }\n}\n",
+		"source": "flow ok {\n  step \"s\" {\n    get \"http://example.test\"\n    expect status == 200\n  }\n}\n",
 	})
 	if got["ok"] != true {
 		t.Fatalf("ok = %v, want true; diagnostics: %v", got["ok"], got["diagnostics"])
