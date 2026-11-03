@@ -14,9 +14,8 @@ import (
 // `var user` or `private var tries = 1`. bind reads both through it.
 type input struct {
 	Name    token.Token
-	Default ast.Expr    // nil when required
-	Private bool        // takes only its own default: no argument, no context name
-	Secret  token.Token // `secret`, zero when absent
+	Default ast.Expr // nil when required
+	Private bool     // takes only its own default: no argument, no context name
 }
 
 // inputs is what r takes, in the order it declares them: its parameters, then
@@ -25,11 +24,11 @@ func inputs(r *ast.RequestDecl) []input {
 	var out []input
 	if r.Params != nil {
 		for _, p := range r.Params.List {
-			out = append(out, input{Name: p.Name, Default: p.Default, Secret: p.Secret})
+			out = append(out, input{Name: p.Name, Default: p.Default})
 		}
 	}
 	for _, v := range r.Inputs {
-		out = append(out, input{Name: v.Name, Default: v.Value, Private: v.Private.Text != "", Secret: v.Secret})
+		out = append(out, input{Name: v.Name, Default: v.Value, Private: v.Private.Text != ""})
 	}
 	return out
 }
@@ -47,10 +46,8 @@ func inputs(r *ast.RequestDecl) []input {
 // default is copied out of the collection and stamped. A context name is the
 // bare identifier, placed where the item reads the input: the checker then
 // judges whether the name is bound at that point, and a diagnostic on it
-// points into the item with the use as its chain. A secret input's value goes
-// through secretArg, with sc saying what the use can read, pre naming a
-// hoisted var and ref naming the item in a diagnostic.
-func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope, pre, ref string, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
+// points into the item with the use as its chain.
+func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
 	declared := map[string]input{}
 	var names []string
 	for _, in := range list {
@@ -88,7 +85,6 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope
 	}
 
 	env := map[string]ast.Expr{}
-	var hoisted []ast.Decl
 	var missing, required []string
 	for _, in := range list {
 		name := in.Name.Value
@@ -104,15 +100,6 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope
 		default:
 			missing = append(missing, name)
 		}
-		// Before the next default is substituted, so a default built from a
-		// secret parameter reads the hoisted var and is secret too.
-		if x, bound := env[name]; bound && in.Secret.Text != "" {
-			var v *ast.VarDecl
-			env[name], v = e.secretArg(sc, in, x, pre, ref, stamp)
-			if v != nil {
-				hoisted = append(hoisted, v)
-			}
-		}
 		if isNil(in.Default) && !in.Private {
 			required = append(required, name)
 		}
@@ -121,9 +108,6 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope
 		e.bag.Error(use.Item.Span, diag.MissingArgument, "%s needs %s", use.Ref(), strings.Join(missing, ", ")).
 			Hintf("%s requires %s", use.Ref(), strings.Join(required, ", "))
 		ok = false
-	}
-	if ok {
-		*sc.hoisted = append(*sc.hoisted, hoisted...)
 	}
 	return env, ok
 }

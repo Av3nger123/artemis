@@ -1,0 +1,14 @@
+# stage: front
+#
+# use in a flow. A step calls an item by name, step "log in" = auth.login,
+# and the name in quotes is what the report shows for it.
+
+import "../collections/auth.art"
+
+flow checkout {
+  use auth.login { user = "alice" }
+
+  step "pay" {
+    post "/cart/pay"
+  }
+}

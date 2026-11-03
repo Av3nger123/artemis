@@ -1,0 +1,8 @@
+=== terminal
+old_for.art:7:35: scenario "log in as ${user.role}" reads rows with for, and a scenario file now holds one scenario for each row
+   7 | scenario "log in as ${user.role}" for user in json("users.json") {
+     |                                   ^^^
+   hint: write each row as a scenario that sets user, in a scenario file of the flow its steps go in -- artemis migrate -f old_for.art -o <dir> rewrites it
+
+=== codes
+old-for	error	7:35-7:38

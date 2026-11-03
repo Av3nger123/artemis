@@ -71,7 +71,9 @@ func build(in map[string]string) (map[string]*ast.File, []string, error) {
 	for _, k := range m.keys {
 		tree, bag := parser.Parse(k, in[k])
 		for _, d := range bag.All() {
-			if d.Severity == diag.Error {
+			// An old request with parameters held any action; migrate
+			// gives it the keyword its action names.
+			if d.Severity == diag.Error && d.Code != diag.ItemActionMismatch {
 				return nil, nil, fmt.Errorf("%s:%d:%d: %s", k, d.Span.Line, d.Span.Col, d.Message)
 			}
 		}

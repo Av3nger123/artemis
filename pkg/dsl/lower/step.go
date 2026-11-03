@@ -290,11 +290,10 @@ func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, er
 				continue // the parser reported a capture with no name.
 			}
 			out.Captures = append(out.Captures, &Capture{
-				Name:     it.Name.Value,
-				Value:    it.Value,
-				Line:     it.Name.Span.Line,
-				File:     it.Name.Span.File,
-				Declared: it.Secret.Text != "",
+				Name:  it.Name.Value,
+				Value: it.Value,
+				Line:  it.Name.Span.Line,
+				File:  it.Name.Span.File,
 			})
 		case *ast.Field:
 			stepField(out, it)

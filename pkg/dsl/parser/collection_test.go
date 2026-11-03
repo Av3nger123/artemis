@@ -340,11 +340,13 @@ func TestBrokenInputStillRoundTrips(t *testing.T) {
 	}
 }
 
-// An old-form request -- parameters in parentheses -- held any action, so a
-// terminal one still parses until the old forms are retired.
-func TestOldFormRequestMayHoldAnyAction(t *testing.T) {
+// A request with parameters in parentheses is held to its keyword as any
+// item is: run in a request is item-action-mismatch. The parameters
+// themselves are pkg/dsl/front's old-params.
+func TestARequestWithParametersIsHeldToItsKeyword(t *testing.T) {
 	_, bag := Parse("c.art", "collection \"ops\" {\n  request migrate(target) {\n    run \"make\" { args = [target] }\n  }\n}\n")
-	if bag.HasErrors() {
-		t.Fatalf("an old-form request holding run is an error: %v", bag.All())
+	ds := bag.All()
+	if len(ds) != 1 || ds[0].Code != diag.ItemActionMismatch {
+		t.Fatalf("want one item-action-mismatch, got %v", ds)
 	}
 }

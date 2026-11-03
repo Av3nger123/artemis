@@ -56,6 +56,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/check"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/parser"
 )
 
@@ -86,7 +87,7 @@ func TestInvalidCorpus(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(path), ".art")
 		t.Run(name, func(t *testing.T) {
 			src := read(t, path)
-			tree, bag := frontEnd(filepath.Base(path), src)
+			tree, bag := stage(src)(filepath.Base(path), src)
 
 			// Holds for every input, valid or not: the tree is the source
 			// again. ART-31 asserts it over well-formed files; the point of
@@ -119,7 +120,10 @@ func TestInvalidCorpus(t *testing.T) {
 	}
 }
 
-// frontEnd is every stage the corpus runs: lex, parse, check.
+// frontEnd is the stages most of the corpus runs: lex, parse, check, over the
+// file as the plain scenarios expansion makes -- the form the checker and the
+// parser are written against, so their diagnostics are pinned on the file
+// that shows them best.
 //
 // The checker's diagnostics go into the same bag, so Bag.All()'s sort is what
 // interleaves them with the parser's into file order -- a scope error on line
@@ -129,6 +133,29 @@ func frontEnd(file, src string) (*ast.File, *diag.Bag) {
 	_, checked := check.Check(tree)
 	bag.Merge(checked)
 	return tree, bag
+}
+
+// wholeFrontEnd is pkg/dsl/front.Compile, what `artemis parse` runs on a file
+// with no disk behind it. A fixture whose fault is judged over the file as a
+// person writes it -- an old form -- declares it with the line
+//
+//	# stage: front
+//
+// because a plain scenario, which the rest of the corpus is written in, is
+// itself an old form there.
+func wholeFrontEnd(file, src string) (*ast.File, *diag.Bag) {
+	tree, _, bag := front.Compile(file, src)
+	return tree, bag
+}
+
+// stage is the front end a fixture declares it runs through.
+func stage(src string) func(file, src string) (*ast.File, *diag.Bag) {
+	for _, line := range strings.Split(src, "\n") {
+		if strings.TrimSpace(line) == "# stage: front" {
+			return wholeFrontEnd
+		}
+	}
+	return frontEnd
 }
 
 // TestAllErrorsReported is R5, asserted in Go rather than through a golden.
@@ -205,6 +232,15 @@ func TestEveryNamedFaultHasAFixture(t *testing.T) {
 		"second_flow",        // two flows in a flow file
 		"flow_file_holds",    // a collection and a scenario in a flow file
 		"data_only_scenario", // a step and an expect in a data scenario
+
+		// The old forms, each judged over the file as written.
+		"old_scenario", // a scenario that holds steps, in a file with no header
+		"old_capture",  // capture in a flow
+		"old_use",      // use in a flow
+		"old_params",   // a collection item's parameters
+		"old_secret",   // secret on a flow's var
+		"old_suite",    // a suite block
+		"old_for",      // a scenario's for rows
 	}
 	for _, name := range want {
 		for _, ext := range []string{".art", ".golden"} {

@@ -90,9 +90,6 @@ func runExpand(cmd *cobra.Command, args []string) error {
 // use line, at the root of the chain. A step written in the scenario itself
 // has Via 0 and gets nothing.
 //
-// A run of hoisted secret vars that follows a step gets a blank line above
-// it, so it reads as part of the use below it and not of the step above.
-//
 // Trivia is replaced with a new slice and never appended to: ast.Clone shares
 // trivia with the collection's tree, and an append into its spare capacity
 // would write a comment into a file nobody asked to change.
@@ -102,21 +99,10 @@ func withOrigins(u *front.Unit) *ast.File {
 		if !ok {
 			continue
 		}
-		for i, b := range sc.Body {
-			switch s := b.(type) {
-			case *ast.StepDecl:
+		for _, b := range sc.Body {
+			if s, ok := b.(*ast.StepDecl); ok {
 				if text, ok := origin(u, s.Name.Span.Via); ok {
 					s.Keyword.Leading = withComment(s.Keyword.Leading, text)
-				}
-			case *ast.VarDecl:
-				if i == 0 || s.Name.Span.Via == 0 || s.Secret.Text == "" {
-					continue
-				}
-				if _, afterStep := sc.Body[i-1].(*ast.StepDecl); afterStep {
-					s.Secret.Leading = []token.Trivia{
-						{Kind: token.Newline, Text: "\n"},
-						{Kind: token.Newline, Text: "\n"},
-					}
 				}
 			}
 		}

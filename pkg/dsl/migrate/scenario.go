@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/diag"
-	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 )
@@ -381,30 +379,6 @@ func mergeTags(sets []*ast.TagsDecl) *ast.TagsDecl {
 		}
 	}
 	return &ast.TagsDecl{Keyword: word(token.Ident, "tags"), Assign: word(token.Assign, "="), Value: arr}
-}
-
-// rows is the rows of a data-driven scenario, made exactly as a run makes
-// them: by expanding the scenario's for clause, over the files in m.in, so
-// the names and the values are the ones the old file ran with.
-func (m *migration) rows(key string, s *ast.Scenario) ([]row, error) {
-	stub := &ast.Scenario{Keyword: s.Keyword, Name: s.Name, For: s.For, LBrace: s.LBrace, RBrace: s.RBrace}
-	res, bag := expand.Expand(&ast.File{Scenarios: []ast.Decl{stub}}, expand.MapLoader(m.in))
-	for _, d := range bag.All() {
-		if d.Severity == diag.Error {
-			return nil, fmt.Errorf("%s:%d:%d: %s", d.Span.File, d.Span.Line, d.Span.Col, d.Message)
-		}
-	}
-	var out []row
-	for _, d := range res.File.Scenarios {
-		sc, ok := d.(*ast.Scenario)
-		if !ok || len(sc.Body) == 0 {
-			continue
-		}
-		if v, ok := sc.Body[0].(*ast.VarDecl); ok {
-			out = append(out, row{title: sc.Name.Value, value: v.Value})
-		}
-	}
-	return out, nil
 }
 
 func importsOf(tree *ast.File) []*ast.Import {

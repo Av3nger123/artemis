@@ -1,7 +1,6 @@
 action-not-first	error	a step statement appears above the step's action block
 bad-arity	error	a call or a browser action has the wrong number of arguments
 bad-override	error	a line in a use block is not an argument or an override that applies
-bad-row-name	error	a data-driven scenario's name reads something other than its row
 bad-tag	error	a tag is not a lower-case word written out as a string, or is listed twice
 bad-value	error	a value is the wrong kind for the position it is in
 body-conflict	error	a request says what its body is more than one way
@@ -20,16 +19,11 @@ duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a var that reuses the name of a var declared in the same place
 duplicate-import-name	error	two imports give their collections the same name
 duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
-duplicate-row-name	error	two rows of a data-driven scenario name it alike
-duplicate-suite-name	error	a suite exports a name a suite above it already exports
-duplicate-tags	error	a scenario or a suite has more than one tags list
+duplicate-tags	error	a scenario has more than one tags list
 flow-file-holds	error	a flow file holds a collection or a scenario
 flow-not-found	error	a scenario file's flow header names a file that cannot be read
 flow-not-runnable	error	a flow file is named on the command line, and a flow runs only through a scenario file
 flow-ref-placement	error	a scenario file's flow "..." header is not its first line
-for-no-rows	error	a for clause's data has no rows
-for-source-not-array	error	a for clause's data is not an array of rows
-for-source-not-static	error	a for clause reads rows that are not known before the run
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
 import-needs-name	error	an import has no "as" and its file's name cannot be what a use names it by
@@ -48,6 +42,13 @@ nesting-too-deep	error	a file nests deeper than the parser will descend
 non-associative-operator	error	a comparison operator is chained with another
 not-a-flow-file	error	a scenario file's flow header names a file that holds no flow
 not-in-scope	error	a name is not bound in this step's type
+old-capture	error	a step writes a name with capture, which var after the action replaces
+old-for	error	a scenario reads its rows with for, which a scenario for each row replaces
+old-params	error	a collection item declares parameters in parentheses, which vars above its action replace
+old-scenario	error	a scenario holds steps in a file with no flow header, the form a flow file and a scenario file replace
+old-secret	error	a var, a capture, a parameter or a for clause is marked secret, which is removed
+old-suite	error	a file is a suite, which folders, --tags and each flow's own setup replace
+old-use	error	a use calls an item, which step "name" = <collection>.<item> replaces
 parallel-browser	error	two branches of a parallel block drive the browser, which has one page
 parallel-capture-clash	error	two branches of a parallel block capture the same name
 parallel-sibling-capture	error	a branch of a parallel block reads a capture another branch makes at the same time
@@ -62,13 +63,9 @@ scenario-in-collection-file	error	a file holding a collection also holds a scena
 scenario-value-reads-name	error	a scenario's value reads a name, where only literals and builtins are allowed
 second-collection	error	a file holds more than one collection
 second-flow	error	a file declares or names a second flow
-secret-argument	error	an argument to a secret parameter is not itself secret
 setup-after-step	error	a setup block is below a step it would run before
 skip-maybe-written	error	a var a scenario skips is read where only some paths have written it
 skip-read	error	a var a scenario skips is read somewhere other than an expect or an object field
-suite-file-name	error	a suite block is in a file not named suite.art
-suite-has-scenario	error	a suite file holds a scenario, or a second suite block
-suite-has-step	error	a suite block holds a step or a use outside setup and teardown
 teardown-before-step	error	a teardown block is above a step it would run after
 unclosed-block	error	a "{", "(" or "[" is never closed
 unclosed-interpolation	error	a "${" in a string has no closing "}"

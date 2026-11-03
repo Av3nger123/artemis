@@ -14,10 +14,9 @@ import (
 )
 
 func TestSkipRemovesTheExpectsThatReadIt(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { var total = skip }\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var total = 100\n" +
-			"  step \"pay\" {\n    post \"/p\"\n    expect status == 200\n    expect body.total == total\n  }\n}\n"},
-		checkoutFlow)
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { total = skip }\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  var total = 100\n" +
+			"  step \"pay\" {\n    post \"/p\"\n    expect status == 200\n    expect body.total == total\n  }\n}\n"})
 	noDiags(t, got.diags)
 	if !contains(got.out, "expect status == 200") || contains(got.out, "body.total") || contains(got.out, "var total") {
 		t.Fatalf("want the expect on total and the var gone, the other expect kept:\n%s", got.out)
@@ -25,10 +24,9 @@ func TestSkipRemovesTheExpectsThatReadIt(t *testing.T) {
 }
 
 func TestSkipLeavesTheObjectFieldOut(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { var coupon = skip }\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var sku = \"S\"\n  var coupon = \"\"\n" +
-			"  step \"pay\" {\n    post \"/p\" { body = {\"sku\": sku, \"coupon\": coupon} }\n  }\n}\n"},
-		checkoutFlow)
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { coupon = skip }\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  var sku = \"S\"\n  var coupon = \"\"\n" +
+			"  step \"pay\" {\n    post \"/p\" { body = {\"sku\": sku, \"coupon\": coupon} }\n  }\n}\n"})
 	noDiags(t, got.diags)
 	if !contains(got.out, `body = {"sku": sku}`) {
 		t.Fatalf("want the coupon field left out:\n%s", got.out)
@@ -36,10 +34,9 @@ func TestSkipLeavesTheObjectFieldOut(t *testing.T) {
 }
 
 func TestSkipInAURLIsAnError(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { var coupon = skip }\n",
-		map[string]string{"flows/checkout.art": "scenario \"checkout\" {\n  var coupon = \"\"\n" +
-			"  step \"pay\" {\n    post \"/p/${coupon}\"\n  }\n}\n"},
-		checkoutFlow)
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { coupon = skip }\n",
+		map[string]string{"flows/checkout.art": "flow checkout {\n  var coupon = \"\"\n" +
+			"  step \"pay\" {\n    post \"/p/${coupon}\"\n  }\n}\n"})
 	ds := only(got.bag, diag.SkipRead)
 	if len(ds) != 1 || ds[0].Span.File != "flows/checkout.art" || ds[0].Span.Line != 4 {
 		t.Fatalf("want one skip-read at the URL, got:\n%s", got.diags)
@@ -53,12 +50,12 @@ func TestSkipInAURLIsAnError(t *testing.T) {
 }
 
 func TestSkipReachesIntoAnItem(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { var total = skip }\n",
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { total = skip }\n",
 		map[string]string{
-			"flows/checkout.art": "import \"../collections/api.art\"\n\nscenario \"checkout\" {\n  var total = 1\n  use api.pay { total = total }\n}\n",
+			"flows/checkout.art": "import \"../collections/api.art\"\n\nflow checkout {\n  var total = 1\n  step \"pay\" = api.pay { total = total }\n}\n",
 			"collections/api.art": "collection \"api\" {\n  request pay(total) {\n    post \"/p\"\n" +
 				"    expect status == 200\n    expect body.total == total\n  }\n}\n",
-		}, checkoutFlow)
+		})
 	noDiags(t, got.diags)
 	if !contains(got.out, "expect status == 200") || contains(got.out, "body.total") {
 		t.Fatalf("want the item's expect on total gone:\n%s", got.out)
@@ -69,12 +66,12 @@ func TestSkipReachesIntoAnItem(t *testing.T) {
 // is at the flow's line. Read from the context (Task 8), the read is the
 // item's own: TestSkipReadInsideAnItemNamesTheChain.
 func TestSkipReadThroughAnItemArgument(t *testing.T) {
-	got := expandFlows(t, "# flow \"flows/checkout.art\"\nscenario \"s\" { var token = skip }\n",
+	got := expandFlows(t, "flow \"flows/checkout.art\"\nscenario \"s\" { token = skip }\n",
 		map[string]string{
-			"flows/checkout.art": "import \"../collections/auth.art\"\n\nscenario \"checkout\" {\n  var token = \"t\"\n  use auth.me { token = token }\n}\n",
+			"flows/checkout.art": "import \"../collections/auth.art\"\n\nflow checkout {\n  var token = \"t\"\n  step \"me\" = auth.me { token = token }\n}\n",
 			"collections/auth.art": "collection \"auth\" {\n  request me(token) {\n" +
 				"    get \"/me\" { header \"Authorization\" = \"Bearer ${token}\" }\n  }\n}\n",
-		}, checkoutFlow)
+		})
 	ds := only(got.bag, diag.SkipRead)
 	if len(ds) != 1 || ds[0].Span.File != "flows/checkout.art" || ds[0].Span.Line != 5 {
 		t.Fatalf("want one skip-read at the flow's argument, got:\n%s", got.diags)

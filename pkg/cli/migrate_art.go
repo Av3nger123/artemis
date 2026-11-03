@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/front"
 	artmigrate "artemis/pkg/dsl/migrate"
 	"artemis/pkg/dsl/parser"
 
@@ -134,7 +133,7 @@ func migrationInput(root string, start []string) (map[string]string, error) {
 		if !isArtFile(p) {
 			continue
 		}
-		for _, s := range front.SuiteChain(p) {
+		for _, s := range suitesAbove(p) {
 			add(s)
 		}
 		tree, _ := parser.Parse(p, string(b))
@@ -152,6 +151,41 @@ func migrationInput(root string, start []string) (map[string]string, error) {
 		}
 	}
 	return in, nil
+}
+
+// suitesAbove is where an old suite.art that applies to file could be: one in
+// each directory from file's own up to the working directory -- or, for a
+// path outside it, up to the root of the filesystem. A suite file is given its
+// parents'. Which of them exist is the caller's to find out.
+func suitesAbove(file string) []string {
+	dir := filepath.Dir(file)
+	if filepath.Base(file) == "suite.art" {
+		if dir == "." || dir == string(filepath.Separator) {
+			return nil
+		}
+		dir = filepath.Dir(dir)
+	}
+	stop := "."
+	if filepath.IsAbs(dir) {
+		stop = string(filepath.Separator)
+		if wd, err := os.Getwd(); err == nil && within(dir, wd) {
+			stop = wd
+		}
+	}
+	var out []string
+	for {
+		out = append(out, filepath.Join(dir, "suite.art"))
+		if dir == stop || dir == "." || dir == string(filepath.Separator) {
+			return out
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+
+// within reports whether dir is root or below it.
+func within(dir, root string) bool {
+	rel, err := filepath.Rel(root, dir)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // dataPaths is the literal paths json() and csv() read in x.

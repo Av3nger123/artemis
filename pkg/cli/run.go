@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"artemis/pkg/dsl/front"
 	"artemis/pkg/executor"
 	"artemis/pkg/report"
 	"artemis/pkg/result"
@@ -265,9 +264,7 @@ func discover(path string) ([]string, error) {
 			}
 			return nil
 		}
-		// A suite.art is a folder's setup and teardown, not a scenario
-		// file: it runs with the scenarios under it.
-		if isScenarioFile(d.Name()) && !front.IsSuiteFile(p) {
+		if isScenarioFile(d.Name()) {
 			files = append(files, p)
 		}
 		return nil
@@ -337,11 +334,6 @@ type runtimeEnv struct {
 	// not a run of nothing that passes.
 	sel          *selector
 	noneSelected bool
-
-	// suites are the run's suite.art files by path, and suiteOfFile the
-	// innermost one each scenario file is under. See suite.go.
-	suites      map[string]*suiteState
-	suiteOfFile map[string]*suiteState
 
 	// root is the path `run` was given, which a scenario's file is named
 	// relative to when its generator is seeded: `artemis run suite` from the
@@ -435,31 +427,16 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	}
 
 	var loaded []compiled
-	var scenarioFiles []string
 	for _, a := range attempts {
 		if a.ok {
 			loaded = append(loaded, a.compiled)
-			scenarioFiles = append(scenarioFiles, a.file)
 		}
 	}
-	// The suite.art files above the scenarios, compiled once each. Their
-	// env() needs join the check before the run, and one that would not
-	// compile is reported as the errored file it is, first.
-	suiteLoaded, brokenSuites := rt.planSuites(scenarioFiles, diagOut)
-	for _, b := range brokenSuites {
-		failScenario(run, rep, rt.events, b.file, b.err)
-	}
-
-	// --tags and --grep, settled once every file and suite has compiled and
+	// --tags and --grep, settled once every file has compiled and
 	// before anything checks the environment or runs: a smoke run needs the
 	// smoke scenarios' variables, and nothing else's.
 	if rt.sel != nil {
 		loaded = rt.selectScenarios(attempts, diagOut)
-	}
-	for _, c := range suiteLoaded {
-		if st := rt.suites[c.file]; st != nil && st.used {
-			loaded = append(loaded, c)
-		}
 	}
 	// nil is os.LookupEnv: the real process environment, which is where the
 	// .env file was loaded to. A seam here would have had no caller -- the
@@ -479,7 +456,7 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	runnable := len(faults) == 0 && !rt.noneSelected
 
 	// The run's databases: one pool per connection URL, opened by the first
-	// db step that names it -- in a suite, a scenario or any --jobs worker --
+	// db step that names it -- in a scenario or any --jobs worker --
 	// and closed once the last teardown is done. A run with no db step opens
 	// nothing.
 	pools := dbstep.NewPools()
@@ -488,12 +465,6 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 	// More than one job: every runnable file runs into its own result tree and
 	// its own buffer, and the ordered loop below drains them. See runParallel
 	// for why the output is buffered rather than streamed.
-	// Every suite's setup, once and before any scenario: the scenarios under
-	// it read what it left.
-	if runnable {
-		rt.setUpSuites(ctx, run, rep)
-	}
-
 	var parallel []*fileOutcome
 	if runnable && rt.workers() > 1 {
 		parallel = runParallel(ctx, rt, attempts)
@@ -517,10 +488,6 @@ func runFilesWith(rt *runtimeEnv, files []string, rep *report.Console, diagOut i
 			continue
 		}
 		parallel[i].drainInto(run, rep)
-	}
-	// And every suite's teardown, once every scenario under it is done.
-	if runnable {
-		rt.tearDownSuites(ctx, run, rep)
 	}
 	if err := pools.Close(); err != nil {
 		logger.Logger.Warn("Could not close a database connection", "error", err.Error())
