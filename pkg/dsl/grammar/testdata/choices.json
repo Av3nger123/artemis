@@ -611,6 +611,16 @@
           "severity": "error"
         },
         {
+          "value": "skip-maybe-written",
+          "doc": "a var a scenario skips is read where only some paths have written it",
+          "severity": "error"
+        },
+        {
+          "value": "skip-read",
+          "doc": "a var a scenario skips is read somewhere other than an expect or an object field",
+          "severity": "error"
+        },
+        {
           "value": "suite-file-name",
           "doc": "a suite block is in a file not named suite.art",
           "severity": "error"
@@ -913,6 +923,10 @@
         {
           "value": "ai",
           "purpose": "reserved for a possible future agentic assertion"
+        },
+        {
+          "value": "skip",
+          "purpose": "a scenario's value that turns off the expects reading a var: total = skip"
         }
       ]
     },

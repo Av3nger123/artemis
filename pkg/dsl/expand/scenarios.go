@@ -17,7 +17,7 @@ import (
 // chains to the scenario that ran it. Each parameter's value is the one the
 // scenario sets, or else its default; the scenario's tags are carried; the
 // flow's item calls are expanded in the flow file's own terms, against its
-// own imports.
+// own imports; and then each var the scenario sets to skip is pruned.
 //
 // The flow is checked once, on its own, before any scenario is made of it,
 // as a collection is: its faults are reported once, chained to the header,
@@ -64,6 +64,24 @@ func (e *expander) scenario(fu *unit, f *ast.Flow, s *ast.Scenario, values map[s
 		}
 	}
 	body = append(body, e.body(fu, flowBody(f, values, stamp))...)
+
+	bad := false
+	for _, name := range skipped {
+		body = prune(body, name, func(at token.Span, code diag.Code, msg string) {
+			bad = true
+			r := e.bag.Error(at, code, "%s", msg)
+			switch code {
+			case diag.SkipRead:
+				r.Hintf("scenario %q sets %s = skip; give it a value instead, or read it only in an expect or as an object field's value", s.Name.Value, name)
+			case diag.SkipMaybeWritten:
+				r.Hintf("write %s on every path above this, or give it a value in scenario %q", name, s.Name.Value)
+			}
+		})
+	}
+	if bad {
+		// Its fault is reported; the reads left in it would only cascade.
+		return nil
+	}
 	return &ast.Scenario{
 		Keyword: s.Keyword,
 		Name:    s.Name,

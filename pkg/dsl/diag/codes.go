@@ -257,6 +257,10 @@ const (
 	PrivateParam           Code = "private-param"
 	MissingParam           Code = "missing-param"
 	ScenarioValueReadsName Code = "scenario-value-reads-name"
+
+	// skip, a scenario's value that turns off the expects reading a var.
+	SkipRead         Code = "skip-read"
+	SkipMaybeWritten Code = "skip-maybe-written"
 )
 
 // CodeInfo is what the registry knows about a code: its default severity and
@@ -352,6 +356,8 @@ var registry = []CodeInfo{
 	{PrivateParam, Error, "a scenario sets a private var of its flow"},
 	{MissingParam, Error, "a scenario does not set a var its flow declares without a value"},
 	{ScenarioValueReadsName, Error, "a scenario's value reads a name, where only literals and builtins are allowed"},
+	{SkipRead, Error, "a var a scenario skips is read somewhere other than an expect or an object field"},
+	{SkipMaybeWritten, Error, "a var a scenario skips is read where only some paths have written it"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

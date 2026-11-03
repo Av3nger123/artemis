@@ -57,6 +57,8 @@ scenario-value-reads-name	error	a scenario's value reads a name, where only lite
 second-collection	error	a file holds more than one collection
 secret-argument	error	an argument to a secret parameter is not itself secret
 setup-after-step	error	a setup block is below a step it would run before
+skip-maybe-written	error	a var a scenario skips is read where only some paths have written it
+skip-read	error	a var a scenario skips is read somewhere other than an expect or an object field
 suite-file-name	error	a suite block is in a file not named suite.art
 suite-has-scenario	error	a suite file holds a scenario, or a second suite block
 suite-has-step	error	a suite block holds a step or a use outside setup and teardown

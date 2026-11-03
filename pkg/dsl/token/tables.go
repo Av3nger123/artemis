@@ -121,6 +121,7 @@ var (
 	Reserved = []string{
 		"if", "else", "for", "in", "while", "parallel", "group",
 		"fn", "return", "import", "use", "let", "setup", "teardown", "ai",
+		"skip",
 	}
 )
 
