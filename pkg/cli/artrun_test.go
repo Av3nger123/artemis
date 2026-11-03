@@ -897,7 +897,6 @@ func TestFailedWriteInAParallelBranchUnsetsTheName(t *testing.T) {
 // `var` overwrites. It needs `var` after a step's action (Task 3) and the
 // checker letting a write replace a name (Task 11).
 func TestFailedWriteUnsetsTheNameOfAFlowVar(t *testing.T) {
-	t.Skip("integration: needs Tasks 3,5,11")
 	srv, asked := writeServer(t, `200 {}`)
 	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
   var url = %q
@@ -919,7 +918,6 @@ func TestFailedWriteUnsetsTheNameOfAFlowVar(t *testing.T) {
 // Review Focus 5: a step overwrites a flow var, and a later item that reads the
 // name through the flow's context sends the new value, not the flow's default.
 func TestOverwrittenNameReachesALaterItem(t *testing.T) {
-	t.Skip("integration: needs Tasks 3,5,11")
 	var (
 		mu  sync.Mutex
 		got []string

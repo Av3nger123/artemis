@@ -12,7 +12,6 @@ import (
 // needs private and value-less vars, a var after a step's action, and the
 // step form of a use. It runs once those land beside this.
 func TestFlowFileParsesWithTheFullSyntax(t *testing.T) {
-	t.Skip("integration: needs Tasks 2,3,5")
 	src := "import \"../collections/auth.art\"\n\nflow checkout {\n  var code = 200\n  private var url = env(\"U\")\n" +
 		"  step \"log in\" = auth.login { }\n  step \"pay\" {\n    post \"${url}/pay\"\n    expect status == code\n    var pay_status = status\n  }\n" +
 		"  if pay_status == 400 {\n    step \"err\" {\n      get \"/e\"\n    }\n  }\n}\n"

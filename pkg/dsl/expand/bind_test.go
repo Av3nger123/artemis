@@ -128,7 +128,6 @@ func TestCommandItemExpandsInATree(t *testing.T) {
 // (Task 5) from the parser.
 
 func TestItemVarsBindLikeParams(t *testing.T) {
-	t.Skip("integration: needs Tasks 2,4,5")
 	got, diags := run(t, map[string]string{
 		"auth.art": "collection \"auth\" {\n  request login {\n    var user = \"admin\"\n    var password\n" +
 			"    post \"/l\" { body = {\"u\": user, \"p\": password} }\n  }\n}\n",
@@ -141,7 +140,6 @@ func TestItemVarsBindLikeParams(t *testing.T) {
 }
 
 func TestRequiredItemVarIsMissingArgument(t *testing.T) {
-	t.Skip("integration: needs Tasks 2,4,5")
 	_, diags := run(t, map[string]string{
 		"auth.art": "collection \"auth\" {\n  request login {\n    var user = \"admin\"\n    var password\n" +
 			"    post \"/l\" { body = {\"u\": user, \"p\": password} }\n  }\n}\n",
@@ -153,7 +151,6 @@ func TestRequiredItemVarIsMissingArgument(t *testing.T) {
 }
 
 func TestPassingAPrivateItemVarIsAnError(t *testing.T) {
-	t.Skip("integration: needs Tasks 2,4,5")
 	_, diags := run(t, map[string]string{
 		"auth.art": "collection \"auth\" {\n  request login {\n    private var tries = 1\n    post \"/l\" { body = {\"n\": tries} }\n  }\n}\n",
 		"main.art": "import \"auth.art\"\n\nscenario \"s\" {\n  step \"l\" = auth.login { tries = 2 }\n}\n",
@@ -164,7 +161,6 @@ func TestPassingAPrivateItemVarIsAnError(t *testing.T) {
 }
 
 func TestCommandItemExpands(t *testing.T) {
-	t.Skip("integration: needs Tasks 2,4,5")
 	got, diags := run(t, map[string]string{
 		"ops.art":  "collection \"ops\" {\n  command migrate {\n    var target = \"migrate\"\n    run \"make\" { args = [target] }\n  }\n}\n",
 		"main.art": "import \"ops.art\"\n\nscenario \"s\" {\n  step \"m\" = ops.migrate { }\n}\n",

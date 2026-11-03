@@ -193,7 +193,6 @@ func TestSkipIsReserved(t *testing.T) {
 // files and items take var inputs from the context (Tasks 4-6, 8).
 
 func TestSkipRemovesTheExpectsThatReadItFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	out, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { total = skip }\n",
 		"flows/checkout.art": "flow checkout {\n  var total = 100\n  step \"pay\" {\n    post \"/p\"\n    expect status == 200\n    expect body.total == total\n  }\n}\n",
@@ -205,7 +204,6 @@ func TestSkipRemovesTheExpectsThatReadItFromSource(t *testing.T) {
 }
 
 func TestSkipLeavesTheObjectFieldOutFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	out, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { coupon = skip }\n",
 		"flows/checkout.art": "flow checkout {\n  var sku = \"S\"\n  var coupon = \"\"\n  step \"pay\" {\n    post \"/p\" { body = {\"sku\": sku, \"coupon\": coupon} }\n  }\n}\n",
@@ -217,7 +215,6 @@ func TestSkipLeavesTheObjectFieldOutFromSource(t *testing.T) {
 }
 
 func TestSkipInAURLIsAnErrorFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	_, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { coupon = skip }\n",
 		"flows/checkout.art": "flow checkout {\n  var coupon = \"\"\n  step \"pay\" {\n    post \"/p/${coupon}\"\n  }\n}\n",
@@ -228,7 +225,6 @@ func TestSkipInAURLIsAnErrorFromSource(t *testing.T) {
 }
 
 func TestSkipReachesIntoAnItemFromSource(t *testing.T) {
-	t.Skip("integration: needs Tasks 4-6 and 8")
 	out, diags := run(t, map[string]string{
 		"main.art":            "flow \"flows/checkout.art\"\nscenario \"s\" { total = skip }\n",
 		"flows/checkout.art":  "import \"../collections/api.art\"\n\nflow checkout {\n  var total = 1\n  step \"pay\" = api.pay { }\n}\n",
@@ -241,7 +237,6 @@ func TestSkipReachesIntoAnItemFromSource(t *testing.T) {
 }
 
 func TestSkipReadInsideAnItemNamesTheChain(t *testing.T) {
-	t.Skip("integration: needs Tasks 4-6 and 8")
 	_, diags := run(t, map[string]string{
 		"main.art":             "flow \"flows/checkout.art\"\nscenario \"s\" { token = skip }\n",
 		"flows/checkout.art":   "import \"../collections/auth.art\"\n\nflow checkout {\n  var token = \"t\"\n  step \"me\" = auth.me { }\n}\n",

@@ -252,7 +252,6 @@ func TestTwoUsesOfACapturingRequestOverwriteTheCapture(t *testing.T) {
 // flow is reported by each file's unit once, at the flow's line, chained to
 // that file.
 func TestFlowErrorReportedPerScenarioFile(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	files := expand.MapLoader{
 		"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/${nope}\"\n  }\n}\n",
 		"a.art":              "flow \"flows/checkout.art\"\nscenario \"a1\" { }\nscenario \"a2\" { }\n",

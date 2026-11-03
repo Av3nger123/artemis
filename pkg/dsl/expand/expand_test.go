@@ -368,7 +368,6 @@ func TestDropVarsRemovesTheItemsOutputs(t *testing.T) {
 
 // drop vars removes an item's step vars as well as its captures.
 func TestDropVarsRemovesVarOutputs(t *testing.T) {
-	t.Skip("integration: needs Task 3 (var after the action)")
 	got, diags := run(t, map[string]string{
 		"main.art": "import \"auth.art\"\nscenario \"s\" {\n  step \"bad login\" = auth.login {\n    user = \"x\"\n    drop vars\n  }\n}\n",
 		"auth.art": "collection \"auth\" {\n  request login(user) {\n    post \"/l\"\n    expect status == 200\n    var token = body.t\n  }\n}\n",

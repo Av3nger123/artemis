@@ -20,12 +20,7 @@ func (c *canon) flowDecl(f *ast.Flow) {
 	c.w.in()
 	c.w.suppress()
 	for i, d := range f.Body {
-		switch d.(type) {
-		case *ast.StepDecl, *ast.PhaseDecl, *ast.BlockDecl:
-			if i > 0 {
-				c.w.blank()
-			}
-		}
+		c.paragraph(i, d)
 		c.decl(d)
 	}
 	c.w.outd()

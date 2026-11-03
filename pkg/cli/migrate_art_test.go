@@ -120,7 +120,6 @@ func TestMigrateNeverWritesOverTheOriginals(t *testing.T) {
 
 // What a migrated file says, once the printer writes flows and scenario files.
 func TestMigrateCommandWritesTheNewForms(t *testing.T) {
-	t.Skip("integration: needs Tasks 2-6,9")
 	dir := writeProject(t, oldProject)
 	out := t.TempDir()
 	if _, stderr, err := runCLI(t, "migrate", "-f", dir, "-o", out); err != nil {

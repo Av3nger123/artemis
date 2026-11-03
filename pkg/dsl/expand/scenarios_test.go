@@ -207,7 +207,6 @@ func TestFlowHeaderNamesAFlowFile(t *testing.T) {
 // files (Task 6).
 
 func TestScenarioFileExpandsOneScenarioPerLineFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	files := map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"full\" { }\nscenario \"coupon\" { quantity = 3  total = 270 }\n",
 		"flows/checkout.art": "flow checkout {\n  var quantity = 1\n  var total = 100\n  step \"pay\" {\n    post \"/pay\" { body = {\"q\": quantity} }\n    expect body.total == total\n  }\n}\n",
@@ -228,7 +227,6 @@ func TestScenarioFileExpandsOneScenarioPerLineFromSource(t *testing.T) {
 }
 
 func TestFlowImportsResolveFromTheFlowFileFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	_, diags := run(t, map[string]string{
 		"main.art":             "flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
 		"flows/checkout.art":   "import \"../collections/auth.art\"\n\nflow checkout {\n  step \"log in\" = auth.login { user = \"a\" }\n}\n",
@@ -238,7 +236,6 @@ func TestFlowImportsResolveFromTheFlowFileFromSource(t *testing.T) {
 }
 
 func TestScenarioCannotSetAnUnknownOrPrivateVarFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	_, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" {\n  quantty = 3\n  url = \"x\"\n}\n",
 		"flows/checkout.art": "flow checkout {\n  var quantity = 1\n  private var url = \"http://h\"\n  step \"pay\" {\n    post \"${url}/pay\" { body = {\"q\": quantity} }\n  }\n}\n",
@@ -249,7 +246,6 @@ func TestScenarioCannotSetAnUnknownOrPrivateVarFromSource(t *testing.T) {
 }
 
 func TestRequiredFlowVarMustBeSetFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	_, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
 		"flows/checkout.art": "flow checkout {\n  var password\n  step \"pay\" {\n    post \"/pay\" { body = {\"p\": password} }\n  }\n}\n",
@@ -260,7 +256,6 @@ func TestRequiredFlowVarMustBeSetFromSource(t *testing.T) {
 }
 
 func TestScenarioValueCannotReadANameFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	files := map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { total = \"${quantity}0\" }\n",
 		"flows/checkout.art": "flow checkout {\n  var quantity = 1\n  var total = 100\n  step \"pay\" {\n    post \"/pay\" { body = {\"q\": quantity} }\n    expect body.total == total\n  }\n}\n",
@@ -275,7 +270,6 @@ func TestScenarioValueCannotReadANameFromSource(t *testing.T) {
 }
 
 func TestVarAfterTheFirstStepIsAnErrorFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	_, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
 		"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/pay\"\n  }\n  var b = 2\n}\n",
@@ -286,7 +280,6 @@ func TestVarAfterTheFirstStepIsAnErrorFromSource(t *testing.T) {
 }
 
 func TestFlowCannotDeclareTagsFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	_, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" { }\n",
 		"flows/checkout.art": "flow checkout {\n  var tags = 1\n  step \"pay\" {\n    get \"/pay\"\n  }\n}\n",
@@ -297,7 +290,6 @@ func TestFlowCannotDeclareTagsFromSource(t *testing.T) {
 }
 
 func TestScenarioTagsAreCarriedFromSource(t *testing.T) {
-	t.Skip("integration: needs Task 6")
 	out, diags := run(t, map[string]string{
 		"main.art":           "flow \"flows/checkout.art\"\nscenario \"s\" {\n  tags = [\"smoke\"]\n}\n",
 		"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/pay\"\n  }\n}\n",

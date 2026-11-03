@@ -504,7 +504,6 @@ func TestRebase(t *testing.T) {
 // The byte-for-byte check: each case's out/ is what Files prints, and its
 // notes.txt is the notes.
 func TestMigrateFixtures(t *testing.T) {
-	t.Skip("integration: needs Tasks 2-6,9")
 	cases, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
@@ -533,7 +532,6 @@ func TestMigrateFixtures(t *testing.T) {
 // Every scenario file each case's out/ holds compiles with no error, with the
 // input's data files beside it.
 func TestMigratedOutputCompiles(t *testing.T) {
-	t.Skip("integration: needs Tasks 2-6,9")
 	cases, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)

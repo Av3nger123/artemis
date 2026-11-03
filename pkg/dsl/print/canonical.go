@@ -134,28 +134,34 @@ func (c *canon) scenario(s *ast.Scenario) {
 	c.w.in()
 	c.w.suppress()
 	for i, d := range s.Body {
-		// A step always gets a blank line above it, whether or not the author
-		// left one. It is the one piece of paragraphing canonical mode supplies
-		// rather than keeps, because `migrate` and `generate` build trees with
-		// no trivia at all and a wall of twelve steps with nothing between them
-		// is not a file anyone wants to read. The first item in the body is
-		// against the brace and gets nothing.
-		switch v := d.(type) {
-		case *ast.StepDecl, *ast.PhaseDecl, *ast.BlockDecl:
-			if i > 0 {
-				c.w.blank()
-			}
-		case *ast.UseDecl:
-			// A step that calls an item is a step, and gets a step's paragraph;
-			// a use line stacks with its neighbours as it always has.
-			if i > 0 && v.Step.Text != "" {
-				c.w.blank()
-			}
-		}
+		c.paragraph(i, d)
 		c.decl(d)
 	}
 	c.w.outd()
 	c.close(s.RBrace)
+}
+
+// paragraph writes the blank line a body's i-th declaration gets above it.
+//
+// A step always gets a blank line above it, whether or not the author left
+// one. It is the one piece of paragraphing canonical mode supplies rather than
+// keeps, because `migrate` and `generate` build trees with no trivia at all and
+// a wall of twelve steps with nothing between them is not a file anyone wants
+// to read. The first item in the body is against the brace and gets nothing.
+// A step that calls an item is a step, and gets a step's paragraph; a use line
+// stacks with its neighbours as it always has.
+func (c *canon) paragraph(i int, d ast.Decl) {
+	if i == 0 {
+		return
+	}
+	switch v := d.(type) {
+	case *ast.StepDecl, *ast.PhaseDecl, *ast.BlockDecl:
+		c.w.blank()
+	case *ast.UseDecl:
+		if v.Step.Text != "" {
+			c.w.blank()
+		}
+	}
 }
 
 // phase is `setup { ... }` or `teardown { ... }`, broken like a scenario: its

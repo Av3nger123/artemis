@@ -167,7 +167,6 @@ func TestMissingSeparatorInAUseBlockOffersAComma(t *testing.T) {
 // their input vars are this test's own, and TestTypedItemsWithValuedInputs
 // holds them on their own until the forms land.
 func TestTypedItemsWithInputs(t *testing.T) {
-	t.Skip("integration: needs Task 2 (private var, var with no value) and Task 3 (var after the action)")
 	src := "collection \"auth\" {\n" +
 		"  request login {\n    var user = \"admin\"\n    var password\n    private var tries = 1\n" +
 		"    post \"/login\" { body = {\"user\": user} }\n    var token = body.token\n  }\n" +
