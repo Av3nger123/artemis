@@ -195,6 +195,8 @@ const (
 	DropAfterExpect          Code = "drop-after-expect"
 	SecretArgument           Code = "secret-argument"
 	RootCapture              Code = "root-capture"
+	// A use passes a private var of the item, which takes only its own default.
+	PrivateInput Code = "private-input"
 
 	// A json(), csv() or file() whose literal path names nothing, or names a
 	// data file that does not parse. Settled when the file compiles, because
@@ -301,6 +303,7 @@ var registry = []CodeInfo{
 	{DropAfterExpect, Error, "a drop expects line comes after an expect line in the same use block"},
 	{SecretArgument, Error, "an argument to a secret parameter is not itself secret"},
 	{RootCapture, Error, "a collection's template captures under the name of a step's observation, such as body"},
+	{PrivateInput, Error, "a use passes a private var of the item, which takes only its own default"},
 	{DataFileMissing, Error, "json(), csv() or file() names a path where there is no file"},
 	{DataNotJSON, Error, "json() names a file that is not JSON"},
 	{DataNotCSV, Error, "csv() names a file that is not CSV"},

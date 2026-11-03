@@ -134,3 +134,30 @@ func TestAFreeNameHintSaysAddAParameter(t *testing.T) {
 		t.Fatalf("hint is %q", all[0].Hint)
 	}
 }
+
+// An item's var inputs are in scope in its standalone check as its
+// parameters are: a required one is declared with a placeholder, a private
+// one with its default.
+func TestItemVarInputsAreInScopeStandalone(t *testing.T) {
+	_, diags := runEdited(t, map[string]string{
+		"c.art":    "collection \"c\" {\n  request r(a, b = \"${a}/x\", n = 1) {\n    get b { query \"n\" = n }\n    expect status == 200\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { a = \"h\" }\n}\n",
+	}, varInputs("n"))
+	noDiags(t, diags)
+}
+
+// For an item whose inputs are vars, the free-name hint says to add a var.
+func TestAFreeNameHintSaysAddAnInput(t *testing.T) {
+	files := map[string]string{
+		"c.art":    "collection \"c\" {\n  request r(base) {\n    get \"${url}/x\"\n    expect status == 200\n  }\n}\n",
+		"main.art": "import \"c.art\"\n\nscenario \"s\" {\n  use c.r { base = \"b\" }\n}\n",
+	}
+	_, bag := expandEdited(t, files, varInputs())
+	all := bag.All()
+	if len(all) != 1 || all[0].Code != diag.UnknownIdentifier || all[0].Span.File != "c.art" {
+		t.Fatalf("want one unknown-identifier in c.art, got %v", all)
+	}
+	if !strings.HasPrefix(all[0].Hint, "add it as an input of c.r: a var above the action\n") {
+		t.Fatalf("hint is %q", all[0].Hint)
+	}
+}

@@ -122,14 +122,14 @@ func (sc *scope) at(base map[string]bool, steps []ast.Decl) *scope {
 	return &cp
 }
 
-// secretArg is what a secret parameter p stands for at this use, given the
+// secretArg is what a secret input p stands for at this use, given the
 // expression x bound to it. An x that reads only scenario vars is hoisted
 // into `secret var <prefix>_<param> = x` and the parameter reads that var;
 // one that reads a capture stays as written, and must already be secret.
 //
 // The var is returned for bind to append to the scenario once the whole use
 // has bound; its name is in sc from now on, so a later default can read it.
-func (e *expander) secretArg(sc *scope, p *ast.Param, x ast.Expr, pre, ref string, stamp func(token.Token) token.Token) (ast.Expr, *ast.VarDecl) {
+func (e *expander) secretArg(sc *scope, p input, x ast.Expr, pre, ref string, stamp func(token.Token) token.Token) (ast.Expr, *ast.VarDecl) {
 	if free := firstFree(x, sc.vars); free != "" {
 		if !taint.Secret(x, sc.secrets) {
 			e.bag.Error(x.Span(), diag.SecretArgument, "%s is secret in %s, so its argument must be secret too", p.Name.Value, ref).

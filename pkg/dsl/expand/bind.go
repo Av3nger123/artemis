@@ -9,39 +9,71 @@ import (
 	"artemis/pkg/dsl/token"
 )
 
-// bind matches a use's argument lines to the item's parameters and returns
-// the expression each parameter stands for at this use, already substituted
-// so a default that names an earlier parameter sees that parameter's value.
+// input is one value an item takes: a parameter of the old form,
+// `request r(user, password = "pw")`, or a var above the item's action,
+// `var user` or `private var tries = 1`. bind reads both through it.
+type input struct {
+	Name    token.Token
+	Default ast.Expr    // nil when required
+	Private bool        // takes only its own default: no argument, no context name
+	Secret  token.Token // `secret`, zero when absent
+}
+
+// inputs is what r takes, in the order it declares them: its parameters, then
+// the vars above its action. An item has one or the other.
+func inputs(r *ast.RequestDecl) []input {
+	var out []input
+	if r.Params != nil {
+		for _, p := range r.Params.List {
+			out = append(out, input{Name: p.Name, Default: p.Default, Secret: p.Secret})
+		}
+	}
+	for _, v := range r.Inputs {
+		out = append(out, input{Name: v.Name, Default: v.Value, Private: v.Private.Text != "", Secret: v.Secret})
+	}
+	return out
+}
+
+// bind matches a use's argument lines to the item's inputs and returns the
+// expression each input stands for at this use, already substituted so a
+// default that names an earlier input sees that input's value.
+//
+// An input takes the argument the use passes, or else the item's own
+// default. With neither, it is missing-argument. A private input takes only
+// its default.
 //
 // An argument is the expression written at the use and keeps its own span; a
-// default is copied out of the collection and stamped. A secret parameter's
-// value goes through secretArg, with sc saying what the use can read, pre
-// naming a hoisted var and ref naming the item in a diagnostic.
-func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, sc *scope, pre, ref string, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
-	var list []*ast.Param
-	if params != nil {
-		list = params.List
-	}
-	declared := map[string]bool{}
+// default is copied out of the collection and stamped. A secret input's value
+// goes through secretArg, with sc saying what the use can read, pre naming a
+// hoisted var and ref naming the item in a diagnostic.
+func (e *expander) bind(use *ast.UseDecl, item ast.Decl, list []input, sc *scope, pre, ref string, stamp func(token.Token) token.Token) (map[string]ast.Expr, bool) {
+	declared := map[string]input{}
 	var names []string
-	for _, p := range list {
-		declared[p.Name.Value] = true
-		names = append(names, p.Name.Value)
+	for _, in := range list {
+		declared[in.Name.Value] = in
+		if !in.Private {
+			names = append(names, in.Name.Value)
+		}
 	}
 
 	ok := true
 	args := map[string]*ast.Field{}
 	for _, f := range arguments(use) {
 		name := f.Name.Value
+		in, isInput := declared[name]
 		switch {
 		case f.Key != nil || f.Block != nil:
 			e.bag.Error(f.Span(), diag.BadOverride, "an argument is name = value")
 			ok = false
-		case !declared[name]:
+		case !isInput:
 			r := e.bag.Error(f.Name.Span, diag.UnknownArgument, "%s has no parameter %q", use.Ref(), name)
 			if !r.DidYouMean(name, names) {
 				r.Hintf("%s", takes(itemName(item), names))
 			}
+			ok = false
+		case in.Private:
+			e.bag.Error(f.Name.Span, diag.PrivateInput, "%s is private to %s", name, use.Ref()).
+				Hintf("remove it; a private var takes only its own default")
 			ok = false
 		case args[name] != nil:
 			e.bag.Error(f.Name.Span, diag.DuplicateArgument, "%s is passed twice", name)
@@ -54,26 +86,26 @@ func (e *expander) bind(use *ast.UseDecl, item ast.Decl, params *ast.Params, sc 
 	env := map[string]ast.Expr{}
 	var hoisted []ast.Decl
 	var missing, required []string
-	for _, p := range list {
-		name := p.Name.Value
+	for _, in := range list {
+		name := in.Name.Value
 		switch {
 		case args[name] != nil:
 			env[name] = args[name].Value
-		case !isNil(p.Default):
-			env[name] = subst(ast.Clone(p.Default, stamp), env)
+		case !isNil(in.Default):
+			env[name] = subst(ast.Clone(in.Default, stamp), env)
 		default:
 			missing = append(missing, name)
 		}
 		// Before the next default is substituted, so a default built from a
 		// secret parameter reads the hoisted var and is secret too.
-		if x, bound := env[name]; bound && p.Secret.Text != "" {
+		if x, bound := env[name]; bound && in.Secret.Text != "" {
 			var v *ast.VarDecl
-			env[name], v = e.secretArg(sc, p, x, pre, ref, stamp)
+			env[name], v = e.secretArg(sc, in, x, pre, ref, stamp)
 			if v != nil {
 				hoisted = append(hoisted, v)
 			}
 		}
-		if isNil(p.Default) {
+		if isNil(in.Default) && !in.Private {
 			required = append(required, name)
 		}
 	}

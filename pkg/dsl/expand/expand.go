@@ -449,7 +449,7 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 
 	switch it := item.(type) {
 	case *ast.RequestDecl:
-		env, ok := e.bind(use, it, it.Params, sc, varPrefix(use, it.Name.Value), key, stamp)
+		env, ok := e.bind(use, it, inputs(it), sc, varPrefix(use, it.Name.Value), key, stamp)
 		if !ok {
 			return nil
 		}
