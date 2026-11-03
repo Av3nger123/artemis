@@ -1,13 +1,15 @@
 collection "session" {
-  request login(base) {
-    post "${base}/token" {
-      body = {"username": "bob", "password": "pw"}
-    }
+  request login {
+    var base
+
+    post "${base}/token" { body = {"username": "bob", "password": "pw"} }
     expect status == 200
-    secret capture token = body.data.access_token
+    var token = body.data.access_token
   }
 
-  request me(base) {
+  request me {
+    var base
+
     get "${base}/orders"
     expect status == 200
   }

@@ -50,13 +50,13 @@ func TestArtRunCapturesReachTheNextStep(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	run, _ := runArt(t, fmt.Sprintf(`scenario "two steps" {
+	run, _ := runArt(t, fmt.Sprintf(`flow two_steps {
   var base = %q
 
   step "sign in" {
     post "${base}/login"
     expect status == 200
-    capture token = body.token
+    var token = body.token
   }
 
   step "use it" {
@@ -65,6 +65,8 @@ func TestArtRunCapturesReachTheNextStep(t *testing.T) {
     expect body.ok == true
   }
 }
+
+scenario "two steps" {}
 `, srv.URL))
 
 	if !run.Passed() {
@@ -79,12 +81,14 @@ func TestArtRunCapturesReachTheNextStep(t *testing.T) {
 // shape of a YAML file that would not load -- and the full diagnostics are
 // written out, caret and hint included.
 func TestArtRunCompileErrorIsAnErroredScenario(t *testing.T) {
-	run, diags := runArt(t, `scenario "typo" {
+	run, diags := runArt(t, `flow typo {
   step "ping" {
     get "/ping"
     expect statu == 200
   }
 }
+
+scenario "typo" {}
 `)
 
 	if run.Passed() {
@@ -118,13 +122,15 @@ func TestArtRunCompileErrorIsAnErroredScenario(t *testing.T) {
 // Several errors in one file: the reason names the first and counts the rest,
 // and every one of them is rendered.
 func TestArtRunCompileErrorNamesTheFirstAndCountsTheRest(t *testing.T) {
-	run, diags := runArt(t, `scenario "typos" {
+	run, diags := runArt(t, `flow typos {
   step "ping" {
     get "/ping"
     timeot = "5s"
     expect statu == 200
   }
 }
+
+scenario "typos" {}
 `)
 
 	sc := run.Scenarios[0]
@@ -149,13 +155,15 @@ func TestArtRunBrokenFileDoesNotStopTheRest(t *testing.T) {
 	defer srv.Close()
 
 	dir := writeTree(t, t.TempDir(), map[string]string{
-		"01_broken.art": "scenario \"broken\" {\n  step \"ping\" {\n    get \"/x\"\n    expect statu == 200\n  }\n}\n",
-		"02_fine.art": fmt.Sprintf(`scenario "fine" {
+		"01_broken.art": "flow broken {\n  step \"ping\" {\n    get \"/x\"\n    expect statu == 200\n  }\n}\n\nscenario \"broken\" {}\n",
+		"02_fine.art": fmt.Sprintf(`flow fine {
   step "ping" {
     get %q
     expect status == 200
   }
 }
+
+scenario "fine" {}
 `, srv.URL),
 	})
 	files, err := discover(dir)
@@ -178,7 +186,7 @@ func TestArtRunBrokenFileDoesNotStopTheRest(t *testing.T) {
 // A var that will not evaluate errors the scenario with no steps: a scenario
 // whose variables do not resolve has nothing worth running.
 func TestArtRunUnbindableVarErrorsTheScenario(t *testing.T) {
-	run, _ := runArt(t, `scenario "bad var" {
+	run, _ := runArt(t, `flow bad_var {
   var n = match("no digits here", /([0-9]+)/)
 
   step "ping" {
@@ -186,6 +194,8 @@ func TestArtRunUnbindableVarErrorsTheScenario(t *testing.T) {
     expect status == 200
   }
 }
+
+scenario "bad var" {}
 `)
 
 	if len(run.Scenarios) != 1 {
@@ -211,14 +221,16 @@ func TestArtRunFailedCaptureIsOneErroredAssertion(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	run, _ := runArt(t, fmt.Sprintf(`scenario "captures" {
+	run, _ := runArt(t, fmt.Sprintf(`flow captures {
   step "login" {
     get %q
     expect status == 200
-    capture missing = body.nope.deeper
-    capture token = body.token
+    var missing = body.nope.deeper
+    var token = body.token
   }
 }
+
+scenario "captures" {}
 `, srv.URL))
 
 	step := run.Scenarios[0].Steps[0]
@@ -259,14 +271,16 @@ func TestArtRunRetriesOnAFailedCapture(t *testing.T) {
 	sleep = func(d time.Duration) { waited = append(waited, d) }
 	defer func() { sleep = orig }()
 
-	run, _ := runArt(t, fmt.Sprintf(`scenario "wait for the token" {
+	run, _ := runArt(t, fmt.Sprintf(`flow wait_for_the_token {
   step "login" {
     get %q
     retry { times = 4, delay = "10ms" }
     expect status == 200
-    capture token = body.token
+    var token = body.token
   }
 }
+
+scenario "wait for the token" {}
 `, srv.URL))
 
 	step := run.Scenarios[0].Steps[0]
@@ -296,7 +310,7 @@ func TestArtRunBadPolicyFromAnExpressionStopsTheStep(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	run, _ := runArt(t, fmt.Sprintf(`scenario "bad delay" {
+	run, _ := runArt(t, fmt.Sprintf(`flow bad_delay {
   var d = "soon"
 
   step "ping" {
@@ -305,6 +319,8 @@ func TestArtRunBadPolicyFromAnExpressionStopsTheStep(t *testing.T) {
     expect status == 200
   }
 }
+
+scenario "bad delay" {}
 `, srv.URL))
 
 	step := run.Scenarios[0].Steps[0]
@@ -329,7 +345,7 @@ func TestArtRunBadPolicyFromAnExpressionStopsTheStep(t *testing.T) {
 // *before* the first act, and the whole executor over a real page is
 // pkg/steps/browserstep's browser-tagged suite.
 func TestArtRunABrowserConfigThatWillNotResolveFailsTheScenario(t *testing.T) {
-	run, _ := runArt(t, `scenario "the app" {
+	run, _ := runArt(t, `flow the_app {
   var size = 1280
   config browser { viewport = size, headless = "yes" }
 
@@ -340,6 +356,8 @@ func TestArtRunABrowserConfigThatWillNotResolveFailsTheScenario(t *testing.T) {
     expect page.url contains "/settings"
   }
 }
+
+scenario "the app" {}
 `)
 
 	if run.Passed() {
@@ -361,7 +379,7 @@ func TestArtRunABrowserConfigThatWillNotResolveFailsTheScenario(t *testing.T) {
 // driven, so a selector that came out of a bad expression costs no browser
 // launch to discover -- the same rule as a bad `timeout` on an api step.
 func TestArtRunAnActThatWillNotResolveFailsBeforeTheBrowserOpens(t *testing.T) {
-	run, _ := runArt(t, `scenario "the app" {
+	run, _ := runArt(t, `flow the_app {
   var sel = ".x"
 
   step "open it" {
@@ -372,6 +390,8 @@ func TestArtRunAnActThatWillNotResolveFailsBeforeTheBrowserOpens(t *testing.T) {
     expect page.url contains "/"
   }
 }
+
+scenario "the app" {}
 `)
 
 	if run.Passed() {
@@ -389,22 +409,20 @@ func TestArtRunAnActThatWillNotResolveFailsBeforeTheBrowserOpens(t *testing.T) {
 	}
 }
 
-// Several scenarios in one file all run, in source order, as several scenarios
-// of one run. A YAML file holds one; a .art file may hold any number.
+// Several scenarios in one scenario file all run, in source order, as several
+// scenarios of one run, each a run of the file's flow. A YAML file holds one;
+// a scenario file may hold any number.
 func TestArtRunEveryScenarioInTheFile(t *testing.T) {
-	run, _ := runArt(t, `scenario "first" {
+	run, _ := runArt(t, `flow nothing {
   step "nothing" {
     run "true"
     expect exit_code == 0
   }
 }
 
-scenario "second" {
-  step "nothing" {
-    run "true"
-    expect exit_code == 0
-  }
-}
+scenario "first" {}
+
+scenario "second" {}
 `)
 
 	if len(run.Scenarios) != 2 {
@@ -441,13 +459,15 @@ func TestTestCommandRunsAnArtFile(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	path := writeArt(t, "ok.art", fmt.Sprintf(`scenario "ok" {
+	path := writeArt(t, "ok.art", fmt.Sprintf(`flow ok {
   step "ping" {
     get %q
     expect status == 200
     expect body.ok == true
   }
 }
+
+scenario "ok" {}
 `, srv.URL))
 
 	var out strings.Builder
@@ -471,12 +491,14 @@ func TestArtRunHonoursTheContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	path := writeArt(t, "slow.art", fmt.Sprintf(`scenario "slow" {
+	path := writeArt(t, "slow.art", fmt.Sprintf(`flow slow {
   step "ping" {
     get %q
     expect status == 200
   }
 }
+
+scenario "slow" {}
 `, srv.URL))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -528,7 +550,7 @@ func eventNames(events []map[string]any) []string {
 // with its index, so a watcher ticks steps off as they finish.
 func TestEventsTickEveryStep(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
-	path := writeArt(t, "two.art", fmt.Sprintf(`scenario "two steps" {
+	path := writeArt(t, "two.art", fmt.Sprintf(`flow two_steps {
   step "first" {
     get %q
     expect status == 200
@@ -539,6 +561,8 @@ func TestEventsTickEveryStep(t *testing.T) {
     expect body.status == "ok"
   }
 }
+
+scenario "two steps" {}
 `, srv.URL, srv.URL))
 
 	events := runArtEvents(t, path)
@@ -571,7 +595,7 @@ func TestEventsTickEveryStep(t *testing.T) {
 // A scenario whose vars will not bind runs no step, and still ends on the
 // stream -- errored, with the reason -- or a watcher shows it running forever.
 func TestEventsEndAScenarioWhoseVarsWillNotBind(t *testing.T) {
-	path := writeArt(t, "bad_var.art", `scenario "bad var" {
+	path := writeArt(t, "bad_var.art", `flow bad_var {
   var n = match("no digits here", /([0-9]+)/)
 
   step "ping" {
@@ -579,6 +603,8 @@ func TestEventsEndAScenarioWhoseVarsWillNotBind(t *testing.T) {
     expect status == 200
   }
 }
+
+scenario "bad var" {}
 `)
 
 	events := runArtEvents(t, path)
@@ -598,7 +624,7 @@ func TestEventsEndAScenarioWhoseVarsWillNotBind(t *testing.T) {
 
 // The same for a browser config that will not resolve: no step, one end.
 func TestEventsEndAScenarioWhoseBrowserConfigWillNotResolve(t *testing.T) {
-	path := writeArt(t, "bad_config.art", `scenario "the app" {
+	path := writeArt(t, "bad_config.art", `flow the_app {
   var size = 1280
   config browser { viewport = size, headless = "yes" }
 
@@ -609,6 +635,8 @@ func TestEventsEndAScenarioWhoseBrowserConfigWillNotResolve(t *testing.T) {
     expect page.url contains "/settings"
   }
 }
+
+scenario "the app" {}
 `)
 
 	events := runArtEvents(t, path)
@@ -625,13 +653,15 @@ func TestEventsEndAScenarioWhoseBrowserConfigWillNotResolve(t *testing.T) {
 // A file that does not compile is a start with no name and no steps -- [] and
 // not null -- and an errored end carrying the first diagnostic.
 func TestEventsGiveAFileThatWillNotCompileAStartAndAnEnd(t *testing.T) {
-	path := writeArt(t, "broken.art", `scenario "broken" {
+	path := writeArt(t, "broken.art", `flow broken {
   step "typo" {
     get "http://127.0.0.1:1/health"
     timeot = "5s"
     expect status == 200
   }
 }
+
+scenario "broken" {}
 `)
 
 	events := runArtEvents(t, path)
@@ -677,13 +707,15 @@ func TestEventsGiveAFileThatIsNotAScenarioAStartAndAnEnd(t *testing.T) {
 // them ran -- and run-end carries the gate's status and reason, as the report
 // does. run-start still lists the file: it is what the run was asked to try.
 func TestEventsOfAGatedRunStartNoScenario(t *testing.T) {
-	path := writeArt(t, "gated.art", `scenario "reports" {
+	path := writeArt(t, "gated.art", `flow reports {
   var url = env("ARTEMIS_TEST_EVENTS_GATE_URL")
   step "report" {
     get "${url}"
     expect status == 200
   }
 }
+
+scenario "reports" {}
 `)
 
 	events := runArtEvents(t, path)
@@ -779,14 +811,14 @@ func wantUnsetRead(t *testing.T, run *result.RunResult, diags string, asked []st
 // is the overwrite the checker allows before last-write-wins (Task 11).
 func TestFailedWriteUnsetsTheName(t *testing.T) {
 	srv, asked := writeServer(t, `200 {"n": 1, "code": "a"}`, `200 {"n": 2}`)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+	run, diags := runArt(t, fmt.Sprintf(`flow failed_write {
   var url = %q
 
   repeat max 3 {
     step "pay" {
       get "${url}/pay"
-      capture n = body.n
-      capture code = body.code
+      var n = body.n
+      var code = body.code
     }
   } until n >= 2
 
@@ -800,6 +832,8 @@ func TestFailedWriteUnsetsTheName(t *testing.T) {
     }
   }
 }
+
+scenario "failed write" {}
 `, srv.URL))
 	wantUnsetRead(t, run, diags, asked())
 	// In cleanup, a step that reads an unset name is skipped, as it always
@@ -815,20 +849,22 @@ func TestFailedWriteUnsetsTheName(t *testing.T) {
 // code unset, not holding the first attempt's value.
 func TestFailedWriteOnTheLastAttemptUnsetsTheName(t *testing.T) {
 	srv, asked := writeServer(t, `500 {"code": "a"}`, `200 {}`)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+	run, diags := runArt(t, fmt.Sprintf(`flow failed_write {
   var url = %q
 
   step "pay" {
     get "${url}/pay"
     retry { times = 2 }
     expect status == 200
-    capture code = body.code
+    var code = body.code
   }
 
   step "after" {
     get "${url}/x?c=${code}"
   }
 }
+
+scenario "failed write" {}
 `, srv.URL))
 	if pay := steps(run)["pay"]; pay == nil || pay.Attempts != 2 {
 		t.Fatalf("pay = %+v, want two attempts", pay)
@@ -841,14 +877,14 @@ func TestFailedWriteOnTheLastAttemptUnsetsTheName(t *testing.T) {
 // value for the steps after the loop to read.
 func TestAStepThatErroredUnsetsWhatItWrites(t *testing.T) {
 	srv, asked := writeServer(t, `200 {"n": 1, "code": "a"}`, "hangup")
-	run, diags := runArt(t, fmt.Sprintf(`scenario "errored write" {
+	run, diags := runArt(t, fmt.Sprintf(`flow errored_write {
   var url = %q
 
   repeat max 3 {
     step "pay" {
       get "${url}/pay"
-      capture n = body.n
-      capture code = body.code
+      var n = body.n
+      var code = body.code
     }
   } until n >= 2
 
@@ -856,6 +892,8 @@ func TestAStepThatErroredUnsetsWhatItWrites(t *testing.T) {
     get "${url}/x?c=${code}"
   }
 }
+
+scenario "errored write" {}
 `, srv.URL))
 	if pay := steps(run)["pay"]; pay == nil || pay.Status != result.StatusError || pay.Round != 2 {
 		t.Fatalf("pay = %+v, want round 2 to have errored", pay)
@@ -868,19 +906,19 @@ func TestAStepThatErroredUnsetsWhatItWrites(t *testing.T) {
 // value.
 func TestFailedWriteInAParallelBranchUnsetsTheName(t *testing.T) {
 	srv, asked := writeServer(t, `200 {"n": 1, "code": "a"}`, `200 {"n": 2}`)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+	run, diags := runArt(t, fmt.Sprintf(`flow failed_write {
   var url = %q
 
   repeat max 3 {
     parallel {
       step "pay" {
         get "${url}/pay"
-        capture n = body.n
-        capture code = body.code
+        var n = body.n
+        var code = body.code
       }
       step "other" {
         get "${url}/other"
-        capture o = body.o
+        var o = body.o
       }
     }
   } until n >= 2
@@ -889,6 +927,8 @@ func TestFailedWriteInAParallelBranchUnsetsTheName(t *testing.T) {
     get "${url}/x?c=${code}"
   }
 }
+
+scenario "failed write" {}
 `, srv.URL))
 	wantUnsetRead(t, run, diags, asked())
 }
@@ -898,7 +938,7 @@ func TestFailedWriteInAParallelBranchUnsetsTheName(t *testing.T) {
 // checker letting a write replace a name (Task 11).
 func TestFailedWriteUnsetsTheNameOfAFlowVar(t *testing.T) {
 	srv, asked := writeServer(t, `200 {}`)
-	run, diags := runArt(t, fmt.Sprintf(`scenario "failed write" {
+	run, diags := runArt(t, fmt.Sprintf(`flow failed_write {
   var url = %q
   var code = 200
 
@@ -911,6 +951,8 @@ func TestFailedWriteUnsetsTheNameOfAFlowVar(t *testing.T) {
     get "${url}/x?c=${code}"
   }
 }
+
+scenario "failed write" {}
 `, srv.URL))
 	wantUnsetRead(t, run, diags, asked())
 }
@@ -941,9 +983,7 @@ func TestOverwrittenNameReachesALaterItem(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, src string) string {
 		path := filepath.Join(dir, name)
-		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		writeSplit(t, path, src)
 		return path
 	}
 	write("api.art", `collection "api" {

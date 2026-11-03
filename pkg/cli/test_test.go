@@ -51,13 +51,15 @@ func okServer(t *testing.T, status int, body string) *httptest.Server {
 
 // scenarioArt is one GET step that expects a status and a body field.
 func scenarioArt(url string, wantStatus int, wantBody string) string {
-	return fmt.Sprintf(`scenario "exit code" {
+	return fmt.Sprintf(`flow exit_code {
   step "ping" {
     get %q
     expect status == %d
     expect body.status == %q
   }
 }
+
+scenario "exit code" {}
 `, url, wantStatus, wantBody)
 }
 
@@ -103,9 +105,7 @@ func captureArgs(t *testing.T, build func(path string) []string, src string) (st
 	resetRunFlags(t)
 
 	path := filepath.Join(t.TempDir(), "scenario.art")
-	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSplit(t, path, src)
 
 	var out bytes.Buffer
 	RootCmd.SetArgs(build(path))
@@ -174,9 +174,7 @@ func TestExecuteWithTheLogFlagWritesTheLogFile(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "scenario.art")
-	if err := os.WriteFile(path, []byte(scenarioArt(srv.URL, 200, "ok")), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSplit(t, path, scenarioArt(srv.URL, 200, "ok"))
 	logPath := filepath.Join(dir, "run.log")
 
 	var out bytes.Buffer
@@ -210,9 +208,7 @@ func TestExecuteUnopenableLogFileReturnsError(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "scenario.art")
-	if err := os.WriteFile(path, []byte(scenarioArt(srv.URL, 200, "ok")), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSplit(t, path, scenarioArt(srv.URL, 200, "ok"))
 
 	RootCmd.SetArgs([]string{"test", "-f", path, "-l", filepath.Join(dir, "no-such-dir", "run.log")})
 	RootCmd.SetOut(os.Stderr)

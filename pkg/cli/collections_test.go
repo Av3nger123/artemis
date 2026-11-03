@@ -71,7 +71,7 @@ func authServer(t *testing.T) *httptest.Server {
 func TestRunAScenarioThatUsesACollection(t *testing.T) {
 	srv := authServer(t)
 	t.Setenv("API_URL", srv.URL)
-	out, stderr, err := runCLI(t, "run", "testdata/collections/checkout.art", "--report", "json")
+	out, stderr, err := runCLI(t, "run", "testdata/collections/scenarios/checkout.art", "--report", "json")
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s\n%s", err, out, stderr)
 	}
@@ -86,17 +86,17 @@ func TestRunAScenarioThatUsesACollection(t *testing.T) {
 }
 
 func TestParseAScenarioThatUsesACollection(t *testing.T) {
-	out, stderr, err := runCLI(t, "parse", "-f", "testdata/collections/checkout.art")
+	out, stderr, err := runCLI(t, "parse", "-f", "testdata/collections/scenarios/checkout.art")
 	if err != nil {
 		t.Fatalf("parse failed: %v\n%s", err, stderr)
 	}
-	if out != "testdata/collections/checkout.art: ok\n" {
+	if out != "testdata/collections/scenarios/checkout.art: ok\n" {
 		t.Fatalf("stdout = %q", out)
 	}
 }
 
 func TestBrokenCollectionReportedOnceAgainstTheCollection(t *testing.T) {
-	_, stderr, err := runCLI(t, "parse", "-f", "testdata/collections/broken.art")
+	_, stderr, err := runCLI(t, "parse", "-f", "testdata/collections/scenarios/broken.art")
 	if err == nil {
 		t.Fatal("want a non-zero exit")
 	}
@@ -111,11 +111,11 @@ func TestBrokenCollectionReportedOnceAgainstTheCollection(t *testing.T) {
 }
 
 func TestFmtDoesNotExpand(t *testing.T) {
-	out, stderr, err := runCLI(t, "fmt", "testdata/collections/checkout.art")
+	out, stderr, err := runCLI(t, "fmt", "testdata/collections/flows/checkout.art")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, stderr)
 	}
-	if !strings.Contains(out, "use auth.login") || strings.Contains(out, `step "auth.login"`) {
+	if !strings.Contains(out, `step "auth.login" = auth.login`) || strings.Contains(out, `/token"`) {
 		t.Fatalf("fmt must print the file as written:\n%s", out)
 	}
 }
@@ -126,14 +126,14 @@ func TestFmtDoesNotExpand(t *testing.T) {
 func TestAFailureInACollectionNamesTheCollectionFile(t *testing.T) {
 	srv := authServer(t)
 	t.Setenv("API_URL", srv.URL)
-	stdout, stderr, err := runCLI(t, "run", "testdata/collections/failing.art", "--report", "json")
+	stdout, stderr, err := runCLI(t, "run", "testdata/collections/scenarios/failing.art", "--report", "json")
 	if err == nil {
 		t.Fatal("want the run to fail")
 	}
-	if !strings.Contains(stderr, "testdata/collections/auth.art:6") {
-		t.Errorf("the console does not name auth.art:6:\n%s", stderr)
+	if !strings.Contains(stderr, "testdata/collections/auth.art:8") {
+		t.Errorf("the console does not name auth.art:8:\n%s", stderr)
 	}
-	if strings.Contains(stderr, "failing.art:6") {
+	if strings.Contains(stderr, "failing.art:8") {
 		t.Errorf("the console names the scenario file with the collection's line:\n%s", stderr)
 	}
 	var doc struct {
@@ -156,14 +156,14 @@ func TestAFailureInACollectionNamesTheCollectionFile(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatalf("%v\n%s", err, stdout)
 	}
-	if len(doc.Failures) != 1 || doc.Failures[0].File != "testdata/collections/auth.art" || doc.Failures[0].Line != 6 {
+	if len(doc.Failures) != 1 || doc.Failures[0].File != "testdata/collections/auth.art" || doc.Failures[0].Line != 8 {
 		t.Errorf("failures = %+v", doc.Failures)
 	}
 	step := doc.Scenarios[0].Steps[0]
 	if step.File != "testdata/collections/auth.art" || step.Line != 2 {
 		t.Errorf("step = %+v", step)
 	}
-	if a := step.Assertions[0]; a.File != "testdata/collections/auth.art" || a.Line != 6 {
+	if a := step.Assertions[0]; a.File != "testdata/collections/auth.art" || a.Line != 8 {
 		t.Errorf("assertion = %+v", a)
 	}
 	if !strings.Contains(stdout, `"file": "testdata/collections/auth.art"`) &&
@@ -172,12 +172,14 @@ func TestAFailureInACollectionNamesTheCollectionFile(t *testing.T) {
 	}
 }
 
-// A step written in the scenario itself carries no file key: it would only
-// repeat the scenario's.
-func TestAStepWrittenInTheScenarioHasNoFileKey(t *testing.T) {
+// Every step of a scenario file's scenario carries the file it was written
+// in, because none was written in the scenario file: a step the flow writes
+// in place names the flow file, and a step that calls an item names the
+// collection's.
+func TestAStepNamesTheFileItWasWrittenIn(t *testing.T) {
 	srv := authServer(t)
 	t.Setenv("API_URL", srv.URL)
-	stdout, _, err := runCLI(t, "run", "testdata/collections/checkout.art", "--report", "json")
+	stdout, _, err := runCLI(t, "run", "testdata/collections/scenarios/checkout.art", "--report", "json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,9 +192,12 @@ func TestAStepWrittenInTheScenarioHasNoFileKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, st := range doc.Scenarios[0].Steps {
-		_, has := st["file"]
-		if want := st["name"] != "orders"; has != want {
-			t.Errorf("step %v: file key present = %v, want %v", st["name"], has, want)
+		want := "testdata/collections/auth.art"
+		if st["name"] == "orders" {
+			want = "testdata/collections/flows/checkout.art"
+		}
+		if st["file"] != want {
+			t.Errorf("step %v: file = %v, want %s", st["name"], st["file"], want)
 		}
 	}
 }
@@ -203,8 +208,9 @@ func TestRunAFolderWithACollectionOnlyFile(t *testing.T) {
 	srv := authServer(t)
 	t.Setenv("API_URL", srv.URL)
 	dir := writeTree(t, t.TempDir(), map[string]string{
-		"auth.art":     mustRead(t, "testdata/collections/auth.art"),
-		"checkout.art": mustRead(t, "testdata/collections/checkout.art"),
+		"auth.art":               mustRead(t, "testdata/collections/auth.art"),
+		"flows/checkout.art":     mustRead(t, "testdata/collections/flows/checkout.art"),
+		"scenarios/checkout.art": mustRead(t, "testdata/collections/scenarios/checkout.art"),
 	})
 	stdout, stderr, err := runCLI(t, "run", dir, "--report", "json")
 	if err != nil {
@@ -229,7 +235,7 @@ func TestAHoistedSecretIsInNoEventOrTrace(t *testing.T) {
 	srv := authServer(t)
 	t.Setenv("API_URL", srv.URL)
 	traces := t.TempDir()
-	stdout, stderr, err := runCLI(t, "run", "testdata/collections/checkout.art", "--events", "ndjson", "--trace", traces)
+	stdout, stderr, err := runCLI(t, "run", "testdata/collections/old/checkout.art", "--events", "ndjson", "--trace", traces)
 	if err != nil {
 		t.Fatalf("%v\n%s", err, stderr)
 	}
@@ -238,7 +244,7 @@ func TestAHoistedSecretIsInNoEventOrTrace(t *testing.T) {
 	}
 	// The event stream's step-end carries the step's file like the report
 	// does, for a step a use brought in.
-	if !strings.Contains(stdout, `"file":"testdata/collections/auth.art"`) {
+	if !strings.Contains(stdout, `"file":"testdata/collections/old/auth.art"`) {
 		t.Errorf("no step-end names auth.art:\n%s", stdout)
 	}
 	var all strings.Builder
@@ -300,7 +306,7 @@ func TestTwoUsesOfASecretRequestSendTheirOwnPasswords(t *testing.T) {
 			"  use auth.login" + bad + " { user = \"alice\", password = \"wrong\", base = url, drop captures, drop expects, expect status == 401 }\n}\n"
 	}
 	dir := writeTree(t, t.TempDir(), map[string]string{
-		"auth.art":  mustRead(t, "testdata/collections/auth.art"),
+		"auth.art":  mustRead(t, "testdata/collections/old/auth.art"),
 		"two.art":   scenario(" as real", " as bad"),
 		"clash.art": scenario("", ""),
 	})

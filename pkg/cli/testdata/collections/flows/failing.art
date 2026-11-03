@@ -1,0 +1,7 @@
+import "../auth.art"
+
+flow failing {
+  var url = env("API_URL")
+
+  step "auth.login" = auth.login { user = "alice", password = "wrong", base = url }
+}

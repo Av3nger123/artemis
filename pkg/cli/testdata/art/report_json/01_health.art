@@ -1,8 +1,0 @@
-scenario "health" {
-  step "ping" {
-    get "%SERVER%/health"
-    expect status == 200
-    expect body.status == "ok"
-    capture build = body.build
-  }
-}

@@ -51,18 +51,17 @@ func decodeFlowReport(t *testing.T, stdout, stderr string) flowReport {
 }
 
 // The flow's name reaches the report from the lowered scenario: the runner
-// copies it onto the result, and the JSON report writes it. Expansion is what
-// sets it in a real run; here it is set on the lowered scenario directly.
+// copies it onto the result, and the JSON report writes it. Expansion sets it
+// on the lowered scenario, from the flow the scenario file names.
 func TestTheRunCarriesTheFlowName(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	t.Cleanup(srv.Close)
-	path := writeArt(t, "checkout.art", "scenario \"full price\" {\n  step \"ping\" {\n    get \""+srv.URL+"/ping\"\n    expect status == 200\n  }\n}\n")
+	path := writeArt(t, "checkout.art", "flow checkout {\n  step \"ping\" {\n    get \""+srv.URL+"/ping\"\n    expect status == 200\n  }\n}\n\nscenario \"full price\" {}\n")
 
 	c, err := loadArtFile(path, io.Discard)
 	if err != nil {
 		t.Fatalf("loadArtFile() = %v", err)
 	}
-	c.scenarios[0].FlowName = "checkout"
 	run := result.NewRun()
 	runCompiled(context.Background(), &runtimeEnv{reg: executor.Default()}, c, run, report.NewConsole(io.Discard))
 	run.Finish()
@@ -81,12 +80,11 @@ func TestTheRunCarriesTheFlowName(t *testing.T) {
 
 // A scenario the selection passes over is still in the report, flow and all.
 func TestASkippedScenarioCarriesTheFlowName(t *testing.T) {
-	path := writeArt(t, "checkout.art", "scenario \"full price\" {\n  step \"ping\" {\n    get \"http://127.0.0.1:1/ping\"\n  }\n}\n")
+	path := writeArt(t, "checkout.art", "flow checkout {\n  step \"ping\" {\n    get \"http://127.0.0.1:1/ping\"\n  }\n}\n\nscenario \"full price\" {}\n")
 	c, err := loadArtFile(path, io.Discard)
 	if err != nil {
 		t.Fatalf("loadArtFile() = %v", err)
 	}
-	c.scenarios[0].FlowName = "checkout"
 	c.selected = []bool{false}
 	sel, err := newSelector("smoke", "")
 	if err != nil {

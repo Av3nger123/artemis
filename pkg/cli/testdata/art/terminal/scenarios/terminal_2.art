@@ -1,0 +1,3 @@
+flow "../flows/terminal_2.art"
+
+scenario "a command that fails" {}

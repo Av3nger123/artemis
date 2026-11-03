@@ -1,18 +1,18 @@
-scenario: status check (testdata/art/fail.art)
+scenario: status check (testdata/art/scenarios/fail.art)
   FAIL  ping                        <dur>
          body.status == ok, got pending
          body.count <= 2, got 3
 
 2 failures:
 
-1) testdata/art/fail.art:10
+1) testdata/art/flows/fail.art:10
      scenario  status check
      step      ping
      assert    expect body.status ==
      expected  "ok"
      actual    "pending"
 
-2) testdata/art/fail.art:11
+2) testdata/art/flows/fail.art:11
      scenario  status check
      step      ping
      assert    expect body.count <=

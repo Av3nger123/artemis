@@ -10,11 +10,27 @@ import (
 	"artemis/pkg/dsl/encode"
 )
 
+// labelledArt is a scenario with its steps written in it, in the old form.
+// The checker's labels -- class, stepType, scope -- are on the steps of a
+// scenario it checked, and `artemis ast` of a flow file has none, because a
+// flow is checked only through a scenario file that names it, whose own tree
+// holds no step. So this one source stays in the old form until a flow file's
+// tree carries the labels.
+const labelledArt = `scenario "checkout" {
+  var url = env("API_URL")
+
+  step "login" {
+    post "${url}/token"
+    expect status == 200
+  }
+}
+`
+
 // The document goes to stdout and nothing else does, because the whole point of
 // `artemis ast` is being piped: into a UI, into jq, into `artemis ast
 // --from-json`.
 func TestAstWritesTheTreeToStdout(t *testing.T) {
-	path := writeArt(t, "checkout.art", cleanArt)
+	path := writeArt(t, "checkout.art", labelledArt)
 
 	stdout, stderr, err := executeArgs(t, "ast", "-f", path)
 	if err != nil {
@@ -76,7 +92,7 @@ func TestAstRoundTripsThroughTheCommands(t *testing.T) {
 
 // -f is accepted with --from-json too, for anyone holding a tree on disk.
 func TestAstFromJSONReadsAFile(t *testing.T) {
-	art := writeArt(t, "checkout.art", cleanArt)
+	art := flowOf(writeArt(t, "checkout.art", cleanArt))
 	doc, _, err := executeArgs(t, "ast", "-f", art)
 	if err != nil {
 		t.Fatal(err)
@@ -87,8 +103,8 @@ func TestAstFromJSONReadsAFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() = %v, want nil\nstderr:\n%s", err, stderr)
 	}
-	if !strings.HasPrefix(stdout, "# A scenario that checks clean.\nscenario \"checkout\" {") {
-		t.Errorf("stdout does not start with the file's own comment and scenario:\n%s", stdout)
+	if !strings.HasPrefix(stdout, "# A scenario that checks clean.\nflow checkout {") {
+		t.Errorf("stdout does not start with the file's own comment and flow:\n%s", stdout)
 	}
 }
 
@@ -119,7 +135,7 @@ func TestAstRefusesAFileWithAnError(t *testing.T) {
 // encoding is total so that `artemis ast` can describe a file mid-edit, and
 // decoding is not, because a UI serialises a complete tree.
 func TestAstFromJSONRefusesAnIncompleteTree(t *testing.T) {
-	path := writeArt(t, "broken.art", "scenario \"s\" {\n  step \"one\" {\n    get \"/a\"\n    expect == 200\n  }\n}\n")
+	path := flowOf(writeArt(t, "broken.art", "flow s {\n  step \"one\" {\n    get \"/a\"\n    expect == 200\n  }\n}\n\nscenario \"s\" {}\n"))
 
 	// -f on a file with an error writes nothing, so the document for this test
 	// is built from the package rather than from the command.

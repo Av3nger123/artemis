@@ -1,0 +1,3 @@
+flow "../flows/wrong_status.art"
+
+scenario "status code" {}

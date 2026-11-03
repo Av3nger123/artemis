@@ -41,7 +41,7 @@ func workspaceWithFiles(t *testing.T) string {
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatalf("making %s: %v", filepath.Dir(full), err)
 		}
-		if err := os.WriteFile(full, []byte("scenario \"x\" {}\n"), 0o600); err != nil {
+		if err := os.WriteFile(full, []byte("flow x {}\n"), 0o600); err != nil {
 			t.Fatalf("writing %s: %v", full, err)
 		}
 	}
