@@ -80,10 +80,11 @@ func (p *Params) Span() token.Span { return spanOf(p) }
 // RequestDecl is `request create(sku, qty = 1) { <action> <stmt>... }`: the
 // body of a step, with parameters and without a quoted name.
 type RequestDecl struct {
-	Keyword token.Token
+	Keyword token.Token // request, command or query
 	Name    token.Token
-	Params  *Params
+	Params  *Params // nil for an item whose inputs are vars
 	LBrace  token.Token
+	Inputs  []*VarDecl // the var lines above the action: the item's inputs
 	Action  Action
 	Body    []Stmt
 	RBrace  token.Token
@@ -94,6 +95,9 @@ func (r *RequestDecl) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, r.Name)
 	dst = appendNode(dst, r.Params)
 	dst = appendTok(dst, r.LBrace)
+	for _, in := range r.Inputs {
+		dst = appendNode(dst, in)
+	}
 	for _, it := range r.items() {
 		dst = appendNode(dst, it)
 	}
@@ -104,14 +108,32 @@ func (r *RequestDecl) Tokens(dst []token.Token) []token.Token {
 func (r *RequestDecl) items() []Node {
 	return (&StepDecl{Action: r.Action, Body: r.Body}).items()
 }
+// Type is the step type the item's keyword names: "api" for request,
+// "terminal" for command and "db" for query.
+func (r *RequestDecl) Type() string {
+	switch r.Keyword.Value {
+	case "command":
+		return "terminal"
+	case "query":
+		return "db"
+	}
+	return "api"
+}
+
 func (r *RequestDecl) Span() token.Span { return spanOf(r) }
 func (r *RequestDecl) decl()            {}
 
 // UseDecl is `use auth.login as admin { user = "alice" ... }`. It is legal in
 // a scenario body, and pkg/dsl/expand replaces it with the step it names
 // before the checker sees the file.
+//
+// `step "log in" = auth.login { ... }` is the same node: Step, Name and Assign
+// are set and Keyword is zero.
 type UseDecl struct {
-	Keyword    token.Token // use
+	Step       token.Token // step; zero for the use form
+	Name       token.Token // the String naming the step; zero for the use form
+	Assign     token.Token // =; zero for the use form
+	Keyword    token.Token // use; zero for the step form
 	Collection token.Token // zero for a bare sibling ref
 	Dot        token.Token // zero for a bare sibling ref
 	Item       token.Token
@@ -123,6 +145,9 @@ type UseDecl struct {
 }
 
 func (u *UseDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, u.Step)
+	dst = appendTok(dst, u.Name)
+	dst = appendTok(dst, u.Assign)
 	dst = appendTok(dst, u.Keyword)
 	dst = appendTok(dst, u.Collection)
 	dst = appendTok(dst, u.Dot)
@@ -137,6 +162,15 @@ func (u *UseDecl) Tokens(dst []token.Token) []token.Token {
 }
 func (u *UseDecl) Span() token.Span { return spanOf(u) }
 func (u *UseDecl) decl()            {}
+
+// StepName is the name the expanded step takes: the step form's Name, or the
+// reference for the use form.
+func (u *UseDecl) StepName() string {
+	if u.Name.Text != "" {
+		return u.Name.Value
+	}
+	return u.Ref()
+}
 
 // Ref is the reference as written: "auth.login", or "create" for a sibling.
 func (u *UseDecl) Ref() string {

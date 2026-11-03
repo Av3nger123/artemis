@@ -83,3 +83,7 @@ func (b *Bad) decl()                                  {}
 func (b *Bad) stmt()                                  {}
 func (b *Bad) action()                                {}
 func (b *Bad) expr()                                  {}
+
+// IsVar reports whether the capture is written `var x = ...` after a step's
+// action, the form that replaces `capture x = ...`.
+func (c *Capture) IsVar() bool { return c.Keyword.Value == "var" }

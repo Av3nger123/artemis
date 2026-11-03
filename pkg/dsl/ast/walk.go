@@ -160,7 +160,17 @@ func Children(n Node) []Node {
 	case *Param:
 		return nodes(n.Default)
 	case *RequestDecl:
-		return append(nodes(n.Params), n.items()...)
+		kids := nodes(n.Params)
+		for _, in := range n.Inputs {
+			kids = append(kids, in)
+		}
+		return append(kids, n.items()...)
+	case *Flow:
+		return decls(n.Body)
+	case *FlowRef:
+		return nil
+	case *Set:
+		return nodes(n.Value)
 	case *UseDecl:
 		return stmts(n.Lines)
 	case *BodySet:

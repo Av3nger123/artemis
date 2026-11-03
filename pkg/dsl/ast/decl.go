@@ -47,6 +47,11 @@ type Scenario struct {
 	// pkg/dsl/expand sets it on each scenario it makes out of one with a for
 	// clause; it is nil everywhere else and has no tokens.
 	Row *RowOrigin
+
+	// Flow is the name of the flow an expanded scenario runs. pkg/dsl/expand
+	// sets it on each scenario it makes out of a scenario file; it is "" for
+	// any other scenario and has no tokens.
+	Flow string
 }
 
 // RowOrigin is the row an expanded scenario was made from.
@@ -114,6 +119,10 @@ func (c *ConfigDecl) decl()            {}
 
 // VarDecl is `var url = env("API_URL")`, or `secret var pw = env("API_PASSWORD")`.
 type VarDecl struct {
+	// Private is the `private` modifier, and the zero token when it is absent:
+	// a private var is set by nothing outside the flow or item declaring it.
+	Private token.Token
+
 	// Secret is the `secret` modifier, and the zero token when it is absent.
 	//
 	// It is a token rather than a bool because pkg/dsl/print reproduces the
@@ -122,11 +131,16 @@ type VarDecl struct {
 	Secret  token.Token // `secret`, zero when the modifier is absent
 	Keyword token.Token // var
 	Name    token.Token // the Ident being bound
-	Assign  token.Token // =
-	Value   Expr
+	Assign  token.Token // =; zero for a required var, `var user`
+	Value   Expr        // nil for a required var
 }
 
+// Required reports whether the var has no value of its own, so that whoever
+// uses the flow or item declaring it must supply one.
+func (v *VarDecl) Required() bool { return v.Value == nil }
+
 func (v *VarDecl) Tokens(dst []token.Token) []token.Token {
+	dst = appendTok(dst, v.Private)
 	dst = appendTok(dst, v.Secret)
 	dst = appendTok(dst, v.Keyword)
 	dst = appendTok(dst, v.Name)
