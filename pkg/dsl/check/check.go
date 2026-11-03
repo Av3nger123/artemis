@@ -499,6 +499,14 @@ func (c *checker) varDecl(v *ast.VarDecl, sc *scope) {
 	if c.reserved(v.Name, "var") {
 		return
 	}
+	// A plain scenario is all the checker sees: expansion has already given
+	// a flow's vars their scenario's values and an item's inputs its caller's,
+	// so a var still without one has nothing that could supply it. The name
+	// stays bound below, so a read of it is not a second error.
+	if v.Required() && v.Name.Kind == token.Ident {
+		c.bag.Error(v.Name.Span, diag.VarNeedsValue, "var %s has no value", v.Name.Value).
+			Hintf("give it one, var %s = ...; only a flow or a collection item may leave a var without a value", v.Name.Value)
+	}
 	c.expr(v.Value, sc.view(Unknown))
 	if v.Name.Kind == token.Ident {
 		// The vars were bound before the walk, so the first var of a name is

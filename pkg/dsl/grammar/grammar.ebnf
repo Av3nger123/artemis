@@ -40,7 +40,7 @@ ConfigDecl    = "config" ( "browser" "{" [ BrowserSetting { Sep BrowserSetting }
 BrowserSetting = "headless" "=" Bool | "viewport" "=" Expr ;
 HTTPSetting   = "cookies" "=" Bool ;
 
-VarDecl       = [ "secret" ] "var" Ident "=" Expr ;
+VarDecl       = [ "private" ] [ "secret" ] "var" Ident [ "=" Expr ] ;
 StepDecl      = "step" String "{" Action { StepStmt } "}" ;
 
 Action        = Request | Run | Browser | DB ;
@@ -69,7 +69,7 @@ BrowserAct    = "goto"   Expr
 
 StepStmt      = Expect | Capture | Retry | Timeout ;
 Expect        = "expect" Expr [ "within" String ] ;
-Capture       = [ "secret" ] "capture" Ident "=" Expr ;
+Capture       = [ "secret" ] "capture" Ident "=" Expr | "var" Ident "=" Expr ;
 Retry         = "retry" "{" [ RetryField { Sep RetryField } ] "}" ;
 RetryField    = "times" "=" Number | "delay" "=" String ;
 Timeout       = "timeout" "=" String ;

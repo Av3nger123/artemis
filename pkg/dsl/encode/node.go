@@ -245,6 +245,7 @@ func (e *enc) varDecl(d *ast.VarDecl) *obj {
 	// set drops a false flag, so a plain var encodes exactly as it did before
 	// ART-54 and no existing document gains a key.
 	return start(kindVar, d).
+		set("private", d.Private.Text != "").
 		set("secret", d.Secret.Text != "").
 		set("name", d.Name.Text).
 		set("value", e.node(d.Value)).
@@ -353,8 +354,15 @@ func (e *enc) expect(x *ast.Expect) *obj {
 		comments(x.Tokens(nil), zero, zero).done()
 }
 
+// capture carries its keyword only when it is var, so a capture written
+// `capture x = ...` encodes exactly as it did before step vars and no existing
+// document gains a key.
 func (e *enc) capture(c *ast.Capture) *obj {
-	return start(kindCapture, c).
+	o := start(kindCapture, c)
+	if c.IsVar() {
+		o.set("keyword", "var")
+	}
+	return o.
 		set("secret", c.Secret.Text != "").
 		set("name", c.Name.Text).
 		set("value", e.node(c.Value)).

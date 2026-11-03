@@ -67,6 +67,7 @@ func TestValidCorpusParsesWithoutDiagnostics(t *testing.T) {
 	valid := []string{
 		"testdata/checkout.art",
 		"testdata/exprs.art",
+		"testdata/flows.art",
 		filepath.Join("..", "lexer", "testdata", "checkout.art"),
 		filepath.Join("..", "lexer", "testdata", "trivia.art"),
 		filepath.Join("..", "lexer", "testdata", "interpolation.art"),

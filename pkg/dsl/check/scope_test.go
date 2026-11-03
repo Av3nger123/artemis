@@ -93,6 +93,15 @@ func TestScopeRules(t *testing.T) {
 			src:  "scenario \"s\" {\n  var a = env(\"API_URL\")\n}\n",
 		},
 		{
+			name: "a var with no value in a plain scenario",
+			src:  "scenario \"s\" {\n  var user\n  step \"t\" {\n    get \"/${user}\"\n  }\n}\n",
+			want: []string{"var-needs-value@2:7"},
+		},
+		{
+			name: "a private var is a var in a plain scenario",
+			src:  "scenario \"s\" {\n  private var a = 1\n  var b = a\n}\n",
+		},
+		{
 			name: "a var shadows a root it collides with",
 			src:  "scenario \"s\" {\n  var status = 1\n  step \"t\" {\n    browser { goto \"/\" }\n    expect status == 1\n  }\n}\n",
 		},
@@ -102,6 +111,16 @@ func TestScopeRules(t *testing.T) {
 			name: "a capture is in scope in a later step",
 			src: "scenario \"s\" {\n  step \"one\" {\n    get \"/x\"\n    capture tok = body.tok\n  }\n" +
 				"  step \"two\" {\n    get \"/y\" {\n      header \"Authorization\" = \"Bearer ${tok}\"\n    }\n  }\n}\n",
+		},
+		{
+			name: "a step var is in scope in a later step, as a capture is",
+			src: "scenario \"s\" {\n  step \"one\" {\n    get \"/x\"\n    var tok = body.tok\n  }\n" +
+				"  step \"two\" {\n    get \"/y/${tok}\"\n  }\n}\n",
+		},
+		{
+			name: "a step var is not in scope in its own step",
+			src:  step("api", `get "/x"`, `var tok = body.tok`, `expect tok exists`),
+			want: []string{"unknown-identifier@5:12"},
 		},
 		{
 			name: "a capture is not in scope in its own step",

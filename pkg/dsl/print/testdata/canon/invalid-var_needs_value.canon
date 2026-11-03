@@ -1,0 +1,18 @@
+# A var with no value in a plain scenario.
+#
+# `var user` is a required var: a flow's scenarios or an item's callers give
+# it a value. A plain scenario has neither, so nothing can. The parser accepts
+# the form, because a flow and an item use it; the checker owns the fault,
+# because it is the stage that sees the scenario after expansion, when every
+# var that could get a value has one. The read of user below is not a second
+# error.
+
+scenario "login" {
+  var url = env("API_URL")
+  var user
+
+  step "log in" {
+    post "${url}/login" { body = {"user": user} }
+    expect status == 200
+  }
+}
