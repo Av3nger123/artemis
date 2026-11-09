@@ -76,6 +76,11 @@ type Record struct {
 	Scenario string `json:"scenario"`
 	Step     string `json:"step"`
 
+	// ScenarioID and StepID are the two ids, which the file is named after.
+	// Empty for a step with no id, whose file is named after the names.
+	ScenarioID string `json:"scenario_id,omitempty"`
+	StepID     string `json:"step_id,omitempty"`
+
 	// Type is the step type: api, terminal, browser.
 	Type string `json:"type"`
 
@@ -138,7 +143,7 @@ func (w *Writer) On(rec Record) (string, error) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	path := filepath.Join(w.Dir, w.name(rec.Scenario, rec.Step))
+	path := filepath.Join(w.Dir, w.name(rec))
 	if err := os.MkdirAll(w.Dir, 0o750); err != nil {
 		return "", fmt.Errorf("making the trace directory %s: %w", w.Dir, err)
 	}
@@ -156,9 +161,18 @@ func (w *Writer) On(rec Record) (string, error) {
 
 // name is `<scenario>-<step>.json`, slugged, with the same rules as a
 // screenshot's: deterministic so a rerun overwrites and a CI job can predict
-// the path, and counted so two steps sharing a name do not collide.
-func (w *Writer) name(scenario, step string) string {
-	base := slug(scenario) + "-" + slug(step)
+// the path, and counted so two steps sharing a name do not collide. Each part
+// is the id when there is one, as written -- an id is already a safe file
+// name, and with_coupon-pay.json is what the reader looks for -- and else the
+// name, slugged.
+func (w *Writer) name(rec Record) string {
+	part := func(id, name string) string {
+		if id != "" {
+			return id
+		}
+		return slug(name)
+	}
+	base := part(rec.ScenarioID, rec.Scenario) + "-" + part(rec.StepID, rec.Step)
 	if base == "-" {
 		base = "step"
 	}

@@ -99,12 +99,17 @@ type jsonScenario struct {
 // stream's scenario-end carries: by then every step has already arrived on its
 // own step-end. Embedded in jsonScenario for the same reason as jsonRunSummary.
 type jsonScenarioSummary struct {
-	Name string `json:"name"`
-	File string `json:"file"`
+	// Name is the scenario's label, or its id when it has none: what a person
+	// reads. ID and Label are the two apart, and Label is "" when absent.
+	Name  string `json:"name"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	File  string `json:"file"`
 	// Flow is the flow a scenario of a scenario file ran, and omitted for any
 	// other scenario, so a run with no scenario file writes the document it
-	// always did.
-	Flow string `json:"flow,omitempty"`
+	// always did. FlowLabel is that flow's label, omitted when it has none.
+	Flow      string `json:"flow,omitempty"`
+	FlowLabel string `json:"flow_label,omitempty"`
 	// Kind is "suite" for a suite.art's setup or teardown, and omitted for a
 	// scenario, so a run with no suite writes the document it always did.
 	Kind string `json:"kind,omitempty"`
@@ -117,7 +122,11 @@ type jsonScenarioSummary struct {
 }
 
 type jsonStep struct {
-	Name string `json:"name"`
+	// Name is the step's label, or its id when it has none. Label is "" when
+	// the step has none.
+	Name  string `json:"name"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
 	// Phase is "setup" or "teardown" for a step of a scenario's setup or
 	// teardown block, and omitted for one of its own steps -- so a scenario
 	// with neither writes the document it always did.
@@ -293,8 +302,11 @@ func fromScenario(sc *result.ScenarioResult) jsonScenario {
 func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
 	out := jsonScenarioSummary{
 		Name:       sc.Name,
+		ID:         sc.ID,
+		Label:      sc.Label,
 		File:       sc.File,
 		Flow:       sc.Flow,
+		FlowLabel:  sc.FlowLabel,
 		Status:     sc.Status.String(),
 		DurationMS: millis(sc.Duration),
 		Error:      sc.Error,
@@ -307,6 +319,8 @@ func fromScenarioSummary(sc *result.ScenarioResult) jsonScenarioSummary {
 func fromStep(step *result.StepResult) jsonStep {
 	out := jsonStep{
 		Name:       step.Name,
+		ID:         step.ID,
+		Label:      step.Label,
 		Phase:      step.Phase,
 		Round:      step.Round,
 		Status:     step.Status.String(),

@@ -14,6 +14,7 @@ import (
 	"artemis/pkg/dsl/expand"
 	"artemis/pkg/dsl/lower"
 	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/token"
 	"artemis/pkg/executor"
 
 	"github.com/spf13/cobra"
@@ -32,8 +33,9 @@ const (
 
 // itemRun is a run of one collection item, or of every item of one collection.
 //
-// It is a flow, `flow item { step "<ref>" = coll.item { <args> } }`, and a
-// scenario file that runs it, `scenario "<ref>" { }`, each in a file of its
+// It is a flow, `flow item { step <item> as "<ref>" = coll.item { <args> } }`,
+// and a scenario file that runs it, `scenario <coll>_<item> as "<ref>" { }`,
+// each in a file of its
 // own, in memory, beside the collection file, as any flow and scenario file
 // would be: a collection file holds only its collection. The collection's own
 // imports resolve from where they always did, and every line of it keeps its
@@ -129,7 +131,7 @@ func itemFromFlags(cmd *cobra.Command, path string) (*itemRun, *captureSink, err
 	run := &itemRun{
 		file:     path,
 		name:     filepath.Join(filepath.Dir(path), stem+".item.art"),
-		src:      "flow " + encode.QuoteString(stem+".item.flow.art") + "\n\nscenario " + encode.QuoteString(ref) + " { }\n",
+		src:      "flow " + encode.QuoteString(stem+".item.flow.art") + "\n\nscenario " + token.SnakeFrom(ref) + " as " + encode.QuoteString(ref) + " { }\n",
 		flowName: filepath.Join(filepath.Dir(path), stem+".item.flow.art"),
 		flowSrc:  "import " + encode.QuoteString(base) + " as " + collName + "\n\n" + flow,
 	}
@@ -168,8 +170,9 @@ func itemFlow(tree *ast.File, ref string, args map[string]any) (string, error) {
 	}
 
 	type item struct {
-		name   string
-		params map[string]bool
+		name     string
+		params   map[string]bool
+		labelled bool // the item has a label, which its step then reads
 	}
 	var items []item
 	var itemNames []string
@@ -189,7 +192,7 @@ func itemFlow(tree *ast.File, ref string, args map[string]any) (string, error) {
 				taken[v.Name.Text] = true
 			}
 		}
-		items = append(items, item{name: name, params: taken})
+		items = append(items, item{name: name, params: taken, labelled: x.Label.Text != ""})
 	}
 	if itemName != "" && len(items) == 0 {
 		return "", fmt.Errorf("%s has no item %s (it has: %s)", collName, itemName, listOrNone(itemNames))
@@ -204,7 +207,13 @@ func itemFlow(tree *ast.File, ref string, args map[string]any) (string, error) {
 	var b strings.Builder
 	b.WriteString("flow item {\n")
 	for _, it := range items {
-		fmt.Fprintf(&b, "  step %s = %s.%s {\n", encode.QuoteString(collName+"."+it.name), collName, it.name)
+		// The step's id is the item's; it reads the item's label, or else
+		// the reference the run was asked for.
+		label := " as " + encode.QuoteString(collName+"."+it.name)
+		if it.labelled {
+			label = ""
+		}
+		fmt.Fprintf(&b, "  step %s%s = %s.%s {\n", token.SnakeFrom(it.name), label, collName, it.name)
 		for _, k := range keys {
 			if itemName == "" && !it.params[k] {
 				continue

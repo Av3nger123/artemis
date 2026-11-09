@@ -85,7 +85,8 @@ func runCompiled(ctx context.Context, rt *runtimeEnv, c compiled, run *result.Ru
 			// it; not on the console, where a smoke run of a large suite
 			// would otherwise be a page of lines saying nothing ran.
 			skipped := run.NewScenario(sc.Name, c.file)
-			skipped.Flow = sc.FlowName
+			skipped.ID, skipped.Label = sc.ID, sc.Label
+			skipped.Flow, skipped.FlowLabel = sc.FlowName, sc.FlowLabel
 			skipped.Tags = sc.Tags
 			skipped.Status = result.StatusSkip
 			skipped.Error = rt.sel.reason()
@@ -242,7 +243,8 @@ func firstError(diags []diag.Diagnostic) error {
 // more than one.
 func executeArtScenario(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, file string, run *result.RunResult, rep *report.Console) {
 	scenario := run.NewScenario(sc.Name, file)
-	scenario.Flow = sc.FlowName
+	scenario.ID, scenario.Label = sc.ID, sc.Label
+	scenario.Flow, scenario.FlowLabel = sc.FlowName, sc.FlowLabel
 	scenario.Tags = sc.Tags
 	rep.Scenario(scenario)
 	rt.events.ScenarioStart(scenario, stepNames(sc))
@@ -400,7 +402,7 @@ func unwrite(st *lower.Step, scope executor.Scope) {
 // read -- passed. That goes for the scope too: what the step writes is what
 // the last attempt wrote, and a step that stopped on an error wrote nothing,
 // so every name it writes is unset.
-func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.Step, scope executor.Scope, gen *eval.Gen, stepResult *result.StepResult) {
+func runArtStep(ctx context.Context, rt *runtimeEnv, sc *lower.Scenario, st *lower.Step, scope executor.Scope, gen *eval.Gen, stepResult *result.StepResult) {
 	start := time.Now()
 
 	// The step's own scope with no roots on it: a URL, a command or a retry
@@ -461,10 +463,10 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 		// Before the early return: a step that could not run at all is the
 		// case a picture helps most -- a click that timed out says nothing
 		// about what the page was showing.
-		shoot(ctx, rt, scenario, st, stepResult)
+		shoot(ctx, rt, sc.Name, st, stepResult)
 		// And the case a trace helps most: there is no response to read, so
 		// what was sent is the whole of the evidence.
-		record(rt, scenario, st, model, scope, stepResult, roots, lastErr)
+		record(rt, sc, st, model, scope, stepResult, roots, lastErr)
 		// After the trace, which scrubs the secrets the scope still holds: an
 		// earlier attempt may have written one this attempt's request carried.
 		unwrite(st, scope)
@@ -475,12 +477,12 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 	}
 	stepResult.Finish(time.Since(start))
 	if !stepResult.Passed() {
-		shoot(ctx, rt, scenario, st, stepResult)
+		shoot(ctx, rt, sc.Name, st, stepResult)
 	}
 	// Every step, pass or fail. A trace exists to answer "what actually went
 	// over the wire", and comparing a passing step with a failing one is half
 	// of how that question gets answered.
-	record(rt, scenario, st, model, scope, stepResult, roots, nil)
+	record(rt, sc, st, model, scope, stepResult, roots, nil)
 }
 
 // record writes one step's trace and stamps its path on the step for the report
@@ -490,12 +492,13 @@ func runArtStep(ctx context.Context, rt *runtimeEnv, scenario string, st *lower.
 // evidence about the run, and failing a run because its evidence would not
 // write would be the worst possible report of a disk problem. This is shoot's
 // rule, for shoot's reason.
-func record(rt *runtimeEnv, scenario string, st *lower.Step, model models.Step, scope executor.Scope, stepResult *result.StepResult, roots map[string]any, runErr error) {
+func record(rt *runtimeEnv, sc *lower.Scenario, st *lower.Step, model models.Step, scope executor.Scope, stepResult *result.StepResult, roots map[string]any, runErr error) {
 	if rt.traces == nil || rt.traces.Dir == "" {
 		return
 	}
-	path, err := rt.traces.On(trace.Of(
-		scenario, model, stepResult.Attempts, roots, runErr, secretValues(st, scope)...))
+	rec := trace.Of(sc.Name, model, stepResult.Attempts, roots, runErr, secretValues(st, scope)...)
+	rec.ScenarioID, rec.StepID = sc.ID, st.ID
+	path, err := rt.traces.On(rec)
 	if err != nil {
 		logger.Logger.Warn("Could not write a trace", "name", model.Name, "error", err.Error())
 		return

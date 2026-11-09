@@ -152,8 +152,10 @@ func (a Assertion) with(status Status, errMsg string) AssertionResult {
 
 // StepResult is the outcome of one step of a scenario.
 type StepResult struct {
-	// Name is the step's name from the scenario.
+	// Name is what a person reads for the step: its label, or its id.
 	Name string
+	// ID is the step's id, and Label its label, "" when it has none.
+	ID, Label string
 	// Phase is PhaseSetup or PhaseTeardown for a step of the scenario's setup
 	// or teardown, and empty for one of its own steps.
 	Phase string
@@ -256,8 +258,10 @@ func (s *StepResult) Skip(reason string) {
 
 // ScenarioResult is the outcome of one scenario -- today, of one YAML file.
 type ScenarioResult struct {
-	// Name is the scenario's name.
+	// Name is what a person reads for the scenario: its label, or its id.
 	Name string
+	// ID is the scenario's id, and Label its label, "" when it has none.
+	ID, Label string
 	// File is the path it was read from.
 	File string
 	// Status is derived from the steps by Finish, or set outright by Fail.
@@ -273,6 +277,8 @@ type ScenarioResult struct {
 	// scenario file, and empty for every other. NewScenario leaves it unset;
 	// the runner sets it after.
 	Flow string
+	// FlowLabel is that flow's label, "" when it has none.
+	FlowLabel string
 	// Kind is "suite" for a suite.art's setup or teardown, which the run
 	// reports beside the scenarios it was for, and empty for a scenario.
 	Kind string

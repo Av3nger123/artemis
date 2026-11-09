@@ -69,6 +69,8 @@ FAIL in <dur>
   "scenarios": [
     {
       "name": "health",
+      "id": "health",
+      "label": "",
       "file": "testdata/art/report_json/scenarios/01_health.art",
       "flow": "s_01_health",
       "status": "pass",
@@ -77,6 +79,8 @@ FAIL in <dur>
       "steps": [
         {
           "name": "ping",
+          "id": "ping",
+          "label": "",
           "status": "pass",
           "duration_ms": 0,
           "attempts": 1,
@@ -114,6 +118,8 @@ FAIL in <dur>
     },
     {
       "name": "items",
+      "id": "items",
+      "label": "",
       "file": "testdata/art/report_json/scenarios/02_items.art",
       "flow": "s_02_items",
       "status": "fail",
@@ -122,6 +128,8 @@ FAIL in <dur>
       "steps": [
         {
           "name": "list items",
+          "id": "list items",
+          "label": "",
           "status": "fail",
           "duration_ms": 0,
           "attempts": 1,
@@ -157,6 +165,8 @@ FAIL in <dur>
         },
         {
           "name": "missing route",
+          "id": "missing route",
+          "label": "",
           "status": "fail",
           "duration_ms": 0,
           "attempts": 1,
@@ -183,6 +193,8 @@ FAIL in <dur>
     },
     {
       "name": "",
+      "id": "",
+      "label": "",
       "file": "testdata/art/report_json/scenarios/03_broken.art",
       "status": "error",
       "duration_ms": 0,

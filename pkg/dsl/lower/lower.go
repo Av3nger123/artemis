@@ -65,9 +65,12 @@ import (
 // Scenario is one lowered `scenario`: the run unit ART-1's result tree reports
 // a ScenarioResult for.
 type Scenario struct {
-	// Name is the scenario's name, which is what the console report prints and
-	// what a JUnit testsuite is named after.
+	// Name is what the console report prints and what a JUnit testsuite is
+	// named after: the scenario's label, or its id when it has none.
 	Name string
+
+	// ID is the scenario's id, and Label its label, "" when it has none.
+	ID, Label string
 
 	// Line is the line the `scenario` keyword sits on.
 	Line int
@@ -75,6 +78,9 @@ type Scenario struct {
 	// FlowName is the name of the flow the scenario runs, for a scenario of a
 	// scenario file, and "" for every other.
 	FlowName string
+
+	// FlowLabel is that flow's label, "" when it has none.
+	FlowLabel string
 
 	// Tags are the scenario's own `tags = [...]`, in the order written. The
 	// suites above it add theirs when the run selects.
@@ -273,9 +279,12 @@ func File(tree *ast.File, info *check.Info) ([]*Scenario, error) {
 // one.
 func scenario(sc *ast.Scenario, info *check.Info) (*Scenario, error) {
 	out := &Scenario{
-		Name:     sc.Name.Value,
-		Line:     sc.Keyword.Span.Line,
-		FlowName: sc.Flow,
+		Name:      ast.Display(sc.Name, sc.Label),
+		ID:        sc.Name.Value,
+		Label:     sc.Label.Value,
+		Line:      sc.Keyword.Span.Line,
+		FlowName:  sc.Flow,
+		FlowLabel: sc.FlowLabel,
 	}
 	secrets := map[string]bool{}
 	l := &lowerer{info: info, secrets: secrets, captured: map[string]bool{}, sc: out, file: sc.Keyword.Span.File}
