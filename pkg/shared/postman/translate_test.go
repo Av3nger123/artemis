@@ -57,7 +57,7 @@ func TestNestedFoldersBecomeSteps(t *testing.T) {
 	})
 
 	src := art(t, c)
-	if !strings.Contains(src, `step "Orders / Admin / list orders"`) {
+	if !strings.Contains(src, `step orders_admin_list_orders as "Orders / Admin / list orders"`) {
 		t.Errorf("source does not carry the folder path:\n%s", src)
 	}
 	if !strings.Contains(src, `get "https://api.test/orders"`) {
@@ -78,7 +78,7 @@ func TestEveryRequestInTheTreeBecomesAStep(t *testing.T) {
 	}}
 
 	src := art(t, c)
-	want := []string{`step "top"`, `step "F / in F"`, `step "F / G / in G"`}
+	want := []string{`step top`, `step f_in_f as "F / in F"`, `step f_g_in_g as "F / G / in G"`}
 	at := -1
 	for _, w := range want {
 		i := strings.Index(src, w)
@@ -316,7 +316,7 @@ func TestRequestAuthOverridesTheCollections(t *testing.T) {
 			t.Errorf("%s is missing:\n%s", want, src)
 		}
 	}
-	public := src[strings.Index(src, `step "public"`):]
+	public := src[strings.Index(src, `step public`):]
 	if strings.Contains(public, "Authorization") {
 		t.Errorf("the noauth request got a header:\n%s", public)
 	}
@@ -385,7 +385,7 @@ func TestScenarioNameFallsBackToTheFile(t *testing.T) {
 	src := art(t, Collection{Items: []Item{
 		{Name: "p", Request: &Request{Method: "GET", URL: URL{Raw: "https://api.test/p"}}},
 	}})
-	if !strings.Contains(src, `scenario "orders.postman_collection"`) {
+	if !strings.Contains(src, `scenario orders_postman_collection as "orders.postman_collection"`) {
 		t.Errorf("scenario name is wrong:\n%s", src)
 	}
 }

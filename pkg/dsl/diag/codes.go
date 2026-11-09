@@ -225,6 +225,13 @@ const (
 	// A use passes a private var of the item, which takes only its own default.
 	PrivateInput Code = "private-input"
 
+	// Ids and labels: every collection, item, flow, step and scenario has a
+	// snake_case id, and may have `as "<label>"` after it.
+	IDNotSnakeCase Code = "id-not-snake-case"
+	DuplicateID    Code = "duplicate-id"
+	ExpectedLabel  Code = "expected-label"
+	QuotedName     Code = "quoted-name"
+
 	// A json(), csv() or file() whose literal path names nothing, or names a
 	// data file that does not parse. Settled when the file compiles, because
 	// the data is in the scenario's own repository.
@@ -412,6 +419,10 @@ var registry = []CodeInfo{
 	{OldSecret, Error, "a var, a capture, a parameter or a for clause is marked secret, which is removed"},
 	{OldSuite, Error, "a file is a suite, which folders, --tags and each flow's own setup replace"},
 	{OldFor, Error, "a scenario reads its rows with for, which a scenario for each row replaces"},
+	{IDNotSnakeCase, Error, "a collection, item, flow, step or scenario id is not snake_case"},
+	{DuplicateID, Error, "two items of a collection, two steps of a flow or two scenarios of a file share an id"},
+	{ExpectedLabel, Error, "an as after an id is not followed by a label in quotes"},
+	{QuotedName, Error, "a step, scenario or collection is named in quotes, which a snake_case id and as \"<label>\" replace"},
 }
 
 // byCode indexes the registry, built once at init so Lookup is a map read.

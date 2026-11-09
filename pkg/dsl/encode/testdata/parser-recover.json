@@ -5,6 +5,10 @@
     {
       "kind": "scenario",
       "name": {
+        "text": "good_one",
+        "value": "good_one"
+      },
+      "label": {
         "text": "\"good one\"",
         "value": "good one"
       },
@@ -27,7 +31,7 @@
                   "col": 17,
                   "endLine": 6,
                   "endCol": 26,
-                  "offset": 250
+                  "offset": 262
                 }
               }
             ],
@@ -37,7 +41,7 @@
               "col": 13,
               "endLine": 6,
               "endCol": 27,
-              "offset": 246
+              "offset": 258
             }
           },
           "span": {
@@ -46,7 +50,7 @@
             "col": 3,
             "endLine": 6,
             "endCol": 27,
-            "offset": 236
+            "offset": 248
           }
         },
         {
@@ -58,7 +62,7 @@
             "col": 3,
             "endLine": 7,
             "endCol": 16,
-            "offset": 263
+            "offset": 275
           }
         },
         {
@@ -75,7 +79,7 @@
               "col": 14,
               "endLine": 9,
               "endCol": 15,
-              "offset": 291
+              "offset": 303
             }
           },
           "span": {
@@ -84,7 +88,7 @@
             "col": 3,
             "endLine": 9,
             "endCol": 15,
-            "offset": 280
+            "offset": 292
           },
           "comments": {
             "blankAbove": true
@@ -93,6 +97,10 @@
         {
           "kind": "step",
           "name": {
+            "text": "survives_a_bad_statement",
+            "value": "survives_a_bad_statement"
+          },
+          "label": {
             "text": "\"survives a bad statement\"",
             "value": "survives a bad statement"
           },
@@ -113,7 +121,7 @@
                       "col": 12,
                       "endLine": 12,
                       "endCol": 15,
-                      "offset": 341
+                      "offset": 381
                     }
                   }
                 }
@@ -125,7 +133,7 @@
                 "col": 9,
                 "endLine": 12,
                 "endCol": 24,
-                "offset": 338
+                "offset": 378
               }
             },
             "span": {
@@ -134,7 +142,7 @@
               "col": 5,
               "endLine": 12,
               "endCol": 24,
-              "offset": 334
+              "offset": 374
             }
           },
           "body": [
@@ -152,7 +160,7 @@
                     "col": 12,
                     "endLine": 13,
                     "endCol": 18,
-                    "offset": 365
+                    "offset": 405
                   }
                 },
                 "y": {
@@ -166,7 +174,7 @@
                     "col": 22,
                     "endLine": 13,
                     "endCol": 25,
-                    "offset": 375
+                    "offset": 415
                   }
                 },
                 "span": {
@@ -175,7 +183,7 @@
                   "col": 12,
                   "endLine": 13,
                   "endCol": 25,
-                  "offset": 365
+                  "offset": 405
                 }
               },
               "span": {
@@ -184,7 +192,7 @@
                 "col": 5,
                 "endLine": 13,
                 "endCol": 25,
-                "offset": 358
+                "offset": 398
               },
               "class": "simple"
             },
@@ -199,7 +207,7 @@
                   "col": 12,
                   "endLine": 14,
                   "endCol": 14,
-                  "offset": 390
+                  "offset": 430
                 }
               },
               "span": {
@@ -208,7 +216,7 @@
                 "col": 5,
                 "endLine": 14,
                 "endCol": 14,
-                "offset": 383
+                "offset": 423
               },
               "class": "complex"
             },
@@ -221,7 +229,7 @@
                 "col": 14,
                 "endLine": 14,
                 "endCol": 15,
-                "offset": 392
+                "offset": 432
               }
             },
             {
@@ -240,7 +248,7 @@
                       "col": 21,
                       "endLine": 15,
                       "endCol": 25,
-                      "offset": 414
+                      "offset": 454
                     }
                   },
                   "name": "data",
@@ -250,7 +258,7 @@
                     "col": 21,
                     "endLine": 15,
                     "endCol": 30,
-                    "offset": 414
+                    "offset": 454
                   }
                 },
                 "name": "token",
@@ -260,7 +268,7 @@
                   "col": 21,
                   "endLine": 15,
                   "endCol": 36,
-                  "offset": 414
+                  "offset": 454
                 }
               },
               "span": {
@@ -269,7 +277,7 @@
                 "col": 5,
                 "endLine": 15,
                 "endCol": 36,
-                "offset": 398
+                "offset": 438
               }
             }
           ],
@@ -279,7 +287,7 @@
             "col": 3,
             "endLine": 16,
             "endCol": 4,
-            "offset": 296
+            "offset": 308
           },
           "stepType": "api",
           "scope": [
@@ -299,6 +307,10 @@
         {
           "kind": "step",
           "name": {
+            "text": "survives_a_bad_field",
+            "value": "survives_a_bad_field"
+          },
+          "label": {
             "text": "\"survives a bad field\"",
             "value": "survives a bad field"
           },
@@ -316,7 +328,7 @@
                 "col": 10,
                 "endLine": 19,
                 "endCol": 14,
-                "offset": 476
+                "offset": 540
               }
             },
             "block": {
@@ -336,7 +348,7 @@
                       "col": 14,
                       "endLine": 20,
                       "endCol": 17,
-                      "offset": 496
+                      "offset": 560
                     }
                   },
                   "value": {
@@ -350,7 +362,7 @@
                       "col": 20,
                       "endLine": 20,
                       "endCol": 23,
-                      "offset": 502
+                      "offset": 566
                     }
                   },
                   "span": {
@@ -359,7 +371,7 @@
                     "col": 7,
                     "endLine": 20,
                     "endCol": 23,
-                    "offset": 489
+                    "offset": 553
                   }
                 },
                 {
@@ -371,7 +383,7 @@
                     "col": 7,
                     "endLine": 22,
                     "endCol": 26,
-                    "offset": 512
+                    "offset": 576
                   }
                 }
               ],
@@ -381,7 +393,7 @@
                 "col": 15,
                 "endLine": 23,
                 "endCol": 6,
-                "offset": 481
+                "offset": 545
               }
             },
             "span": {
@@ -390,7 +402,7 @@
               "col": 5,
               "endLine": 23,
               "endCol": 6,
-              "offset": 471
+              "offset": 535
             }
           },
           "body": [
@@ -408,7 +420,7 @@
                     "col": 12,
                     "endLine": 24,
                     "endCol": 18,
-                    "offset": 561
+                    "offset": 625
                   }
                 },
                 "y": {
@@ -422,7 +434,7 @@
                     "col": 22,
                     "endLine": 24,
                     "endCol": 25,
-                    "offset": 571
+                    "offset": 635
                   }
                 },
                 "span": {
@@ -431,7 +443,7 @@
                   "col": 12,
                   "endLine": 24,
                   "endCol": 25,
-                  "offset": 561
+                  "offset": 625
                 }
               },
               "span": {
@@ -440,7 +452,7 @@
                 "col": 5,
                 "endLine": 24,
                 "endCol": 25,
-                "offset": 554
+                "offset": 618
               },
               "class": "simple"
             }
@@ -451,7 +463,7 @@
             "col": 3,
             "endLine": 25,
             "endCol": 4,
-            "offset": 437
+            "offset": 477
           },
           "stepType": "api",
           "scope": [
@@ -502,12 +514,16 @@
         "col": 1,
         "endLine": 28,
         "endCol": 22,
-        "offset": 582
+        "offset": 646
       }
     },
     {
       "kind": "scenario",
       "name": {
+        "text": "also_good",
+        "value": "also_good"
+      },
+      "label": {
         "text": "\"also good\"",
         "value": "also good"
       },
@@ -515,6 +531,10 @@
         {
           "kind": "step",
           "name": {
+            "text": "still_parsed",
+            "value": "still_parsed"
+          },
+          "label": {
             "text": "\"still parsed\"",
             "value": "still parsed"
           },
@@ -531,7 +551,7 @@
                 "col": 9,
                 "endLine": 32,
                 "endCol": 18,
-                "offset": 660
+                "offset": 753
               }
             },
             "span": {
@@ -540,7 +560,7 @@
               "col": 5,
               "endLine": 32,
               "endCol": 18,
-              "offset": 656
+              "offset": 749
             }
           },
           "body": [
@@ -558,7 +578,7 @@
                     "col": 12,
                     "endLine": 33,
                     "endCol": 21,
-                    "offset": 681
+                    "offset": 774
                   }
                 },
                 "y": {
@@ -572,7 +592,7 @@
                     "col": 25,
                     "endLine": 33,
                     "endCol": 26,
-                    "offset": 694
+                    "offset": 787
                   }
                 },
                 "span": {
@@ -581,7 +601,7 @@
                   "col": 12,
                   "endLine": 33,
                   "endCol": 26,
-                  "offset": 681
+                  "offset": 774
                 }
               },
               "span": {
@@ -590,7 +610,7 @@
                 "col": 5,
                 "endLine": 33,
                 "endCol": 26,
-                "offset": 674
+                "offset": 767
               },
               "class": "simple"
             }
@@ -601,7 +621,7 @@
             "col": 3,
             "endLine": 34,
             "endCol": 4,
-            "offset": 630
+            "offset": 707
           },
           "stepType": "terminal",
           "scope": [
@@ -618,7 +638,7 @@
         "col": 1,
         "endLine": 35,
         "endCol": 2,
-        "offset": 605
+        "offset": 669
       },
       "comments": {
         "blankAbove": true

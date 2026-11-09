@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/encode"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 	"artemis/pkg/shared/migrate"
@@ -63,8 +64,10 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		title = coll
 	}
 	importLine := fmt.Sprintf("import %q", filepath.Base(collectionFile))
-	if !ok {
-		coll = identifier(strings.ToLower(coll))
+	if !ok || !token.IsSnakeID(coll) {
+		// The collection's id is the name the flow calls it by, and an id is
+		// snake_case: a file name that is not one is imported as the id.
+		coll = token.SnakeFrom(coll)
 		importLine += " as " + coll
 	}
 
@@ -105,7 +108,11 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		steps = append(steps, call+"}")
 	}
 
-	collSrc := fmt.Sprintf("collection %s {\n%s}\n", quoteTitle(title), strings.Join(items, "\n"))
+	head := "collection " + coll
+	if title != coll {
+		head += " as " + quoteTitle(title)
+	}
+	collSrc := fmt.Sprintf("%s {\n%s}\n", head, strings.Join(items, "\n"))
 	if c := firstLine(comments.File); c != "" {
 		collSrc = c + "\n" + collSrc
 	}
@@ -214,39 +221,29 @@ func scenarioFile(comment, flowFile, scenario string) string {
 	return b.String()
 }
 
-// flowName is the collection's title as a flow's name: "Orders API" is
-// orders_api.
+// flowName is the collection's title as a flow's id, with the title as its
+// label when the two differ: "Orders API" is orders_api as "Orders API", and
+// "2024 API" is s_2024_api as "2024 API".
 func flowName(title string) string {
-	name := identifier(strings.ToLower(title))
-	for strings.Contains(name, "__") {
-		name = strings.ReplaceAll(name, "__", "_")
-	}
-	if name == "" {
+	name := token.SnakeFrom(strings.ToLower(title))
+	if strings.TrimSpace(title) == "" {
 		return "flow"
 	}
-	return name
+	if name == title {
+		return name
+	}
+	return name + " as " + quoteTitle(title)
 }
 
-// quoteTitle is title as a DSL string, quoted the way migrate.Source quotes a
-// scenario's name.
-func quoteTitle(title string) string {
-	src, err := migrate.Source(migrate.Config{Name: title}, migrate.Comments{})
-	if err != nil {
-		return fmt.Sprintf("%q", title)
-	}
-	line := strings.TrimSuffix(strings.TrimSpace(src), " {}")
-	return strings.TrimPrefix(line, "scenario ")
-}
+// quoteTitle is title as a DSL string literal.
+func quoteTitle(title string) string { return encode.QuoteString(title) }
 
 // requestName is a step name as a request name that no earlier request in
 // taken has, and records it.
 func requestName(step string, taken map[string]bool) string {
-	base := identifier(strings.ToLower(step))
-	// "Orders / list" becomes orders___list; one underscore reads better.
-	for strings.Contains(base, "__") {
-		base = strings.ReplaceAll(base, "__", "_")
-	}
-	if base == "" {
+	// An id: "Orders / list" is orders_list, and "2FA login" s_2fa_login.
+	base := token.SnakeFrom(strings.ToLower(step))
+	if strings.TrimSpace(step) == "" {
 		base = "request"
 	}
 	name := base

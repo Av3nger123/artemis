@@ -1,3 +1,3 @@
 flow "../flows/01_login.art"
 
-scenario "login" {}
+scenario login {}

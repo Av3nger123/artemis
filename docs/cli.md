@@ -88,8 +88,8 @@ agent that wrote the test as a person scrolling a CI log.
 | Field | What it is |
 | --- | --- |
 | the heading | `file:line` -- the line to edit, in the flow or in the collection a step called: the `expect` that failed, or the step `var` that could not be written. A step that could not run at all points at its own first line. A line artemis does not know is left off rather than printed as `:0`. |
-| `scenario` | The scenario's title. Absent for a file that would not compile: there was no title to read. |
-| `step` | The step's name. Absent for a file that would not compile, which never ran one. |
+| `scenario` | The scenario's label, or its id when it has none. Absent for a file that would not compile: there was none to read. |
+| `step` | The step's label, or its id when it has none. Absent for a file that would not compile, which never ran one. |
 | `assert` | What was checked: the statement it came from, the subject's source text, and the comparison applied -- `expect body.data.count >`. |
 | `expected` / `actual` | The two values as evaluated. A string is quoted and a number is not, so `"200"` and `200` do not read alike; when the two sides are different JSON types each is followed by its type. |
 | `error` | In place of `expected`/`actual` when there was nothing to compare: a path that did not resolve, `>` against an object, a command that could not be started, a file that would not compile. |

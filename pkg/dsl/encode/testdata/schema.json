@@ -281,7 +281,7 @@
   "nodes": [
     {
       "kind": "scenario",
-      "doc": "`scenario \"name\" { ... }`",
+      "doc": "`scenario full_price as \"Full price\" { ... }`",
       "fields": [
         {
           "name": "name",
@@ -289,6 +289,12 @@
           "optional": true,
           "inputRequired": true,
           "doc": "absent only in a file the parser recovered past; Decode requires it"
+        },
+        {
+          "name": "label",
+          "type": "name",
+          "optional": true,
+          "doc": "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"
         },
         {
           "name": "for",
@@ -575,7 +581,7 @@
     },
     {
       "kind": "step",
-      "doc": "`step \"login\" { <action> <statement>... }`",
+      "doc": "`step log_in as \"Log in\" { <action> <statement>... }`",
       "fields": [
         {
           "name": "name",
@@ -583,6 +589,12 @@
           "optional": true,
           "inputRequired": true,
           "doc": "absent only in a file the parser recovered past; Decode requires it"
+        },
+        {
+          "name": "label",
+          "type": "name",
+          "optional": true,
+          "doc": "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"
         },
         {
           "name": "action",
@@ -937,7 +949,7 @@
     },
     {
       "kind": "collection",
-      "doc": "`collection \"Orders API\" { request ... }`: one per file; its name is a title",
+      "doc": "`collection orders as \"Orders API\" { request ... }`: one per file; its id is the name an import with no as gives it",
       "fields": [
         {
           "name": "name",
@@ -945,6 +957,12 @@
           "optional": true,
           "inputRequired": true,
           "doc": "absent only in a file the parser recovered past; Decode requires it"
+        },
+        {
+          "name": "label",
+          "type": "name",
+          "optional": true,
+          "doc": "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"
         },
         {
           "name": "items",
@@ -1006,6 +1024,12 @@
           "doc": "the identifier a use names it by"
         },
         {
+          "name": "label",
+          "type": "name",
+          "optional": true,
+          "doc": "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"
+        },
+        {
           "name": "params",
           "type": "node[]",
           "accepts": "param",
@@ -1051,7 +1075,13 @@
           "name": "name",
           "type": "name",
           "optional": true,
-          "doc": "the step form's quoted name, which the expanded step is called; absent for a use"
+          "doc": "the step form's id, which the expanded step is called; absent for a use"
+        },
+        {
+          "name": "label",
+          "type": "name",
+          "optional": true,
+          "doc": "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"
         },
         {
           "name": "collection",
@@ -1144,6 +1174,12 @@
           "name": "name",
           "type": "string",
           "doc": "the identifier naming the flow in reports"
+        },
+        {
+          "name": "label",
+          "type": "name",
+          "optional": true,
+          "doc": "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"
         },
         {
           "name": "body",

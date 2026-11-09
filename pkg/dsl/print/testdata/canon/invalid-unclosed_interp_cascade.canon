@@ -6,10 +6,10 @@
 # output from a recovering parser, narrowing it is a change to pkg/dsl/parser,
 # and this golden is the evidence for whoever takes that on.
 
-scenario "unclosed interpolation" {
+scenario unclosed_interpolation as "unclosed interpolation" {
   var base = "https://api.example.com"
 
-  step "orders" {
+  step orders {
     get "${base/orders"expectstatus == 200}
 }
 

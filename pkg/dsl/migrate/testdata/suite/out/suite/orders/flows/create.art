@@ -2,20 +2,20 @@ flow create {
   var url = env("API_URL")
 
   setup {
-    step "log in" {
+    step log_in as "log in" {
       post "${url}/login"
       expect status == 200
       var token = body.token
     }
   }
 
-  step "create" {
+  step create {
     post "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 201
   }
 
   teardown {
-    step "log out" {
+    step log_out as "log out" {
       post "${url}/logout" { header "Authorization" = "Bearer ${token}" }
     }
   }

@@ -5,13 +5,13 @@
 flow regex_capture {
   var base = "%SERVER%"
 
-  step "read the redirect" {
+  step read_the_redirect as "read the redirect" {
     get "${base}/redirect"
     expect status == 200
     var itemId = match(raw, /\/items\/([0-9]+)/)
   }
 
-  step "read the item back" {
+  step read_the_item_back as "read the item back" {
     get "${base}/items/${itemId}"
     expect status == 200
     expect body.id == 42

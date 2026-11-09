@@ -63,7 +63,7 @@ func TestBrowserScenarioSharesOnePageAcrossSteps(t *testing.T) {
 
   var url = %q
 
-  step "sign in" {
+  step sign_in as "sign in" {
     browser {
       goto "${url}/"
       fill "#user" = "alice"
@@ -75,7 +75,7 @@ func TestBrowserScenarioSharesOnePageAcrossSteps(t *testing.T) {
     expect page.url contains "/done"
   }
 
-  step "the page remembers what step one typed" {
+  step the_page_remembers_what_step_one_typed as "the page remembers what step one typed" {
     browser {
       wait "50ms"
     }
@@ -86,7 +86,7 @@ func TestBrowserScenarioSharesOnePageAcrossSteps(t *testing.T) {
     var plan = match(text(".plan-badge"), /plan: (\w+)/)
   }
 
-  step "and it remembers where it is" {
+  step and_it_remembers_where_it_is as "and it remembers where it is" {
     browser {
       goto "/never"
     }
@@ -97,7 +97,7 @@ func TestBrowserScenarioSharesOnePageAcrossSteps(t *testing.T) {
   }
 }
 
-scenario "the app" {}
+scenario the_app as "the app" {}
 `, srv.URL))
 
 	if !run.Passed() {
@@ -131,7 +131,7 @@ func TestBrowserWithinWaitsForTheDomToSettle(t *testing.T) {
 	run, _ := runBrowserArt(t, fmt.Sprintf(`flow settling {
   var url = %q
 
-  step "wait for the banner" {
+  step wait_for_the_banner as "wait for the banner" {
     browser {
       goto "${url}/"
       fill "#user" = "alice"
@@ -143,7 +143,7 @@ func TestBrowserWithinWaitsForTheDomToSettle(t *testing.T) {
   }
 }
 
-scenario "settling" {}
+scenario settling {}
 `, srv.URL+fixture.PathForm))
 	elapsed := time.Since(start)
 
@@ -181,7 +181,7 @@ func TestBrowserWithinHonoursABudgetThatExpires(t *testing.T) {
 	run, dir := runBrowserArt(t, fmt.Sprintf(`flow never_settles {
   var url = %q
 
-  step "wait for something that never comes" {
+  step wait_for_something_that_never_comes as "wait for something that never comes" {
     browser {
       goto "${url}/never"
     }
@@ -190,7 +190,7 @@ func TestBrowserWithinHonoursABudgetThatExpires(t *testing.T) {
   }
 }
 
-scenario "never settles" {}
+scenario never_settles as "never settles" {}
 `, srv.URL))
 	elapsed := time.Since(start)
 
@@ -229,7 +229,7 @@ func TestBrowserScreenshotIsNamedInTheJSONReport(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	run, _ := runBrowserArt(t, fmt.Sprintf(`flow never_settles {
-  step "look for a receipt" {
+  step look_for_a_receipt as "look for a receipt" {
     browser {
       goto "%s/never"
     }
@@ -238,7 +238,7 @@ func TestBrowserScreenshotIsNamedInTheJSONReport(t *testing.T) {
   }
 }
 
-scenario "never settles" {}
+scenario never_settles as "never settles" {}
 `, srv.URL))
 
 	var buf bytes.Buffer
@@ -280,7 +280,7 @@ func TestBrowserRetryAndWithinCompose(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	run, _ := runBrowserArt(t, fmt.Sprintf(`flow both_timers {
-  step "settle, retrying if the page is wrong" {
+  step settle_retrying_if_the_page_is_wrong as "settle, retrying if the page is wrong" {
     browser {
       goto "%s/"
       fill "#user" = "alice"
@@ -293,7 +293,7 @@ func TestBrowserRetryAndWithinCompose(t *testing.T) {
   }
 }
 
-scenario "both timers" {}
+scenario both_timers as "both timers" {}
 `, srv.URL))
 
 	if !run.Passed() {
@@ -319,7 +319,7 @@ func TestBrowserEmptyMatchesAreAssertable(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	run, _ := runBrowserArt(t, fmt.Sprintf(`flow nothing_there {
-  step "assert the absence of things" {
+  step assert_the_absence_of_things as "assert the absence of things" {
     browser {
       goto "%s/never"
     }
@@ -332,7 +332,7 @@ func TestBrowserEmptyMatchesAreAssertable(t *testing.T) {
   }
 }
 
-scenario "nothing there" {}
+scenario nothing_there as "nothing there" {}
 `, srv.URL))
 
 	if !run.Passed() {
@@ -358,7 +358,7 @@ func TestBrowserRunLeavesNothingRunning(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		run, _ := runBrowserArt(t, fmt.Sprintf(`flow open_and_close_d {
-  step "look" {
+  step look {
     browser {
       goto "%s/"
     }
@@ -367,7 +367,7 @@ func TestBrowserRunLeavesNothingRunning(t *testing.T) {
   }
 }
 
-scenario "open and close %d" {}
+scenario open_and_close_d as "open and close %d" {}
 `, i, srv.URL))
 		if !run.Passed() {
 			t.Fatalf("run %d failed", i)

@@ -1,8 +1,8 @@
 === terminal
-old_use.art:9:3: use is now step "<name>" = auth.login
+old_use.art:9:3: use is now step <id> = auth.login
    9 |   use auth.login {
      |   ^^^
-   hint: name the step: step "<name>" = auth.login { ... } -- artemis migrate -f old_use.art -o <dir> rewrites it
+   hint: name the step: step <id> = auth.login { ... } -- artemis migrate -f old_use.art -o <dir> rewrites it
 
 === codes
 old-use	error	9:3-9:6

@@ -17,9 +17,10 @@ const (
 func (e *enc) flowDecl(f *ast.Flow) *obj {
 	return start(kindFlowDecl, f).
 		set("name", f.Name.Text).
+		set("label", nameObj(f.Label)).
 		set("body", e.list(toNodes(f.Body))).
 		span().
-		comments(toks(f.Keyword, f.Name), f.LBrace, f.RBrace).done()
+		comments(toks(f.Keyword, f.Name, f.LabelAs, f.Label), f.LBrace, f.RBrace).done()
 }
 
 func (e *enc) flowRef(r *ast.FlowRef) *obj {
@@ -49,6 +50,9 @@ func flowOf(f fields) (*ast.Flow, error) {
 		Name:    syn(token.Ident, name),
 		LBrace:  syn(token.LBrace, "{"),
 		RBrace:  syn(token.RBrace, "}"),
+	}
+	if fl.LabelAs, fl.Label, err = labelOf(f); err != nil {
+		return nil, err
 	}
 	body, err := f.list("body")
 	if err != nil {

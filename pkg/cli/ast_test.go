@@ -16,7 +16,7 @@ import (
 const labelledArt = `flow checkout {
   var url
 
-  step "login" {
+  step login {
     post "${url}/token"
     expect status == 200
   }
@@ -132,7 +132,7 @@ func TestAstRefusesAFileWithAnError(t *testing.T) {
 // encoding is total so that `artemis ast` can describe a file mid-edit, and
 // decoding is not, because a UI serialises a complete tree.
 func TestAstFromJSONRefusesAnIncompleteTree(t *testing.T) {
-	path := flowOf(writeArt(t, "broken.art", "flow s {\n  step \"one\" {\n    get \"/a\"\n    expect == 200\n  }\n}\n\nscenario \"s\" {}\n"))
+	path := flowOf(writeArt(t, "broken.art", "flow s {\n  step one {\n    get \"/a\"\n    expect == 200\n  }\n}\n\nscenario s {}\n"))
 
 	// -f on a file with an error writes nothing, so the document for this test
 	// is built from the package rather than from the command.

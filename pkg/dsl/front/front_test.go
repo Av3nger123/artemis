@@ -14,9 +14,9 @@ import (
 // the checker's bag would return no diagnostics at all.
 func TestCompileMergesTheCheckersBag(t *testing.T) {
 	files := expand.MapLoader{
-		"f.art": "flow f {\n  step \"orders\" {\n    get \"/orders\"\n    expect statu == 200\n  }\n}\n",
+		"f.art": "flow f {\n  step orders {\n    get \"/orders\"\n    expect statu == 200\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	if u.Tree == nil || u.Info == nil {
 		t.Fatal("CompileWith returned no tree or no checker Info")
 	}
@@ -44,10 +44,10 @@ func TestIsArtFileIgnoresCase(t *testing.T) {
 
 func TestCompileWithExpandsAndChecksTheExpandedTree(t *testing.T) {
 	files := expand.MapLoader{
-		"c.art": "collection \"c\" {\n  request r {\n    var u\n    get u\n    expect status == 200\n    var tok = body.t\n  }\n}\n",
-		"f.art": "import \"c.art\"\n\nflow s {\n  step \"call\" = c.r { u = \"x\" }\n  step \"next\" {\n    get \"${tok}\"\n    expect status == 200\n  }\n}\n",
+		"c.art": "collection c {\n  request r {\n    var u\n    get u\n    expect status == 200\n    var tok = body.t\n  }\n}\n",
+		"f.art": "import \"c.art\"\n\nflow s {\n  step call = c.r { u = \"x\" }\n  step next {\n    get \"${tok}\"\n    expect status == 200\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	if u.Bag.HasErrors() {
 		t.Fatal(u.Bag.All())
 	}
@@ -76,13 +76,13 @@ func TestCompileWithExpandsAndChecksTheExpandedTree(t *testing.T) {
 // last write wins.
 func TestAnItemMayOverwriteTheNameItsArgumentReads(t *testing.T) {
 	files := expand.MapLoader{
-		"auth.art": "collection \"auth\" {\n  request login {\n    var user\n    var password = \"pw\"\n" +
+		"auth.art": "collection auth {\n  request login {\n    var user\n    var password = \"pw\"\n" +
 			"    post \"http://h/token\" {\n      body = {\"username\": user, \"password\": password}\n    }\n" +
 			"    expect status == 200\n    var token = body.token\n  }\n}\n",
-		"f.art": "import \"auth.art\"\n\nflow s {\n  step \"t\" {\n    get \"http://h/x\"\n    var token = body.t\n  }\n" +
-			"  step \"log in\" = auth.login { user = token }\n  step \"after\" {\n    get \"http://h/${token}\"\n  }\n}\n",
+		"f.art": "import \"auth.art\"\n\nflow s {\n  step t {\n    get \"http://h/x\"\n    var token = body.t\n  }\n" +
+			"  step log_in as \"log in\" = auth.login { user = token }\n  step after {\n    get \"http://h/${token}\"\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	if u.Bag.HasErrors() {
 		t.Fatal(u.Bag.All())
 	}
@@ -90,7 +90,7 @@ func TestAnItemMayOverwriteTheNameItsArgumentReads(t *testing.T) {
 
 // Compile is CompileWith with no disk to read from.
 func TestCompileIsCompileWithNoLoader(t *testing.T) {
-	src := "flow s {\n  step \"a\" {\n    get \"x\"\n    expect status == 200\n  }\n}\n"
+	src := "flow s {\n  step a {\n    get \"x\"\n    expect status == 200\n  }\n}\n"
 	tree, info, bag := front.Compile("a.art", src)
 	u := front.CompileWith("a.art", src, nil)
 	if ast.Source(u.Tree) != ast.Source(tree) || bag.Len() != u.Bag.Len() || info.Steps() != u.Info.Steps() {
@@ -105,11 +105,11 @@ func TestCompileIsCompileWithNoLoader(t *testing.T) {
 // missing-argument, and not a runtime error.
 func TestContextInputFromOneBranchIsMaybeUnbound(t *testing.T) {
 	files := expand.MapLoader{
-		"api.art": "collection \"api\" {\n  request me {\n    var token\n    get \"http://h/me/${token}\"\n  }\n}\n",
-		"f.art": "import \"api.art\"\n\nflow s {\n  var x = true\n  if x {\n    step \"a\" {\n      get \"http://h/\"\n" +
-			"      var token = body.t\n    }\n  }\n  step \"me\" = api.me { }\n}\n",
+		"api.art": "collection api {\n  request me {\n    var token\n    get \"http://h/me/${token}\"\n  }\n}\n",
+		"f.art": "import \"api.art\"\n\nflow s {\n  var x = true\n  if x {\n    step a {\n      get \"http://h/\"\n" +
+			"      var token = body.t\n    }\n  }\n  step me = api.me { }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	var got []diag.Diagnostic
 	for _, d := range u.Bag.All() {
 		if d.Severity == diag.Error {
@@ -130,12 +130,12 @@ func TestContextInputFromOneBranchIsMaybeUnbound(t *testing.T) {
 // overwrites the first's, and a step after both reads the second.
 func TestTwoCallsOfAWritingItemOverwriteTheVar(t *testing.T) {
 	files := expand.MapLoader{
-		"auth.art": "collection \"auth\" {\n  request login {\n    var user\n    post \"http://h/token\"\n    expect status == 200\n" +
+		"auth.art": "collection auth {\n  request login {\n    var user\n    post \"http://h/token\"\n    expect status == 200\n" +
 			"    var token = body.token\n  }\n}\n",
-		"f.art": "import \"auth.art\"\n\nflow s {\n  step \"a\" = auth.login { user = \"a\" }\n  step \"b\" = auth.login { user = \"b\" }\n" +
-			"  step \"after\" {\n    get \"http://h/${token}\"\n  }\n}\n",
+		"f.art": "import \"auth.art\"\n\nflow s {\n  step a = auth.login { user = \"a\" }\n  step b = auth.login { user = \"b\" }\n" +
+			"  step after {\n    get \"http://h/${token}\"\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	if u.Bag.HasErrors() {
 		t.Fatal(u.Bag.All())
 	}
@@ -146,9 +146,9 @@ func TestTwoCallsOfAWritingItemOverwriteTheVar(t *testing.T) {
 // that file.
 func TestFlowErrorReportedPerScenarioFile(t *testing.T) {
 	files := expand.MapLoader{
-		"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/${nope}\"\n  }\n}\n",
-		"a.art":              "flow \"flows/checkout.art\"\nscenario \"a1\" { }\nscenario \"a2\" { }\n",
-		"b.art":              "flow \"flows/checkout.art\"\nscenario \"b1\" { }\n",
+		"flows/checkout.art": "flow checkout {\n  step pay {\n    get \"/${nope}\"\n  }\n}\n",
+		"a.art":              "flow \"flows/checkout.art\"\nscenario a1 { }\nscenario a2 { }\n",
+		"b.art":              "flow \"flows/checkout.art\"\nscenario b1 { }\n",
 	}
 	for _, name := range []string{"a.art", "b.art"} {
 		u := front.CompileWith(name, files[name], files)

@@ -86,12 +86,15 @@ func (e *expander) scenario(fu *unit, f *ast.Flow, s *ast.Scenario, values map[s
 		return nil
 	}
 	return &ast.Scenario{
-		Keyword: s.Keyword,
-		Name:    s.Name,
-		LBrace:  s.LBrace,
-		Body:    body,
-		RBrace:  s.RBrace,
-		Flow:    f.Name.Value,
+		Keyword:   s.Keyword,
+		Name:      s.Name,
+		LabelAs:   s.LabelAs,
+		Label:     s.Label,
+		LBrace:    s.LBrace,
+		Body:      body,
+		RBrace:    s.RBrace,
+		Flow:      f.Name.Value,
+		FlowLabel: f.Label.Value,
 	}
 }
 
@@ -270,10 +273,11 @@ func (e *expander) flowCheckTree(u *unit, f *ast.Flow, stamp func(token.Token) t
 		return nil
 	}
 	return &ast.File{Scenarios: []ast.Decl{&ast.Scenario{
-		Keyword: synth(token.Ident, "scenario", "scenario", token.Span{}),
-		Name:    synth(token.String, quote(f.Name.Value), f.Name.Value, token.Span{}),
-		Body:    body,
-		Flow:    f.Name.Value,
+		Keyword:   synth(token.Ident, "scenario", "scenario", token.Span{}),
+		Name:      synth(token.String, quote(f.Name.Value), f.Name.Value, token.Span{}),
+		Body:      body,
+		Flow:      f.Name.Value,
+		FlowLabel: f.Label.Value,
 	}}}
 }
 

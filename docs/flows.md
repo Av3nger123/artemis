@@ -14,7 +14,7 @@ flow checkout {
   var min_orders = 1
   private var url = env("API_URL")
 
-  step "get a token" {
+  step get_a_token as "get a token" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": user, "password": env("API_PASSWORD")}
@@ -23,7 +23,7 @@ flow checkout {
     var token = body.data.access_token
   }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "${url}/orders" {
       header "Authorization" = "Bearer ${token}"
       query "limit" = 10
@@ -60,14 +60,14 @@ whose hint names the scenario files that run it.
 # scenarios/checkout.art
 flow "../flows/checkout.art"
 
-scenario "alice has orders" {}
+scenario alice_has_orders as "alice has orders" {}
 
-scenario "an admin's orders" {
+scenario an_admin_s_orders as "an admin's orders" {
   tags = ["smoke"]
   user = "admin"
 }
 
-scenario "a new user has none" {
+scenario a_new_user_has_none as "a new user has none" {
   user       = "newbie"
   min_orders = 0
 }
@@ -80,7 +80,7 @@ artemis run scenarios/checkout.art
 ```
 
 The first line names the flow, relative to the scenario file. Each scenario is
-one run of the flow, under its own title, with the values it sets and the
+one run of the flow, under its own id and label, with the values it sets and the
 flow's defaults for the rest. A scenario holds `name = value` lines and `tags`,
 and nothing else: a step or an `expect` in one is a compile error, because a
 scenario changes the data and never the steps. A name the flow has no var for,
@@ -92,7 +92,7 @@ A scenario can turn checks off with `skip`:
 # scenarios/any_orders.art
 flow "../flows/checkout.art"
 
-scenario "whatever alice has" {
+scenario whatever_alice_has as "whatever alice has" {
   min_orders = skip
 }
 ```
@@ -113,7 +113,7 @@ step calls it by name:
 
 ```art
 # collections/auth.art
-collection "auth" {
+collection auth {
 
   request login {
     var url
@@ -138,16 +138,16 @@ flow orders {
   var user = "alice"
   private var url = env("API_URL")
 
-  step "log in" = auth.login { password = env("API_PASSWORD") }
+  step log_in as "log in" = auth.login { password = env("API_PASSWORD") }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "${url}/orders" {
       header "Authorization" = "Bearer ${token}"
     }
     expect status == 200
   }
 
-  step "a wrong password" = auth.login as bad {
+  step a_wrong_password as "a wrong password" = auth.login as bad {
     password = "wrong"
     drop expects
     drop vars
@@ -160,8 +160,8 @@ flow orders {
 # scenarios/orders.art
 flow "../flows/orders.art"
 
-scenario "alice" {}
-scenario "bob"   { user = "bob" }
+scenario alice {}
+scenario bob   { user = "bob" }
 ```
 
 The keyword is the item's type -- `request` for an HTTP verb, `command` for
@@ -181,9 +181,15 @@ write -- and `expect` lines add new ones. `as bad` prefixes the call's outputs,
 second call's `token` replaces the first's.
 
 A collection holds single items; steps in order are a flow. A collection file
-holds one collection, whose name is a title, and nothing else.
-`import "../collections/auth.art"` puts it in scope as `auth`;
+holds one collection and nothing else. `import "../collections/auth.art"` puts
+it in scope by its id, `auth` for `collection auth { ... }`;
 `import "../collections/Backend APIs.art" as api` puts it in scope as `api`.
+
+Every collection, item, flow, step and scenario has a snake_case id, and may
+have a label after `as`: `request legacy_readiness as "Legacy readiness"`.
+Reports and editors show the label, and the id where there is none; the id is
+what a call, `--item`, `report.json` and a trace file name use. A step that
+calls an item with no label of its own shows the item's.
 
 An override applies to an `api` request only. To vary a command or a query,
 make the value an input and pass it.
@@ -198,12 +204,12 @@ artemis expand scenarios/orders.art
 
 ```text
 # from orders (flows/orders.art:4) via scenarios/orders.art:5
-scenario "bob" {
+scenario bob_2 as "bob" {
   var user = "bob"
   var url = env("API_URL")
 
   # from auth.login (collections/auth.art:4) via flows/orders.art:8
-  step "log in" {
+  step log_in as "log in" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": user, "password": env("API_PASSWORD")}
@@ -212,13 +218,13 @@ scenario "bob" {
     var token = body.data.access_token
   }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200
   }
 
   # from auth.login (collections/auth.art:4) via flows/orders.art:17
-  step "a wrong password" {
+  step a_wrong_password as "a wrong password" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": user, "password": "wrong"}

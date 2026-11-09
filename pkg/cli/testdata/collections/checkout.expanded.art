@@ -1,21 +1,21 @@
 # from checkout (testdata/collections/flows/checkout.art:3) via testdata/collections/scenarios/checkout.art:3
-scenario "checkout" {
+scenario checkout {
   var url = env("API_URL")
 
   # from auth.login (testdata/collections/auth.art:2) via testdata/collections/flows/checkout.art:6
-  step "auth.login" {
+  step auth_login as "auth.login" {
     post "${url}/token" { body = {"username": "alice", "password": "s3cret"} }
     expect status == 200
     var token = body.data.access_token
   }
 
   # from auth.login (testdata/collections/auth.art:2) via testdata/collections/flows/checkout.art:8
-  step "bad" {
+  step bad {
     post "${url}/token" { body = {"username": "alice", "password": "wrong"} }
     expect status == 401
   }
 
-  step "orders" {
+  step orders {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200
   }

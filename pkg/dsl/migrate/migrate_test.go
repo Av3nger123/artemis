@@ -125,9 +125,9 @@ func shape(body []ast.Decl) []string {
 		case *ast.VarDecl:
 			out = append(out, "var "+v.Name.Value)
 		case *ast.StepDecl:
-			out = append(out, "step "+v.Name.Value)
+			out = append(out, "step "+ast.Display(v.Name, v.Label))
 		case *ast.UseDecl:
-			out = append(out, "step "+v.Name.Value+" = "+v.Ref())
+			out = append(out, "step "+ast.Display(v.Name, v.Label)+" = "+v.Ref())
 		case *ast.PhaseDecl:
 			out = append(out, v.Keyword.Value+"("+strings.Join(shape(v.Body), ", ")+")")
 		case *ast.ConfigDecl:
@@ -162,12 +162,12 @@ func tagsOf(t *testing.T, s *ast.Scenario) string {
 func step(t *testing.T, body []ast.Decl, name string) *ast.StepDecl {
 	t.Helper()
 	for _, d := range body {
-		if s, ok := d.(*ast.StepDecl); ok && s.Name.Value == name {
+		if s, ok := d.(*ast.StepDecl); ok && ast.Display(s.Name, s.Label) == name {
 			return s
 		}
 		if p, ok := d.(*ast.PhaseDecl); ok {
 			for _, b := range p.Body {
-				if s, ok := b.(*ast.StepDecl); ok && s.Name.Value == name {
+				if s, ok := b.(*ast.StepDecl); ok && ast.Display(s.Name, s.Label) == name {
 					return s
 				}
 			}
@@ -223,7 +223,7 @@ func TestScenarioBecomesAFlowAndAScenarioFile(t *testing.T) {
 	if ref != "../flows/checkout.art" || len(scs) != 1 {
 		t.Fatalf("scenario file names %s with %d scenarios", ref, len(scs))
 	}
-	if scs[0].Name.Value != "checkout" || tagsOf(t, scs[0]) != `["smoke"]` || len(scs[0].Body) != 1 {
+	if ast.Display(scs[0].Name, scs[0].Label) != "checkout" || tagsOf(t, scs[0]) != `["smoke"]` || len(scs[0].Body) != 1 {
 		t.Errorf("scenario %s with tags %s and %d lines", scs[0].Name.Text, tagsOf(t, scs[0]), len(scs[0].Body))
 	}
 }
@@ -273,8 +273,8 @@ func TestSeveralScenariosAreNumbered(t *testing.T) {
 			t.Errorf("flow %s, want %s", flow.Name.Value, n)
 		}
 		ref, scs := scenariosOf(t, files["scenarios/"+n+".art"])
-		if ref != "../flows/"+n+".art" || scs[0].Name.Value != title {
-			t.Errorf("scenarios/%s.art names %s and %q", n, ref, scs[0].Name.Value)
+		if ref != "../flows/"+n+".art" || ast.Display(scs[0].Name, scs[0].Label) != title {
+			t.Errorf("scenarios/%s.art names %s and %q", n, ref, ast.Display(scs[0].Name, scs[0].Label))
 		}
 	}
 }
@@ -352,8 +352,8 @@ func TestRowsBecomeScenarios(t *testing.T) {
 	}
 	for _, s := range scs {
 		set := s.Body[0].(*ast.Set)
-		if set.Name.Value != "user" || expr(set.Value) != want[s.Name.Value] {
-			t.Errorf("scenario %q sets %s = %s", s.Name.Value, set.Name.Value, expr(set.Value))
+		if set.Name.Value != "user" || expr(set.Value) != want[ast.Display(s.Name, s.Label)] {
+			t.Errorf("scenario %q sets %s = %s", ast.Display(s.Name, s.Label), set.Name.Value, expr(set.Value))
 		}
 	}
 }

@@ -17,13 +17,16 @@ drop-after-expect	error	a drop expects line comes after an expect line in the sa
 duplicate-action	error	a step block contains more than one action block
 duplicate-argument	error	a use passes the same argument twice
 duplicate-binding	error	a var that reuses the name of a var declared in the same place
+duplicate-id	error	two items of a collection, two steps of a flow or two scenarios of a file share an id
 duplicate-import-name	error	two imports give their collections the same name
 duplicate-phase	error	a scenario has two setup blocks or two teardown blocks
 duplicate-tags	error	a scenario has more than one tags list
+expected-label	error	an as after an id is not followed by a label in quotes
 flow-file-holds	error	a flow file holds a collection or a scenario
 flow-not-found	error	a scenario file's flow header names a file that cannot be read
 flow-not-runnable	error	a flow file is named on the command line, and a flow runs only through a scenario file
 flow-ref-placement	error	a scenario file's flow "..." header is not its first line
+id-not-snake-case	error	a collection, item, flow, step or scenario id is not snake_case
 import-cycle	error	a file imports itself, directly or through other files
 import-needs-file	error	a file read from no disk imports another file
 import-needs-name	error	an import has no "as" and its file's name cannot be what a use names it by
@@ -54,6 +57,7 @@ parallel-capture-clash	error	two branches of a parallel block write the same nam
 parallel-sibling-capture	error	a branch of a parallel block reads a name another branch writes at the same time
 private-input	error	a use passes a private var of the item, which takes only its own default
 private-param	error	a scenario sets a private var of its flow
+quoted-name	error	a step, scenario or collection is named in quotes, which a snake_case id and as "<label>" replace
 repeat-unbounded	error	a repeat has neither within nor max, so nothing stops it
 reserved-param	error	a parameter is named like a use-block override word, so no use can pass it
 reserved-tags	error	a flow declares a var named tags, which is each scenario's own list

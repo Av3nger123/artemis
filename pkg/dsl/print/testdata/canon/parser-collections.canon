@@ -1,6 +1,6 @@
 import "auth.art"
 
-collection "orders" {
+collection collections as "orders" {
   request create(sku, qty = 1, base = env("API_URL")) {
     post "${base}/orders" { body = {"sku": sku, "qty": qty} }
     expect status == 201
@@ -36,7 +36,7 @@ collection "orders" {
   }
 }
 
-scenario "rush" {
+scenario rush {
   use orders.create as rush {
     sku = "A-1"
     header "X-Priority" = "high"
@@ -48,7 +48,7 @@ scenario "rush" {
   use orders.pay { order_id = rush_order_id, card = env("CARD"), header "X-Trace" = "1" }
 
   # A step that calls an item is named like a step and takes the use's lines.
-  step "reorder" = orders.create as again {
+  step reorder = orders.create as again {
     sku = "B-2"
     drop vars
   }

@@ -8,12 +8,12 @@
 #   line 29  a chained comparison
 #   line 33  a step with no action block
 
-scenario "first" {
+scenario first {
   var url = env("API_URL")
   nonsense here
   var kept = 1
 
-  step "survives the bad field" {
+  step survives_the_bad_field as "survives the bad field" {
     post "${url}/orders" {
       header "Content-Type" = "application/json"
       query
@@ -23,14 +23,14 @@ scenario "first" {
   }
 }
 
-scenario "second" {
-  step "survives the chain" {
+scenario second {
+  step survives_the_chain as "survives the chain" {
     get "/orders"
     expect body.data.count == 1 == true
     capture token = body.data.token
   }
 
-  step "has nothing to run" {
+  step has_nothing_to_run as "has nothing to run" {
     expect status == 200
   }
 }

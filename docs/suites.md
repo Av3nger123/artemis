@@ -72,11 +72,11 @@ tag, by title, or both, across every scenario file in the folder:
 # scenarios/checkout.art
 flow "../flows/checkout.art"
 
-scenario "full price" {
+scenario full_price as "full price" {
   tags = ["smoke", "payments"]
 }
 
-scenario "a big order" {
+scenario a_big_order as "a big order" {
   tags     = ["payments", "slow"]
   quantity = 500
 }
@@ -88,7 +88,7 @@ flow checkout {
   var quantity = 1
   private var url = env("API_URL")
 
-  step "pay" {
+  step pay {
     post "${url}/cart/pay" { body = {"sku": "A-1", "quantity": quantity} }
     expect status == 200
   }

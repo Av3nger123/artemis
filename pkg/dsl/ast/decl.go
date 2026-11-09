@@ -37,7 +37,9 @@ func (f *File) Span() token.Span { return spanOf(f) }
 // template, once per row, when it turns the scenario into one per row.
 type Scenario struct {
 	Keyword token.Token // scenario
-	Name    token.Token // the String naming it
+	Name    token.Token // the Ident (or, old form, String) naming it
+	LabelAs token.Token // "as" before the label; zero when absent
+	Label   token.Token // the String after as: the label people read; zero when absent
 	For     *ForClause  // nil for a scenario that is not data-driven
 	LBrace  token.Token
 	Body    []Decl // ConfigDecl, VarDecl, StepDecl, or Bad
@@ -47,6 +49,9 @@ type Scenario struct {
 	// sets it on each scenario it makes out of a scenario file; it is "" for
 	// any other scenario and has no tokens.
 	Flow string
+	// FlowLabel is that flow's label, "" when it has none. Like Flow, it is
+	// set by expansion and has no tokens.
+	FlowLabel string
 }
 
 // ForClause is `for user in json("data/users.json")`, or `for secret user in
@@ -72,6 +77,8 @@ func (f *ForClause) Span() token.Span { return spanOf(f) }
 func (s *Scenario) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, s.Keyword)
 	dst = appendTok(dst, s.Name)
+	dst = appendTok(dst, s.LabelAs)
+	dst = appendTok(dst, s.Label)
 	if s.For != nil {
 		dst = s.For.Tokens(dst)
 	}
@@ -154,7 +161,9 @@ func (v *VarDecl) decl()            {}
 // or after the action; action-not-first is a diagnostic, not a reordering.
 type StepDecl struct {
 	Keyword token.Token // step
-	Name    token.Token // the String naming it
+	Name    token.Token // the Ident (or, old form, String) naming it
+	LabelAs token.Token // "as" before the label; zero when absent
+	Label   token.Token // the String after as: the label people read; zero when absent
 	LBrace  token.Token
 	Action  Action // nil on an erroring file
 	Body    []Stmt
@@ -168,6 +177,8 @@ type StepDecl struct {
 func (s *StepDecl) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, s.Keyword)
 	dst = appendTok(dst, s.Name)
+	dst = appendTok(dst, s.LabelAs)
+	dst = appendTok(dst, s.Label)
 	dst = appendTok(dst, s.LBrace)
 	for _, it := range s.items() {
 		dst = appendNode(dst, it)

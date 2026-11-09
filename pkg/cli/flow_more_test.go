@@ -33,22 +33,22 @@ flow uses_in_blocks {
   var url = %q
 
   parallel {
-    step "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
-    step "missing" {
+    step auth_login as "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
+    step missing {
       get "${url}/nowhere"
       expect status == 404
     }
   }
 
   if token == "t" {
-    step "orders" {
+    step orders {
       get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
       expect status == 200
     }
   }
 }
 
-scenario "uses in blocks" {}
+scenario uses_in_blocks as "uses in blocks" {}
 `, srv.URL))
 	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
 	if !run.Passed() {
@@ -68,24 +68,24 @@ func TestBlocksInSetupAndTeardown(t *testing.T) {
 
   setup {
     parallel {
-      step "warm" { get "${url}/warm" }
-      step "broken" {
+      step warm { get "${url}/warm" }
+      step broken {
         get "${url}/fail"
         expect status == 200
       }
     }
   }
 
-  step "own" { get "${url}/own" }
+  step own { get "${url}/own" }
 
   teardown {
     if 1 == 1 {
-      step "clean" { get "${url}/clean" }
+      step clean { get "${url}/clean" }
     }
   }
 }
 
-scenario "phases" {}
+scenario phases {}
 `, srv.URL))
 	got := steps(run)
 	if got["own"].Status != result.StatusSkip || got["own"].Error != `setup step "broken" did not pass` {
@@ -107,23 +107,23 @@ func TestNestedBlocksRun(t *testing.T) {
 
   parallel {
     repeat every "5ms" max 10 {
-      step "poll" {
+      step poll {
         get "${url}/job"
         var state = body.state
       }
     } until state == "done"
     if 2 > 1 {
-      step "side" { get "${url}/side" }
+      step side { get "${url}/side" }
     }
   }
 
-  step "after" {
+  step after {
     get "${url}/after/${state}"
     expect body.path == "/after/done"
   }
 }
 
-scenario "nested" {}
+scenario nested {}
 `, srv.URL))
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
@@ -141,17 +141,17 @@ func TestAConditionThatWillNotEvaluate(t *testing.T) {
   var url = %q
 
   if 1 {
-    step "never" { get "${url}/never" }
+    step never { get "${url}/never" }
   }
 
   switch number("abc") {
     case 1 {
-      step "nor" { get "${url}/nor" }
+      step nor { get "${url}/nor" }
     }
   }
 }
 
-scenario "bad conditions" {}
+scenario bad_conditions as "bad conditions" {}
 `, srv.URL))
 	sc := run.Scenarios[0]
 	var errs []string
@@ -178,17 +178,17 @@ func TestAFailingParallelBranch(t *testing.T) {
   var url = %q
 
   parallel {
-    step "broken" {
+    step broken {
       get "${url}/fail"
       expect status == 200
     }
-    step "fine" { get "${url}/slow/fine" }
+    step fine { get "${url}/slow/fine" }
   }
 
-  step "after" { get "${url}/after" }
+  step after { get "${url}/after" }
 }
 
-scenario "one branch fails" {}
+scenario one_branch_fails as "one branch fails" {}
 `, srv.URL))
 	if run.Passed() {
 		t.Fatal("a scenario with a failing branch passed")
@@ -207,14 +207,14 @@ func TestARepeatBoundedInTime(t *testing.T) {
   var url = %q
 
   repeat every "30ms" within "100ms" {
-    step "status" {
+    step status {
       get "${url}/job"
       var state = body.state
     }
   } until state == "never"
 }
 
-scenario "times out" {}
+scenario times_out as "times out" {}
 `, srv.URL))
 	sc := run.Scenarios[0]
 	last := sc.Steps[len(sc.Steps)-1]
@@ -231,21 +231,21 @@ func TestEventsOfBlocksAreInReportOrder(t *testing.T) {
   var url = %q
 
   parallel {
-    step "a" { get "${url}/slow/a" }
-    step "b" { get "${url}/b" }
+    step a { get "${url}/slow/a" }
+    step b { get "${url}/b" }
   }
 
   repeat every "5ms" max 5 {
-    step "poll" {
+    step poll {
       get "${url}/job"
       var state = body.state
     }
   } until state == "done"
 
-  step "c" { get "${url}/c" }
+  step c { get "${url}/c" }
 }
 
-scenario "events" {}
+scenario events {}
 `, srv.URL))
 	var started, ended []string
 	var indexes []float64
@@ -279,16 +279,16 @@ func TestTheJSONReportCarriesTheRound(t *testing.T) {
   var url = %q
 
   repeat every "5ms" max 5 {
-    step "poll" {
+    step poll {
       get "${url}/job"
       var state = body.state
     }
   } until state == "done"
 
-  step "after" { get "${url}/after" }
+  step after { get "${url}/after" }
 }
 
-scenario "round" {}
+scenario round {}
 `, srv.URL))
 	out := filepath.Join(t.TempDir(), "run.json")
 	if _, stderr, err := runCLI(t, "run", path, "--report", "json="+out); err != nil {
@@ -324,12 +324,12 @@ func TestParallelBranchesDrawReproducibly(t *testing.T) {
   var url = %q
 
   parallel {
-    step "a" { get "${url}/a/${random_string(12)}" }
-    step "b" { get "${url}/b/${random_string(12)}" }
+    step a { get "${url}/a/${random_string(12)}" }
+    step b { get "${url}/b/${random_string(12)}" }
   }
 }
 
-scenario "seeded" {}
+scenario seeded {}
 `, srv.URL))
 		out := filepath.Join(t.TempDir(), "run.json")
 		if _, stderr, err := runCLI(t, "run", path, "--seed", "42", "--trace", filepath.Dir(out)); err != nil {
@@ -381,16 +381,16 @@ flow setup_logs_in {
   var url = %q
 
   setup {
-    step "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
+    step auth_login as "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
   }
 
-  step "orders" {
+  step orders {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200
   }
 }
 
-scenario "setup logs in" {}
+scenario setup_logs_in as "setup logs in" {}
 `, srv.URL))
 	run := runFiles(executor.Default(), []string{path}, report.Discard(), io.Discard)
 	if !run.Passed() {

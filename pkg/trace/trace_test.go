@@ -313,3 +313,19 @@ func TestScrubReachesTheErrorText(t *testing.T) {
 }
 
 func errorsNew(s string) error { return errors.New(s) }
+
+func TestTraceFileByIDs(t *testing.T) {
+	dir := t.TempDir()
+	w := New(dir)
+	first, err := w.On(Record{Scenario: "With a coupon", Step: "Pay", ScenarioID: "with_coupon", StepID: "pay"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := w.On(Record{Scenario: "With a coupon", Step: "Pay", ScenarioID: "with_coupon", StepID: "pay"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(first) != "with_coupon-pay.json" || filepath.Base(second) != "with_coupon-pay-2.json" {
+		t.Fatalf("paths %q, %q", first, second)
+	}
+}

@@ -7,11 +7,11 @@
 # checker owns it because it is the stage that walks the scenario's bindings in
 # order; the hint names the first var.
 
-scenario "rebind" {
+scenario rebind {
   var token = env("TOKEN")
   var token = "fallback"
 
-  step "refresh" {
+  step refresh {
     post "/refresh"
     capture token = body.token
   }

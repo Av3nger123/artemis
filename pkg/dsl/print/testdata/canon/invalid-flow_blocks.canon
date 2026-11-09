@@ -1,80 +1,80 @@
 # The control-flow blocks' own mistakes, each in a scenario of its own.
 
-scenario "a sibling's capture" {
+scenario a_sibling_s_capture as "a sibling's capture" {
   parallel {
-    step "cart" {
+    step cart {
       post "https://example.com/carts"
       capture cart_id = body.id
     }
 
-    step "pay" {
+    step pay {
       post "https://example.com/carts/${cart_id}/pay"
     }
   }
 }
 
-scenario "two branches, one name" {
+scenario two_branches_one_name as "two branches, one name" {
   parallel {
-    step "a" {
+    step a {
       get "https://example.com/a"
       capture id = body.id
     }
 
-    step "b" {
+    step b {
       get "https://example.com/b"
       capture id = body.id
     }
   }
 }
 
-scenario "only one branch captures" {
+scenario only_one_branch_captures as "only one branch captures" {
   var plan = "pro"
 
   if plan == "pro" {
-    step "pro" {
+    step pro {
       get "https://example.com/pro"
       capture seat = body.seat
     }
   }
 
-  step "after" {
+  step after {
     get "https://example.com/seats/${seat}"
   }
 
   teardown {
-    step "cleanup reads it" {
+    step cleanup_reads_it as "cleanup reads it" {
       delete "https://example.com/seats/${seat}"
     }
   }
 }
 
-scenario "a repeat with no bound" {
+scenario a_repeat_with_no_bound as "a repeat with no bound" {
   repeat every "2s" {
-    step "poll" {
+    step poll {
       get "https://example.com/job"
       capture state = body.state
     }
   } until state == "done"
 }
 
-scenario "a bad max" {
+scenario a_bad_max as "a bad max" {
   repeat max 0 {
-    step "poll" {
+    step poll {
       get "https://example.com/job"
       capture state = body.state
     }
   } until state == "done"
 }
 
-scenario "two pages at once" {
+scenario two_pages_at_once as "two pages at once" {
   parallel {
-    step "one" {
+    step one {
       browser {
         goto "https://example.com/a"
       }
     }
 
-    step "two" {
+    step two {
       browser {
         goto "https://example.com/b"
       }

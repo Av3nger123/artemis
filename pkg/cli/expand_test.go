@@ -39,13 +39,13 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 	order := []string{
 		`var url = env("API_URL")`,
 		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/flows/checkout.art:6",
-		`step "auth.login"`,
+		`step auth_login as "auth.login"`,
 		`"password": "s3cret"`,
 		"# from auth.login (testdata/collections/auth.art:2) via testdata/collections/flows/checkout.art:8",
-		`step "bad"`,
+		`step bad`,
 		`"password": "wrong"`,
 		"expect status == 401",
-		`step "orders"`,
+		`step orders`,
 	}
 	rest := out
 	for _, want := range order {
@@ -55,7 +55,7 @@ func TestExpandPrintsTheIntermediaryScenario(t *testing.T) {
 		}
 		rest = rest[i+len(want):]
 	}
-	bad := out[strings.Index(out, `step "bad"`):strings.Index(out, `step "orders"`)]
+	bad := out[strings.Index(out, `step bad`):strings.Index(out, `step orders`)]
 	if strings.Contains(bad, "== 200") {
 		t.Errorf("drop expects left the request's expect in step bad:\n%s", bad)
 	}
@@ -107,7 +107,7 @@ func TestExpandRefusesToOverwrite(t *testing.T) {
 		t.Fatalf("%v\n%s", err, stderr)
 	}
 	b, _ := os.ReadFile(out) //nolint:gosec // a path this test wrote
-	if !strings.Contains(string(b), `step "auth.login"`) {
+	if !strings.Contains(string(b), `step auth_login as "auth.login"`) {
 		t.Fatalf("--force did not write the expanded scenario: %q", b)
 	}
 }

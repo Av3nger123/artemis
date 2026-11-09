@@ -15,7 +15,7 @@ Six tools:
 | `artemis_grammar` | Every finite option set in the language | | | |
 | `artemis_validate` | Every diagnostic in a piece of source text, with codes and suggestions | | | |
 | `artemis_format` | The same source in canonical layout: the bytes `artemis fmt` writes | | | |
-| `artemis_list` | The `.art` files in the workspace, in path order; under `collections` the `collection.item` names each collection file declares; and under `scenario_files` each scenario file's flow file, flow name and scenario titles | disk | | |
+| `artemis_list` | The `.art` files in the workspace, in path order; under `collections` the `collection.item` refs each collection file declares, by the collection's id, and under `collection_labels` each item's label; and under `scenario_files` each scenario file's flow file, flow id and `flow_label`, scenario ids and `scenario_labels` | disk | | |
 | `artemis_write` | Checks source, makes it canonical, writes it | disk | disk | |
 | `artemis_run` | Runs a scenario file, or the scenario files under a folder, and returns the full JSON report | disk | | **yes** |
 

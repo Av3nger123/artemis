@@ -5,8 +5,8 @@
 # checking it would reject correct files, but a page has exactly a url and a
 # title.
 
-scenario "the page" {
-  step "upgrade" {
+scenario the_page as "the page" {
+  step upgrade {
     browser {
       goto "/settings/billing"
     }

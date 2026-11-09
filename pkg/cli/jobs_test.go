@@ -25,13 +25,13 @@ func manyFiles(t *testing.T, url string, n int) string {
 	for i := 1; i <= n; i++ {
 		name := fmt.Sprintf("%02d_file.art", i)
 		files[name] = fmt.Sprintf(`flow ping {
-  step "ping" {
+  step ping {
     get %[2]q
     expect status == 200
   }
 }
 
-scenario "scenario %02[1]d" {}`, i, url)
+scenario scenario_%02[1]d as "scenario %02[1]d" {}`, i, url)
 	}
 	return writeTree(t, t.TempDir(), files)
 }
@@ -70,13 +70,13 @@ func TestJobsKeepsFileOrder(t *testing.T) {
 	files := map[string]string{}
 	for i := 1; i <= 6; i++ {
 		files[fmt.Sprintf("%02d_file.art", i)] = fmt.Sprintf(`flow ping {
-  step "ping" {
+  step ping {
     get "%[2]s/%[3]d"
     expect status == 200
   }
 }
 
-scenario "scenario %02[1]d" {}`, i, srv.URL, (7-i)*20)
+scenario scenario_%02[1]d as "scenario %02[1]d" {}`, i, srv.URL, (7-i)*20)
 	}
 	root := writeTree(t, t.TempDir(), files)
 
@@ -139,7 +139,7 @@ func TestJobsKeepsAFileThatWillNotCompileInPlace(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	root := writeTree(t, t.TempDir(), map[string]string{
 		"01_ok.art":     namedScenarioArt("first", srv.URL, "ok"),
-		"02_broken.art": "scenario \"x\" {\n",
+		"02_broken.art": "scenario x {\n",
 		"03_ok.art":     namedScenarioArt("third", srv.URL, "ok"),
 	})
 	run, _ := runWithJobs(t, root, 3)

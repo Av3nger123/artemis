@@ -51,28 +51,28 @@ func taggedTree(t *testing.T, url string) string {
 	return writeTree(t, t.TempDir(), map[string]string{
 		"suite/a.art": fmt.Sprintf(`flow checkout {
   var u
-  step "s" {
+  step s {
     get "${u}"
     expect status == 200
   }
 }
 
-scenario "checkout smoke" {
+scenario checkout_smoke as "checkout smoke" {
   tags = ["smoke", "api"]
   u = env("SMOKE_URL", %[1]q)
 }
 
-scenario "checkout slow" {
+scenario checkout_slow as "checkout slow" {
   tags = ["slow", "api"]
   u = env("SLOW_URL", %[1]q)
 }
 `, url),
 		"suite/b.art": `flow needs_a_secret {
   var key = env("NIGHTLY_KEY_NEVER_SET")
-  step "s" { run "true" }
+  step s { run "true" }
 }
 
-scenario "needs a secret" { tags = ["nightly", "api"] }
+scenario needs_a_secret as "needs a secret" { tags = ["nightly", "api"] }
 `,
 	})
 }

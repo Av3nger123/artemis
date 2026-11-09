@@ -23,9 +23,10 @@ func (e *enc) importDecl(i *ast.Import) *obj {
 func (e *enc) collection(c *ast.Collection) *obj {
 	return start(kindCollection, c).
 		set("name", nameObj(c.Name)).
+		set("label", nameObj(c.Label)).
 		set("items", e.list(toNodes(c.Items))).
 		span().
-		comments(toks(c.Keyword, c.Name), c.LBrace, c.RBrace).done()
+		comments(toks(c.Keyword, c.Name, c.LabelAs, c.Label), c.LBrace, c.RBrace).done()
 }
 
 // params is a request's parameter list. Its parentheses and commas
@@ -63,6 +64,7 @@ func (e *enc) requestDecl(r *ast.RequestDecl) *obj {
 		o.set("keyword", r.Keyword.Value)
 	}
 	o.set("name", r.Name.Text)
+	o.set("label", nameObj(r.Label))
 	if r.Params != nil {
 		o.present("params", e.params(r.Params))
 	}
@@ -74,7 +76,7 @@ func (e *enc) requestDecl(r *ast.RequestDecl) *obj {
 		set("action", e.node(r.Action)).
 		set("body", e.list(toNodes(r.Body))).
 		span().
-		comments(append(toks(r.Keyword, r.Name), nodeToks(r.Params)...), r.LBrace, r.RBrace).done()
+		comments(append(append(toks(r.Keyword, r.Name), nodeToks(r.Params)...), toks(r.LabelAs, r.Label)...), r.LBrace, r.RBrace).done()
 }
 
 // useDecl leaves collection out for a bare ref and alias out when
@@ -87,6 +89,7 @@ func (e *enc) useDecl(u *ast.UseDecl) *obj {
 	b := start(kindUse, u)
 	if u.Name.Text != "" {
 		b.set("name", nameObj(u.Name))
+		b.set("label", nameObj(u.Label))
 	}
 	return b.
 		set("collection", optional(u.Collection.Text)).
@@ -94,7 +97,7 @@ func (e *enc) useDecl(u *ast.UseDecl) *obj {
 		set("alias", optional(u.Alias.Text)).
 		set("lines", e.list(toNodes(u.Lines))).
 		span().
-		comments(toks(u.Step, u.Name, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
+		comments(toks(u.Step, u.Name, u.LabelAs, u.Label, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias), u.LBrace, u.RBrace).done()
 }
 
 // present records key even when list is empty, for the one field whose
@@ -156,6 +159,9 @@ func collection(f fields) (*ast.Collection, error) {
 	}
 	var err error
 	if c.Name, err = nameTok(f, "name"); err != nil {
+		return nil, err
+	}
+	if c.LabelAs, c.Label, err = labelOf(f); err != nil {
 		return nil, err
 	}
 	items, err := f.list("items")
@@ -261,6 +267,9 @@ func requestDecl(f fields) (*ast.RequestDecl, error) {
 		LBrace:  syn(token.LBrace, "{"),
 		RBrace:  syn(token.RBrace, "}"),
 	}
+	if r.LabelAs, r.Label, err = labelOf(f); err != nil {
+		return nil, err
+	}
 	if f.has("params") {
 		if r.Params, err = paramsOf(f); err != nil {
 			return nil, err
@@ -326,6 +335,9 @@ func useDecl(f fields) (*ast.UseDecl, error) {
 	stepForm := f.has("name")
 	if stepForm {
 		if u.Name, err = nameTok(f, "name"); err != nil {
+			return nil, err
+		}
+		if u.LabelAs, u.Label, err = labelOf(f); err != nil {
 			return nil, err
 		}
 		u.Keyword, u.Step, u.Assign = token.Token{}, syn(token.Ident, "step"), syn(token.Assign, "=")

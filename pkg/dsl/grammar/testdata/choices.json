@@ -414,6 +414,11 @@
           "severity": "error"
         },
         {
+          "value": "duplicate-id",
+          "doc": "two items of a collection, two steps of a flow or two scenarios of a file share an id",
+          "severity": "error"
+        },
+        {
           "value": "duplicate-import-name",
           "doc": "two imports give their collections the same name",
           "severity": "error"
@@ -426,6 +431,11 @@
         {
           "value": "duplicate-tags",
           "doc": "a scenario has more than one tags list",
+          "severity": "error"
+        },
+        {
+          "value": "expected-label",
+          "doc": "an as after an id is not followed by a label in quotes",
           "severity": "error"
         },
         {
@@ -446,6 +456,11 @@
         {
           "value": "flow-ref-placement",
           "doc": "a scenario file's flow \"...\" header is not its first line",
+          "severity": "error"
+        },
+        {
+          "value": "id-not-snake-case",
+          "doc": "a collection, item, flow, step or scenario id is not snake_case",
           "severity": "error"
         },
         {
@@ -596,6 +611,11 @@
         {
           "value": "private-param",
           "doc": "a scenario sets a private var of its flow",
+          "severity": "error"
+        },
+        {
+          "value": "quoted-name",
+          "doc": "a step, scenario or collection is named in quotes, which a snake_case id and as \"<label>\" replace",
           "severity": "error"
         },
         {

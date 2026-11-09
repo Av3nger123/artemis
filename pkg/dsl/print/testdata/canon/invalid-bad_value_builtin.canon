@@ -7,7 +7,7 @@
 # where text goes. The same mistakes arriving through a var are run-time
 # errors with the same words.
 
-scenario "made up" {
+scenario made_up as "made up" {
   var stamp = now("dat")
   var when = now("iso")
   var qty = random_int(10, 1)
@@ -16,7 +16,7 @@ scenario "made up" {
   var size = len(/x/)
   var token = base64(1)
 
-  step "use them" {
+  step use_them as "use them" {
     get "/orders/${qty}"
     expect status == 200
   }

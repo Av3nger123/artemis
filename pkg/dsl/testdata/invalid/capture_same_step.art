@@ -6,10 +6,10 @@
 # the hint lists what is available -- including the scenario's vars, which is
 # the other half of every step's scope.
 
-scenario "captures" {
+scenario captures {
   var base = env("API_URL")
 
-  step "login" {
+  step login {
     post "${base}/token"
     capture token = body.data.access_token
     expect token exists

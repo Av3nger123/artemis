@@ -42,7 +42,7 @@ func connectWithBinary(t *testing.T, workspace, bin string) *mcp.ClientSession {
 // A terminal flow, so these tests need no server and no network. `run` is
 // the action block that makes a step a terminal step.
 const passingFlow = `flow ok {
-  step "true" {
+  step s_true as "true" {
     run "true"
     expect exit_code == 0
   }
@@ -50,7 +50,7 @@ const passingFlow = `flow ok {
 `
 
 const failingFlow = `flow no {
-  step "false" {
+  step false {
     run "false"
     expect exit_code == 0
   }
@@ -59,7 +59,7 @@ const failingFlow = `flow no {
 
 // scenarioOf is a scenario file that runs the flow file at flowPath once.
 func scenarioOf(flowPath, title string) string {
-	return "flow \"" + flowPath + "\"\n\nscenario \"" + title + "\" {}\n"
+	return "flow \"" + flowPath + "\"\n\nscenario " + title + " {}\n"
 }
 
 // writePair writes flow to <name>.flow.art in root and a scenario file that
@@ -82,7 +82,7 @@ func TestWriteChecksFormatsAndWrites(t *testing.T) {
 
 	got := structured(t, call(t, cs, "artemis_write", map[string]any{
 		"path":   "checkout.art",
-		"source": "flow    checkout   {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n",
+		"source": "flow    checkout   {\n  step s {\n    get \"http://example.test\"\n  }\n}\n",
 	}))
 	if got["ok"] != true || got["written"] != true {
 		t.Fatalf("ok=%v written=%v, want both true; diagnostics: %v", got["ok"], got["written"], got["diagnostics"])
@@ -100,7 +100,7 @@ func TestWriteChecksFormatsAndWrites(t *testing.T) {
 	if string(onDisk) != got["source"] {
 		t.Errorf("the file is not what the tool reported\n disk: %q\nsaid: %q", onDisk, got["source"])
 	}
-	if string(onDisk) == "scenario    \"checkout\"   {\n  step \"s\" {\n    get \"http://example.test\"\n  }\n}\n" {
+	if string(onDisk) == "scenario    checkout   {\n  step s {\n    get \"http://example.test\"\n  }\n}\n" {
 		t.Error("the tool wrote the source verbatim; it must write the canonical form")
 	}
 

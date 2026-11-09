@@ -6,7 +6,7 @@
 # peers and every one of them is evaluated. So the suppression has nothing left
 # to pin here, and status_and_body.art pins what replaced it.
 flow wrong_status {
-  step "ping" {
+  step ping {
     get "%SERVER%/ping"
     expect status == 200
   }

@@ -97,6 +97,7 @@ func (f *flowRun) step(phase string, st *lower.Step, skip string, cleanup bool) 
 		f.rt.events.StepStart(f.scenario, *f.index, st.Name)
 	}
 	r := f.scenario.NewStep(st.Name)
+	r.ID, r.Label = st.ID, st.Label
 	// The line the step was written on, so a step that could not run at all
 	// -- and an assertion with no line of its own -- still points somewhere a
 	// reader can go (ART-12). And the file that line is in, when a use brought
@@ -115,7 +116,7 @@ func (f *flowRun) step(phase string, st *lower.Step, skip string, cleanup bool) 
 		unwrite(st, f.scope)
 		f.wrote(st)
 	default:
-		runArtStep(f.ctx, f.rt, f.sc.Name, st, f.scope, f.gen, r)
+		runArtStep(f.ctx, f.rt, f.sc, st, f.scope, f.gen, r)
 		f.wrote(st)
 	}
 	logger.Logger.Info(fmt.Sprintf("Step completed: %s, Duration: %v", st.Name, r.Duration))

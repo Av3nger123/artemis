@@ -10,10 +10,10 @@
 # syntax error before it is a reserved-word one, and pinning that would pin the
 # parser's recovery. `var ai = 1` is not, so the hint gets pinned here.
 
-scenario "reserved" {
+scenario reserved {
   var ai = 1
 
-  step "orders" {
+  step orders {
     get "/orders"
     expect status == 200
   }

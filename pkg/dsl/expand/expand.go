@@ -75,13 +75,14 @@ type expander struct {
 
 // unit is one parsed file and the collections it can see by name.
 type unit struct {
-	name  string
-	tree  *ast.File
-	deps  []dep                      // the files this file imports directly
-	own   []*ast.Collection          // collections declared in this file, in source order
-	scope map[string]*ast.Collection // the collection each import names, by that name
-	ok    bool                       // parsed without error
-	lost  bool                       // an import failed, so a collection may be missing from scope
+	name   string
+	tree   *ast.File
+	deps   []dep                      // the files this file imports directly
+	own    []*ast.Collection          // collections declared in this file, in source order
+	scope  map[string]*ast.Collection // the collection each import names, by that name
+	byFile map[string]string          // the id each import with no as is in scope by, keyed by its file's name
+	ok     bool                       // parsed without error
+	lost   bool                       // an import failed, so a collection may be missing from scope
 }
 
 // dep is one import and the file it loaded.
@@ -355,20 +356,9 @@ func (e *expander) index(u *unit) {
 		}
 	}
 	u.scope = map[string]*ast.Collection{}
+	u.byFile = map[string]string{}
 	named := map[string]*ast.Import{}
 	for _, d := range u.deps {
-		name, at := d.imp.Name.Value, d.imp.Name.Span
-		if d.imp.Name.Text == "" {
-			var ok bool
-			name, ok = parser.ImportName(d.imp.Path.Value)
-			at = d.imp.Path.Span
-			if !ok {
-				u.lost = true
-				e.bag.Error(at, diag.ImportNeedsName, "a use reads an import by its file's name, and %q cannot be one", name).
-					Hintf("name it: import %s as %s", d.imp.Path.Text, parser.IdentLike(name))
-				continue
-			}
-		}
 		if len(d.unit.own) == 0 {
 			u.lost = true
 			// A file that did not parse has said why already.
@@ -377,6 +367,27 @@ func (e *expander) index(u *unit) {
 					Hintf("import a collection file: a scenario file is run, never imported")
 			}
 			continue
+		}
+		name, at := d.imp.Name.Value, d.imp.Name.Span
+		if d.imp.Name.Text == "" {
+			// With no as, the collection is in scope by its id. An old
+			// collection, titled in quotes, is by its file's name.
+			at = d.imp.Path.Span
+			if id := d.unit.own[0].Name; id.Kind == token.Ident {
+				name = id.Value
+				if stem, ok := parser.ImportName(d.imp.Path.Value); ok && stem != name {
+					u.byFile[stem] = name
+				}
+			} else {
+				var ok bool
+				name, ok = parser.ImportName(d.imp.Path.Value)
+				if !ok {
+					u.lost = true
+					e.bag.Error(at, diag.ImportNeedsName, "a use reads an import by its file's name, and %q cannot be one", name).
+						Hintf("name it: import %s as %s", d.imp.Path.Text, parser.IdentLike(name))
+					continue
+				}
+			}
 		}
 		if prev, dup := named[name]; dup {
 			e.bag.Error(at, diag.DuplicateImportName, "two imports are named %s", name).
@@ -404,7 +415,9 @@ func (e *expander) resolve(u *unit, use *ast.UseDecl) (coll *ast.Collection, ite
 				return nil, nil, false
 			}
 			r := e.bag.Error(use.Collection.Span, diag.UnknownCollection, "no collection %q is in scope here", name)
-			if !r.DidYouMean(name, keys(u.scope)) {
+			if id, ok := u.byFile[name]; ok {
+				r.Hintf("an import with no as is in scope by its collection's id: write %s.%s", id, use.Item.Value)
+			} else if !r.DidYouMean(name, keys(u.scope)) {
 				r.Hintf("import the file that declares it")
 			}
 			return nil, nil, false
@@ -487,7 +500,11 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 		if !ok {
 			return nil
 		}
-		s := requestStep(it, prefix(use, it.Name.Value), env, stamp)
+		s := requestStep(it, stepName(use, it.Name.Value), env, stamp)
+		if use.Label.Text != "" {
+			// The call's own label wins over the item's.
+			s.LabelAs, s.Label = use.LabelAs, use.Label
+		}
 		e.writtenLiteral(s, it.Action)
 		e.override(via, s, use.Lines)
 		if use.Alias.Text != "" {
@@ -499,12 +516,17 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 }
 
 // requestStep is r written out as a step called name, with its parameters
-// replaced by their values at this use.
-func requestStep(r *ast.RequestDecl, name string, env map[string]ast.Expr, stamp func(token.Token) token.Token) *ast.StepDecl {
+// replaced by their values at this use. name is a token of no span: its kind
+// says how `artemis expand` prints it. The step takes r's label, and a call
+// with a label of its own puts it in place after.
+func requestStep(r *ast.RequestDecl, name token.Token, env map[string]ast.Expr, stamp func(token.Token) token.Token) *ast.StepDecl {
 	cl := ast.Clone(r, stamp)
+	name.Span = cl.Name.Span
 	s := &ast.StepDecl{
 		Keyword: synth(token.Ident, "step", "step", cl.Keyword.Span),
-		Name:    synth(token.String, quote(name), name, cl.Name.Span),
+		Name:    name,
+		LabelAs: cl.LabelAs,
+		Label:   cl.Label,
 		LBrace:  cl.LBrace,
 		Action:  cl.Action,
 		Body:    cl.Body,
@@ -512,6 +534,17 @@ func requestStep(r *ast.RequestDecl, name string, env map[string]ast.Expr, stamp
 	}
 	substStep(s, env)
 	return s
+}
+
+// stepName is the name of the step use expands to: the call's id as it was
+// written -- an identifier, or a quoted name in the old form -- or, for an
+// old use with no name, its alias or its reference, in quotes.
+func stepName(use *ast.UseDecl, item string) token.Token {
+	name := prefix(use, item)
+	if use.Name.Kind == token.Ident {
+		return synth(token.Ident, name, name, token.Span{})
+	}
+	return synth(token.String, quote(name), name, token.Span{})
 }
 
 // synth is a token that was never written, placed at at so a diagnostic on it

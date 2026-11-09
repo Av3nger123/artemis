@@ -34,12 +34,18 @@ makes the command exit non-zero after listing the rest.`,
 	},
 }
 
+// listedScenario is one scenario a list names. Name is its label, or its id
+// when it has none: what a person reads. ID and Label are the two apart, and
+// FlowLabel is the flow's label beside its id.
 type listedScenario struct {
-	File string   `json:"file"`
-	Name string   `json:"name"`
-	Flow string   `json:"flow,omitempty"`
-	Line int      `json:"line"`
-	Tags []string `json:"tags"`
+	File      string   `json:"file"`
+	Name      string   `json:"name"`
+	ID        string   `json:"id"`
+	Label     string   `json:"label"`
+	Flow      string   `json:"flow,omitempty"`
+	FlowLabel string   `json:"flow_label,omitempty"`
+	Line      int      `json:"line"`
+	Tags      []string `json:"tags"`
 }
 
 func listScenarios(cmd *cobra.Command, path string) error {
@@ -79,7 +85,10 @@ func listScenarios(cmd *cobra.Command, path string) error {
 			if !sel.selects(sc.Name, tags) {
 				continue
 			}
-			item := listedScenario{File: c.file, Name: sc.Name, Flow: sc.FlowName, Line: sc.Line, Tags: tags}
+			item := listedScenario{
+				File: c.file, Name: sc.Name, ID: sc.ID, Label: sc.Label,
+				Flow: sc.FlowName, FlowLabel: sc.FlowLabel, Line: sc.Line, Tags: tags,
+			}
 			if item.Tags == nil {
 				item.Tags = []string{}
 			}

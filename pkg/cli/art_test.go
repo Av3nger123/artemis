@@ -20,7 +20,7 @@ const cleanArt = `# A scenario that checks clean.
 flow checkout {
   var url = env("API_URL")
 
-  step "login" {
+  step login {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": "alice"}
@@ -29,7 +29,7 @@ flow checkout {
     var token = body.data.access_token
   }
 
-  step "orders" {
+  step orders {
     get "${url}/orders" {
       header "Authorization" = "Bearer ${token}"
       query "limit" = 10
@@ -42,7 +42,7 @@ flow checkout {
   }
 }
 
-scenario "checkout" {}
+scenario checkout {}
 `
 
 // manyErrorsArt holds four unrelated faults with well-formed code either side
@@ -55,7 +55,7 @@ const manyErrorsArt = `flow many {
   nonsense here
   var kept = 1
 
-  step "survives the bad field" {
+  step survives_the_bad_field as "survives the bad field" {
     post "${url}/orders" {
       header "Content-Type" = "application/json"
       query
@@ -64,18 +64,18 @@ const manyErrorsArt = `flow many {
     expect status == 201
   }
 
-  step "survives the chain" {
+  step survives_the_chain as "survives the chain" {
     get "/orders"
     expect body.data.count == 1 == true
     var token = body.data.token
   }
 
-  step "has nothing to run" {
+  step has_nothing_to_run as "has nothing to run" {
     expect status == 200
   }
 }
 
-scenario "first" {}
+scenario first {}
 `
 
 // writeArt writes src to a file named name in a fresh temp directory and
@@ -213,7 +213,7 @@ func TestParseArtReportsEveryErrorAndFails(t *testing.T) {
 		`expected "config", "var", "step", "use", "setup", "teardown" or a block, found "nonsense"`,
 		`expected "=" and a value after "query"`,
 		`"==" cannot be chained with another comparison`,
-		`step "has nothing to run" has no action block`,
+		`step has_nothing_to_run has no action block`,
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr does not report %q; the front end stopped early\n%s", want, stderr)
@@ -268,7 +268,7 @@ func TestParseArtRunsNothing(t *testing.T) {
 	marker := filepath.Join(dir, "ran")
 	path := filepath.Join(dir, "deploy.art")
 	src := `flow deploy {
-  step "seed" {
+  step seed {
     run "touch" {
       args = ["` + filepath.ToSlash(marker) + `"]
     }
@@ -276,7 +276,7 @@ func TestParseArtRunsNothing(t *testing.T) {
   }
 }
 
-scenario "deploy" {}
+scenario deploy {}
 `
 	writeSplit(t, path, src)
 

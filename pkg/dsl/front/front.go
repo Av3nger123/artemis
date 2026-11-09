@@ -81,11 +81,15 @@ type Unit struct {
 // parameters -- is reported beside the rest.
 func CompileWith(file, src string, l expand.Loader) *Unit {
 	tree, bag := parser.Parse(file, src)
+	// Whether the file parsed, taken before the id checks: an id that is not
+	// snake_case is no reason to hide what expansion and the checker find.
+	parsed := !bag.HasErrors()
+	checkIDs(tree, bag)
 	if oldForms(file, tree, bag) {
 		info, _ := check.Check(nil)
 		return &Unit{Tree: tree, Expanded: tree, Info: info, Sources: map[string]string{file: src}, Bag: bag, FlowFile: isFlowFile(tree)}
 	}
-	res, eb := expand.ExpandParsed(tree, l, !bag.HasErrors())
+	res, eb := expand.ExpandParsed(tree, l, parsed)
 	bag.Merge(eb)
 	checked := res.File
 	if res.Check != nil {
@@ -102,6 +106,7 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 		sources[name] = res.Sources[name]
 		if name != file {
 			read, _ := parser.Parse(name, res.Sources[name])
+			checkIDs(read, bag)
 			oldForms(name, read, bag)
 		}
 	}

@@ -8,11 +8,11 @@
 # suggest. `browsr` gets the suggestion; `network` is not near anything and gets
 # the list instead.
 
-scenario "configured" {
+scenario configured {
   config browsr { headless = true }
   config network { timeout = "5s" }
 
-  step "orders" {
+  step orders {
     get "/orders"
     expect status == 200
   }

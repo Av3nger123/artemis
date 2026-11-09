@@ -48,30 +48,30 @@ func checkoutArt(url string) string {
   var url = %q
 
   setup {
-    step "make a cart" {
+    step make_a_cart as "make a cart" {
       post "${url}/carts"
       expect status == 200
       var cart_id = body.id
     }
   }
 
-  step "pay" {
+  step pay {
     post "${url}/pay"
     expect status == 200
     var order_id = body.id
   }
 
   teardown {
-    step "cancel the order" {
+    step cancel_the_order as "cancel the order" {
       delete "${url}/orders/${order_id}"
     }
-    step "drop the cart" {
+    step drop_the_cart as "drop the cart" {
       delete "${url}/carts/${cart_id}"
     }
   }
 }
 
-scenario "checkout" {}
+scenario checkout {}
 `, url)
 }
 

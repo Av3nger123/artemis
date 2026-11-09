@@ -9,7 +9,7 @@ suite {
   var url = env("API_URL")
 
   setup {
-    step "seed" {
+    step seed {
       post "${url}/seed"
     }
   }

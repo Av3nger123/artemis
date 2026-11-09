@@ -10,7 +10,7 @@ flow checkout {
     user = "alice"
   }
 
-  step "pay" {
+  step pay {
     post "/cart/pay"
   }
 }

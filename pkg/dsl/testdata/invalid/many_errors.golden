@@ -12,13 +12,13 @@ many_errors.art:29:33: "==" cannot be chained with another comparison
       |                                 ^^
    hint: an expect holds one comparison; join two with "and", or write two expect lines
 
-many_errors.art:33:8: step "has nothing to run" has no action block
-   33 |   step "has nothing to run" {
-      |        ^^^^^^^^^^^^^^^^^^^^
+many_errors.art:33:8: step has_nothing_to_run has no action block
+   33 |   step has_nothing_to_run as "has nothing to run" {
+      |        ^^^^^^^^^^^^^^^^^^
    hint: a step does one of: an HTTP verb (get, post, ...), run "<command>", browser { ... }, or db <url> { ... }
 
 === codes
 unexpected-token	error	13:3-13:11
 unexpected-token	error	20:7-20:11
 non-associative-operator	error	29:33-29:35
-missing-action	error	33:8-33:28
+missing-action	error	33:8-33:26

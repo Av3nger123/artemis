@@ -2,18 +2,18 @@
 # The Postman variable "access-token" is written access_token here, because a DSL name cannot hold "-".
 # The Postman variable "base-url" is written base_url here, because a DSL name cannot hold "-".
 # Read from the environment, because the collection used them without defining them: access_token from ACCESS_TOKEN, operator from OPERATOR.
-flow orders_api {
+flow orders_api as "Orders API" {
   var base_url = "https://api.example.com"
   var page_size = "10"
   var access_token = env("ACCESS_TOKEN")
   var operator = env("OPERATOR")
 
-  step "Health / ping" {
+  step health_ping as "Health / ping" {
     get "${base_url}/ping"
     expect status == 200
   }
 
-  step "Orders / Admin / list orders" {
+  step orders_admin_list_orders as "Orders / Admin / list orders" {
     get "${base_url}/orders" {
       header "Authorization" = "Bearer ${access_token}"
       header "Accept" = "application/json"
@@ -23,7 +23,7 @@ flow orders_api {
     expect status < 400
   }
 
-  step "Orders / create order" {
+  step orders_create_order as "Orders / create order" {
     post "${base_url}/orders" {
       header "Authorization" = "Bearer ${access_token}"
       header "Content-Type" = "application/json"
@@ -32,7 +32,7 @@ flow orders_api {
     expect status == 201
   }
 
-  step "Orders / amend order" {
+  step orders_amend_order as "Orders / amend order" {
     put "${base_url}/orders/1" {
       header "Authorization" = "Basic YWRhOmxvdmVsYWNl"
       header "Content-Type" = "application/x-www-form-urlencoded"
@@ -41,7 +41,7 @@ flow orders_api {
     expect status < 400
   }
 
-  step "Orders / search orders" {
+  step orders_search_orders as "Orders / search orders" {
     post "${base_url}/orders/search" {
       header "Content-Type" = "application/json"
       query "api_key" = "${access_token}"
@@ -50,7 +50,7 @@ flow orders_api {
     expect status == 200
   }
 
-  step "Legacy / raw header form" {
+  step legacy_raw_header_form as "Legacy / raw header form" {
     delete "${base_url}/orders/1" {
       header "Authorization" = "Bearer ${access_token}"
       header "X-Legacy" = "1"

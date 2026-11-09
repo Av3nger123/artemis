@@ -126,6 +126,9 @@ func (m *migration) put(key string, f *ast.File) error {
 	if _, dup := m.out[key]; dup {
 		return fmt.Errorf("%s: two files would be written here; rename one of the files it comes from", key)
 	}
+	// A copy: f may be the parsed input itself, which is never changed.
+	f = ast.Clone(f, identity)
+	m.ids(key, f)
 	m.out[key] = f
 	return nil
 }

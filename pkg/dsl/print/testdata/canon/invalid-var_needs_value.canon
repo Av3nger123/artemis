@@ -7,11 +7,11 @@
 # var that could get a value has one. The read of user below is not a second
 # error.
 
-scenario "login" {
+scenario login {
   var url = env("API_URL")
   var user
 
-  step "log in" {
+  step log_in as "log in" {
     post "${url}/login" { body = {"user": user} }
     expect status == 200
   }

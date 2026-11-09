@@ -3,10 +3,10 @@
 # blocks back inline, so this golden is compact.art's apart from the blank lines
 # between the declarations -- paragraphing is the one piece of layout canonical
 # mode reads from the file, because the author meant it.
-scenario "compact" {
+scenario compact {
   var url = env("API_URL")
 
-  step "one" {
+  step one {
     get "${url}/a" {
       query "q" = 1
       header "Accept" = "text/plain"
@@ -15,7 +15,7 @@ scenario "compact" {
     capture id = body.id
   }
 
-  step "two" {
+  step two {
     browser {
       goto "/b"
       click "#go"

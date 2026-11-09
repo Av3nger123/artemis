@@ -23,7 +23,7 @@ By default, `generate` writes three files:
 - `orders.flow.art` imports the collection and holds the flow. The flow is
   named after the collection -- `"Orders API"` is `orders_api` -- and has one
   `var` for each Postman variable, then one step for each request that calls
-  its item: `step "Orders / Admin / list orders" = orders.orders_admin_list_orders {}`.
+  its item: `step orders_admin_list_orders as "Orders / Admin / list orders" = orders.orders_admin_list_orders {}`.
   The item's inputs are read from the flow's vars of the same names.
 - `orders.art` is the scenario file. It names the flow and holds one
   scenario, titled as the collection is, that sets nothing, so every var keeps
@@ -37,7 +37,7 @@ it.
 
 ```text
 # orders.collection.art
-collection "Orders API" {
+collection orders_api as "Orders API" {
   request health_ping {
     var base_url
 
@@ -52,13 +52,13 @@ import "orders.collection.art"
 flow orders_api {
   var base_url = "https://api.example.com"
 
-  step "Health / ping" = orders.health_ping {}
+  step health_ping as "Health / ping" = orders.health_ping {}
 }
 
 # orders.art
 flow "orders.flow.art"
 
-scenario "Orders API" {}
+scenario orders_api as "Orders API" {}
 ```
 
 (The three files, cut short.)
@@ -91,12 +91,12 @@ flow orders_api {
   var page_size = "10"
   var access_token = env("ACCESS_TOKEN")
 
-  step "Health / ping" {
+  step health_ping as "Health / ping" {
     get "${base_url}/ping"
     expect status == 200
   }
 
-  step "Orders / Admin / list orders" {
+  step orders_admin_list_orders as "Orders / Admin / list orders" {
     get "${base_url}/orders" {
       header "Authorization" = "Bearer ${access_token}"
       header "Accept" = "application/json"
@@ -106,7 +106,7 @@ flow orders_api {
     expect status < 400
   }
 
-  step "Orders / create order" {
+  step orders_create_order as "Orders / create order" {
     post "${base_url}/orders" {
       header "Authorization" = "Bearer ${access_token}"
       header "Content-Type" = "application/json"
@@ -190,7 +190,7 @@ And this is what `artemis migrate -f checkout.yaml -o new/` writes:
 flow checkout {
   var url = env("API_URL")
 
-  step "Login" {
+  step login as "Login" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"password": "s3cret", "username": "alice"}
@@ -200,7 +200,7 @@ flow checkout {
     var token = body.data.access_token
   }
 
-  step "Orders" {
+  step orders as "Orders" {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     timeout = "5s"
     retry { times = 3, delay = "2s" }
@@ -212,7 +212,7 @@ flow checkout {
 # new/scenarios/checkout.art
 flow "../flows/checkout.art"
 
-scenario "API Collection" {}
+scenario api_collection as "API Collection" {}
 ```
 
 The flow is named after the file, and the scenario after the YAML's `name`.
@@ -262,14 +262,15 @@ suite/orders/create.art        ->  new/orders/flows/create.art
 
 | Old | New |
 | --- | --- |
-| `scenario "x" { ... }` in `a/b.art` | the flow `b` in `a/flows/b.art`, with the vars at its top, and `a/scenarios/b.art` holding `scenario "x" {}` with the old tags. A file of several scenarios makes `b_1`, `b_2`, ... |
+| `scenario "x" { ... }` in `a/b.art` | the flow `b` in `a/flows/b.art`, with the vars at its top, and `a/scenarios/b.art` holding `scenario x {}` with the old tags. A file of several scenarios makes `b_1`, `b_2`, ... |
 | `capture x = ...` | `var x = ...` after the action |
-| `use a.b as x { ... }` | `step "x" = a.b as x { ... }`, named as the old step was: the alias, or `a.b` |
+| `use a.b as x { ... }` | `step x = a.b as x { ... }`, named as the old step was: the alias, or `step a_b as "a.b"` |
 | `drop captures` | `drop vars` |
 | `request r(p, q = 1)` | `request r { var p  var q = 1 ... }`; an item whose action is `run` is a `command`, and one whose action is `db` is a `query` |
 | `scenario "..." for row in ...` | one scenario for each row, each setting `row`; the flow declares `var row` with the first row |
 | `suite.art` | its vars, setup and teardown are copied into each flow under it, `suite.x` reads `x`, and its tags go onto each scenario |
 | `secret` | removed |
+| `step "Get a token"`, `scenario "full price"`, `collection "Orders API"` | `step get_a_token as "Get a token"`: a snake_case id, numbered `_2`, `_3` on a clash, and the text as its label -- left out when the text already is the id, `step "pay"` becoming `step pay`. A collection's id is the name its file was imported by, so every import still resolves |
 | `json()`, `csv()`, `file()` and `import` paths | rewritten for the flow's folder, so they name the same files |
 
 A step fills an item's input from the flow's names before the item's own
@@ -288,12 +289,12 @@ This old file and the collection it imports:
 # checkout.art
 import "collections/auth.art"
 
-scenario "orders need a token" {
+scenario orders_need_a_token as "orders need a token" {
   tags = ["smoke"]
   var url = env("API_URL")
   use auth.login { user = "alice", password = env("API_PASSWORD") }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "${url}/orders" {
       header "Authorization" = "Bearer ${token}"
     }
@@ -303,7 +304,7 @@ scenario "orders need a token" {
 }
 
 # collections/auth.art
-collection "auth" {
+collection auth {
 
   request login(user, secret password, base = env("API_URL")) {
     post "${base}/token" {
@@ -319,7 +320,7 @@ become, under `artemis migrate -f checkout.art -o new/`:
 
 ```text
 # new/collections/auth.art
-collection "auth" {
+collection auth {
   request login {
     var user
     var password
@@ -337,9 +338,9 @@ import "../collections/auth.art"
 flow checkout {
   var url = env("API_URL")
 
-  step "auth.login" = auth.login { user = "alice", password = env("API_PASSWORD") }
+  step auth_login as "auth.login" = auth.login { user = "alice", password = env("API_PASSWORD") }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200
     var count = body.data.count
@@ -349,7 +350,7 @@ flow checkout {
 # new/scenarios/checkout.art
 flow "../flows/checkout.art"
 
-scenario "orders need a token" {
+scenario orders_need_a_token as "orders need a token" {
   tags = ["smoke"]
 }
 ```

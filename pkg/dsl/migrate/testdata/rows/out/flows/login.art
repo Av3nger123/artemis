@@ -1,7 +1,7 @@
 flow login {
   var user = {"email": "a@x.io", "role": "admin", "status": 200}
 
-  step "log in" {
+  step log_in as "log in" {
     post "https://example.com/login" { body = {"email": user.email} }
     expect status == user.status
   }

@@ -37,44 +37,44 @@ func TestAScenarioKeepsItsCookiesAndOnlyItsOwn(t *testing.T) {
 	login, me := srv.URL+"/login", srv.URL+"/me"
 	dir := writeTree(t, t.TempDir(), map[string]string{
 		"1_logs_in.art": fmt.Sprintf(`flow logs_in {
-  step "login" {
+  step login {
     post %[1]q
     expect status == 200
     expect cookies.sid.value == "abc"
     expect cookies.sid.http_only == true
     expect duration_ms >= 0
   }
-  step "me" {
+  step me {
     get %[2]q
     expect raw == "sid=abc"
   }
 }
 
-scenario "logs in" {}
+scenario logs_in as "logs in" {}
 `, login, me),
 		"2_new_jar.art": fmt.Sprintf(`flow new_jar {
-  step "me" {
+  step me {
     get %q
     expect raw == "none"
   }
 }
 
-scenario "a new scenario has a new jar" {}
+scenario a_new_scenario_has_a_new_jar as "a new scenario has a new jar" {}
 `, me),
 		"3_no_jar.art": fmt.Sprintf(`flow no_jar {
   config http { cookies = false }
 
-  step "login" {
+  step login {
     post %[1]q
     expect status == 200
   }
-  step "me" {
+  step me {
     get %[2]q
     expect raw == "none"
   }
 }
 
-scenario "no jar" {}
+scenario no_jar as "no jar" {}
 `, login, me),
 	})
 
@@ -92,10 +92,10 @@ scenario "no jar" {}
 func TestDurationIsNotInAVar(t *testing.T) {
 	_, stderr, err := runStreams(t, `flow x {
   var took = duration_ms
-  step "s" { run "true" }
+  step s { run "true" }
 }
 
-scenario "x" {}
+scenario x {}
 `)
 	if err == nil {
 		t.Fatal("a var reading duration_ms compiled")

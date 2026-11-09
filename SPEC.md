@@ -29,7 +29,7 @@ values.
 
 ```art
 # collections/auth.art
-collection "auth" {
+collection auth {
 
   request login {
     var url
@@ -59,10 +59,10 @@ flow checkout {
   private var url = env("API_URL")
 
   setup {
-    step "log in" = auth.login { password = env("API_PASSWORD") }
+    step log_in as "log in" = auth.login { password = env("API_PASSWORD") }
   }
 
-  step "pay" {
+  step pay {
     post "${url}/cart/pay" {
       header "Authorization" = "Bearer ${token}"
       body = {"sku": sku, "quantity": quantity, "coupon": coupon}
@@ -76,7 +76,7 @@ flow checkout {
   }
 
   if paid == 200 {
-    step "the order is there" {
+    step the_order_is_there as "the order is there" {
       get "${url}/orders/latest" {
         header "Authorization" = "Bearer ${token}"
         query "limit" = 1
@@ -88,7 +88,7 @@ flow checkout {
       expect body.id is number
     }
   } else {
-    step "the error says why" {
+    step the_error_says_why as "the error says why" {
       get "${url}/errors/last" {
         header "Authorization" = "Bearer ${token}"
       }
@@ -102,16 +102,16 @@ flow checkout {
 # scenarios/checkout.art
 flow "../flows/checkout.art"
 
-scenario "full price" {}
+scenario full_price as "full price" {}
 
-scenario "with a coupon" {
+scenario with_a_coupon as "with a coupon" {
   tags     = ["smoke"]
   quantity = 3
   coupon   = "TEN"
   total    = 270
 }
 
-scenario "bad coupon" {
+scenario bad_coupon as "bad coupon" {
   tags   = ["errors"]
   coupon = "NOPE"
   code   = 422
@@ -132,7 +132,7 @@ scenarios. Everything in this document is a rule those three files follow.
 
 | | Collection file | Flow file | Scenario file |
 | --- | --- | --- | --- |
-| Holds | One `collection "<title>" { ... }` of items | `import` lines, then one `flow <name> { ... }` | A `flow "<path>"` header on its first line, then `scenario "<title>" { ... }` blocks |
+| Holds | One `collection <id> [as "<label>"] { ... }` of items | `import` lines, then one `flow <id> [as "<label>"] { ... }` | A `flow "<path>"` header on its first line, then `scenario <id> [as "<label>"] { ... }` blocks |
 | Its job | Units of work, written once: see [Collections](#collections) | Steps in order: see [Inside a flow](#inside-a-flow) | Data: see [Scenario files](#scenario-files) |
 | Runs | One item at a time, with [`--item`](#running-one-item) | Never alone: through a scenario file that names it | Yes: each scenario is one run of the flow |
 
@@ -161,6 +161,44 @@ flow imports and what a scenario file names.
 
 ---
 
+## Ids and labels
+
+Every collection, item, flow, step and scenario has an **id**, and may have a
+**label** after it:
+
+```art
+# collections/admin.art
+collection admin as "Admin" {
+
+  request legacy_readiness as "Legacy readiness" {
+    get "https://api.test/legacy-readiness"
+    expect status == 200
+  }
+}
+```
+
+| | |
+| --- | --- |
+| Form | `<keyword> <id> [as "<label>"]`, for `collection`, `request`, `command`, `query`, `flow`, `step` and `scenario` |
+| Id | snake_case: `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`. What code, the CLI, `report.json` and trace files use |
+| Label | Any text in quotes, with no interpolation. What people read: the console report, the `name` in `report.json`, and a UI's lists |
+| No label | Everything that would show one shows the id. A step that calls an item takes the item's label first |
+
+An id is the only one of its kind in its scope: a collection's items, a flow's
+steps -- setup, teardown and every block included -- and a scenario file's
+scenarios. Each of these is a compile error at the id:
+
+| Error | Code | Hint |
+| --- | --- | --- |
+| an id that is not snake_case, like `SignIn` | `id-not-snake-case` | write it sign_in, and put the text people read in a label |
+| a second step, item or scenario with an id its scope has | `duplicate-id` | give one of them another id; the label may still say the same |
+| an `as` with no label in quotes after it | `expected-label` | step sign_in as "Sign in" { ... } |
+
+A name in quotes, `step "log in"`, is the [old form](#the-old-forms)
+`quoted-name`, and `artemis migrate` rewrites it to `step log_in as "log in"`.
+
+---
+
 ## Inside a flow
 
 A flow holds these declarations:
@@ -172,7 +210,7 @@ flow list_orders {
   var limit = 10                       # a value a scenario can set
   private var url = env("API_URL")     # a value only the flow sets
 
-  step "list" {                        # a thing to do, and what to expect of it
+  step list {                        # a thing to do, and what to expect of it
     get "${url}/orders?limit=${limit}"
     expect status == 200
   }
@@ -184,8 +222,8 @@ flow list_orders {
 | `config` | `config <ident> { <key> = <expr>, ... }` | Settings for one step type, named by the ident |
 | `var` | `var <ident> = <expr>`, `var <ident>` | A parameter of the flow: a value every step can name, and a scenario can set |
 | `private var` | `private var <ident> = <expr>` | A value every step can name, and no scenario can set |
-| `step` | `step "<name>" { ... }` | One action and what to expect of it |
-| an item call | `step "<name>" = <collection>.<item> { ... }` | A step written once in a collection -- see [Collections](#collections) |
+| `step` | `step <id> [as "<label>"] { ... }` | One action and what to expect of it |
+| an item call | `step <id> [as "<label>"] = <collection>.<item> { ... }` | A step written once in a collection -- see [Collections](#collections) |
 | `setup`, `teardown` | `setup { ... }`, `teardown { ... }` | Steps that run first, and steps that run last whatever happened -- see [setup and teardown](#setup-and-teardown) |
 | a block | `parallel { ... }`, `if`, `switch`, `try`, `repeat` | Steps that run at the same time, on a condition, under try, or in a loop -- see [Blocks](#blocks) |
 
@@ -216,7 +254,7 @@ flow orders {
   private var base = env("API_URL")
   private var root = "${base}/${version}"
 
-  step "list" {
+  step list {
     get "${root}/orders?limit=${limit}&user=${user}" {
       header "Accept" = accept
     }
@@ -252,25 +290,25 @@ flow checkout {
   private var url = env("API_URL")
 
   setup {
-    step "make a cart" {
+    step make_a_cart as "make a cart" {
       post "${url}/carts"
       expect status == 201
       var cart_id = body.id
     }
   }
 
-  step "pay" {
+  step pay {
     post "${url}/carts/${cart_id}/pay"
     expect status == 200
     var order_id = body.id
   }
 
   teardown {
-    step "cancel the order" {
+    step cancel_the_order as "cancel the order" {
       delete "${url}/orders/${order_id}"
     }
 
-    step "drop the cart" {
+    step drop_the_cart as "drop the cart" {
       delete "${url}/carts/${cart_id}"
     }
   }
@@ -309,7 +347,7 @@ flow's api steps talk:
 flow anonymous {
   config http { cookies = false }
 
-  step "no session" {
+  step no_session as "no session" {
     get "https://example.com/me"
     expect status == 401
   }
@@ -334,13 +372,13 @@ once.
 flow cookie_session {
   private var url = env("API_URL")
 
-  step "log in" {
+  step log_in as "log in" {
     post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
     expect status == 200
     expect cookies.sid.http_only == true
   }
 
-  step "read the profile" {
+  step read_the_profile as "read the profile" {
     get "${url}/me"
     expect status == 200
   }
@@ -366,9 +404,9 @@ step can read. A [trace](#tracing-a-step) withholds every cookie's value, in
 # scenarios/orders.art
 flow "../flows/orders.art"
 
-scenario "alice"        { user = "alice" }
-scenario "bob, limit 1" { user = "bob"  limit = 1 }
-scenario "from the env" {
+scenario alice        { user = "alice" }
+scenario bob_limit_1 as "bob, limit 1" { user = "bob"  limit = 1 }
+scenario from_the_env as "from the env" {
   tags = ["smoke"]
   user = env("SMOKE_USER", "alice")
 }
@@ -391,7 +429,7 @@ nothing else. Several may share a line, as in `bob, limit 1`.
 | A var not set | Keeps the flow's default. A required var not set is `missing-param`, at the scenario's title |
 | Anything else | A `step`, an `expect`, a `var` or an override line is `data-only-scenario`: **a scenario changes data, never the shape of the flow.** A test that needs other steps is another flow |
 
-A scenario that sets nothing, `scenario "full price" {}`, runs the flow with
+A scenario that sets nothing, `scenario full_price as "full price" {}`, runs the flow with
 its defaults.
 
 A scenario has no routing of its own. The flow does all of it, with
@@ -405,7 +443,7 @@ its scenarios can cause.
 # scenarios/smoke.art
 flow "../flows/orders.art"
 
-scenario "smoke" {
+scenario smoke {
   tags = ["smoke", "payments"]
   user = "alice"
 }
@@ -420,7 +458,7 @@ one word of a `--tags` expression. A tag that is not, or is listed twice, is
 
 `--tags` takes an expression of tags joined by `and`, `or` and `not`, with
 parentheses; `not` binds tightest and `or` loosest. `--grep` takes a regular
-expression over the scenario's title. A scenario a run does not select is in
+expression over the scenario's label, or its id when it has none. A scenario a run does not select is in
 the [JSON report](#the-json-report) with `"status": "skip"` and why in `error`,
 and is not on the console. A selection of nothing is an error, and a tag the
 expression names that no scenario has is a warning naming the nearest one.
@@ -434,7 +472,7 @@ scenario reads is not [required](#builtins).
 # scenarios/any_total.art
 flow "../flows/checkout.art"
 
-scenario "any total" {
+scenario any_total as "any total" {
   coupon = "NOPE"
   total  = skip
 }
@@ -491,12 +529,12 @@ Every step holds exactly **one action block**, and that block is what gives the
 step its type. There is no `type:` key:
 
 ```art
-step "fetch it" {
+step fetch_it as "fetch it" {
   get "https://example.com/items/1"    # <- an HTTP verb, so this is an api step
   expect status == 200
 }
 
-step "build it" {
+step build_it as "build it" {
   run "go" { args = ["build", "./..."] }   # <- run, so this is a terminal step
   expect exit_code == 0
 }
@@ -518,7 +556,7 @@ statements and [step vars](#step-vars), below the action, in any order and any
 number:
 
 ```art
-step "orders" {
+step orders {
   get "${url}/orders"
   timeout = "5s"
   retry { times = 3, delay = "2s" }
@@ -528,7 +566,7 @@ step "orders" {
 ```
 
 A step can also call an item a collection holds instead of writing its own
-action: `step "log in" = auth.login { ... }`. See [Collections](#collections).
+action: `step log_in as "log in" = auth.login { ... }`. See [Collections](#collections).
 
 ---
 
@@ -538,7 +576,7 @@ The action is an HTTP verb and a URL. The URL is an expression, so it is usually
 an interpolated string:
 
 ```art
-step "create an order" {
+step create_an_order as "create an order" {
   post "${url}/orders" {
     header "Content-Type" = "application/json"
     header "Authorization" = "Bearer ${token}"
@@ -572,13 +610,13 @@ body = {"username": "alice", "roles": ["admin"], "quota": limit}
 That is serialised to JSON. So an object a step wrote reaches a body as a value:
 
 ```art
-step "read the user" {
+step read_the_user as "read the user" {
   get "${url}/users/1"
   expect status == 200
   var user = body.data
 }
 
-step "write it back" {
+step write_it_back as "write it back" {
   put "${url}/users/1" {
     body = {"user": user, "seen": true}
   }
@@ -596,7 +634,7 @@ A form is fields rather than a body. `form` sends them urlencoded and
 `multipart` as `multipart/form-data`, where a field may be a file:
 
 ```art
-step "sign in" {
+step sign_in as "sign in" {
   post "https://example.com/login" {
     form "user" = "alice"
     form "password" = "s3cret"
@@ -604,7 +642,7 @@ step "sign in" {
   expect status == 200
 }
 
-step "upload an avatar" {
+step upload_an_avatar as "upload an avatar" {
   post "https://example.com/me/avatar" {
     multipart "avatar" = file("fixtures/avatar.png")
     multipart "caption" = "hello"
@@ -624,7 +662,7 @@ a step error naming `multipart`, because a urlencoded form cannot carry one.
 The action is `run`, the command, and what to run it with:
 
 ```art
-step "the tag exists" {
+step the_tag_exists as "the tag exists" {
   run "git" {
     args = ["rev-parse", "--verify", "${tag}^{commit}"]
   }
@@ -649,7 +687,7 @@ with a space in its name and does not find one. A step that wants a pipeline
 or a glob names a shell itself:
 
 ```art
-step "the changelog mentions the tag" {
+step the_changelog_mentions_the_tag as "the changelog mentions the tag" {
   run "sh" { args = ["-c", "grep -c '${tag}' CHANGELOG.md"] }
   expect stdout matches /^[1-9]/
 }
@@ -673,7 +711,7 @@ A whole flow of terminal steps:
 flow release_checks {
   var tag = env("RELEASE_TAG")
 
-  step "the tag exists" {
+  step the_tag_exists as "the tag exists" {
     run "git" { args = ["rev-parse", "--verify", "${tag}^{commit}"] }
     expect exit_code == 0
     expect stderr matches /^\s*$/
@@ -681,12 +719,12 @@ flow release_checks {
     timeout = "5s"
   }
 
-  step "the changelog mentions it" {
+  step the_changelog_mentions_it as "the changelog mentions it" {
     run "sh" { args = ["-c", "grep -c '${tag}' CHANGELOG.md"] }
     expect stdout matches /^[1-9]/
   }
 
-  step "it builds" {
+  step it_builds as "it builds" {
     run "go" {
       args = ["build", "./..."]
       env  { CGO_ENABLED = "0" }
@@ -709,7 +747,7 @@ flow upgrade_to_pro {
 
   var url = env("APP_URL")
 
-  step "upgrade the plan" {
+  step upgrade_the_plan as "upgrade the plan" {
     browser {
       goto "${url}/settings/billing"
       fill "#email" = "alice@example.com"
@@ -877,11 +915,12 @@ before it saturates the machine.
 ### Tracing a step
 
 A report says what failed. A **trace** says what went over the wire, and
-`--trace` asks for one file per step:
+`--trace` asks for one file per step, named for the scenario's id and the
+step's, `<scenario_id>-<step_id>.json`:
 
 ```sh
-artemis run checkout.art --trace traces      # traces/checkout-get-a-token.json
-artemis run checkout.art                     # no traces: off unless asked
+artemis run scenarios/checkout.art --trace traces   # traces/with_a_coupon-pay.json
+artemis run scenarios/checkout.art                  # no traces: off unless asked
 ```
 
 Every step gets one, whether it passed or not, because comparing a passing step
@@ -928,18 +967,18 @@ flow order_saved {
   private var orders_db = env("ORDERS_DB")   # postgres://app:pw@localhost:5432/orders
 
   setup {
-    step "seed" {
+    step seed {
       db orders_db { sql = file("fixtures/seed.sql") }
     }
   }
 
-  step "place an order" {
+  step place_an_order as "place an order" {
     post "${url}/orders" { body = {"sku": "A-1"} }
     expect status == 201
     var order_id = body.id
   }
 
-  step "the row is there" {
+  step the_row_is_there as "the row is there" {
     db orders_db {
       sql  = "SELECT status, total FROM orders WHERE id = $1"
       args = [order_id]
@@ -951,7 +990,7 @@ flow order_saved {
   }
 
   teardown {
-    step "remove it" {
+    step remove_it as "remove it" {
       db orders_db {
         sql  = "DELETE FROM orders WHERE id = $1"
         args = [order_id]
@@ -1066,7 +1105,7 @@ flow order_cached {
   private var mongo = env("MONGO_URL")
   private var cache = env("REDIS_URL")
 
-  step "the order" {
+  step the_order as "the order" {
     db mongo {
       command = {"find": "orders", "filter": {"status": "paid"}, "sort": {"_id": -1}, "limit": 1}
     }
@@ -1074,12 +1113,12 @@ flow order_cached {
     var order_id = rows[0]._id
   }
 
-  step "by its id" {
+  step by_its_id as "by its id" {
     db mongo { command = {"find": "orders", "filter": {"_id": {"$oid": order_id}}} }
     expect rows[0].status == "paid"
   }
 
-  step "the cache has it" {
+  step the_cache_has_it as "the cache has it" {
     db cache { command = ["GET", "order:${order_id}"] }
     expect result == "paid"
   }
@@ -1113,58 +1152,58 @@ RFC 3339 time, a decimal a number by the rule above.
 flow checkout {
   private var url = env("API_URL")
 
-  step "log in" {
+  step log_in as "log in" {
     post "${url}/login" { body = {"user": "alice", "password": env("PW")} }
     var token = body.token
   }
 
   parallel {
-    step "cart" {
+    step cart {
       post "${url}/carts" { header "Authorization" = "Bearer ${token}" }
       var cart_id = body.id
     }
-    step "profile" {
+    step profile {
       get "${url}/me" { header "Authorization" = "Bearer ${token}" }
       var tier = body.tier
     }
   }
 
   if tier == "gold" {
-    step "perks" {
+    step perks {
       get "${url}/perks"
       expect len(body) > 0
     }
   } else {
-    step "upsell" {
+    step upsell {
       get "${url}/upsell"
       expect status == 200
     }
   }
 
   try {
-    step "pay" {
+    step pay {
       post "${url}/carts/${cart_id}/pay"
       expect status == 201
       var order_id = body.id
     }
   } catch {
-    step "refund" {
+    step refund {
       post "${url}/carts/${cart_id}/refund"
     }
   } finally {
-    step "unlock" {
+    step unlock {
       delete "${url}/carts/${cart_id}/lock"
     }
   }
 
   repeat every "2s" within "2m" {
-    step "order status" {
+    step order_status as "order status" {
       get "${url}/orders/${order_id}"
       var state = body.state
     }
   } until state == "shipped" or state == "failed"
 
-  step "shipped" {
+  step shipped {
     get "${url}/orders/${order_id}"
     expect body.state == "shipped"
   }
@@ -1250,7 +1289,7 @@ no multi-step item, and a flow does not call another flow.
 
 ```art
 # collections/orders.art
-collection "orders" {
+collection orders {
 
   request create {
     var url
@@ -1282,7 +1321,7 @@ collection "orders" {
 
 ```art
 # collections/ops.art
-collection "ops" {
+collection ops {
 
   command migrate {
     var dir = "db"
@@ -1320,28 +1359,28 @@ flow rush {
   private var orders_db = env("ORDERS_DB")
 
   setup {
-    step "migrate" = ops.migrate {}
-    step "log in" = auth.login { password = env("PW") }
+    step migrate = ops.migrate {}
+    step log_in as "log in" = auth.login { password = env("PW") }
   }
 
-  step "a wrong password" = auth.login as bad {
+  step a_wrong_password as "a wrong password" = auth.login as bad {
     password = "wrong"
     drop expects
     drop vars
     expect status == 401
   }
 
-  step "rush order" = orders.create as rush {
+  step rush_order as "rush order" = orders.create as rush {
     header "X-Priority" = "high"
     body.qty = 5
     expect body.data.eta < 3600
   }
 
-  step "pay for it" = orders.pay { order_id = rush_order_id }
+  step pay_for_it as "pay for it" = orders.pay { order_id = rush_order_id }
 
-  step "it is paid" = ops.order_status { order_id = rush_order_id }
+  step it_is_paid as "it is paid" = ops.order_status { order_id = rush_order_id }
 
-  step "check it" {
+  step check_it as "check it" {
     get "${url}/orders/${rush_order_id}" {
       header "Authorization" = "Bearer ${token}"
     }
@@ -1365,10 +1404,10 @@ points there.
 
 | Form | What it is |
 | --- | --- |
-| `collection "<title>" { ... }` | A set of items. The title is any text, for people: a flow reaches the collection by the name its file is [imported](#importing) as |
-| `request <name> { ... }` | An item whose action is an HTTP verb: an `api` step |
-| `command <name> { ... }` | An item whose action is `run`: a `terminal` step |
-| `query <name> { ... }` | An item whose action is `db`: a `db` step |
+| `collection <id> [as "<label>"] { ... }` | A set of items. The id is the name an [import](#importing) with no `as` puts it in scope by; the label is for people |
+| `request <id> [as "<label>"] { ... }` | An item whose action is an HTTP verb: an `api` step |
+| `command <id> [as "<label>"] { ... }` | An item whose action is `run`: a `terminal` step |
+| `query <id> [as "<label>"] { ... }` | An item whose action is `db`: a `db` step |
 | `var <ident>` above the action | A required **input** |
 | `var <ident> = <expr>` above the action | An input with a default. The default may name an earlier input, as a flow's var may name an earlier var |
 | `private var <ident> = <expr>` above the action | An input no step can pass: it takes only its own default |
@@ -1408,7 +1447,7 @@ collections/orders.art:3:9: an input cannot be named body: a step that calls the
 | Form | `import "<path>" [as <ident>]` |
 | Where | At the top of a flow file, before the flow |
 | Path | Relative to the importing file. Local files only: no URL, no package, no version |
-| Effect | The file's collection is in scope by the name after `as`, or else by the file's name less `.art` -- and less a `.collection` before it, so `orders.art` and `orders.collection.art` are both `orders` |
+| Effect | The file's collection is in scope by the name after `as`, or else by its id: `collection orders { ... }` is `orders`, whatever its file is called |
 | Not transitive | A flow reaches only the collections it imports itself |
 
 ```art
@@ -1419,20 +1458,21 @@ import "../collections/auth.art"
 flow buy {
   private var url = env("API_URL")
 
-  step "log in" = auth.login { password = env("PW") }
-  step "order" = shop.create { sku = "A-1", qty = 2 }
+  step log_in as "log in" = auth.login { password = env("PW") }
+  step order = shop.create { sku = "A-1", qty = 2 }
 }
 ```
 
-A file named `Backend APIs.art` is imported the same way, `as` a name a step
-can read.
+A file named `Backend APIs.art` that holds `collection backend_apis as
+"Backend APIs"` is imported with no `as`, and a step reads it as
+`backend_apis`. A step that names it by its file's name instead gets an
+`unknown-collection` whose hint gives the id.
 
-The collection's title plays no part: the import line alone says what a step
-reads. Each of these is a compile error at the import:
+The collection's label plays no part: the import line and the id alone say
+what a step reads. Each of these is a compile error at the import:
 
 | Error | Code | Hint |
 | --- | --- | --- |
-| no `as`, and a file name that cannot be one, like `Backend APIs.art` | `import-needs-name` | name it: import "collections/Backend APIs.art" as Backend_APIs |
 | a file with no collection | `import-no-collection` | import a collection file: a flow or a scenario file is never imported |
 | two imports under one name | `duplicate-import-name` | name one of them another way with as |
 
@@ -1441,7 +1481,7 @@ So is an import cycle, named as its chain: `a.art -> b.art -> a.art`.
 ### Calling an item
 
 ```art
-step "rush order" = orders.create as rush {
+step rush_order as "rush order" = orders.create as rush {
   sku = "A-1"
   body.qty = 5
 }
@@ -1449,19 +1489,22 @@ step "rush order" = orders.create as rush {
 
 | | |
 | --- | --- |
-| Form | `step "<name>" = <collection>.<item> [as <ident>] { <line> ... }` |
+| Form | `step <id> [as "<label>"] = <collection>.<item> [as <ident>] { <line> ... }` |
 | Where | In a flow, wherever a `step` may be: setup, teardown and blocks included |
-| Effect | Replaced, in place, by the item's step, named `<name>`. It runs where it is written |
+| Effect | Replaced, in place, by the item's step, with the call's id. It runs where it is written |
 
-The name in quotes is required, and it is the step's name in every report.
-Two steps may share a name, as they may anywhere else. The braces are required
-too, and may be empty: `step "pay" = orders.pay {}`.
+The id is required, and is unique in the flow like any step's. With no label
+of its own the step takes the item's label, and with neither it reads as its
+id: `step sign_in = settings.client_login {}` reads "Client login" when the
+item is `request client_login as "Client login"`. The first `as`, before the
+`=`, is the label; the one after the item is the [output prefix](#as). The
+braces are required too, and may be empty: `step pay = orders.pay {}`.
 
 ### How an item gets its values
 
 Each input of the item takes its value from the first of these that has one:
 
-1. **The value the step passes**: `step "log in" = auth.login { user = "bob" }`.
+1. **The value the step passes**: `step log_in as "log in" = auth.login { user = "bob" }`.
 2. **The name in the flow's [context](#what-is-in-scope)** at that point: a
    flow var, or a var an earlier step wrote. In `rush` above, `orders.create`
    reads `url` from the flow and `token` from what `log in` wrote, and neither
@@ -1601,7 +1644,7 @@ scenario starts:
 
 ```text
 # from checkout (flows/checkout.art:4) via scenarios/checkout.art:13
-scenario "bad coupon" {
+scenario bad_coupon as "bad coupon" {
   tags = ["errors"]
   var sku = "A-1"
   var quantity = 1
@@ -1611,7 +1654,7 @@ scenario "bad coupon" {
 
   setup {
     # from auth.login (collections/auth.art:4) via flows/checkout.art:13
-    step "log in" {
+    step log_in as "log in" {
       post "${url}/token" {
         header "Content-Type" = "application/json"
         body = {"username": "alice", "password": env("API_PASSWORD")}
@@ -1621,7 +1664,7 @@ scenario "bad coupon" {
     }
   }
 
-  step "pay" {
+  step pay {
     post "${url}/cart/pay" {
       header "Authorization" = "Bearer ${token}"
       body = {"sku": sku, "quantity": quantity, "coupon": coupon}
@@ -1634,7 +1677,7 @@ scenario "bad coupon" {
   }
 
   if paid == 200 {
-    step "the order is there" {
+    step the_order_is_there as "the order is there" {
       get "${url}/orders/latest" {
         header "Authorization" = "Bearer ${token}"
         query "limit" = 1
@@ -1645,7 +1688,7 @@ scenario "bad coupon" {
       expect body.id is number
     }
   } else {
-    step "the error says why" {
+    step the_error_says_why as "the error says why" {
       get "${url}/errors/last" { header "Authorization" = "Bearer ${token}" }
       expect body.code exists
     }
@@ -1938,7 +1981,7 @@ flow sign_up {
   var email = "user-${random_string(8)}@example.test"
   var basic = base64("admin:secret")
 
-  step "create the user" {
+  step create_the_user as "create the user" {
     post "${url}/users" {
       header "Authorization" = "Basic ${basic}"
       header "X-Signature" = hmac_sha256(env("SIGNING_KEY"), to_json({"id": id}))
@@ -1997,7 +2040,7 @@ flow import_users {
   var users = json("data/users.json")
   var plans = csv("data/plans.csv")
 
-  step "upload the sheet" {
+  step upload_the_sheet as "upload the sheet" {
     post "${url}/imports" {
       multipart "sheet" = file("data/users.csv")
     }
@@ -2005,7 +2048,7 @@ flow import_users {
     expect body.count == len(users)
   }
 
-  step "seed the database" {
+  step seed_the_database as "seed the database" {
     run "psql" {
       args  = ["-v", "ON_ERROR_STOP=1"]
       stdin = file("fixtures/seed.sql")
@@ -2074,7 +2117,7 @@ A double-quoted string may hold `${ <expr> }`, with any expression inside:
 ```art
 var root = "${base}/${version}"
 
-step "orders" {
+step orders {
   get "${root}/orders/${orderId}?since=${since}" {
     header "Authorization" = "Bearer ${token}"
   }
@@ -2164,7 +2207,7 @@ A step can pull a value out of what it produced and leave it for the steps after
 it, with a `var` after its action:
 
 ```art
-step "login" {
+step login {
   post "${url}/token" {
     body = {"username": "alice", "password": pw}
   }
@@ -2172,7 +2215,7 @@ step "login" {
   var token = body.data.access_token
 }
 
-step "orders" {
+step orders_2 as "orders" {
   get "${url}/orders" {
     header "Authorization" = "Bearer ${token}"
   }
@@ -2227,7 +2270,7 @@ flow, so:
 | `expect ... within "<duration>"` | Re-evaluates **one assertion**, re-reading the page | none for `api`, `terminal` and `db`; 5s for `browser` |
 
 ```art
-step "wait for the import" {
+step wait_for_the_import as "wait for the import" {
   get "${url}/imports/${importId}"
   timeout = "5s"
   retry { times = 10, delay = "3s" }
@@ -2316,13 +2359,14 @@ parsing.
 ```ebnf
 File          = CollectionFile | FlowFile | ScenarioFile ;
 Import        = "import" String [ "as" Ident ] ;
+Label         = "as" String ;
 
-CollectionFile = "collection" String "{" { ItemDecl } "}" ;
-ItemDecl      = ( "request" | "command" | "query" ) Ident
+CollectionFile = "collection" Ident [ Label ] "{" { ItemDecl } "}" ;
+ItemDecl      = ( "request" | "command" | "query" ) Ident [ Label ]
                 "{" { VarDecl } Action { StepStmt } "}" ;
 
 FlowFile      = { Import } FlowDecl ;
-FlowDecl      = "flow" Ident "{" { ConfigDecl | VarDecl | StepDecl | ItemCall | PhaseDecl | Block } "}" ;
+FlowDecl      = "flow" Ident [ Label ] "{" { ConfigDecl | VarDecl | StepDecl | ItemCall | PhaseDecl | Block } "}" ;
 PhaseDecl     = ( "setup" | "teardown" ) BlockBody ;
 Block         = "parallel" BlockBody
               | "if" Expr BlockBody { "else" "if" Expr BlockBody } [ "else" BlockBody ]
@@ -2331,7 +2375,7 @@ Block         = "parallel" BlockBody
               | "repeat" { RepeatOption } BlockBody "until" Expr ;
 RepeatOption  = ( "every" | "within" | "max" ) Expr ;
 BlockBody     = "{" { StepDecl | ItemCall | Block } "}" ;
-ItemCall      = "step" String "=" ItemRef [ "as" Ident ] "{" { CallLine } "}" ;
+ItemCall      = "step" Ident [ Label ] "=" ItemRef [ "as" Ident ] "{" { CallLine } "}" ;
 ItemRef       = Ident "." Ident ;
 CallLine      = Ident "=" Expr
               | ReqField
@@ -2341,14 +2385,14 @@ CallLine      = Ident "=" Expr
 
 ScenarioFile  = FlowRef { DataScenario } ;
 FlowRef       = "flow" String ;
-DataScenario  = "scenario" String "{" { TagsDecl | Set } "}" ;
+DataScenario  = "scenario" Ident [ Label ] "{" { TagsDecl | Set } "}" ;
 TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
 Set           = Ident "=" ( Expr | "skip" ) ;
 
 ConfigDecl    = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
 Setting       = Ident "=" Expr ;
 VarDecl       = [ "private" ] "var" Ident [ "=" Expr ] ;
-StepDecl      = "step" String "{" Action { StepStmt } "}" ;
+StepDecl      = "step" Ident [ Label ] "{" Action { StepStmt } "}" ;
 
 Action        = Request | Run | Browser | DB ;
 Request       = Method String [ "{" { ReqField } "}" ] ;
@@ -2517,6 +2561,8 @@ so a reader can tell "nothing failed" from "nothing ran":
   "scenarios": [
     {
       "name": "items",
+      "id": "items",
+      "label": "",
       "file": "scenarios/items.art",
       "flow": "items",
       "status": "fail",
@@ -2525,6 +2571,8 @@ so a reader can tell "nothing failed" from "nothing ran":
       "steps": [
         {
           "name": "get item",
+          "id": "get_item",
+          "label": "get item",
           "status": "fail",
           "duration_ms": 12.5,
           "attempts": 1,
@@ -2592,8 +2640,11 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
 | `tags` | scenario | The scenario's [tags](#tags). **Omitted** when it has none |
-| `flow` | scenario | The name of the flow the scenario ran: `"checkout"`. **Omitted** when it ran none, as for a file that would not compile |
-| `name` | scenario, step | As written: a scenario's title, a step's name. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
+| `flow` | scenario | The id of the flow the scenario ran: `"checkout"`. **Omitted** when it ran none, as for a file that would not compile |
+| `flow_label` | scenario | That flow's label: `"Checkout"`. **Omitted** when it has none |
+| `name` | scenario, step | What a person reads: the label, or the id when there is none. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
+| `id` | scenario, step | The snake_case id as written: `"with_coupon"`, `"pay"` |
+| `label` | scenario, step | The label after `as`, and `""` when there is none |
 | `file` | scenario, failure, step, assertion | On a scenario, the scenario file it was read from. On a failure, the file its `line` was written in: the flow's, or the [collection's](#collections) an item call brought the step in from. On a step or an assertion, the same, and **omitted** when it is the scenario's own file |
 | `error` | scenario, step, assertion, failure | Why it could not run, or `""`. A scenario's error is a file that would not compile, and such a scenario has no steps |
 | `steps` | scenario | One entry per step the scenario reached |
@@ -2706,12 +2757,13 @@ file:
 | --- | --- |
 | `scenario "x" { steps }`, in a file with no `flow "..."` header | A flow file, and a scenario file that names it |
 | `capture x = ...` | `var x = ...` after the step's action: a [step var](#step-vars) |
-| `use a.b { ... }` | `step "<name>" = a.b { ... }`: [calling an item](#calling-an-item) |
+| `use a.b { ... }` | `step <id> = a.b { ... }`: [calling an item](#calling-an-item) |
 | `drop captures` | `drop vars` |
 | `request name(params)` | `var`s above the item's action: [its inputs](#a-collection-file) |
 | `suite.art` and `suite { }` | Folders and `--tags`. A suite's setup, which ran once per run, is a `setup` in each flow, which runs once per scenario |
 | `secret var`, `secret capture`, `secret` parameters, `for secret` | Nothing, for now: see **Masking credentials in reports** above |
 | `scenario "..." for row in json(...)` | A scenario for each row, written out |
+| `step "log in"`, `scenario "full price"`, `collection "Orders API"`: a name in quotes (`quoted-name`) | A snake_case id and the text as its label: `step log_in as "log in"`. See [Ids and labels](#ids-and-labels) |
 
 [docs/migrating.md](docs/migrating.md#old-art-files) shows what `artemis
 migrate` writes for each.

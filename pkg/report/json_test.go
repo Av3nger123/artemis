@@ -93,6 +93,8 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
   "scenarios": [
     {
       "name": "items",
+      "id": "",
+      "label": "",
       "file": "suite/items.yaml",
       "status": "fail",
       "duration_ms": 13,
@@ -100,6 +102,8 @@ func TestWriteJSONPinsTheSchema(t *testing.T) {
       "steps": [
         {
           "name": "get item",
+          "id": "",
+          "label": "",
           "status": "fail",
           "duration_ms": 12.5,
           "attempts": 1,

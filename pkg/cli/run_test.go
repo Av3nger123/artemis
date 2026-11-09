@@ -194,7 +194,7 @@ func TestRunFilesKeepsGoingPastAFileThatWillNotLoad(t *testing.T) {
 // counting its steps would say "0 of 0 steps failed".
 func TestRunFailedErrorNamesAFileThatWouldNotLoad(t *testing.T) {
 	initLog(t)
-	root := writeTree(t, t.TempDir(), map[string]string{"broken.art": "scenario \"x\" {\n"})
+	root := writeTree(t, t.TempDir(), map[string]string{"broken.art": "scenario x {\n"})
 
 	files, err := discover(root)
 	if err != nil {
@@ -223,23 +223,23 @@ func TestRunFilesDoesNotLeakCapturesBetweenFiles(t *testing.T) {
 	srv := okServer(t, 200, `{"token":"abc"}`)
 
 	capturing := fmt.Sprintf(`flow capture {
-  step "login" {
+  step login {
     get %q
     expect status == 200
     var token = body.token
   }
 }
 
-scenario "capture" {}
+scenario capture {}
 `, srv.URL)
 	using := fmt.Sprintf(`flow use {
-  step "me" {
+  step me {
     get "%s/${token}"
     expect status == 200
   }
 }
 
-scenario "use" {}
+scenario use {}
 `, srv.URL)
 
 	root := writeTree(t, t.TempDir(), map[string]string{
@@ -272,14 +272,14 @@ scenario "use" {}
 // rejects: a file artemis cannot load.
 func brokenArt(url string) string {
 	return fmt.Sprintf(`flow broken {
-  step "ping" {
+  step ping {
     get %q
     timeot = "5s"
     expect status == 200
   }
 }
 
-scenario "broken" {}
+scenario broken {}
 `, url)
 }
 
@@ -326,14 +326,14 @@ func TestRunFilesRefusesANonScenarioFile(t *testing.T) {
 // test can tell the files of a folder run apart.
 func namedScenarioArt(name, url, wantBody string) string {
 	return fmt.Sprintf(`flow ping {
-  step "ping" {
+  step ping {
     get %[2]q
     expect status == 200
     expect body.status == %[3]q
   }
 }
 
-scenario %[1]q {}
+scenario %[1]s {}
 `, name, url, wantBody)
 }
 
@@ -625,14 +625,14 @@ func TestRunPrintsAFailureBlockNamingTheFileAndLine(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"pending"}`)
 
 	stdout, _, err := runStreams(t, `flow status_check {
-  step "ping" {
+  step ping {
     get "`+srv.URL+`/ping"
     expect status == 200
     expect body.status == "ok"
   }
 }
 
-scenario "status check" {}
+scenario status_check as "status check" {}
 `)
 	if err == nil {
 		t.Fatalf("Execute() = nil, want an error:\n%s", stdout)
@@ -753,22 +753,22 @@ func TestRunStopsBeforeTheFirstStepWhenAVariableIsAbsent(t *testing.T) {
 
 	root := writeTree(t, t.TempDir(), map[string]string{
 		"01-first.art": `flow first {
-  step "touch it" {
+  step touch_it as "touch it" {
     get "` + srv.URL + `/orders"
     expect status == 200
   }
 }
 
-scenario "first" {}`,
+scenario first {}`,
 		"03-reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_REPORT_URL")
-  step "report" {
+  step report {
     get "${url}"
     expect status == 200
   }
 }
 
-scenario "reports" {}`,
+scenario reports {}`,
 	})
 
 	var out, errOut bytes.Buffer
@@ -804,13 +804,13 @@ func TestRunFilesWithSetsErrorAndStatusWhenTheEnvGateTrips(t *testing.T) {
 	root := writeTree(t, t.TempDir(), map[string]string{
 		"01-reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_GATE_WIRING_URL")
-  step "report" {
+  step report {
     get "${url}"
     expect status == 200
   }
 }
 
-scenario "reports" {}`,
+scenario reports {}`,
 	})
 	files, err := discover(root)
 	if err != nil {
@@ -862,13 +862,13 @@ func TestRunReportsABrokenFileEvenWhenTheEnvGateAlsoTrips(t *testing.T) {
 		"01-broken.art": brokenArt("http://unused.invalid"),
 		"02-reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_REPORT_URL_2")
-  step "report" {
+  step report {
     get "${url}"
     expect status == 200
   }
 }
 
-scenario "reports" {}`,
+scenario reports {}`,
 	})
 
 	var out, errOut bytes.Buffer
@@ -989,13 +989,13 @@ func TestRunDoesNotClaimToHaveReadAnEnvFileWhenThereIsNone(t *testing.T) {
 	writeTree(t, dir, map[string]string{
 		"reports.art": `flow reports {
   var url = env("ARTEMIS_TEST_NO_ENV_FILE_URL")
-  step "report" {
+  step report {
     get "${url}"
     expect status == 200
   }
 }
 
-scenario "reports" {}`,
+scenario reports {}`,
 	})
 	inDir(t, dir)
 
@@ -1125,13 +1125,13 @@ func TestEventsWithAnUnknownFormatRunsNothing(t *testing.T) {
 func envScenarioArt(name string) string {
 	return fmt.Sprintf(`flow env {
   var url = env(%q)
-  step "ping" {
+  step ping {
     get "${url}"
     expect status == 200
   }
 }
 
-scenario "env" {}
+scenario env {}
 `, name)
 }
 

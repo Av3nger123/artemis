@@ -1,11 +1,11 @@
-flow _02_items {
-  step "list items" {
+flow s_02_items {
+  step list_items as "list items" {
     get "%SERVER%/items"
     expect status == 200
     expect body.total > 0
   }
 
-  step "missing route" {
+  step missing_route as "missing route" {
     get "%SERVER%/nope"
     expect status == 200
   }

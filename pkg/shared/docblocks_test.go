@@ -277,7 +277,7 @@ var fragmentContexts = []string{
 	"collection \"doc\" {\nBLOCK\n}\n",
 	"flow doc {\n  step \"doc\" {\n    get \"https://example.test\"\nBLOCK\n  }\n}\n",
 	"flow doc {\n  step \"doc\" {\n    post \"https://example.test\" {\nBLOCK\n    }\n  }\n}\n",
-	"flow \"doc.art\"\n\nscenario \"doc\" {\nBLOCK\n}\n",
+	"flow \"doc.art\"\n\nscenario doc {\nBLOCK\n}\n",
 }
 
 // compileBlock holds one `art` block to compiling.
@@ -359,7 +359,7 @@ func flowCheck(name, src string) (string, bool) {
 				break top
 			}
 		}
-		return fmt.Sprintf("flow %q\n\nscenario \"doc\" {\n%s}\n", path.Base(name), strings.Join(sets, "")), true
+		return fmt.Sprintf("flow %q\n\nscenario doc {\n%s}\n", path.Base(name), strings.Join(sets, "")), true
 	}
 	return "", false
 }

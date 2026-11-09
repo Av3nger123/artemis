@@ -4,7 +4,7 @@
 # api step, because stderr is exactly what a failure is diagnosed from and a
 # check on it matters most when the command did not succeed.
 flow terminal_2 {
-  step "exit non-zero" {
+  step exit_non_zero as "exit non-zero" {
     run "sh" { args = ["-c", "printf 'disk full' >&2; exit 2"] }
     expect exit_code == 0
     expect stderr contains "disk full"

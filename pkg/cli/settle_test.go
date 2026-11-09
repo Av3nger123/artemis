@@ -227,8 +227,8 @@ func envFor(t *testing.T, b *browserstep.Bindings) *eval.Env {
 	return &eval.Env{Roots: roots, Elements: b.Elements()}
 }
 
-const browserSrc = `scenario "s" {
-  step "check" {
+const browserSrc = `scenario s {
+  step check {
     browser { goto "http://127.0.0.1:1/" }
     %s
   }
@@ -377,8 +377,8 @@ func TestEveryExpectIsEvaluatedAndEachHasItsOwnBudget(t *testing.T) {
 // which is the reason those types have no default.
 func TestAStepWithNoPageEvaluatesOnceEvenWithAnExplicitWithin(t *testing.T) {
 	c := fakeClock(t)
-	st := oneStep(t, `scenario "s" {
-  step "check" {
+	st := oneStep(t, `scenario s {
+  step check {
     get "http://127.0.0.1:1/x"
     expect status == 200 within "10s"
   }
@@ -402,10 +402,10 @@ func TestABudgetThatWillNotParseIsAnErroredAssertion(t *testing.T) {
 	page := &settlingPage{url: "http://127.0.0.1:1/", title: "Welcome", text: "Working"}
 	ctx, b := pageOn(t, page)
 
-	sc, st := oneScenario(t, `scenario "s" {
+	sc, st := oneScenario(t, `scenario s {
   var budget = "soon"
 
-  step "check" {
+  step check {
     browser { goto "http://127.0.0.1:1/" }
     expect page.title == "Welcome" within budget
   }
@@ -486,8 +486,8 @@ func TestAStepWithNoExpectsAssertsNothing(t *testing.T) {
 	page := &settlingPage{url: "http://127.0.0.1:1/", title: "Welcome"}
 	ctx, b := pageOn(t, page)
 
-	st := oneStep(t, `scenario "s" {
-  step "check" {
+	st := oneStep(t, `scenario s {
+  step check {
     browser { goto "http://127.0.0.1:1/" }
   }
 }`)

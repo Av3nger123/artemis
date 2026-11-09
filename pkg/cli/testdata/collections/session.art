@@ -1,4 +1,4 @@
-collection "session" {
+collection session {
   request login {
     var base
 

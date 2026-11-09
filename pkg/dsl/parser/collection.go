@@ -31,14 +31,15 @@ func (p *parser) parseImport() ast.Decl {
 // parseCollection is `collection String "{" { ItemDecl } "}"`.
 func (p *parser) parseCollection() ast.Decl {
 	c := &ast.Collection{Keyword: p.next()}
-	name, ok := p.expectIdentOrString("a collection name in quotes")
+	name, ok := p.expectIdentOrString("a collection id, like orders")
 	if !ok {
 		return p.badFrom(c.Keyword)
 	}
 	c.Name = name
+	c.LabelAs, c.Label = p.parseLabel()
 	open, ok := p.expect(token.LBrace, "\"{\" to open the collection")
 	if !ok {
-		return p.badFrom(c.Keyword, c.Name)
+		return p.badFrom(c.Keyword, c.Name, c.LabelAs, c.Label)
 	}
 	c.LBrace = open
 
@@ -137,6 +138,7 @@ func (p *parser) parseItemDecl() ast.Decl {
 		return p.badFrom(r.Keyword)
 	}
 	r.Name = name
+	r.LabelAs, r.Label = p.parseLabel()
 	if p.at(token.LParen) {
 		params, ok := p.parseParams()
 		r.Params = params
@@ -249,8 +251,8 @@ func (p *parser) parseUse() ast.Decl {
 // { UseLine } "}"`, once parseStep has read the keyword and the name and seen
 // the "=": a step that calls a collection item. It is the same node as a use,
 // with the step's keyword, name and "=" in place of `use`.
-func (p *parser) parseStepCall(kw, name token.Token) ast.Decl {
-	u := &ast.UseDecl{Step: kw, Name: name, Assign: p.next()}
+func (p *parser) parseStepCall(kw, name, labelAs, label token.Token) ast.Decl {
+	u := &ast.UseDecl{Step: kw, Name: name, LabelAs: labelAs, Label: label, Assign: p.next()}
 	if !p.parseItemRef(u, "the item the step calls, like auth.login") {
 		return p.badFrom(u.Tokens(nil)...)
 	}

@@ -9,7 +9,7 @@
         "col": 14,
         "endLine": 10,
         "endCol": 8,
-        "offset": 328
+        "offset": 341
       },
       "message": "a body block is not an object literal",
       "hint": "write the fields as `body { \"sku\" = \"A-1\" }`",
@@ -28,7 +28,7 @@
         "col": 14,
         "endLine": 24,
         "endCol": 8,
-        "offset": 465
+        "offset": 492
       },
       "message": "every element of args must be a string"
     }

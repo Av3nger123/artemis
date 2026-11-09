@@ -11,12 +11,12 @@ import (
 // flowDecl breaks like a scenario: `flow checkout {`, its body, `}`, with a
 // blank line above each step, phase and block.
 func (c *canon) flowDecl(f *ast.Flow) {
-	head := join(" ", f.Keyword.Text, f.Name.Text)
+	head := join(" ", f.Keyword.Text, f.Name.Text, f.LabelAs.Text, f.Label.Text)
 	if len(f.Body) == 0 && !hasComment(f) {
-		c.line(toks(f.Keyword, f.Name, f.LBrace, f.RBrace), join(" ", head, braces(f.LBrace, f.RBrace)))
+		c.line(toks(f.Keyword, f.Name, f.LabelAs, f.Label, f.LBrace, f.RBrace), join(" ", head, braces(f.LBrace, f.RBrace)))
 		return
 	}
-	c.line(toks(f.Keyword, f.Name, f.LBrace), join(" ", head, f.LBrace.Text))
+	c.line(toks(f.Keyword, f.Name, f.LabelAs, f.Label, f.LBrace), join(" ", head, f.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
 	for i, d := range f.Body {
@@ -51,7 +51,7 @@ const maxInlineSets = 3
 // Otherwise it prints one line each, with the "=" signs aligned, so a file of
 // scenarios reads as the table it is.
 func (c *canon) dataScenario(s *ast.Scenario) {
-	head := join(" ", s.Keyword.Text, s.Name.Text)
+	head := join(" ", s.Keyword.Text, s.Name.Text, s.LabelAs.Text, s.Label.Text)
 	if inline, ok := c.inlineData(s); ok && len(head)+1+len(inline) <= c.w.width() {
 		c.line(s.Tokens(nil), join(" ", head, inline))
 		return
@@ -62,7 +62,7 @@ func (c *canon) dataScenario(s *ast.Scenario) {
 			width = n
 		}
 	}
-	c.line(toks(s.Keyword, s.Name, s.LBrace), join(" ", head, s.LBrace.Text))
+	c.line(toks(s.Keyword, s.Name, s.LabelAs, s.Label, s.LBrace), join(" ", head, s.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
 	for _, d := range s.Body {

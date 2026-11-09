@@ -5,7 +5,7 @@
     {
       "kind": "scenario",
       "name": {
-        "text": "\"kinds\"",
+        "text": "kinds",
         "value": "kinds"
       },
       "body": [
@@ -29,7 +29,7 @@
                     "col": 31,
                     "endLine": 6,
                     "endCol": 35,
-                    "offset": 333
+                    "offset": 331
                   }
                 },
                 "span": {
@@ -38,7 +38,7 @@
                   "col": 20,
                   "endLine": 6,
                   "endCol": 35,
-                  "offset": 322
+                  "offset": 320
                 }
               }
             ],
@@ -48,7 +48,7 @@
               "col": 18,
               "endLine": 6,
               "endCol": 37,
-              "offset": 320
+              "offset": 318
             }
           },
           "span": {
@@ -57,7 +57,7 @@
             "col": 3,
             "endLine": 6,
             "endCol": 37,
-            "offset": 305
+            "offset": 303
           }
         },
         {
@@ -77,7 +77,7 @@
                 "col": 14,
                 "endLine": 8,
                 "endCol": 15,
-                "offset": 354
+                "offset": 352
               }
             },
             "span": {
@@ -86,7 +86,7 @@
               "col": 13,
               "endLine": 8,
               "endCol": 15,
-              "offset": 353
+              "offset": 351
             }
           },
           "span": {
@@ -95,7 +95,7 @@
             "col": 3,
             "endLine": 8,
             "endCol": 15,
-            "offset": 343
+            "offset": 341
           },
           "comments": {
             "blankAbove": true
@@ -115,7 +115,7 @@
               "col": 12,
               "endLine": 9,
               "endCol": 19,
-              "offset": 367
+              "offset": 365
             }
           },
           "span": {
@@ -124,7 +124,7 @@
             "col": 3,
             "endLine": 9,
             "endCol": 19,
-            "offset": 358
+            "offset": 356
           }
         },
         {
@@ -141,7 +141,7 @@
               "col": 17,
               "endLine": 10,
               "endCol": 21,
-              "offset": 391
+              "offset": 389
             }
           },
           "span": {
@@ -150,7 +150,7 @@
             "col": 3,
             "endLine": 10,
             "endCol": 21,
-            "offset": 377
+            "offset": 375
           }
         },
         {
@@ -171,7 +171,7 @@
                     "col": 14,
                     "endLine": 11,
                     "endCol": 17,
-                    "offset": 409
+                    "offset": 407
                   }
                 },
                 "value": {
@@ -188,7 +188,7 @@
                         "col": 20,
                         "endLine": 11,
                         "endCol": 21,
-                        "offset": 415
+                        "offset": 413
                       }
                     },
                     {
@@ -202,7 +202,7 @@
                         "col": 23,
                         "endLine": 11,
                         "endCol": 28,
-                        "offset": 418
+                        "offset": 416
                       }
                     }
                   ],
@@ -212,7 +212,7 @@
                     "col": 19,
                     "endLine": 11,
                     "endCol": 29,
-                    "offset": 414
+                    "offset": 412
                   }
                 }
               },
@@ -228,7 +228,7 @@
                     "col": 31,
                     "endLine": 11,
                     "endCol": 34,
-                    "offset": 426
+                    "offset": 424
                   }
                 },
                 "value": {
@@ -239,7 +239,7 @@
                     "col": 36,
                     "endLine": 11,
                     "endCol": 38,
-                    "offset": 431
+                    "offset": 429
                   }
                 }
               }
@@ -250,7 +250,7 @@
               "col": 13,
               "endLine": 11,
               "endCol": 39,
-              "offset": 408
+              "offset": 406
             }
           },
           "span": {
@@ -259,7 +259,7 @@
             "col": 3,
             "endLine": 11,
             "endCol": 39,
-            "offset": 398
+            "offset": 396
           }
         },
         {
@@ -279,7 +279,7 @@
                     "col": 16,
                     "endLine": 12,
                     "endCol": 19,
-                    "offset": 450
+                    "offset": 448
                   }
                 }
               }
@@ -291,7 +291,7 @@
               "col": 13,
               "endLine": 12,
               "endCol": 23,
-              "offset": 447
+              "offset": 445
             }
           },
           "span": {
@@ -300,13 +300,13 @@
             "col": 3,
             "endLine": 12,
             "endCol": 23,
-            "offset": 437
+            "offset": 435
           }
         },
         {
           "kind": "step",
           "name": {
-            "text": "\"api\"",
+            "text": "api",
             "value": "api"
           },
           "action": {
@@ -326,7 +326,7 @@
                       "col": 12,
                       "endLine": 15,
                       "endCol": 15,
-                      "offset": 485
+                      "offset": 481
                     }
                   }
                 }
@@ -338,7 +338,7 @@
                 "col": 9,
                 "endLine": 15,
                 "endCol": 24,
-                "offset": 482
+                "offset": 478
               }
             },
             "block": {
@@ -358,7 +358,7 @@
                       "col": 14,
                       "endLine": 16,
                       "endCol": 22,
-                      "offset": 513
+                      "offset": 509
                     }
                   },
                   "value": {
@@ -372,7 +372,7 @@
                       "col": 25,
                       "endLine": 16,
                       "endCol": 43,
-                      "offset": 524
+                      "offset": 520
                     }
                   },
                   "span": {
@@ -381,7 +381,7 @@
                     "col": 7,
                     "endLine": 16,
                     "endCol": 43,
-                    "offset": 506
+                    "offset": 502
                   }
                 },
                 {
@@ -402,7 +402,7 @@
                             "col": 15,
                             "endLine": 17,
                             "endCol": 18,
-                            "offset": 557
+                            "offset": 553
                           }
                         },
                         "value": {
@@ -416,7 +416,7 @@
                             "col": 20,
                             "endLine": 17,
                             "endCol": 21,
-                            "offset": 562
+                            "offset": 558
                           }
                         }
                       }
@@ -427,7 +427,7 @@
                       "col": 14,
                       "endLine": 17,
                       "endCol": 22,
-                      "offset": 556
+                      "offset": 552
                     }
                   },
                   "span": {
@@ -436,7 +436,7 @@
                     "col": 7,
                     "endLine": 17,
                     "endCol": 22,
-                    "offset": 549
+                    "offset": 545
                   }
                 }
               ],
@@ -446,7 +446,7 @@
                 "col": 25,
                 "endLine": 18,
                 "endCol": 6,
-                "offset": 498
+                "offset": 494
               }
             },
             "span": {
@@ -455,7 +455,7 @@
               "col": 5,
               "endLine": 18,
               "endCol": 6,
-              "offset": 478
+              "offset": 474
             }
           },
           "body": [
@@ -473,7 +473,7 @@
                   "col": 15,
                   "endLine": 19,
                   "endCol": 19,
-                  "offset": 585
+                  "offset": 581
                 }
               },
               "span": {
@@ -482,7 +482,7 @@
                 "col": 5,
                 "endLine": 19,
                 "endCol": 19,
-                "offset": 575
+                "offset": 571
               }
             },
             {
@@ -505,7 +505,7 @@
                         "col": 21,
                         "endLine": 20,
                         "endCol": 22,
-                        "offset": 610
+                        "offset": 606
                       }
                     },
                     "span": {
@@ -514,7 +514,7 @@
                       "col": 13,
                       "endLine": 20,
                       "endCol": 23,
-                      "offset": 602
+                      "offset": 598
                     }
                   },
                   {
@@ -531,7 +531,7 @@
                         "col": 32,
                         "endLine": 20,
                         "endCol": 36,
-                        "offset": 621
+                        "offset": 617
                       }
                     },
                     "span": {
@@ -540,7 +540,7 @@
                       "col": 24,
                       "endLine": 20,
                       "endCol": 36,
-                      "offset": 613
+                      "offset": 609
                     }
                   }
                 ],
@@ -550,7 +550,7 @@
                   "col": 11,
                   "endLine": 20,
                   "endCol": 38,
-                  "offset": 600
+                  "offset": 596
                 }
               },
               "span": {
@@ -559,7 +559,7 @@
                 "col": 5,
                 "endLine": 20,
                 "endCol": 38,
-                "offset": 594
+                "offset": 590
               }
             },
             {
@@ -576,7 +576,7 @@
                     "col": 12,
                     "endLine": 21,
                     "endCol": 18,
-                    "offset": 639
+                    "offset": 635
                   }
                 },
                 "y": {
@@ -590,7 +590,7 @@
                     "col": 22,
                     "endLine": 21,
                     "endCol": 25,
-                    "offset": 649
+                    "offset": 645
                   }
                 },
                 "span": {
@@ -599,7 +599,7 @@
                   "col": 12,
                   "endLine": 21,
                   "endCol": 25,
-                  "offset": 639
+                  "offset": 635
                 }
               },
               "budget": {
@@ -613,7 +613,7 @@
                   "col": 33,
                   "endLine": 21,
                   "endCol": 38,
-                  "offset": 660
+                  "offset": 656
                 }
               },
               "span": {
@@ -622,7 +622,7 @@
                 "col": 5,
                 "endLine": 21,
                 "endCol": 38,
-                "offset": 632
+                "offset": 628
               },
               "class": "simple"
             },
@@ -653,7 +653,7 @@
                                 "col": 17,
                                 "endLine": 22,
                                 "endCol": 21,
-                                "offset": 682
+                                "offset": 678
                               }
                             },
                             "name": "items",
@@ -663,7 +663,7 @@
                               "col": 17,
                               "endLine": 22,
                               "endCol": 27,
-                              "offset": 682
+                              "offset": 678
                             }
                           },
                           "index": {
@@ -677,7 +677,7 @@
                               "col": 28,
                               "endLine": 22,
                               "endCol": 29,
-                              "offset": 693
+                              "offset": 689
                             }
                           },
                           "span": {
@@ -686,7 +686,7 @@
                             "col": 17,
                             "endLine": 22,
                             "endCol": 30,
-                            "offset": 682
+                            "offset": 678
                           }
                         },
                         "name": "id",
@@ -696,7 +696,7 @@
                           "col": 17,
                           "endLine": 22,
                           "endCol": 33,
-                          "offset": 682
+                          "offset": 678
                         }
                       },
                       "span": {
@@ -705,7 +705,7 @@
                         "col": 17,
                         "endLine": 22,
                         "endCol": 40,
-                        "offset": 682
+                        "offset": 678
                       }
                     },
                     "span": {
@@ -714,7 +714,7 @@
                       "col": 16,
                       "endLine": 22,
                       "endCol": 41,
-                      "offset": 681
+                      "offset": 677
                     }
                   },
                   "span": {
@@ -723,7 +723,7 @@
                     "col": 12,
                     "endLine": 22,
                     "endCol": 41,
-                    "offset": 677
+                    "offset": 673
                   }
                 },
                 "y": {
@@ -739,7 +739,7 @@
                         "col": 46,
                         "endLine": 22,
                         "endCol": 50,
-                        "offset": 711
+                        "offset": 707
                       }
                     },
                     "name": "count",
@@ -749,7 +749,7 @@
                       "col": 46,
                       "endLine": 22,
                       "endCol": 56,
-                      "offset": 711
+                      "offset": 707
                     }
                   },
                   "type": "number",
@@ -759,7 +759,7 @@
                     "col": 46,
                     "endLine": 22,
                     "endCol": 66,
-                    "offset": 711
+                    "offset": 707
                   }
                 },
                 "span": {
@@ -768,7 +768,7 @@
                   "col": 12,
                   "endLine": 22,
                   "endCol": 66,
-                  "offset": 677
+                  "offset": 673
                 }
               },
               "span": {
@@ -777,7 +777,7 @@
                 "col": 5,
                 "endLine": 22,
                 "endCol": 66,
-                "offset": 670
+                "offset": 666
               },
               "class": "complex"
             },
@@ -799,7 +799,7 @@
                         "col": 18,
                         "endLine": 23,
                         "endCol": 22,
-                        "offset": 749
+                        "offset": 745
                       }
                     },
                     "name": "items",
@@ -809,7 +809,7 @@
                       "col": 18,
                       "endLine": 23,
                       "endCol": 28,
-                      "offset": 749
+                      "offset": 745
                     }
                   },
                   "index": {
@@ -823,7 +823,7 @@
                       "col": 29,
                       "endLine": 23,
                       "endCol": 30,
-                      "offset": 760
+                      "offset": 756
                     }
                   },
                   "span": {
@@ -832,7 +832,7 @@
                     "col": 18,
                     "endLine": 23,
                     "endCol": 31,
-                    "offset": 749
+                    "offset": 745
                   }
                 },
                 "name": "id",
@@ -842,7 +842,7 @@
                   "col": 18,
                   "endLine": 23,
                   "endCol": 34,
-                  "offset": 749
+                  "offset": 745
                 }
               },
               "span": {
@@ -851,7 +851,7 @@
                 "col": 5,
                 "endLine": 23,
                 "endCol": 34,
-                "offset": 736
+                "offset": 732
               }
             }
           ],
@@ -861,7 +861,7 @@
             "col": 3,
             "endLine": 24,
             "endCol": 4,
-            "offset": 461
+            "offset": 459
           },
           "stepType": "api",
           "scope": [
@@ -884,7 +884,7 @@
         {
           "kind": "step",
           "name": {
-            "text": "\"terminal\"",
+            "text": "terminal",
             "value": "terminal"
           },
           "action": {
@@ -900,7 +900,7 @@
                 "col": 9,
                 "endLine": 28,
                 "endCol": 15,
-                "offset": 819
+                "offset": 813
               }
             },
             "block": {
@@ -923,7 +923,7 @@
                           "col": 15,
                           "endLine": 29,
                           "endCol": 19,
-                          "offset": 866
+                          "offset": 860
                         }
                       },
                       {
@@ -937,7 +937,7 @@
                           "col": 21,
                           "endLine": 29,
                           "endCol": 31,
-                          "offset": 872
+                          "offset": 866
                         }
                       }
                     ],
@@ -947,7 +947,7 @@
                       "col": 14,
                       "endLine": 29,
                       "endCol": 32,
-                      "offset": 865
+                      "offset": 859
                     }
                   },
                   "span": {
@@ -956,7 +956,7 @@
                     "col": 7,
                     "endLine": 29,
                     "endCol": 32,
-                    "offset": 858
+                    "offset": 852
                   }
                 },
                 {
@@ -979,7 +979,7 @@
                             "col": 22,
                             "endLine": 30,
                             "endCol": 33,
-                            "offset": 905
+                            "offset": 899
                           }
                         },
                         "span": {
@@ -988,7 +988,7 @@
                           "col": 13,
                           "endLine": 30,
                           "endCol": 33,
-                          "offset": 896
+                          "offset": 890
                         }
                       }
                     ],
@@ -998,7 +998,7 @@
                       "col": 11,
                       "endLine": 30,
                       "endCol": 35,
-                      "offset": 894
+                      "offset": 888
                     }
                   },
                   "span": {
@@ -1007,7 +1007,7 @@
                     "col": 7,
                     "endLine": 30,
                     "endCol": 35,
-                    "offset": 890
+                    "offset": 884
                   }
                 }
               ],
@@ -1017,7 +1017,7 @@
                 "col": 16,
                 "endLine": 31,
                 "endCol": 6,
-                "offset": 826
+                "offset": 820
               },
               "comments": {
                 "open": [
@@ -1031,7 +1031,7 @@
               "col": 5,
               "endLine": 31,
               "endCol": 6,
-              "offset": 815
+              "offset": 809
             },
             "comments": {
               "above": [
@@ -1056,7 +1056,7 @@
                     "col": 12,
                     "endLine": 32,
                     "endCol": 18,
-                    "offset": 936
+                    "offset": 930
                   }
                 },
                 "y": {
@@ -1070,7 +1070,7 @@
                     "col": 28,
                     "endLine": 32,
                     "endCol": 34,
-                    "offset": 952
+                    "offset": 946
                   }
                 },
                 "span": {
@@ -1079,7 +1079,7 @@
                   "col": 12,
                   "endLine": 32,
                   "endCol": 34,
-                  "offset": 936
+                  "offset": 930
                 }
               },
               "span": {
@@ -1088,7 +1088,7 @@
                 "col": 5,
                 "endLine": 32,
                 "endCol": 34,
-                "offset": 929
+                "offset": 923
               },
               "class": "simple"
             }
@@ -1099,7 +1099,7 @@
             "col": 3,
             "endLine": 33,
             "endCol": 4,
-            "offset": 773
+            "offset": 769
           },
           "stepType": "terminal",
           "scope": [
@@ -1121,7 +1121,7 @@
         {
           "kind": "step",
           "name": {
-            "text": "\"db\"",
+            "text": "db",
             "value": "db"
           },
           "action": {
@@ -1141,7 +1141,7 @@
                     "col": 12,
                     "endLine": 36,
                     "endCol": 20,
-                    "offset": 989
+                    "offset": 981
                   }
                 }
               ],
@@ -1151,7 +1151,7 @@
                 "col": 8,
                 "endLine": 36,
                 "endCol": 21,
-                "offset": 985
+                "offset": 977
               }
             },
             "block": {
@@ -1171,7 +1171,7 @@
                       "col": 13,
                       "endLine": 37,
                       "endCol": 50,
-                      "offset": 1013
+                      "offset": 1005
                     }
                   },
                   "span": {
@@ -1180,7 +1180,7 @@
                     "col": 7,
                     "endLine": 37,
                     "endCol": 50,
-                    "offset": 1007
+                    "offset": 999
                   }
                 },
                 {
@@ -1198,7 +1198,7 @@
                           "col": 15,
                           "endLine": 38,
                           "endCol": 17,
-                          "offset": 1065
+                          "offset": 1057
                         }
                       }
                     ],
@@ -1208,7 +1208,7 @@
                       "col": 14,
                       "endLine": 38,
                       "endCol": 18,
-                      "offset": 1064
+                      "offset": 1056
                     }
                   },
                   "span": {
@@ -1217,7 +1217,7 @@
                     "col": 7,
                     "endLine": 38,
                     "endCol": 18,
-                    "offset": 1057
+                    "offset": 1049
                   }
                 }
               ],
@@ -1227,7 +1227,7 @@
                 "col": 22,
                 "endLine": 39,
                 "endCol": 6,
-                "offset": 999
+                "offset": 991
               }
             },
             "span": {
@@ -1236,7 +1236,7 @@
               "col": 5,
               "endLine": 39,
               "endCol": 6,
-              "offset": 982
+              "offset": 974
             }
           },
           "body": [
@@ -1254,7 +1254,7 @@
                     "col": 12,
                     "endLine": 40,
                     "endCol": 20,
-                    "offset": 1086
+                    "offset": 1078
                   }
                 },
                 "y": {
@@ -1268,7 +1268,7 @@
                     "col": 24,
                     "endLine": 40,
                     "endCol": 25,
-                    "offset": 1098
+                    "offset": 1090
                   }
                 },
                 "span": {
@@ -1277,7 +1277,7 @@
                   "col": 12,
                   "endLine": 40,
                   "endCol": 25,
-                  "offset": 1086
+                  "offset": 1078
                 }
               },
               "span": {
@@ -1286,7 +1286,7 @@
                 "col": 5,
                 "endLine": 40,
                 "endCol": 25,
-                "offset": 1079
+                "offset": 1071
               },
               "class": "simple"
             }
@@ -1297,7 +1297,7 @@
             "col": 3,
             "endLine": 41,
             "endCol": 4,
-            "offset": 966
+            "offset": 960
           },
           "stepType": "db",
           "scope": [
@@ -1319,7 +1319,7 @@
         {
           "kind": "step",
           "name": {
-            "text": "\"browser\"",
+            "text": "browser",
             "value": "browser"
           },
           "action": {
@@ -1339,7 +1339,7 @@
                     "col": 12,
                     "endLine": 45,
                     "endCol": 16,
-                    "offset": 1177
+                    "offset": 1167
                   }
                 },
                 "span": {
@@ -1348,7 +1348,7 @@
                   "col": 7,
                   "endLine": 45,
                   "endCol": 16,
-                  "offset": 1172
+                  "offset": 1162
                 },
                 "comments": {
                   "after": [
@@ -1370,7 +1370,7 @@
                     "col": 12,
                     "endLine": 46,
                     "endCol": 20,
-                    "offset": 1221
+                    "offset": 1211
                   }
                 },
                 "value": {
@@ -1384,7 +1384,7 @@
                     "col": 23,
                     "endLine": 46,
                     "endCol": 30,
-                    "offset": 1232
+                    "offset": 1222
                   }
                 },
                 "span": {
@@ -1393,7 +1393,7 @@
                   "col": 7,
                   "endLine": 46,
                   "endCol": 30,
-                  "offset": 1216
+                  "offset": 1206
                 }
               }
             ],
@@ -1403,7 +1403,7 @@
               "col": 5,
               "endLine": 48,
               "endCol": 6,
-              "offset": 1128
+              "offset": 1118
             },
             "comments": {
               "open": [
@@ -1437,7 +1437,7 @@
                         "col": 17,
                         "endLine": 49,
                         "endCol": 32,
-                        "offset": 1310
+                        "offset": 1300
                       }
                     }
                   ],
@@ -1447,7 +1447,7 @@
                     "col": 12,
                     "endLine": 49,
                     "endCol": 33,
-                    "offset": 1305
+                    "offset": 1295
                   }
                 },
                 "y": {
@@ -1461,7 +1461,7 @@
                     "col": 43,
                     "endLine": 49,
                     "endCol": 48,
-                    "offset": 1336
+                    "offset": 1326
                   }
                 },
                 "span": {
@@ -1470,7 +1470,7 @@
                   "col": 12,
                   "endLine": 49,
                   "endCol": 48,
-                  "offset": 1305
+                  "offset": 1295
                 }
               },
               "span": {
@@ -1479,7 +1479,7 @@
                 "col": 5,
                 "endLine": 49,
                 "endCol": 48,
-                "offset": 1298
+                "offset": 1288
               },
               "class": "simple"
             }
@@ -1490,7 +1490,7 @@
             "col": 3,
             "endLine": 50,
             "endCol": 4,
-            "offset": 1107
+            "offset": 1099
           },
           "stepType": "browser",
           "scope": [
@@ -1536,7 +1536,7 @@
     {
       "kind": "scenario",
       "name": {
-        "text": "\"blocks\"",
+        "text": "blocks",
         "value": "blocks"
       },
       "body": [
@@ -1550,7 +1550,7 @@
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"a\"",
+                    "text": "a",
                     "value": "a"
                   },
                   "action": {
@@ -1566,7 +1566,7 @@
                         "col": 11,
                         "endLine": 56,
                         "endCol": 17,
-                        "offset": 1407
+                        "offset": 1393
                       }
                     },
                     "span": {
@@ -1575,7 +1575,7 @@
                       "col": 7,
                       "endLine": 56,
                       "endCol": 17,
-                      "offset": 1403
+                      "offset": 1389
                     }
                   },
                   "span": {
@@ -1584,7 +1584,7 @@
                     "col": 5,
                     "endLine": 57,
                     "endCol": 6,
-                    "offset": 1386
+                    "offset": 1374
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -1601,7 +1601,7 @@
                 "col": 3,
                 "endLine": 58,
                 "endCol": 4,
-                "offset": 1371
+                "offset": 1359
               }
             }
           ],
@@ -1611,7 +1611,7 @@
             "col": 3,
             "endLine": 58,
             "endCol": 4,
-            "offset": 1371
+            "offset": 1359
           }
         },
         {
@@ -1634,7 +1634,7 @@
                     "col": 6,
                     "endLine": 60,
                     "endCol": 7,
-                    "offset": 1430
+                    "offset": 1416
                   }
                 },
                 "y": {
@@ -1648,7 +1648,7 @@
                     "col": 11,
                     "endLine": 60,
                     "endCol": 12,
-                    "offset": 1435
+                    "offset": 1421
                   }
                 },
                 "span": {
@@ -1657,14 +1657,14 @@
                   "col": 6,
                   "endLine": 60,
                   "endCol": 12,
-                  "offset": 1430
+                  "offset": 1416
                 }
               },
               "body": [
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"b\"",
+                    "text": "b",
                     "value": "b"
                   },
                   "action": {
@@ -1680,7 +1680,7 @@
                         "col": 11,
                         "endLine": 62,
                         "endCol": 17,
-                        "offset": 1464
+                        "offset": 1448
                       }
                     },
                     "span": {
@@ -1689,7 +1689,7 @@
                       "col": 7,
                       "endLine": 62,
                       "endCol": 17,
-                      "offset": 1460
+                      "offset": 1444
                     }
                   },
                   "span": {
@@ -1698,7 +1698,7 @@
                     "col": 5,
                     "endLine": 63,
                     "endCol": 6,
-                    "offset": 1443
+                    "offset": 1429
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -1715,7 +1715,7 @@
                 "col": 3,
                 "endLine": 64,
                 "endCol": 4,
-                "offset": 1427
+                "offset": 1413
               },
               "comments": {
                 "blankAbove": true
@@ -1739,7 +1739,7 @@
                     "col": 13,
                     "endLine": 64,
                     "endCol": 14,
-                    "offset": 1489
+                    "offset": 1473
                   }
                 },
                 "y": {
@@ -1753,7 +1753,7 @@
                     "col": 18,
                     "endLine": 64,
                     "endCol": 19,
-                    "offset": 1494
+                    "offset": 1478
                   }
                 },
                 "span": {
@@ -1762,14 +1762,14 @@
                   "col": 13,
                   "endLine": 64,
                   "endCol": 19,
-                  "offset": 1489
+                  "offset": 1473
                 }
               },
               "body": [
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"c\"",
+                    "text": "c",
                     "value": "c"
                   },
                   "action": {
@@ -1785,7 +1785,7 @@
                         "col": 11,
                         "endLine": 66,
                         "endCol": 17,
-                        "offset": 1523
+                        "offset": 1505
                       }
                     },
                     "span": {
@@ -1794,7 +1794,7 @@
                       "col": 7,
                       "endLine": 66,
                       "endCol": 17,
-                      "offset": 1519
+                      "offset": 1501
                     }
                   },
                   "span": {
@@ -1803,7 +1803,7 @@
                     "col": 5,
                     "endLine": 67,
                     "endCol": 6,
-                    "offset": 1502
+                    "offset": 1486
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -1820,7 +1820,7 @@
                 "col": 5,
                 "endLine": 68,
                 "endCol": 4,
-                "offset": 1481
+                "offset": 1465
               }
             },
             {
@@ -1830,7 +1830,7 @@
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"d\"",
+                    "text": "d",
                     "value": "d"
                   },
                   "action": {
@@ -1846,7 +1846,7 @@
                         "col": 11,
                         "endLine": 70,
                         "endCol": 17,
-                        "offset": 1572
+                        "offset": 1552
                       }
                     },
                     "span": {
@@ -1855,7 +1855,7 @@
                       "col": 7,
                       "endLine": 70,
                       "endCol": 17,
-                      "offset": 1568
+                      "offset": 1548
                     }
                   },
                   "span": {
@@ -1864,7 +1864,7 @@
                     "col": 5,
                     "endLine": 71,
                     "endCol": 6,
-                    "offset": 1551
+                    "offset": 1533
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -1881,7 +1881,7 @@
                 "col": 5,
                 "endLine": 72,
                 "endCol": 4,
-                "offset": 1540
+                "offset": 1522
               }
             }
           ],
@@ -1891,7 +1891,7 @@
             "col": 3,
             "endLine": 72,
             "endCol": 4,
-            "offset": 1427
+            "offset": 1413
           }
         },
         {
@@ -1911,7 +1911,7 @@
                   "col": 10,
                   "endLine": 74,
                   "endCol": 11,
-                  "offset": 1599
+                  "offset": 1579
                 }
               },
               "body": [
@@ -1929,14 +1929,14 @@
                       "col": 10,
                       "endLine": 75,
                       "endCol": 11,
-                      "offset": 1612
+                      "offset": 1592
                     }
                   },
                   "body": [
                     {
                       "kind": "step",
                       "name": {
-                        "text": "\"e\"",
+                        "text": "e",
                         "value": "e"
                       },
                       "action": {
@@ -1952,7 +1952,7 @@
                             "col": 13,
                             "endLine": 77,
                             "endCol": 19,
-                            "offset": 1645
+                            "offset": 1623
                           }
                         },
                         "span": {
@@ -1961,7 +1961,7 @@
                           "col": 9,
                           "endLine": 77,
                           "endCol": 19,
-                          "offset": 1641
+                          "offset": 1619
                         }
                       },
                       "span": {
@@ -1970,7 +1970,7 @@
                         "col": 7,
                         "endLine": 78,
                         "endCol": 8,
-                        "offset": 1622
+                        "offset": 1602
                       },
                       "stepType": "terminal",
                       "scope": [
@@ -1987,7 +1987,7 @@
                     "col": 5,
                     "endLine": 79,
                     "endCol": 6,
-                    "offset": 1607
+                    "offset": 1587
                   }
                 },
                 {
@@ -1997,7 +1997,7 @@
                     {
                       "kind": "step",
                       "name": {
-                        "text": "\"f\"",
+                        "text": "f",
                         "value": "f"
                       },
                       "action": {
@@ -2013,7 +2013,7 @@
                             "col": 13,
                             "endLine": 82,
                             "endCol": 19,
-                            "offset": 1709
+                            "offset": 1685
                           }
                         },
                         "span": {
@@ -2022,7 +2022,7 @@
                           "col": 9,
                           "endLine": 82,
                           "endCol": 19,
-                          "offset": 1705
+                          "offset": 1681
                         }
                       },
                       "span": {
@@ -2031,7 +2031,7 @@
                         "col": 7,
                         "endLine": 83,
                         "endCol": 8,
-                        "offset": 1686
+                        "offset": 1664
                       },
                       "stepType": "terminal",
                       "scope": [
@@ -2048,7 +2048,7 @@
                     "col": 5,
                     "endLine": 84,
                     "endCol": 6,
-                    "offset": 1670
+                    "offset": 1648
                   }
                 }
               ],
@@ -2058,7 +2058,7 @@
                 "col": 3,
                 "endLine": 85,
                 "endCol": 4,
-                "offset": 1592
+                "offset": 1572
               },
               "comments": {
                 "blankAbove": true
@@ -2071,7 +2071,7 @@
             "col": 3,
             "endLine": 85,
             "endCol": 4,
-            "offset": 1592
+            "offset": 1572
           }
         },
         {
@@ -2084,7 +2084,7 @@
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"g\"",
+                    "text": "g",
                     "value": "g"
                   },
                   "action": {
@@ -2100,7 +2100,7 @@
                         "col": 11,
                         "endLine": 89,
                         "endCol": 17,
-                        "offset": 1768
+                        "offset": 1742
                       }
                     },
                     "span": {
@@ -2109,7 +2109,7 @@
                       "col": 7,
                       "endLine": 89,
                       "endCol": 17,
-                      "offset": 1764
+                      "offset": 1738
                     }
                   },
                   "span": {
@@ -2118,7 +2118,7 @@
                     "col": 5,
                     "endLine": 90,
                     "endCol": 6,
-                    "offset": 1747
+                    "offset": 1723
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -2135,7 +2135,7 @@
                 "col": 3,
                 "endLine": 91,
                 "endCol": 4,
-                "offset": 1737
+                "offset": 1713
               },
               "comments": {
                 "blankAbove": true
@@ -2148,7 +2148,7 @@
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"h\"",
+                    "text": "h",
                     "value": "h"
                   },
                   "action": {
@@ -2164,7 +2164,7 @@
                         "col": 11,
                         "endLine": 93,
                         "endCol": 17,
-                        "offset": 1818
+                        "offset": 1790
                       }
                     },
                     "span": {
@@ -2173,7 +2173,7 @@
                       "col": 7,
                       "endLine": 93,
                       "endCol": 17,
-                      "offset": 1814
+                      "offset": 1786
                     }
                   },
                   "span": {
@@ -2182,7 +2182,7 @@
                     "col": 5,
                     "endLine": 94,
                     "endCol": 6,
-                    "offset": 1797
+                    "offset": 1771
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -2199,7 +2199,7 @@
                 "col": 5,
                 "endLine": 95,
                 "endCol": 4,
-                "offset": 1785
+                "offset": 1759
               }
             },
             {
@@ -2209,7 +2209,7 @@
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"i\"",
+                    "text": "i",
                     "value": "i"
                   },
                   "action": {
@@ -2225,7 +2225,7 @@
                         "col": 11,
                         "endLine": 97,
                         "endCol": 17,
-                        "offset": 1870
+                        "offset": 1840
                       }
                     },
                     "span": {
@@ -2234,7 +2234,7 @@
                       "col": 7,
                       "endLine": 97,
                       "endCol": 17,
-                      "offset": 1866
+                      "offset": 1836
                     }
                   },
                   "span": {
@@ -2243,7 +2243,7 @@
                     "col": 5,
                     "endLine": 98,
                     "endCol": 6,
-                    "offset": 1849
+                    "offset": 1821
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -2260,7 +2260,7 @@
                 "col": 5,
                 "endLine": 99,
                 "endCol": 4,
-                "offset": 1835
+                "offset": 1807
               }
             }
           ],
@@ -2270,7 +2270,7 @@
             "col": 3,
             "endLine": 99,
             "endCol": 4,
-            "offset": 1737
+            "offset": 1713
           }
         },
         {
@@ -2294,7 +2294,7 @@
                       "col": 16,
                       "endLine": 101,
                       "endCol": 20,
-                      "offset": 1903
+                      "offset": 1873
                     }
                   },
                   "span": {
@@ -2303,7 +2303,7 @@
                     "col": 10,
                     "endLine": 101,
                     "endCol": 20,
-                    "offset": 1897
+                    "offset": 1867
                   }
                 },
                 {
@@ -2320,7 +2320,7 @@
                       "col": 25,
                       "endLine": 101,
                       "endCol": 26,
-                      "offset": 1912
+                      "offset": 1882
                     }
                   },
                   "span": {
@@ -2329,7 +2329,7 @@
                     "col": 21,
                     "endLine": 101,
                     "endCol": 26,
-                    "offset": 1908
+                    "offset": 1878
                   }
                 }
               ],
@@ -2337,7 +2337,7 @@
                 {
                   "kind": "step",
                   "name": {
-                    "text": "\"j\"",
+                    "text": "j",
                     "value": "j"
                   },
                   "action": {
@@ -2353,7 +2353,7 @@
                         "col": 11,
                         "endLine": 103,
                         "endCol": 17,
-                        "offset": 1941
+                        "offset": 1909
                       }
                     },
                     "span": {
@@ -2362,7 +2362,7 @@
                       "col": 7,
                       "endLine": 103,
                       "endCol": 17,
-                      "offset": 1937
+                      "offset": 1905
                     }
                   },
                   "body": [
@@ -2378,7 +2378,7 @@
                           "col": 21,
                           "endLine": 104,
                           "endCol": 27,
-                          "offset": 1968
+                          "offset": 1936
                         }
                       },
                       "span": {
@@ -2387,7 +2387,7 @@
                         "col": 7,
                         "endLine": 104,
                         "endCol": 27,
-                        "offset": 1954
+                        "offset": 1922
                       }
                     }
                   ],
@@ -2397,7 +2397,7 @@
                     "col": 5,
                     "endLine": 105,
                     "endCol": 6,
-                    "offset": 1920
+                    "offset": 1890
                   },
                   "stepType": "terminal",
                   "scope": [
@@ -2414,7 +2414,7 @@
                 "col": 3,
                 "endLine": 106,
                 "endCol": 4,
-                "offset": 1890
+                "offset": 1860
               },
               "comments": {
                 "blankAbove": true
@@ -2433,7 +2433,7 @@
                 "col": 11,
                 "endLine": 106,
                 "endCol": 14,
-                "offset": 1991
+                "offset": 1959
               }
             },
             "y": {
@@ -2447,7 +2447,7 @@
                 "col": 18,
                 "endLine": 106,
                 "endCol": 24,
-                "offset": 1998
+                "offset": 1966
               }
             },
             "span": {
@@ -2456,7 +2456,7 @@
               "col": 11,
               "endLine": 106,
               "endCol": 24,
-              "offset": 1991
+              "offset": 1959
             }
           },
           "span": {
@@ -2465,7 +2465,7 @@
             "col": 3,
             "endLine": 106,
             "endCol": 24,
-            "offset": 1890
+            "offset": 1860
           }
         }
       ],
@@ -2475,7 +2475,7 @@
         "col": 1,
         "endLine": 107,
         "endCol": 2,
-        "offset": 1349
+        "offset": 1339
       },
       "comments": {
         "blankAbove": true
@@ -2505,7 +2505,7 @@
                 "col": 38,
                 "endLine": 109,
                 "endCol": 39,
-                "offset": 2045
+                "offset": 2013
               }
             },
             {
@@ -2519,7 +2519,7 @@
                 "col": 41,
                 "endLine": 109,
                 "endCol": 42,
-                "offset": 2048
+                "offset": 2016
               }
             }
           ],
@@ -2529,7 +2529,7 @@
             "col": 37,
             "endLine": 109,
             "endCol": 43,
-            "offset": 2044
+            "offset": 2012
           }
         },
         "span": {
@@ -2538,7 +2538,7 @@
           "col": 21,
           "endLine": 109,
           "endCol": 43,
-          "offset": 2028
+          "offset": 1996
         }
       },
       "body": [
@@ -2558,7 +2558,7 @@
                   "col": 11,
                   "endLine": 110,
                   "endCol": 18,
-                  "offset": 2063
+                  "offset": 2031
                 }
               }
             ],
@@ -2568,7 +2568,7 @@
               "col": 10,
               "endLine": 110,
               "endCol": 19,
-              "offset": 2062
+              "offset": 2030
             }
           },
           "span": {
@@ -2577,7 +2577,7 @@
             "col": 3,
             "endLine": 110,
             "endCol": 19,
-            "offset": 2055
+            "offset": 2023
           }
         },
         {
@@ -2587,7 +2587,7 @@
             {
               "kind": "step",
               "name": {
-                "text": "\"before\"",
+                "text": "before",
                 "value": "before"
               },
               "action": {
@@ -2603,7 +2603,7 @@
                     "col": 11,
                     "endLine": 114,
                     "endCol": 17,
-                    "offset": 2113
+                    "offset": 2079
                   }
                 },
                 "span": {
@@ -2612,7 +2612,7 @@
                   "col": 7,
                   "endLine": 114,
                   "endCol": 17,
-                  "offset": 2109
+                  "offset": 2075
                 }
               },
               "span": {
@@ -2621,7 +2621,7 @@
                 "col": 5,
                 "endLine": 115,
                 "endCol": 6,
-                "offset": 2087
+                "offset": 2055
               },
               "stepType": "terminal",
               "scope": [
@@ -2638,7 +2638,7 @@
             "col": 3,
             "endLine": 116,
             "endCol": 4,
-            "offset": 2075
+            "offset": 2043
           },
           "comments": {
             "blankAbove": true
@@ -2647,7 +2647,7 @@
         {
           "kind": "step",
           "name": {
-            "text": "\"s\"",
+            "text": "s",
             "value": "s"
           },
           "action": {
@@ -2663,7 +2663,7 @@
                 "col": 9,
                 "endLine": 119,
                 "endCol": 15,
-                "offset": 2152
+                "offset": 2116
               }
             },
             "span": {
@@ -2672,7 +2672,7 @@
               "col": 5,
               "endLine": 119,
               "endCol": 15,
-              "offset": 2148
+              "offset": 2112
             }
           },
           "span": {
@@ -2681,7 +2681,7 @@
             "col": 3,
             "endLine": 120,
             "endCol": 4,
-            "offset": 2133
+            "offset": 2099
           },
           "stepType": "terminal",
           "scope": [
@@ -2701,7 +2701,7 @@
             {
               "kind": "step",
               "name": {
-                "text": "\"after\"",
+                "text": "after",
                 "value": "after"
               },
               "action": {
@@ -2717,7 +2717,7 @@
                     "col": 11,
                     "endLine": 124,
                     "endCol": 17,
-                    "offset": 2206
+                    "offset": 2168
                   }
                 },
                 "span": {
@@ -2726,7 +2726,7 @@
                   "col": 7,
                   "endLine": 124,
                   "endCol": 17,
-                  "offset": 2202
+                  "offset": 2164
                 }
               },
               "span": {
@@ -2735,7 +2735,7 @@
                 "col": 5,
                 "endLine": 125,
                 "endCol": 6,
-                "offset": 2181
+                "offset": 2145
               },
               "stepType": "terminal",
               "scope": [
@@ -2752,7 +2752,7 @@
             "col": 3,
             "endLine": 126,
             "endCol": 4,
-            "offset": 2166
+            "offset": 2130
           },
           "comments": {
             "blankAbove": true
@@ -2765,7 +2765,7 @@
         "col": 1,
         "endLine": 127,
         "endCol": 2,
-        "offset": 2008
+        "offset": 1976
       },
       "comments": {
         "blankAbove": true

@@ -2,7 +2,7 @@
 # type holds: a request an HTTP verb, a command run, a query db. A run in a
 # request is a command written under the wrong keyword.
 
-collection "ops" {
+collection item_action_mismatch as "ops" {
   request migrate {
     run "make" {
       args = ["migrate"]

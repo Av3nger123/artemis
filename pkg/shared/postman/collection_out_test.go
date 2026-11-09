@@ -4,6 +4,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"artemis/pkg/dsl/expand"
+	"artemis/pkg/dsl/front"
 )
 
 // files is c as a collection file, a flow and a scenario file, through
@@ -37,7 +40,7 @@ func TestEachRequestBecomesARequestAndAStep(t *testing.T) {
 	}
 	f := files(t, c)
 	for _, want := range []string{
-		`collection "Orders API" {`,
+		`collection orders as "Orders API" {`,
 		"  request ping {\n    var base_url\n\n    get \"${base_url}/ping\"\n",
 		"  request orders_list {\n    get \"https://api.test/orders\"\n",
 	} {
@@ -47,16 +50,16 @@ func TestEachRequestBecomesARequestAndAStep(t *testing.T) {
 	}
 	for _, want := range []string{
 		"import \"orders.collection.art\"\n",
-		"flow orders_api {\n",
+		"flow orders_api as \"Orders API\" {\n",
 		`  var base_url = "https://api.test"`,
-		`  step "ping" = orders.ping {}`,
-		`  step "Orders / list" = orders.orders_list {}`,
+		`  step ping = orders.ping {}`,
+		`  step orders_list as "Orders / list" = orders.orders_list {}`,
 	} {
 		if !strings.Contains(f.Flow, want) {
 			t.Errorf("flow does not hold %s:\n%s", want, f.Flow)
 		}
 	}
-	if want := "flow \"orders.flow.art\"\n\nscenario \"Orders API\" {}\n"; !strings.HasSuffix(f.Scenario, want) {
+	if want := "flow \"orders.flow.art\"\n\nscenario orders_api as \"Orders API\" {}\n"; !strings.HasSuffix(f.Scenario, want) {
 		t.Errorf("scenario file =\n%s\nwant it to end\n%s", f.Scenario, want)
 	}
 }
@@ -80,11 +83,11 @@ func TestFlatFilesWriteTheStepsInTheFlow(t *testing.T) {
 	if f.Collection != "" {
 		t.Errorf("the flat output has a collection:\n%s", f.Collection)
 	}
-	want := "flow orders_api {\n  var base_url = \"https://api.test\"\n\n  step \"ping\" {\n    get \"${base_url}/ping\"\n"
+	want := "flow orders_api as \"Orders API\" {\n  var base_url = \"https://api.test\"\n\n  step ping {\n    get \"${base_url}/ping\"\n"
 	if !strings.Contains(f.Flow, want) || strings.Contains(f.Flow, "import") {
 		t.Errorf("flow =\n%s\nwant it to hold\n%s", f.Flow, want)
 	}
-	if !strings.HasSuffix(f.Scenario, "flow \"orders.flow.art\"\n\nscenario \"Orders API\" {}\n") {
+	if !strings.HasSuffix(f.Scenario, "flow \"orders.flow.art\"\n\nscenario orders_api as \"Orders API\" {}\n") {
 		t.Errorf("scenario file =\n%s", f.Scenario)
 	}
 }
@@ -114,7 +117,7 @@ func TestAVarNamedLikeAnOverrideIsPassedUnderAnotherName(t *testing.T) {
 		Items:     []Item{{Name: "r", Request: &Request{Method: "GET", URL: URL{Raw: "https://api.test/{{body}}"}}}},
 	}
 	f := files(t, c)
-	if !strings.Contains(f.Collection, "request r {\n    var body_value\n") || !strings.Contains(f.Flow, `step "r" = orders.r { body_value = body }`) {
+	if !strings.Contains(f.Collection, "request r {\n    var body_value\n") || !strings.Contains(f.Flow, `step r = orders.r { body_value = body }`) {
 		t.Errorf("collection:\n%s\nflow:\n%s", f.Collection, f.Flow)
 	}
 }
@@ -127,5 +130,23 @@ func TestACollectionWithNoRequestsIsRefused(t *testing.T) {
 	}
 	if _, err := CollectionFiles(config, comments, "c.collection.art", "c.flow.art"); !errors.Is(err, ErrNoRequests) {
 		t.Fatalf("CollectionFiles() = %v, want ErrNoRequests", err)
+	}
+}
+
+// A title and a request name that start with a digit still make ids that
+// compile, and the flow carries the collection's title as its label.
+func TestGeneratedIDsCompile(t *testing.T) {
+	c := Collection{
+		Info:  Info{Name: "2024 API"},
+		Items: []Item{{Name: "2FA login", Request: &Request{Method: "GET", URL: URL{Raw: "https://api.test/2fa"}}}},
+	}
+	f := files(t, c)
+	if !strings.Contains(f.Flow, `flow s_2024_api as "2024 API" {`) {
+		t.Errorf("flow:\n%s", f.Flow)
+	}
+	loader := expand.MapLoader{"out/orders.collection.art": f.Collection, "out/orders.flow.art": f.Flow}
+	u := front.CompileWith("out/orders.art", f.Scenario, loader)
+	if u.Bag.Len() != 0 {
+		t.Errorf("the generated files do not compile: %v\n%s\n%s", u.Bag.All(), f.Collection, f.Flow)
 	}
 }

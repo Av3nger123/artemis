@@ -12,7 +12,7 @@
 # shape is not something the checker can know -- so this is a parity case, with
 # the same four assertions and the same errored step.
 flow bad_capture {
-  step "login" {
+  step login {
     post "%SERVER%/login" { body = {"user": "ada"} }
     expect status == 200
     expect body.token exists

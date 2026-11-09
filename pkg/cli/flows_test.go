@@ -56,7 +56,7 @@ func decodeFlowReport(t *testing.T, stdout, stderr string) flowReport {
 func TestTheRunCarriesTheFlowName(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	t.Cleanup(srv.Close)
-	path := writeArt(t, "checkout.art", "flow checkout {\n  step \"ping\" {\n    get \""+srv.URL+"/ping\"\n    expect status == 200\n  }\n}\n\nscenario \"full price\" {}\n")
+	path := writeArt(t, "checkout.art", "flow checkout {\n  step ping {\n    get \""+srv.URL+"/ping\"\n    expect status == 200\n  }\n}\n\nscenario full_price as \"full price\" {}\n")
 
 	c, err := loadArtFile(path, io.Discard)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestTheRunCarriesTheFlowName(t *testing.T) {
 
 // A scenario the selection passes over is still in the report, flow and all.
 func TestASkippedScenarioCarriesTheFlowName(t *testing.T) {
-	path := writeArt(t, "checkout.art", "flow checkout {\n  step \"ping\" {\n    get \"http://127.0.0.1:1/ping\"\n  }\n}\n\nscenario \"full price\" {}\n")
+	path := writeArt(t, "checkout.art", "flow checkout {\n  step ping {\n    get \"http://127.0.0.1:1/ping\"\n  }\n}\n\nscenario full_price as \"full price\" {}\n")
 	c, err := loadArtFile(path, io.Discard)
 	if err != nil {
 		t.Fatalf("loadArtFile() = %v", err)
@@ -130,7 +130,7 @@ func TestFlowFileDiagIsFlowNotRunnable(t *testing.T) {
 	if !ok || d.Code != diag.FlowNotRunnable || d.Severity != diag.Error || d.Span.Line != 3 {
 		t.Errorf("flowFileDiag() = %+v, %v, want flow-not-runnable at line 3", d, ok)
 	}
-	if _, ok := flowFileDiag("s.art", "scenario \"s\" {}\n", t.TempDir()); ok {
+	if _, ok := flowFileDiag("s.art", "scenario s {}\n", t.TempDir()); ok {
 		t.Error("a scenario has a flow-not-runnable diagnostic")
 	}
 }
@@ -140,8 +140,8 @@ func TestRunAFlowFileNoOneUsesSaysHowToWriteOne(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeTree(t, dir, map[string]string{
-		"flows/lonely.art": "flow lonely {\n  step \"a\" {\n    get \"/\"\n  }\n}\n",
-		"other.art":        "flow \"flows/elsewhere.art\"\n\nscenario \"s\" {}\n",
+		"flows/lonely.art": "flow lonely {\n  step a {\n    get \"/\"\n  }\n}\n",
+		"other.art":        "flow \"flows/elsewhere.art\"\n\nscenario s {}\n",
 	})
 
 	_, stderr, err := runCLI(t, "run", "flows/lonely.art")
@@ -158,7 +158,7 @@ func TestFlowUsersStopsAtTheLimit(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{"flows/f.art": "flow f {\n}\n"}
 	for _, name := range []string{"a", "b", "c", "d"} {
-		files[name+".art"] = "flow \"flows/f.art\"\n\nscenario \"s\" {}\n"
+		files[name+".art"] = "flow \"flows/f.art\"\n\nscenario s {}\n"
 	}
 	writeTree(t, dir, files)
 	got := flowUsers(filepath.Join(dir, "flows", "f.art"), dir, maxUsers)

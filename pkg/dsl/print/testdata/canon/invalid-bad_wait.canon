@@ -12,10 +12,10 @@
 # not known until the run, and the checker skips it there as it does
 # everywhere.
 
-scenario "waiting" {
+scenario waiting {
   var pause = "250ms"
 
-  step "upgrade" {
+  step upgrade {
     browser {
       goto "/settings/billing"
       wait "${pause}"

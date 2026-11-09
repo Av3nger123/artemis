@@ -6,8 +6,8 @@
 # property -- so compiling it is the checker's job, and the diagnostic carries
 # Go's own compile error so the author does not have to guess which paren.
 
-scenario "patterns" {
-  step "orders" {
+scenario patterns {
+  step orders {
     get "/orders"
     expect raw matches /order-(\d+/
   }

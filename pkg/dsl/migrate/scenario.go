@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 )
 
@@ -269,7 +268,7 @@ func (m *migration) split(key string, orig *ast.Scenario, name string, imports [
 
 	m.pin(key, body, colls)
 
-	nameTok := word(token.Ident, parser.IdentLike(name))
+	nameTok := word(token.Ident, token.SnakeFrom(name))
 	nameTok.Trailing = s.Name.Trailing
 	flow := &ast.Flow{
 		Keyword: carry(s.Keyword, word(token.Ident, "flow")),
@@ -292,7 +291,12 @@ func (m *migration) split(key string, orig *ast.Scenario, name string, imports [
 		EOF:       token.Token{Kind: token.EOF},
 	}
 	if len(rows) == 0 {
-		data.Scenarios = append(data.Scenarios, dataScenario(bare(s.Name), tags, nil))
+		sc := dataScenario(bare(s.Name), tags, nil)
+		if s.Label.Text != "" {
+			// An old scenario already named by an id keeps its label.
+			sc.LabelAs, sc.Label = word(token.Ident, "as"), bare(s.Label)
+		}
+		data.Scenarios = append(data.Scenarios, sc)
 	}
 	for _, r := range rows {
 		set := &ast.Set{Name: word(token.Ident, orig.For.Var.Value), Assign: word(token.Assign, "="), Value: r.value}

@@ -57,8 +57,8 @@ func TestEventsPinTheStream(t *testing.T) {
 		`{"event":"run-start","files":["suite/items.art"]}`,
 		`{"event":"scenario-start","file":"suite/items.art","scenario":"items","steps":["get item"]}`,
 		`{"event":"step-start","file":"suite/items.art","scenario":"items","step":"get item","index":0}`,
-		`{"event":"step-end","file":"suite/items.art","scenario":"items","index":0,"result":{"name":"get item","status":"fail","duration_ms":12.5,"attempts":1,"line":5,"error":"","screenshot":"","trace":"","assertions":[{"kind":"status_code","path":"","operator":"equals","expected":200,"actual":200,"status":"pass","error":"","line":11},{"kind":"body","path":"$.status","operator":"equals","expected":"ready","actual":"pending","status":"fail","error":"","line":14}]}}`,
-		`{"event":"scenario-end","file":"suite/items.art","scenario":"items","result":{"name":"items","file":"suite/items.art","status":"fail","duration_ms":13,"error":""}}`,
+		`{"event":"step-end","file":"suite/items.art","scenario":"items","index":0,"result":{"name":"get item","id":"","label":"","status":"fail","duration_ms":12.5,"attempts":1,"line":5,"error":"","screenshot":"","trace":"","assertions":[{"kind":"status_code","path":"","operator":"equals","expected":200,"actual":200,"status":"pass","error":"","line":11},{"kind":"body","path":"$.status","operator":"equals","expected":"ready","actual":"pending","status":"fail","error":"","line":14}]}}`,
+		`{"event":"scenario-end","file":"suite/items.art","scenario":"items","result":{"name":"items","id":"","label":"","file":"suite/items.art","status":"fail","duration_ms":13,"error":""}}`,
 		`{"event":"run-end","result":{"schema_version":1,"started_at":"2026-03-04T05:06:07Z","duration_ms":14,"status":"fail","passed":false,"error":"","counts":{"scenarios":{"total":1,"passed":0,"failed":1,"errored":0,"skipped":0},"steps":{"total":1,"passed":0,"failed":1,"errored":0,"skipped":0},"assertions":{"total":2,"passed":1,"failed":1,"errored":0,"skipped":0}}}}`,
 	}, "\n") + "\n"
 	if got := buf.String(); got != want {
@@ -79,7 +79,7 @@ func TestEventsOfAFileThatWouldNotLoad(t *testing.T) {
 	e.ScenarioEnd(sc)
 
 	want := `{"event":"scenario-start","file":"broken.art","scenario":"","steps":[]}` + "\n" +
-		`{"event":"scenario-end","file":"broken.art","scenario":"","result":{"name":"","file":"broken.art","status":"error","duration_ms":0,"error":"broken.art:4:5: unknown field \"timeot\""}}` + "\n"
+		`{"event":"scenario-end","file":"broken.art","scenario":"","result":{"name":"","id":"","label":"","file":"broken.art","status":"error","duration_ms":0,"error":"broken.art:4:5: unknown field \"timeot\""}}` + "\n"
 	if got := buf.String(); got != want {
 		t.Errorf("the stream does not match\n--- want ---\n%s\n--- got ---\n%s", want, got)
 	}

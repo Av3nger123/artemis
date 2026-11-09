@@ -4,7 +4,7 @@
 # step stops on replaces the earlier ones whole -- so the step line reads as a
 # pass that took three tries rather than as three results.
 flow retried {
-  step "ping until ready" {
+  step ping_until_ready as "ping until ready" {
     get "%SERVER%/ready"
     retry { times = 3, delay = "50ms" }
     expect status == 200

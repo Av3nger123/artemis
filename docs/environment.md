@@ -26,7 +26,7 @@ flow sign_in {
   private var url      = env("API_URL")
   private var password = env("API_PASSWORD")
 
-  step "sign in" {
+  step sign_in as "sign in" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": user, "password": password}
@@ -40,8 +40,8 @@ flow sign_in {
 # scenarios/sign_in.art
 flow "../flows/sign_in.art"
 
-scenario "as alice" {}
-scenario "as the smoke user" { user = env("SMOKE_USER", "alice") }
+scenario as_alice as "as alice" {}
+scenario as_the_smoke_user as "as the smoke user" { user = env("SMOKE_USER", "alice") }
 ```
 
 Names come from the process environment and from the `.env` file in the working

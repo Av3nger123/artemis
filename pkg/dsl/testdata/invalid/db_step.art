@@ -4,51 +4,51 @@
 # would otherwise surface only after the steps above had run. A URL from a var
 # or env() is the usual case and is checked when the step runs.
 
-scenario "orders" {
+scenario orders {
   secret var pg = env("ORDERS_DB")
 
-  step "misspelled scheme" {
+  step misspelled_scheme as "misspelled scheme" {
     db "postgress://app@localhost/orders" { sql = "SELECT 1" }
     expect affected == 1
   }
 
-  step "nothing to run" {
+  step nothing_to_run as "nothing to run" {
     db pg
     expect rows exists
   }
 
-  step "args with no sql" {
+  step args_with_no_sql as "args with no sql" {
     db pg { args = [1] }
   }
 
-  step "unknown field" {
+  step unknown_field as "unknown field" {
     db pg {
       query = "SELECT 1"
       sql = "SELECT 1"
     }
   }
 
-  step "an api root" {
+  step an_api_root as "an api root" {
     db pg { sql = "SELECT 1" }
     expect status == 200
   }
 
-  step "sql and a command" {
+  step sql_and_a_command as "sql and a command" {
     db pg {
       sql = "SELECT 1"
       command = ["PING"]
     }
   }
 
-  step "sql to mongodb" {
+  step sql_to_mongodb as "sql to mongodb" {
     db "mongodb://localhost:27017/shop" { sql = "SELECT 1" }
   }
 
-  step "a command to postgres" {
+  step a_command_to_postgres as "a command to postgres" {
     db "postgres://localhost/shop" { command = {"find": "orders"} }
   }
 
-  step "args with a command" {
+  step args_with_a_command as "args with a command" {
     db "redis://localhost:6379" {
       command = ["GET", "k"]
       args = [1]
@@ -56,7 +56,7 @@ scenario "orders" {
     expect result == "v"
   }
 
-  step "rows outside a db step" {
+  step rows_outside_a_db_step as "rows outside a db step" {
     get "https://example.com/orders"
     expect rows[0].id == 1
   }

@@ -44,9 +44,13 @@ func TypeKey(t check.StepType) (string, bool) {
 // and the policy are expressions evaluated against the scenario's scope, which
 // is what Model does.
 type Step struct {
-	// Name is the step's name, which is what ART-1's result tree records and
-	// what the console report prints a line for.
+	// Name is what ART-1's result tree records and what the console report
+	// prints a line for: the step's label, or its id when it has none.
 	Name string
+
+	// ID is the step's id, which its trace file is named after, and Label its
+	// label, "" when it has none.
+	ID, Label string
 
 	// Type is the registry key: "api", "terminal", "browser" or "db". See
 	// registryKeys.
@@ -263,7 +267,9 @@ func step(d *ast.StepDecl, info *check.Info, secrets map[string]bool) (*Step, er
 	}
 
 	out := &Step{
-		Name:        d.Name.Value,
+		Name:        ast.Display(d.Name, d.Label),
+		ID:          d.Name.Value,
+		Label:       d.Label.Value,
 		Type:        key,
 		Line:        d.Keyword.Span.Line,
 		File:        d.Keyword.Span.File,

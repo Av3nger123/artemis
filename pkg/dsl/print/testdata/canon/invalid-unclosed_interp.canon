@@ -6,8 +6,8 @@
 # The unclosed braces either side of it are real too, and reported: a file that
 # ends inside a string ends inside everything that string was inside.
 
-scenario "unclosed interpolation" {
+scenario unclosed_interpolation as "unclosed interpolation" {
   var base = "https://api.example.com"
 
-  step "orders" {
+  step orders {
     get "${base

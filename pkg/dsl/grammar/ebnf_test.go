@@ -167,7 +167,7 @@ func TestScopesSectionComesFromTheChecker(t *testing.T) {
 // compiled as one names it.
 func TestTheExampleCompiles(t *testing.T) {
 	files := expand.MapLoader{"example.art": example}
-	u := front.CompileWith("scenario.art", "flow \"example.art\"\n\nscenario \"checkout\" { }\n", files)
+	u := front.CompileWith("scenario.art", "flow \"example.art\"\n\nscenario checkout { }\n", files)
 	if u.Info.Steps() == 0 {
 		t.Error("the example compiled to no step")
 	}

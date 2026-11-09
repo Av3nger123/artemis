@@ -3,8 +3,8 @@
 # useful hint is the list of roots this step type *does* bind -- which is what
 # tells the author to write `expect page.title contains "Orders"` instead.
 
-scenario "sign in" {
-  step "loads the orders page" {
+scenario sign_in as "sign in" {
+  step loads_the_orders_page as "loads the orders page" {
     browser {
       goto "/orders"
     }

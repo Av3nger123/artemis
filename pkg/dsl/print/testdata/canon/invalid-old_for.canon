@@ -5,7 +5,7 @@
 # reported at for, once, as the old scenario it is.
 
 scenario "log in as ${user.role}" for user in json("users.json") {
-  step "log in" {
+  step log_in as "log in" {
     post "/login" { body = {"email": user.email} }
     expect status == user.status
   }

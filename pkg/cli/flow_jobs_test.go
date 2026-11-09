@@ -14,9 +14,9 @@ import (
 func TestFlowErrorReportedPerScenarioFileUnderJobs(t *testing.T) {
 	initLog(t)
 	root := writeTree(t, t.TempDir(), map[string]string{
-		"flows/checkout.art": "flow checkout {\n  step \"pay\" {\n    get \"/${nope}\"\n  }\n}\n",
-		"a.art":              "flow \"flows/checkout.art\"\nscenario \"a1\" { }\n",
-		"b.art":              "flow \"flows/checkout.art\"\nscenario \"b1\" { }\n",
+		"flows/checkout.art": "flow checkout {\n  step pay {\n    get \"/${nope}\"\n  }\n}\n",
+		"a.art":              "flow \"flows/checkout.art\"\nscenario a1 { }\n",
+		"b.art":              "flow \"flows/checkout.art\"\nscenario b1 { }\n",
 	})
 	files, err := discover(root)
 	if err != nil {

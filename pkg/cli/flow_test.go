@@ -60,26 +60,26 @@ func TestParallelBranchesRunAtTheSameTime(t *testing.T) {
   var url = %q
 
   parallel {
-    step "a" {
+    step a {
       get "${url}/slow/a"
       var a = body.id
     }
-    step "b" {
+    step b {
       get "${url}/slow/b"
       var b = body.id
     }
-    step "c" {
+    step c {
       get "${url}/slow/c"
     }
   }
 
-  step "after" {
+  step after {
     get "${url}/joined/${a}/${b}"
     expect body.path == "/joined/a/b"
   }
 }
 
-scenario "parallel" {}
+scenario parallel {}
 `, srv.URL))
 	took := time.Since(start)
 	if !run.Passed() {
@@ -102,30 +102,30 @@ func TestIfAndSwitchRunOneBranch(t *testing.T) {
 	run, diags := runArt(t, fmt.Sprintf(`flow choose {
   var url = %q
 
-  step "profile" {
+  step profile {
     get "${url}/me"
     var tier = body.tier
   }
 
   if tier == "silver" {
-    step "silver" { get "${url}/silver" }
+    step silver { get "${url}/silver" }
   } else if tier == "gold" {
-    step "gold" { get "${url}/gold" }
+    step gold { get "${url}/gold" }
   } else {
-    step "other" { get "${url}/other" }
+    step other { get "${url}/other" }
   }
 
   switch tier {
     case "bronze" {
-      step "bronze" { get "${url}/bronze" }
+      step bronze { get "${url}/bronze" }
     }
     default {
-      step "fallback" { get "${url}/fallback" }
+      step fallback { get "${url}/fallback" }
     }
   }
 }
 
-scenario "choose" {}
+scenario choose {}
 `, srv.URL))
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
@@ -154,19 +154,19 @@ func TestTryCatchFinally(t *testing.T) {
   var url = %q
 
   try {
-    step "pay" {
+    step pay {
       get "${url}/fail"
       expect status == 200
     }
-    step "after pay" { get "${url}/after" }
+    step after_pay as "after pay" { get "${url}/after" }
   } catch {
-    step "refund" { get "${url}/refund" }
+    step refund { get "${url}/refund" }
   } finally {
-    step "unlock" { get "${url}/unlock" }
+    step unlock { get "${url}/unlock" }
   }
 }
 
-scenario "try" {}
+scenario try {}
 `, srv.URL))
 	if run.Passed() {
 		t.Fatal("a scenario whose try failed passed: a catch is not a cure")
@@ -188,19 +188,19 @@ func TestRepeatPollsUntilItHolds(t *testing.T) {
   var url = %q
 
   repeat every "10ms" max 10 {
-    step "status" {
+    step status {
       get "${url}/job"
       var state = body.state
     }
   } until state == "done"
 
-  step "result" {
+  step result {
     get "${url}/result"
     expect state == "done"
   }
 }
 
-scenario "poll" {}
+scenario poll {}
 `, srv.URL))
 	if !run.Passed() {
 		t.Fatalf("run failed:\n%s%s", diags, describeRun(run))
@@ -217,14 +217,14 @@ func TestARepeatThatRunsOutNamesTheBoundAndTheLastValue(t *testing.T) {
   var url = %q
 
   repeat max 2 {
-    step "status" {
+    step status {
       get "${url}/job"
       var state = body.state
     }
   } until state == "done"
 }
 
-scenario "poll" {}
+scenario poll {}
 `, srv.URL))
 	if run.Passed() {
 		t.Fatal("a repeat that never held passed")

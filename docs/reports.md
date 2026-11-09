@@ -57,6 +57,8 @@ included, so a reader can tell "nothing failed" from "nothing ran".
   "scenarios": [
     {
       "name": "items",
+      "id": "items",
+      "label": "",
       "file": "scenarios/items.art",
       "flow": "items",
       "status": "fail",
@@ -65,6 +67,8 @@ included, so a reader can tell "nothing failed" from "nothing ran".
       "steps": [
         {
           "name": "list items",
+          "id": "list_items",
+          "label": "list items",
           "status": "fail",
           "duration_ms": 0.316,
           "attempts": 1,

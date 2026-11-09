@@ -3,9 +3,11 @@ package front
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/diag"
+	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 )
 
@@ -55,7 +57,8 @@ func oldForms(file string, tree *ast.File, bag *diag.Bag) bool {
 			case isSuite || header || flow || coll:
 				// A scenario in a scenario file is data; in a flow file or a
 				// collection file the parser and expansion say where it
-				// belongs.
+				// belongs. Either way its name is an id.
+				o.quoted("scenario", v.Name, "")
 			case v.For != nil:
 				o.forClause(v)
 			default:
@@ -64,6 +67,7 @@ func oldForms(file string, tree *ast.File, bag *diag.Bag) bool {
 		case *ast.Flow:
 			o.inner(v)
 		case *ast.Collection:
+			o.quoted("collection", v.Name, collectionID(file))
 			for _, it := range v.Items {
 				if r, ok := it.(*ast.RequestDecl); ok {
 					o.item(r)
@@ -143,13 +147,47 @@ func (o *olds) inner(n ast.Node) {
 		case *ast.UseDecl:
 			if v.Step.Text == "" && v.Keyword.Text != "" {
 				o.report(v.Keyword.Span, diag.OldUse,
-					fmt.Sprintf(`use is now step "<name>" = %s`, v.Ref()),
-					fmt.Sprintf(`name the step: step "<name>" = %s { ... }`, v.Ref()))
+					fmt.Sprintf(`use is now step <id> = %s`, v.Ref()),
+					fmt.Sprintf(`name the step: step <id> = %s { ... }`, v.Ref()))
 			}
+			if v.Step.Text != "" {
+				o.quoted("step", v.Name, "")
+			}
+		case *ast.StepDecl:
+			o.quoted("step", v.Name, "")
 		case *ast.Param:
 			o.secret(v.Secret, "parameter "+v.Name.Value)
 		}
 	})
+}
+
+// quoted reports a step, scenario or collection named in quotes: the name is
+// a snake_case id now, and the text its label, unless it already is the id.
+// id is the id to give it, "" for the text made snake_case.
+func (o *olds) quoted(what string, name token.Token, id string) {
+	if name.Kind != token.String || name.Span.IsZero() {
+		return
+	}
+	if id == "" {
+		id = token.SnakeFrom(name.Value)
+	}
+	form := what + " " + id
+	if name.Value != id {
+		form += " as " + name.Text
+	}
+	o.report(name.Span, diag.QuotedName,
+		fmt.Sprintf("a %s's name is a snake_case id now: %s", what, form),
+		"write "+form)
+}
+
+// collectionID is the id a collection in file is given: the name an import
+// with no as gives the file, when that is an id, and else its name made one.
+func collectionID(file string) string {
+	if id, ok := parser.ImportName(file); ok && token.IsSnakeID(id) {
+		return id
+	}
+	base := filepath.Base(file)
+	return token.SnakeFrom(strings.TrimSuffix(base, filepath.Ext(base)))
 }
 
 func (o *olds) secret(t token.Token, what string) {

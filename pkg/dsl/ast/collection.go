@@ -26,6 +26,8 @@ func (i *Import) decl()            {}
 type Collection struct {
 	Keyword token.Token
 	Name    token.Token
+	LabelAs token.Token // "as" before the label; zero when absent
+	Label   token.Token // the String after as: the label people read; zero when absent
 	LBrace  token.Token
 	Items   []Decl // *RequestDecl or *Bad
 	RBrace  token.Token
@@ -34,6 +36,8 @@ type Collection struct {
 func (c *Collection) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, c.Keyword)
 	dst = appendTok(dst, c.Name)
+	dst = appendTok(dst, c.LabelAs)
+	dst = appendTok(dst, c.Label)
 	dst = appendTok(dst, c.LBrace)
 	for _, d := range c.Items {
 		dst = appendNode(dst, d)
@@ -82,7 +86,9 @@ func (p *Params) Span() token.Span { return spanOf(p) }
 type RequestDecl struct {
 	Keyword token.Token // request, command or query
 	Name    token.Token
-	Params  *Params // nil for an item whose inputs are vars
+	LabelAs token.Token // "as" before the label; zero when absent
+	Label   token.Token // the String after as: the label people read; zero when absent
+	Params  *Params     // nil for an item whose inputs are vars
 	LBrace  token.Token
 	Inputs  []*VarDecl // the var lines above the action: the item's inputs
 	Action  Action
@@ -93,6 +99,8 @@ type RequestDecl struct {
 func (r *RequestDecl) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, r.Keyword)
 	dst = appendTok(dst, r.Name)
+	dst = appendTok(dst, r.LabelAs)
+	dst = appendTok(dst, r.Label)
 	dst = appendNode(dst, r.Params)
 	dst = appendTok(dst, r.LBrace)
 	for _, in := range r.Inputs {
@@ -132,7 +140,9 @@ func (r *RequestDecl) decl()            {}
 // are set and Keyword is zero.
 type UseDecl struct {
 	Step       token.Token // step; zero for the use form
-	Name       token.Token // the String naming the step; zero for the use form
+	Name       token.Token // the Ident (or, old form, String) naming the step; zero for the use form
+	LabelAs    token.Token // "as" before the label; zero when absent
+	Label      token.Token // the String after as; zero when absent
 	Assign     token.Token // =; zero for the use form
 	Keyword    token.Token // use; zero for the step form
 	Collection token.Token // zero for a bare sibling ref
@@ -148,6 +158,8 @@ type UseDecl struct {
 func (u *UseDecl) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, u.Step)
 	dst = appendTok(dst, u.Name)
+	dst = appendTok(dst, u.LabelAs)
+	dst = appendTok(dst, u.Label)
 	dst = appendTok(dst, u.Assign)
 	dst = appendTok(dst, u.Keyword)
 	dst = appendTok(dst, u.Collection)

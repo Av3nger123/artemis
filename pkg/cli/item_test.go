@@ -39,7 +39,7 @@ func TestRunOneRequestOfACollection(t *testing.T) {
 		t.Errorf("the report has no auth.login step:\n%s", out)
 	}
 	// The response a client shows comes from the step's trace.
-	shot, err := os.ReadFile(filepath.Join(traces, "auth-login-auth-login.json"))
+	shot, err := os.ReadFile(filepath.Join(traces, "auth_login-login.json"))
 	if err != nil {
 		entries, _ := os.ReadDir(traces)
 		t.Fatalf("no trace for the request: %v (the folder holds %v)", err, entries)
@@ -165,7 +165,7 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 // file is.
 func TestAstAndParseReadAFileAsIfItWereElsewhere(t *testing.T) {
 	draft := filepath.Join(t.TempDir(), "draft.art")
-	src := "import \"auth.art\"\n\nflow s {\n  step \"login\" = auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
+	src := "import \"auth.art\"\n\nflow s {\n  step login = auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
 	if err := os.WriteFile(draft, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}

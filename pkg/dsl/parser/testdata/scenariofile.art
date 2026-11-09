@@ -2,18 +2,18 @@
 # set of data. A scenario only sets the flow's vars, and tags itself.
 flow "../flows/checkout.art"
 
-scenario "full price" {}
+scenario full_price as "full price" {}
 
-scenario "with a coupon" { quantity = 3  coupon = "TEN" }
+scenario with_a_coupon as "with a coupon" { quantity = 3  coupon = "TEN" }
 
-scenario "bad coupon" {
+scenario bad_coupon as "bad coupon" {
   tags = ["errors", "payments"]
   coupon = "NOPE"
   code = 422 # the server refuses it
   total = skip
 }
 
-scenario "many" {
+scenario many {
   sku = "SKU-2"
   quantity = 2
   coupon = env("COUPON")

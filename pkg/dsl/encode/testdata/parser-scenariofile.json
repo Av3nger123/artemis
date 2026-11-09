@@ -27,6 +27,10 @@
     {
       "kind": "scenario",
       "name": {
+        "text": "full_price",
+        "value": "full_price"
+      },
+      "label": {
         "text": "\"full price\"",
         "value": "full price"
       },
@@ -35,7 +39,7 @@
         "line": 5,
         "col": 1,
         "endLine": 5,
-        "endCol": 25,
+        "endCol": 39,
         "offset": 177
       },
       "comments": {
@@ -45,6 +49,10 @@
     {
       "kind": "scenario",
       "name": {
+        "text": "with_a_coupon",
+        "value": "with_a_coupon"
+      },
+      "label": {
         "text": "\"with a coupon\"",
         "value": "with a coupon"
       },
@@ -60,19 +68,19 @@
             "span": {
               "file": "../parser/testdata/scenariofile.art",
               "line": 7,
-              "col": 39,
+              "col": 56,
               "endLine": 7,
-              "endCol": 40,
-              "offset": 241
+              "endCol": 57,
+              "offset": 272
             }
           },
           "span": {
             "file": "../parser/testdata/scenariofile.art",
             "line": 7,
-            "col": 28,
+            "col": 45,
             "endLine": 7,
-            "endCol": 40,
-            "offset": 230
+            "endCol": 57,
+            "offset": 261
           }
         },
         {
@@ -86,19 +94,19 @@
             "span": {
               "file": "../parser/testdata/scenariofile.art",
               "line": 7,
-              "col": 51,
+              "col": 68,
               "endLine": 7,
-              "endCol": 56,
-              "offset": 253
+              "endCol": 73,
+              "offset": 284
             }
           },
           "span": {
             "file": "../parser/testdata/scenariofile.art",
             "line": 7,
-            "col": 42,
+            "col": 59,
             "endLine": 7,
-            "endCol": 56,
-            "offset": 244
+            "endCol": 73,
+            "offset": 275
           }
         }
       ],
@@ -107,8 +115,8 @@
         "line": 7,
         "col": 1,
         "endLine": 7,
-        "endCol": 58,
-        "offset": 203
+        "endCol": 75,
+        "offset": 217
       },
       "comments": {
         "blankAbove": true
@@ -117,6 +125,10 @@
     {
       "kind": "scenario",
       "name": {
+        "text": "bad_coupon",
+        "value": "bad_coupon"
+      },
+      "label": {
         "text": "\"bad coupon\"",
         "value": "bad coupon"
       },
@@ -137,7 +149,7 @@
                   "col": 11,
                   "endLine": 10,
                   "endCol": 19,
-                  "offset": 296
+                  "offset": 341
                 }
               },
               {
@@ -151,7 +163,7 @@
                   "col": 21,
                   "endLine": 10,
                   "endCol": 31,
-                  "offset": 306
+                  "offset": 351
                 }
               }
             ],
@@ -161,7 +173,7 @@
               "col": 10,
               "endLine": 10,
               "endCol": 32,
-              "offset": 295
+              "offset": 340
             }
           },
           "span": {
@@ -170,7 +182,7 @@
             "col": 3,
             "endLine": 10,
             "endCol": 32,
-            "offset": 288
+            "offset": 333
           }
         },
         {
@@ -187,7 +199,7 @@
               "col": 12,
               "endLine": 11,
               "endCol": 18,
-              "offset": 329
+              "offset": 374
             }
           },
           "span": {
@@ -196,7 +208,7 @@
             "col": 3,
             "endLine": 11,
             "endCol": 18,
-            "offset": 320
+            "offset": 365
           }
         },
         {
@@ -213,7 +225,7 @@
               "col": 10,
               "endLine": 12,
               "endCol": 13,
-              "offset": 345
+              "offset": 390
             }
           },
           "span": {
@@ -222,7 +234,7 @@
             "col": 3,
             "endLine": 12,
             "endCol": 13,
-            "offset": 338
+            "offset": 383
           },
           "comments": {
             "after": [
@@ -242,7 +254,7 @@
               "col": 11,
               "endLine": 13,
               "endCol": 15,
-              "offset": 383
+              "offset": 428
             }
           },
           "span": {
@@ -251,7 +263,7 @@
             "col": 3,
             "endLine": 13,
             "endCol": 15,
-            "offset": 375
+            "offset": 420
           }
         }
       ],
@@ -261,7 +273,7 @@
         "col": 1,
         "endLine": 14,
         "endCol": 2,
-        "offset": 262
+        "offset": 293
       },
       "comments": {
         "blankAbove": true
@@ -270,7 +282,7 @@
     {
       "kind": "scenario",
       "name": {
-        "text": "\"many\"",
+        "text": "many",
         "value": "many"
       },
       "body": [
@@ -288,7 +300,7 @@
               "col": 9,
               "endLine": 17,
               "endCol": 16,
-              "offset": 417
+              "offset": 460
             }
           },
           "span": {
@@ -297,7 +309,7 @@
             "col": 3,
             "endLine": 17,
             "endCol": 16,
-            "offset": 411
+            "offset": 454
           }
         },
         {
@@ -314,7 +326,7 @@
               "col": 14,
               "endLine": 18,
               "endCol": 15,
-              "offset": 438
+              "offset": 481
             }
           },
           "span": {
@@ -323,7 +335,7 @@
             "col": 3,
             "endLine": 18,
             "endCol": 15,
-            "offset": 427
+            "offset": 470
           }
         },
         {
@@ -344,7 +356,7 @@
                   "col": 16,
                   "endLine": 19,
                   "endCol": 24,
-                  "offset": 455
+                  "offset": 498
                 }
               }
             ],
@@ -354,7 +366,7 @@
               "col": 12,
               "endLine": 19,
               "endCol": 25,
-              "offset": 451
+              "offset": 494
             }
           },
           "span": {
@@ -363,7 +375,7 @@
             "col": 3,
             "endLine": 19,
             "endCol": 25,
-            "offset": 442
+            "offset": 485
           }
         },
         {
@@ -380,7 +392,7 @@
               "col": 10,
               "endLine": 20,
               "endCol": 13,
-              "offset": 474
+              "offset": 517
             }
           },
           "span": {
@@ -389,7 +401,7 @@
             "col": 3,
             "endLine": 20,
             "endCol": 13,
-            "offset": 467
+            "offset": 510
           }
         }
       ],
@@ -399,7 +411,7 @@
         "col": 1,
         "endLine": 21,
         "endCol": 2,
-        "offset": 391
+        "offset": 436
       },
       "comments": {
         "blankAbove": true

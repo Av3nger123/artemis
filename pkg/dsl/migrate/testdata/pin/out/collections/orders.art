@@ -1,4 +1,4 @@
-collection "orders" {
+collection orders {
   request create {
     var sku
     var qty = 1

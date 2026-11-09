@@ -1,9 +1,9 @@
 # The first file of the suite: a token captured here is not visible to any
 # other file.
-flow _01_login {
+flow s_01_login {
   var base = "%SERVER%"
 
-  step "sign in" {
+  step sign_in as "sign in" {
     post "${base}/login" {
       header "Content-Type" = "application/json"
       body = {"user": "ada"}
