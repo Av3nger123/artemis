@@ -336,33 +336,6 @@ func TestLexicalErrorsAreInTheSameBag(t *testing.T) {
 	}
 }
 
-// TestUnquotedNameSuggestsTheQuotes: `scenario checkout {` is the mistake
-// someone coming from HCL makes, and a suggestion that adds the quotes is a
-// one-click fix rather than a paragraph.
-func TestUnquotedNameSuggestsTheQuotes(t *testing.T) {
-	src := "scenario checkout {\n  step login {\n    run \"x\"\n  }\n}\n"
-	f, bag := Parse("t.art", src)
-	assertRoundTrip(t, src, f)
-
-	all := bag.All()
-	if len(all) != 2 {
-		t.Fatalf("diagnostics = %d, want one per unquoted name", len(all))
-	}
-	for _, d := range all {
-		if len(d.Suggestions) != 1 {
-			t.Errorf("%d:%d has %d suggestions, want 1", d.Span.Line, d.Span.Col, len(d.Suggestions))
-			continue
-		}
-		if want := []string{`"checkout"`, `"login"`}; !has(want, d.Suggestions[0].Replace) {
-			t.Errorf("suggestion = %q, want one of %q", d.Suggestions[0].Replace, want)
-		}
-	}
-	// And the names are still bound, so the rest of the file checks.
-	if s := find(f, is[*ast.Scenario]); s == nil {
-		t.Error("the scenario was abandoned rather than recovered")
-	}
-}
-
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)

@@ -8,6 +8,8 @@ import "artemis/pkg/dsl/token"
 type Flow struct {
 	Keyword token.Token // flow
 	Name    token.Token // the Ident naming it
+	LabelAs token.Token // "as" before the label; zero when absent
+	Label   token.Token // the String after as: the label people read; zero when absent
 	LBrace  token.Token
 	Body    []Decl // VarDecl, ConfigDecl, StepDecl, UseDecl, PhaseDecl, BlockDecl, or Bad
 	RBrace  token.Token
@@ -16,6 +18,8 @@ type Flow struct {
 func (f *Flow) Tokens(dst []token.Token) []token.Token {
 	dst = appendTok(dst, f.Keyword)
 	dst = appendTok(dst, f.Name)
+	dst = appendTok(dst, f.LabelAs)
+	dst = appendTok(dst, f.Label)
 	dst = appendTok(dst, f.LBrace)
 	for _, d := range f.Body {
 		dst = appendNode(dst, d)

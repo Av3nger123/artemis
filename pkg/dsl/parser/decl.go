@@ -78,12 +78,13 @@ func (p *parser) parseScenario() ast.Decl {
 	if templated {
 		s.Name = template(p.parseInterp().Tokens(nil))
 	} else {
-		name, ok := p.expectIdentOrString("a scenario name in quotes")
+		name, ok := p.expectIdentOrString("a scenario id, like full_price")
 		if !ok {
 			return p.badFrom(s.Keyword)
 		}
 		s.Name = name
 	}
+	s.LabelAs, s.Label = p.parseLabel()
 
 	if p.atWord("for") {
 		s.For = p.parseFor()
@@ -96,7 +97,7 @@ func (p *parser) parseScenario() ast.Decl {
 
 	open, ok := p.expect(token.LBrace, "\"{\" to open the scenario")
 	if !ok {
-		consumed := []token.Token{s.Keyword, s.Name}
+		consumed := []token.Token{s.Keyword, s.Name, s.LabelAs, s.Label}
 		if s.For != nil {
 			consumed = s.For.Tokens(consumed)
 		}
@@ -334,19 +335,20 @@ func (p *parser) parseVar() ast.Decl {
 func (p *parser) parseStep() ast.Decl {
 	s := &ast.StepDecl{Keyword: p.next()}
 
-	name, ok := p.expectIdentOrString("a step name in quotes")
+	name, ok := p.expectIdentOrString("a step id, like log_in")
 	if !ok {
 		return p.badFrom(s.Keyword)
 	}
+	labelAs, label := p.parseLabel()
 	if p.at(token.Assign) {
-		return p.parseStepCall(s.Keyword, name)
+		return p.parseStepCall(s.Keyword, name, labelAs, label)
 	}
 
 	body := p.parseStepBody("step", name)
 	if body == nil {
-		return p.badFrom(s.Keyword, name)
+		return p.badFrom(s.Keyword, name, labelAs, label)
 	}
-	body.Keyword, body.Name = s.Keyword, name
+	body.Keyword, body.Name, body.LabelAs, body.Label = s.Keyword, name, labelAs, label
 	p.endDecl("a step")
 	return body
 }
@@ -428,23 +430,16 @@ func (p *parser) parseStepBodyWith(what string, name token.Token, head func(*ast
 	return s
 }
 
-// expectIdentOrString consumes the name of a scenario or a step.
+// expectIdentOrString consumes the name of a collection, a scenario or a step.
 //
-// Both are written as quoted strings, and an interpolated one is not a name:
-// a step's identity is what the report prints and what a `--filter` matches,
-// so it has to be fixed at parse time. An identifier is accepted and reported,
-// because `scenario checkout {` is the mistake someone coming from HCL makes,
-// and a suggestion that adds the quotes is a one-click fix.
+// The name is a snake_case id, an identifier. A quoted string is the old form,
+// read still so that artemis migrate can rewrite it and front can report it as
+// quoted-name. An interpolated string is not a name: a step's identity is what
+// the report prints and what a trace file is named after, so it has to be
+// fixed at parse time.
 func (p *parser) expectIdentOrString(what string) (token.Token, bool) {
-	if p.at(token.String) {
+	if p.at(token.String) || p.at(token.Ident) {
 		return p.next(), true
-	}
-	if p.at(token.Ident) {
-		t := p.next()
-		p.errorf(t, diag.UnexpectedToken, "expected %s, found %s", what, describe(t)).
-			Hintf("names are quoted: \"%s\"", t.Value).
-			Suggest(quote(t.Value))
-		return t, true
 	}
 	if p.at(token.StringStart) {
 		t := p.peek()

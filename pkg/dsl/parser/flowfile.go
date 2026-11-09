@@ -67,6 +67,7 @@ func (p *parser) parseFlowRef(first bool) ast.Decl {
 // parseFlowDecl is `flow <ident> { ... }`.
 func (p *parser) parseFlowDecl() ast.Decl {
 	f := &ast.Flow{Keyword: p.next(), Name: p.next()}
+	f.LabelAs, f.Label = p.parseLabel()
 	switch {
 	case p.flow != nil:
 		p.errorf(f.Keyword, diag.SecondFlow,
@@ -82,7 +83,7 @@ func (p *parser) parseFlowDecl() ast.Decl {
 
 	open, ok := p.expect(token.LBrace, "\"{\" to open the flow")
 	if !ok {
-		return p.badFrom(f.Keyword, f.Name)
+		return p.badFrom(f.Keyword, f.Name, f.LabelAs, f.Label)
 	}
 	f.LBrace = open
 	for !p.at(token.RBrace) && !p.at(token.EOF) {
@@ -105,15 +106,16 @@ func (p *parser) parseFlowDecl() ast.Decl {
 // because a value ends where the next name begins.
 func (p *parser) parseDataScenario() ast.Decl {
 	s := &ast.Scenario{Keyword: p.next()}
-	name, ok := p.expectIdentOrString("a scenario name in quotes")
+	name, ok := p.expectIdentOrString("a scenario id, like full_price")
 	if !ok {
 		return p.badFrom(s.Keyword)
 	}
 	s.Name = name
+	s.LabelAs, s.Label = p.parseLabel()
 
 	open, ok := p.expect(token.LBrace, "\"{\" to open the scenario")
 	if !ok {
-		return p.badFrom(s.Keyword, s.Name)
+		return p.badFrom(s.Keyword, s.Name, s.LabelAs, s.Label)
 	}
 	s.LBrace = open
 	for !p.at(token.RBrace) && !p.at(token.EOF) {
