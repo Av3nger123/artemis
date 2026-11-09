@@ -118,3 +118,11 @@ func TestQuotedIDNeedsNoLabel(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+// An id error does not hide what expansion and the checker find.
+func TestAnIDErrorHidesNothingElse(t *testing.T) {
+	u := front.CompileWith("f.art", "flow f {\n  step Foo {\n    get \"/\"\n  }\n\n  step b = nope.thing {}\n}\n", expand.MapLoader{})
+	if len(withCode(u, diag.IDNotSnakeCase)) != 1 || len(withCode(u, diag.UnknownCollection)) != 1 {
+		t.Fatalf("want id-not-snake-case and unknown-collection, got %v", u.Bag.All())
+	}
+}

@@ -221,17 +221,18 @@ func scenarioFile(comment, flowFile, scenario string) string {
 	return b.String()
 }
 
-// flowName is the collection's title as a flow's name: "Orders API" is
-// orders_api.
+// flowName is the collection's title as a flow's id, with the title as its
+// label when the two differ: "Orders API" is orders_api as "Orders API", and
+// "2024 API" is s_2024_api as "2024 API".
 func flowName(title string) string {
-	name := identifier(strings.ToLower(title))
-	for strings.Contains(name, "__") {
-		name = strings.ReplaceAll(name, "__", "_")
-	}
-	if name == "" {
+	name := token.SnakeFrom(strings.ToLower(title))
+	if strings.TrimSpace(title) == "" {
 		return "flow"
 	}
-	return name
+	if name == title {
+		return name
+	}
+	return name + " as " + quoteTitle(title)
 }
 
 // quoteTitle is title as a DSL string literal.
@@ -240,12 +241,9 @@ func quoteTitle(title string) string { return encode.QuoteString(title) }
 // requestName is a step name as a request name that no earlier request in
 // taken has, and records it.
 func requestName(step string, taken map[string]bool) string {
-	base := identifier(strings.ToLower(step))
-	// "Orders / list" becomes orders___list; one underscore reads better.
-	for strings.Contains(base, "__") {
-		base = strings.ReplaceAll(base, "__", "_")
-	}
-	if base == "" {
+	// An id: "Orders / list" is orders_list, and "2FA login" s_2fa_login.
+	base := token.SnakeFrom(strings.ToLower(step))
+	if strings.TrimSpace(step) == "" {
 		base = "request"
 	}
 	name := base
