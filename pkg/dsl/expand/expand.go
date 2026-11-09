@@ -75,13 +75,14 @@ type expander struct {
 
 // unit is one parsed file and the collections it can see by name.
 type unit struct {
-	name  string
-	tree  *ast.File
-	deps  []dep                      // the files this file imports directly
-	own   []*ast.Collection          // collections declared in this file, in source order
-	scope map[string]*ast.Collection // the collection each import names, by that name
-	ok    bool                       // parsed without error
-	lost  bool                       // an import failed, so a collection may be missing from scope
+	name   string
+	tree   *ast.File
+	deps   []dep                      // the files this file imports directly
+	own    []*ast.Collection          // collections declared in this file, in source order
+	scope  map[string]*ast.Collection // the collection each import names, by that name
+	byFile map[string]string          // the id each import with no as is in scope by, keyed by its file's name
+	ok     bool                       // parsed without error
+	lost   bool                       // an import failed, so a collection may be missing from scope
 }
 
 // dep is one import and the file it loaded.
@@ -355,20 +356,9 @@ func (e *expander) index(u *unit) {
 		}
 	}
 	u.scope = map[string]*ast.Collection{}
+	u.byFile = map[string]string{}
 	named := map[string]*ast.Import{}
 	for _, d := range u.deps {
-		name, at := d.imp.Name.Value, d.imp.Name.Span
-		if d.imp.Name.Text == "" {
-			var ok bool
-			name, ok = parser.ImportName(d.imp.Path.Value)
-			at = d.imp.Path.Span
-			if !ok {
-				u.lost = true
-				e.bag.Error(at, diag.ImportNeedsName, "a use reads an import by its file's name, and %q cannot be one", name).
-					Hintf("name it: import %s as %s", d.imp.Path.Text, parser.IdentLike(name))
-				continue
-			}
-		}
 		if len(d.unit.own) == 0 {
 			u.lost = true
 			// A file that did not parse has said why already.
@@ -377,6 +367,27 @@ func (e *expander) index(u *unit) {
 					Hintf("import a collection file: a scenario file is run, never imported")
 			}
 			continue
+		}
+		name, at := d.imp.Name.Value, d.imp.Name.Span
+		if d.imp.Name.Text == "" {
+			// With no as, the collection is in scope by its id. An old
+			// collection, titled in quotes, is by its file's name.
+			at = d.imp.Path.Span
+			if id := d.unit.own[0].Name; id.Kind == token.Ident {
+				name = id.Value
+				if stem, ok := parser.ImportName(d.imp.Path.Value); ok && stem != name {
+					u.byFile[stem] = name
+				}
+			} else {
+				var ok bool
+				name, ok = parser.ImportName(d.imp.Path.Value)
+				if !ok {
+					u.lost = true
+					e.bag.Error(at, diag.ImportNeedsName, "a use reads an import by its file's name, and %q cannot be one", name).
+						Hintf("name it: import %s as %s", d.imp.Path.Text, parser.IdentLike(name))
+					continue
+				}
+			}
 		}
 		if prev, dup := named[name]; dup {
 			e.bag.Error(at, diag.DuplicateImportName, "two imports are named %s", name).
@@ -404,7 +415,9 @@ func (e *expander) resolve(u *unit, use *ast.UseDecl) (coll *ast.Collection, ite
 				return nil, nil, false
 			}
 			r := e.bag.Error(use.Collection.Span, diag.UnknownCollection, "no collection %q is in scope here", name)
-			if !r.DidYouMean(name, keys(u.scope)) {
+			if id, ok := u.byFile[name]; ok {
+				r.Hintf("an import with no as is in scope by its collection's id: write %s.%s", id, use.Item.Value)
+			} else if !r.DidYouMean(name, keys(u.scope)) {
 				r.Hintf("import the file that declares it")
 			}
 			return nil, nil, false
