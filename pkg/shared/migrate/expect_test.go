@@ -73,7 +73,7 @@ func TestBodyExpects(t *testing.T) {
 					t.Errorf("line %d = %q, want %q", i, got[i], c.want[i])
 				}
 			}
-			parses(t, "scenario \"t\" {\n  step \"s\" {\n    get \"u\"\n    "+strings.Join(got, "\n    ")+"\n  }\n}\n")
+			parses(t, "scenario t {\n  step s {\n    get \"u\"\n    "+strings.Join(got, "\n    ")+"\n  }\n}\n")
 		})
 	}
 }
@@ -167,7 +167,7 @@ func TestTextExpect(t *testing.T) {
 			if got != c.want {
 				t.Errorf("textExpect = %q, want %q", got, c.want)
 			}
-			parses(t, "scenario \"t\" {\n  step \"s\" {\n    run \"sh\"\n    "+got+"\n  }\n}\n")
+			parses(t, "scenario t {\n  step s {\n    run \"sh\"\n    "+got+"\n  }\n}\n")
 		})
 	}
 }

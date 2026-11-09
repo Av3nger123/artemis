@@ -28,11 +28,11 @@ func TestDataIsCheckedWhenTheFileCompiles(t *testing.T) {
   var gone   = file("fixtures/missing.png")
   var later  = json(env("DATA"))
 
-  step "s" { run "true" }
+  step s { run "true" }
 }
 `,
 	}
-	src := "flow \"data_flow.art\"\n\nscenario \"data\" { }\n"
+	src := "flow \"data_flow.art\"\n\nscenario data { }\n"
 	unit := CompileWith("suite/data.art", src, files)
 	got := map[diag.Code][]string{}
 	for _, d := range unit.Bag.All() {
@@ -58,7 +58,7 @@ func TestDataIsCheckedWhenTheFileCompiles(t *testing.T) {
 func TestNoLoaderReadsNoData(t *testing.T) {
 	_, _, bag := Compile("a.art", `flow s {
   var gone = file("missing.png")
-  step "s" { run "true" }
+  step s { run "true" }
 }
 `)
 	if bag.Len() != 0 {
@@ -70,13 +70,13 @@ func TestNoLoaderReadsNoData(t *testing.T) {
 // is reported once rather than once per scenario.
 func TestAFlowsMistakeIsReportedOnce(t *testing.T) {
 	files := expand.MapLoader{"f.art": `flow f {
-  step "s" {
+  step s {
     run "echo"
     expect statu == 0
   }
 }
 `}
-	src := "flow \"f.art\"\n\nscenario \"a\" { }\nscenario \"b\" { }\nscenario \"c\" { }\n"
+	src := "flow \"f.art\"\n\nscenario a { }\nscenario b { }\nscenario c { }\n"
 	unit := CompileWith("s.art", src, files)
 	n := 0
 	for _, d := range unit.Bag.All() {

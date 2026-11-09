@@ -24,8 +24,8 @@ func TestAFailedBrowserStepIsPhotographed(t *testing.T) {
 	ctx := executor.WithSessions(context.Background(), fakeSessions{page: page})
 	rt := &runtimeEnv{reg: executor.Default(), shots: browserstep.NewShots(dir)}
 
-	st := oneStep(t, `scenario "upgrade to pro" {
-  step "check the receipt" {
+	st := oneStep(t, `scenario upgrade_to_pro as "upgrade to pro" {
+  step check_the_receipt as "check the receipt" {
     browser { goto "http://127.0.0.1:1/" }
     expect visible(".receipt")
   }
@@ -51,8 +51,8 @@ func TestAnApiStepIsNotPhotographed(t *testing.T) {
 	ctx := executor.WithSessions(context.Background(), fakeSessions{page: page})
 	rt := &runtimeEnv{reg: executor.Default(), shots: browserstep.NewShots(dir)}
 
-	st := oneStep(t, `scenario "s" {
-  step "ping" {
+	st := oneStep(t, `scenario s {
+  step ping {
     get "http://127.0.0.1:1/x"
     expect status == 200
   }
@@ -80,8 +80,8 @@ func TestScreenshotsOffTakesNone(t *testing.T) {
 	page := &settlingPage{url: "http://127.0.0.1:1/"}
 	ctx := executor.WithSessions(context.Background(), fakeSessions{page: page})
 
-	st := oneStep(t, `scenario "s" {
-  step "x" {
+	st := oneStep(t, `scenario s {
+  step x {
     browser { goto "http://127.0.0.1:1/" }
     expect page.title == "nope"
   }
@@ -106,8 +106,8 @@ func TestScreenshotsOffTakesNone(t *testing.T) {
 // what failed the step -- gets no screenshot and no crash.
 func TestAStepWithNoSessionIsNotPhotographed(t *testing.T) {
 	rt := &runtimeEnv{reg: executor.Default(), shots: browserstep.NewShots(t.TempDir())}
-	st := oneStep(t, `scenario "s" {
-  step "x" {
+	st := oneStep(t, `scenario s {
+  step x {
     browser { goto "http://127.0.0.1:1/" }
     expect page.title == "nope"
   }

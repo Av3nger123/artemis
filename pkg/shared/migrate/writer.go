@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"artemis/pkg/dsl/token"
 )
 
 // writer accumulates .art source a line at a time.
@@ -17,6 +19,28 @@ import (
 type writer struct {
 	b      strings.Builder
 	indent int
+	ids    map[string]bool // the step ids the scenario has given out
+}
+
+// named is text as an id and its label: `get_a_token as "Get a token"`, or
+// the id alone when text already is one. A step id the scenario has given
+// out already is numbered _2, _3. Empty text is unnamed.
+func (w *writer) named(text string, step bool) string {
+	id := token.SnakeFrom(text)
+	if step {
+		if w.ids == nil {
+			w.ids = map[string]bool{}
+		}
+		base := id
+		for n := 2; w.ids[id]; n++ {
+			id = fmt.Sprintf("%s_%d", base, n)
+		}
+		w.ids[id] = true
+	}
+	if text == id || text == "" {
+		return id
+	}
+	return id + " as " + quote(text)
 }
 
 func (w *writer) line(s string) {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
+	"artemis/pkg/dsl/encode"
 	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 	"artemis/pkg/shared/migrate"
@@ -63,8 +64,10 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		title = coll
 	}
 	importLine := fmt.Sprintf("import %q", filepath.Base(collectionFile))
-	if !ok {
-		coll = identifier(strings.ToLower(coll))
+	if !ok || !token.IsSnakeID(coll) {
+		// The collection's id is the name the flow calls it by, and an id is
+		// snake_case: a file name that is not one is imported as the id.
+		coll = token.SnakeFrom(coll)
 		importLine += " as " + coll
 	}
 
@@ -105,7 +108,11 @@ func CollectionFiles(config migrate.Config, comments migrate.Comments, collectio
 		steps = append(steps, call+"}")
 	}
 
-	collSrc := fmt.Sprintf("collection %s {\n%s}\n", quoteTitle(title), strings.Join(items, "\n"))
+	head := "collection " + coll
+	if title != coll {
+		head += " as " + quoteTitle(title)
+	}
+	collSrc := fmt.Sprintf("%s {\n%s}\n", head, strings.Join(items, "\n"))
 	if c := firstLine(comments.File); c != "" {
 		collSrc = c + "\n" + collSrc
 	}
@@ -227,16 +234,8 @@ func flowName(title string) string {
 	return name
 }
 
-// quoteTitle is title as a DSL string, quoted the way migrate.Source quotes a
-// scenario's name.
-func quoteTitle(title string) string {
-	src, err := migrate.Source(migrate.Config{Name: title}, migrate.Comments{})
-	if err != nil {
-		return fmt.Sprintf("%q", title)
-	}
-	line := strings.TrimSuffix(strings.TrimSpace(src), " {}")
-	return strings.TrimPrefix(line, "scenario ")
-}
+// quoteTitle is title as a DSL string literal.
+func quoteTitle(title string) string { return encode.QuoteString(title) }
 
 // requestName is a step name as a request name that no earlier request in
 // taken has, and records it.

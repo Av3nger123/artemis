@@ -22,10 +22,10 @@ func writeFile(t *testing.T, root, rel, src string) {
 	}
 }
 
-const collSrc = "collection \"c\" {\n  request r {\n    get \"x\"\n    expect status == 200\n  }\n  request q {\n    get \"y\"\n  }\n}\n"
+const collSrc = "collection c {\n  request r {\n    get \"x\"\n    expect status == 200\n  }\n  request q {\n    get \"y\"\n  }\n}\n"
 
 // flowSrc is a flow that calls c.r, for a scenario file to name.
-const flowSrc = "import \"c.art\"\n\nflow f {\n  step \"c.r\" = c.r {}\n}\n"
+const flowSrc = "import \"c.art\"\n\nflow f {\n  step c_r as \"c.r\" = c.r {}\n}\n"
 
 func TestValidateResolvesImportsInsideTheWorkspace(t *testing.T) {
 	root := t.TempDir()
@@ -34,7 +34,7 @@ func TestValidateResolvesImportsInsideTheWorkspace(t *testing.T) {
 	cs := connect(t, root)
 	got := validate(t, cs, map[string]any{
 		"file":   "main.art",
-		"source": "flow \"f.art\"\n\nscenario \"s\" {}\n",
+		"source": "flow \"f.art\"\n\nscenario s {}\n",
 	})
 	if got["ok"] != true {
 		t.Fatalf("got %+v", got)
@@ -87,8 +87,8 @@ func TestRunRefusesAnImportThatLeavesTheWorkspace(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
 	writeFile(t, parent, "outside.art", collSrc)
-	writeFile(t, root, "f.art", "import \"../outside.art\"\n\nflow f {\n  step \"c.r\" = c.r {}\n}\n")
-	writeFile(t, root, "main.art", "flow \"f.art\"\n\nscenario \"s\" {}\n")
+	writeFile(t, root, "f.art", "import \"../outside.art\"\n\nflow f {\n  step c_r as \"c.r\" = c.r {}\n}\n")
+	writeFile(t, root, "main.art", "flow \"f.art\"\n\nscenario s {}\n")
 	cs := connectWithBinary(t, root, buildArtemis(t))
 	res, err := cs.CallTool(context.Background(), callParams("artemis_run", map[string]any{"path": "main.art"}))
 	if err == nil && !res.IsError {
@@ -138,7 +138,7 @@ func TestListDoesNotReadASymlinkOutOfTheWorkspace(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "ws")
 	writeFile(t, root, "keep.art", "flow x {}\n")
-	writeFile(t, parent, "outside.art", "collection \"secret\" {\n  request leak() {\n    get \"x\"\n  }\n}\n")
+	writeFile(t, parent, "outside.art", "collection secret {\n  request leak() {\n    get \"x\"\n  }\n}\n")
 	if err := os.Symlink(filepath.Join(parent, "outside.art"), filepath.Join(root, "link.art")); err != nil {
 		t.Fatal(err)
 	}

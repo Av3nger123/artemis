@@ -10,7 +10,7 @@ makes the step a terminal one:
 flow release_checks {
   var tag = env("RELEASE_TAG")
 
-  step "the tag exists" {
+  step the_tag_exists as "the tag exists" {
     run "git" { args = ["rev-parse", "--verify", "${tag}^{commit}"] }
     expect exit_code == 0
     expect stderr matches /^\s*$/
@@ -18,12 +18,12 @@ flow release_checks {
     timeout = "5s"
   }
 
-  step "the changelog mentions it" {
+  step the_changelog_mentions_it as "the changelog mentions it" {
     run "sh" { args = ["-c", "grep -c '${tag}' CHANGELOG.md"] }
     expect stdout matches /^[1-9]/
   }
 
-  step "it builds" {
+  step it_builds as "it builds" {
     run "go" {
       args = ["build", "./..."]
       env { CGO_ENABLED = "0" }
@@ -46,8 +46,8 @@ A scenario file runs it, and can check a tag other than the environment's:
 # scenarios/release.art
 flow "../flows/release.art"
 
-scenario "this release" {}
-scenario "the last one" { tag = "v0.1.0" }
+scenario this_release as "this release" {}
+scenario the_last_one as "the last one" { tag = "v0.1.0" }
 ```
 
 A command written once for many flows -- a migration, a seed script -- is a

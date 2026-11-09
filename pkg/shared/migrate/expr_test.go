@@ -21,12 +21,12 @@ func parses(t *testing.T, src string) {
 // inExpect wraps an expression where an expect's subject goes, so a path is
 // checked by the real grammar rather than by eye.
 func inExpect(expr string) string {
-	return "scenario \"t\" {\n  step \"s\" {\n    get \"u\"\n    expect " + expr + " exists\n  }\n}\n"
+	return "scenario t {\n  step s {\n    get \"u\"\n    expect " + expr + " exists\n  }\n}\n"
 }
 
 // inValue wraps an expression where an expect's expected value goes.
 func inValue(expr string) string {
-	return "scenario \"t\" {\n  step \"s\" {\n    get \"u\"\n    expect body.x == " + expr + "\n  }\n}\n"
+	return "scenario t {\n  step s {\n    get \"u\"\n    expect body.x == " + expr + "\n  }\n}\n"
 }
 
 func TestPathExpr(t *testing.T) {
@@ -186,7 +186,7 @@ func TestTemplated(t *testing.T) {
 		if got != c.want {
 			t.Errorf("templated(%q) = %q, want %q", c.in, got, c.want)
 		}
-		parses(t, "scenario \"t\" {\n  step \"s\" { get "+got+" }\n}\n")
+		parses(t, "scenario t {\n  step s { get "+got+" }\n}\n")
 	}
 }
 
@@ -216,7 +216,7 @@ func TestRegexLiteral(t *testing.T) {
 		if got != c.want {
 			t.Errorf("regexLiteral(%q) = %q, want %q", c.in, got, c.want)
 		}
-		parses(t, "scenario \"t\" {\n  step \"s\" {\n    get \"u\"\n    capture x = match(raw, "+got+")\n  }\n}\n")
+		parses(t, "scenario t {\n  step s {\n    get \"u\"\n    capture x = match(raw, "+got+")\n  }\n}\n")
 	}
 }
 

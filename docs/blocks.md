@@ -9,34 +9,34 @@ flow import_finishes {
   private var url = env("API_URL")
 
   parallel {
-    step "upload the users" {
+    step upload_the_users as "upload the users" {
       post "${url}/imports" { multipart "file" = file(users_file) }
       var users_job = body.id
     }
-    step "upload the orders" {
+    step upload_the_orders as "upload the orders" {
       post "${url}/imports" { multipart "file" = file("fixtures/orders.csv") }
       var orders_job = body.id
     }
   }
 
   repeat every "2s" within "5m" {
-    step "users status" {
+    step users_status as "users status" {
       get "${url}/imports/${users_job}"
       var users = body.state
     }
-    step "orders status" {
+    step orders_status as "orders status" {
       get "${url}/imports/${orders_job}"
       var orders = body.state
     }
   } until users != "running" and orders != "running"
 
   if users == "done" {
-    step "users are there" {
+    step users_are_there as "users are there" {
       get "${url}/users?limit=1"
       expect len(body) == 1
     }
   } else {
-    step "the import says why" {
+    step the_import_says_why as "the import says why" {
       get "${url}/imports/${users_job}/errors"
       expect len(body) > 0
     }
@@ -62,8 +62,8 @@ scenarios can cause:
 # scenarios/import.art
 flow "../flows/import.art"
 
-scenario "good users" {}
-scenario "a broken sheet" { users_file = "fixtures/broken.csv" }
+scenario good_users as "good users" {}
+scenario a_broken_sheet as "a broken sheet" { users_file = "fixtures/broken.csv" }
 ```
 
 Both scenarios run the same steps up to the `if`; the second takes the `else`

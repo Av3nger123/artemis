@@ -71,10 +71,10 @@ func TestSourceAPIScenario(t *testing.T) {
 		}},
 	}
 
-	want := `scenario "item lifecycle" {
+	want := `scenario item_lifecycle as "item lifecycle" {
   var base = env("API_URL")
 
-  step "create item" {
+  step create_item as "create item" {
     post "${base}/items" {
       header "Authorization" = "Bearer ${token}"
       header "Content-Type" = "application/json"
@@ -119,8 +119,8 @@ func TestSourceExecScenario(t *testing.T) {
 		}},
 	}
 
-	want := `scenario "api and terminal" {
-  step "work out the path" {
+	want := `scenario api_and_terminal as "api and terminal" {
+  step work_out_the_path as "work out the path" {
     run "sh" {
       args = ["-c", "printf items"]
       cwd = "/tmp"
@@ -346,9 +346,9 @@ func TestSourceCarriesComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := `# what this file is for
-scenario "n" {
+scenario n {
   # what this step does
-  step "ping" {
+  step ping {
     get "u"
     expect status == 200
   }
@@ -399,30 +399,30 @@ func TestSourceRenamesARecapturedName(t *testing.T) {
 # The capture "base" of step 2 "refresh" is written base_2 here, because a name is bound once and base already is.
 # The capture "token" of step 2 "refresh" is written token_3 here, because a name is bound once and token already is.
 # The capture "token" of step 3 "again" is written token_4 here, because a name is bound once and token already is.
-scenario "poll" {
+scenario poll {
   var base = "http://h"
 
-  step "login" {
+  step login {
     post "${base}/token"
     expect status == 200
     capture token = body.token
   }
 
-  step "refresh" {
+  step refresh {
     post "${base}/refresh" { header "Authorization" = "Bearer ${token}" }
     expect status == 200
     capture base_2 = body.base
     capture token_3 = body.token
   }
 
-  step "again" {
+  step again {
     post "${base_2}/refresh" { header "Authorization" = "Bearer ${token_3}" }
     expect status == 200
     capture token_4 = body.token
     capture token_2 = body.other
   }
 
-  step "me" {
+  step me {
     get "${base_2}/me" { header "Authorization" = "Bearer ${token_4} ${token_2}" }
     expect status == 200
   }

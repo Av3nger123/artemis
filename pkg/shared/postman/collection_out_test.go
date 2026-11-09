@@ -37,7 +37,7 @@ func TestEachRequestBecomesARequestAndAStep(t *testing.T) {
 	}
 	f := files(t, c)
 	for _, want := range []string{
-		`collection "Orders API" {`,
+		`collection orders as "Orders API" {`,
 		"  request ping {\n    var base_url\n\n    get \"${base_url}/ping\"\n",
 		"  request orders_list {\n    get \"https://api.test/orders\"\n",
 	} {
@@ -49,14 +49,14 @@ func TestEachRequestBecomesARequestAndAStep(t *testing.T) {
 		"import \"orders.collection.art\"\n",
 		"flow orders_api {\n",
 		`  var base_url = "https://api.test"`,
-		`  step "ping" = orders.ping {}`,
-		`  step "Orders / list" = orders.orders_list {}`,
+		`  step ping = orders.ping {}`,
+		`  step orders_list as "Orders / list" = orders.orders_list {}`,
 	} {
 		if !strings.Contains(f.Flow, want) {
 			t.Errorf("flow does not hold %s:\n%s", want, f.Flow)
 		}
 	}
-	if want := "flow \"orders.flow.art\"\n\nscenario \"Orders API\" {}\n"; !strings.HasSuffix(f.Scenario, want) {
+	if want := "flow \"orders.flow.art\"\n\nscenario orders_api as \"Orders API\" {}\n"; !strings.HasSuffix(f.Scenario, want) {
 		t.Errorf("scenario file =\n%s\nwant it to end\n%s", f.Scenario, want)
 	}
 }
@@ -80,11 +80,11 @@ func TestFlatFilesWriteTheStepsInTheFlow(t *testing.T) {
 	if f.Collection != "" {
 		t.Errorf("the flat output has a collection:\n%s", f.Collection)
 	}
-	want := "flow orders_api {\n  var base_url = \"https://api.test\"\n\n  step \"ping\" {\n    get \"${base_url}/ping\"\n"
+	want := "flow orders_api {\n  var base_url = \"https://api.test\"\n\n  step ping {\n    get \"${base_url}/ping\"\n"
 	if !strings.Contains(f.Flow, want) || strings.Contains(f.Flow, "import") {
 		t.Errorf("flow =\n%s\nwant it to hold\n%s", f.Flow, want)
 	}
-	if !strings.HasSuffix(f.Scenario, "flow \"orders.flow.art\"\n\nscenario \"Orders API\" {}\n") {
+	if !strings.HasSuffix(f.Scenario, "flow \"orders.flow.art\"\n\nscenario orders_api as \"Orders API\" {}\n") {
 		t.Errorf("scenario file =\n%s", f.Scenario)
 	}
 }
@@ -114,7 +114,7 @@ func TestAVarNamedLikeAnOverrideIsPassedUnderAnotherName(t *testing.T) {
 		Items:     []Item{{Name: "r", Request: &Request{Method: "GET", URL: URL{Raw: "https://api.test/{{body}}"}}}},
 	}
 	f := files(t, c)
-	if !strings.Contains(f.Collection, "request r {\n    var body_value\n") || !strings.Contains(f.Flow, `step "r" = orders.r { body_value = body }`) {
+	if !strings.Contains(f.Collection, "request r {\n    var body_value\n") || !strings.Contains(f.Flow, `step r = orders.r { body_value = body }`) {
 		t.Errorf("collection:\n%s\nflow:\n%s", f.Collection, f.Flow)
 	}
 }

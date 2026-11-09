@@ -20,12 +20,12 @@ const dbScenario = `flow an_order_lands {
   var id = 42
 
   setup {
-    step "seed" {
+    step seed {
       db db_url { sql = file("seed.sql") }
     }
   }
 
-  step "place it" {
+  step place_it as "place it" {
     db db_url {
       sql  = "INSERT INTO orders (id, status, total, meta) VALUES (?, ?, ?, ?)"
       args = [id, "paid", 12.5, {"tier": "gold"}]
@@ -33,7 +33,7 @@ const dbScenario = `flow an_order_lands {
     expect affected == 1
   }
 
-  step "read it back" {
+  step read_it_back as "read it back" {
     db db_url {
       sql  = "SELECT id, status, total, meta FROM orders WHERE id = ?"
       args = [id]
@@ -47,7 +47,7 @@ const dbScenario = `flow an_order_lands {
   }
 
   teardown {
-    step "drop it" {
+    step drop_it as "drop it" {
       db db_url {
         sql  = "DELETE FROM orders WHERE status = ?"
         args = [status]
@@ -57,7 +57,7 @@ const dbScenario = `flow an_order_lands {
   }
 }
 
-scenario "an order lands" {}
+scenario an_order_lands as "an order lands" {}
 `
 
 const dbSeed = `CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT, total REAL, meta TEXT);
@@ -90,18 +90,18 @@ func TestArtRunDBFailuresKeepTheirKinds(t *testing.T) {
 	run, _ := runArt(t, `flow kinds {
   var url = env("ART_TEST_DB")
 
-  step "wrong answer" {
+  step wrong_answer as "wrong answer" {
     db url { sql = "SELECT 'pending' AS status" }
     expect rows[0].status == "paid"
   }
 
-  step "bad sql" {
+  step bad_sql as "bad sql" {
     db url { sql = "SELEC 1" }
     expect affected == 1
   }
 }
 
-scenario "kinds" {}
+scenario kinds {}
 `)
 	steps := run.Scenarios[0].Steps
 	if steps[0].Status != result.StatusFail {

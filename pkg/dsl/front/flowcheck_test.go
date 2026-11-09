@@ -28,12 +28,12 @@ func TestAFlowFileIsCheckedOnItsOwn(t *testing.T) {
 		src  string
 		want diag.Code
 	}{
-		"a var below the first step": {"flow f {\n  step \"s\" {\n    get \"http://h/\"\n  }\n  var late = 1\n}\n", diag.VarAfterStep},
-		"a var named tags":           {"flow f {\n  var tags = 1\n  step \"s\" {\n    get \"http://h/\"\n  }\n}\n", diag.ReservedTags},
-		"two vars of one name":       {"flow f {\n  var a = 1\n  var a = 2\n  step \"s\" {\n    get \"http://h/${a}\"\n  }\n}\n", diag.DuplicateBinding},
-		"an unknown name":            {"flow f {\n  step \"s\" {\n    get \"http://h/${nope}\"\n  }\n}\n", diag.UnknownIdentifier},
-		"two parallel branches writing one name": {"flow f {\n  parallel {\n    step \"a\" {\n      get \"http://h/a\"\n      var id = body.id\n    }\n" +
-			"    step \"b\" {\n      get \"http://h/b\"\n      var id = body.id\n    }\n  }\n}\n", diag.ParallelCaptureClash},
+		"a var below the first step": {"flow f {\n  step s {\n    get \"http://h/\"\n  }\n  var late = 1\n}\n", diag.VarAfterStep},
+		"a var named tags":           {"flow f {\n  var tags = 1\n  step s {\n    get \"http://h/\"\n  }\n}\n", diag.ReservedTags},
+		"two vars of one name":       {"flow f {\n  var a = 1\n  var a = 2\n  step s {\n    get \"http://h/${a}\"\n  }\n}\n", diag.DuplicateBinding},
+		"an unknown name":            {"flow f {\n  step s {\n    get \"http://h/${nope}\"\n  }\n}\n", diag.UnknownIdentifier},
+		"two parallel branches writing one name": {"flow f {\n  parallel {\n    step a {\n      get \"http://h/a\"\n      var id = body.id\n    }\n" +
+			"    step b {\n      get \"http://h/b\"\n      var id = body.id\n    }\n  }\n}\n", diag.ParallelCaptureClash},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -55,7 +55,7 @@ func TestAFlowFileIsCheckedOnItsOwn(t *testing.T) {
 // A required var is given a placeholder for the check, as a scenario file's
 // flow is: it is not var-needs-value, and a read of it resolves.
 func TestAFlowFilesRequiredVarIsAPlaceholder(t *testing.T) {
-	src := "flow f {\n  var url\n  private var tries = 1\n  step \"s\" {\n    get \"${url}/x\"\n    expect status == 200\n  }\n}\n"
+	src := "flow f {\n  var url\n  private var tries = 1\n  step s {\n    get \"${url}/x\"\n    expect status == 200\n  }\n}\n"
 	u := front.CompileWith("flows/f.art", src, nil)
 	if u.Bag.Len() != 0 {
 		t.Fatalf("want no diagnostic, got %v", u.Bag.All())
@@ -70,10 +70,10 @@ func TestAFlowFilesRequiredVarIsAPlaceholder(t *testing.T) {
 // is what `artemis ast` encodes.
 func TestAFlowFilesInfoIsAboutItsOwnSteps(t *testing.T) {
 	files := expand.MapLoader{
-		"collections/auth.art": "collection \"auth\" {\n  request login {\n    var url\n    post \"${url}/token\"\n    var token = body.t\n  }\n}\n",
+		"collections/auth.art": "collection auth {\n  request login {\n    var url\n    post \"${url}/token\"\n    var token = body.t\n  }\n}\n",
 	}
-	src := "import \"../collections/auth.art\"\n\nflow f {\n  var url = \"http://h\"\n  setup {\n    step \"log in\" = auth.login { }\n  }\n" +
-		"  step \"s\" {\n    get \"${url}/x\"\n    expect status == 200\n  }\n  if true {\n    step \"t\" {\n      run \"true\"\n    }\n  }\n}\n"
+	src := "import \"../collections/auth.art\"\n\nflow f {\n  var url = \"http://h\"\n  setup {\n    step log_in as \"log in\" = auth.login { }\n  }\n" +
+		"  step s {\n    get \"${url}/x\"\n    expect status == 200\n  }\n  if true {\n    step t {\n      run \"true\"\n    }\n  }\n}\n"
 	u := front.CompileWith("flows/f.art", src, files)
 	if u.Bag.Len() != 0 {
 		t.Fatalf("want no diagnostic, got %v", u.Bag.All())
@@ -110,11 +110,11 @@ func TestAFlowFilesInfoIsAboutItsOwnSteps(t *testing.T) {
 // would not help.
 func TestADuplicateFlowVarNamesTheFirstDeclaration(t *testing.T) {
 	files := expand.MapLoader{
-		"flows/f.art": "flow f {\n  var a = 1\n  var a = 2\n  step \"s\" {\n    get \"http://h/${a}\"\n  }\n}\n",
+		"flows/f.art": "flow f {\n  var a = 1\n  var a = 2\n  step s {\n    get \"http://h/${a}\"\n  }\n}\n",
 	}
 	for _, u := range []*front.Unit{
 		front.CompileWith("flows/f.art", files["flows/f.art"], files),
-		front.CompileWith("scenarios/x.art", "flow \"../flows/f.art\"\n\nscenario \"s\" { }\n", files),
+		front.CompileWith("scenarios/x.art", "flow \"../flows/f.art\"\n\nscenario s { }\n", files),
 	} {
 		ds := u.Bag.All()
 		if len(ds) != 1 || ds[0].Code != diag.DuplicateBinding {
@@ -136,7 +136,7 @@ func TestTwoInputsOfOneNameInAnItemAreADuplicate(t *testing.T) {
 		"both defaulted": "    var user = \"a\"\n    var user = \"b\"\n",
 	} {
 		t.Run(name, func(t *testing.T) {
-			coll := "collection \"auth\" {\n  request login {\n" + inputs + "    post \"http://h/${user}\"\n  }\n}\n"
+			coll := "collection auth {\n  request login {\n" + inputs + "    post \"http://h/${user}\"\n  }\n}\n"
 			u := front.CompileWith("collections/auth.art", coll, nil)
 			ds := u.Bag.All()
 			if len(ds) != 1 || ds[0].Code != diag.DuplicateBinding || ds[0].Span.Line != 4 || ds[0].Hint != "the var at line 3 binds it first" {
@@ -144,7 +144,7 @@ func TestTwoInputsOfOneNameInAnItemAreADuplicate(t *testing.T) {
 			}
 		})
 	}
-	coll := "collection \"auth\" {\n  request login {\n    var user\n    post \"http://h/${user}\"\n" +
+	coll := "collection auth {\n  request login {\n    var user\n    post \"http://h/${user}\"\n" +
 		"    var token = body.a\n    var token = body.b\n  }\n}\n"
 	if u := front.CompileWith("collections/auth.art", coll, nil); u.Bag.Len() != 0 {
 		t.Fatalf("two writes of one name after the action are legal, got %v", u.Bag.All())
@@ -155,11 +155,11 @@ func TestTwoInputsOfOneNameInAnItemAreADuplicate(t *testing.T) {
 // the message names the if by its line and its file, which is not the item's.
 func TestMaybeUnboundNamesTheBlocksFile(t *testing.T) {
 	files := expand.MapLoader{
-		"api.art": "collection \"api\" {\n  request me {\n    var token\n    get \"http://h/me/${token}\"\n  }\n}\n",
-		"f.art": "import \"api.art\"\n\nflow s {\n  var x = true\n  if x {\n    step \"a\" {\n      get \"http://h/\"\n" +
-			"      var token = body.t\n    }\n  }\n  step \"me\" = api.me { }\n}\n",
+		"api.art": "collection api {\n  request me {\n    var token\n    get \"http://h/me/${token}\"\n  }\n}\n",
+		"f.art": "import \"api.art\"\n\nflow s {\n  var x = true\n  if x {\n    step a {\n      get \"http://h/\"\n" +
+			"      var token = body.t\n    }\n  }\n  step me = api.me { }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	ds := u.Bag.All()
 	if len(ds) != 1 || ds[0].Code != diag.CaptureMaybeUnbound {
 		t.Fatalf("want one capture-maybe-unbound, got %v", ds)
@@ -176,8 +176,8 @@ func TestMaybeUnboundNamesTheBlocksFile(t *testing.T) {
 // flow's context supplies is not.
 func TestMissingArgumentHintListsOnlyWhatIsMissing(t *testing.T) {
 	files := expand.MapLoader{
-		"c.art": "collection \"c\" {\n  request q {\n    var url\n    var user\n    get \"${url}/${user}\"\n  }\n}\n",
-		"f.art": "import \"c.art\"\n\nflow s {\n  var url = \"http://h\"\n  step \"call\" = c.q { }\n}\n",
+		"c.art": "collection c {\n  request q {\n    var url\n    var user\n    get \"${url}/${user}\"\n  }\n}\n",
+		"f.art": "import \"c.art\"\n\nflow s {\n  var url = \"http://h\"\n  step call = c.q { }\n}\n",
 	}
 	u := front.CompileWith("f.art", files["f.art"], files)
 	ds := u.Bag.All()
@@ -192,10 +192,10 @@ func TestMissingArgumentHintListsOnlyWhatIsMissing(t *testing.T) {
 // A two-letter near miss of a parameter or an argument gets a did-you-mean.
 func TestAShortNearMissIsSuggested(t *testing.T) {
 	files := expand.MapLoader{
-		"c.art":       "collection \"c\" {\n  request q {\n    var url\n    get url\n  }\n}\n",
-		"flows/f.art": "import \"../c.art\"\n\nflow s {\n  var url = \"http://h\"\n  step \"call\" = c.q { ur = \"x\" }\n}\n",
+		"c.art":       "collection c {\n  request q {\n    var url\n    get url\n  }\n}\n",
+		"flows/f.art": "import \"../c.art\"\n\nflow s {\n  var url = \"http://h\"\n  step call = c.q { ur = \"x\" }\n}\n",
 	}
-	u := front.CompileWith("scenarios/x.art", "flow \"../flows/f.art\"\n\nscenario \"s\" { ur = \"y\" }\n", files)
+	u := front.CompileWith("scenarios/x.art", "flow \"../flows/f.art\"\n\nscenario s { ur = \"y\" }\n", files)
 	got := map[diag.Code]string{}
 	for _, d := range u.Bag.All() {
 		got[d.Code] = d.Hint

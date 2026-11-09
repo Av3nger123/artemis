@@ -165,7 +165,7 @@ func TestItemFlagsNeedAnItemAndAFile(t *testing.T) {
 // file is.
 func TestAstAndParseReadAFileAsIfItWereElsewhere(t *testing.T) {
 	draft := filepath.Join(t.TempDir(), "draft.art")
-	src := "import \"auth.art\"\n\nflow s {\n  step \"login\" = auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
+	src := "import \"auth.art\"\n\nflow s {\n  step login = auth.login { user = \"a\", password = \"b\", base = \"http://x\" }\n}\n"
 	if err := os.WriteFile(draft, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}

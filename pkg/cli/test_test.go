@@ -52,14 +52,14 @@ func okServer(t *testing.T, status int, body string) *httptest.Server {
 // scenarioArt is one GET step that expects a status and a body field.
 func scenarioArt(url string, wantStatus int, wantBody string) string {
 	return fmt.Sprintf(`flow exit_code {
-  step "ping" {
+  step ping {
     get %q
     expect status == %d
     expect body.status == %q
   }
 }
 
-scenario "exit code" {}
+scenario exit_code as "exit code" {}
 `, url, wantStatus, wantBody)
 }
 

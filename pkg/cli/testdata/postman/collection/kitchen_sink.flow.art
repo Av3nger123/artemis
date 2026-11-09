@@ -10,10 +10,10 @@ flow orders_api {
   var access_token = env("ACCESS_TOKEN")
   var operator = env("OPERATOR")
 
-  step "Health / ping" = kitchen_sink.health_ping {}
-  step "Orders / Admin / list orders" = kitchen_sink.orders_admin_list_orders {}
-  step "Orders / create order" = kitchen_sink.orders_create_order {}
-  step "Orders / amend order" = kitchen_sink.orders_amend_order {}
-  step "Orders / search orders" = kitchen_sink.orders_search_orders {}
-  step "Legacy / raw header form" = kitchen_sink.legacy_raw_header_form {}
+  step health_ping as "Health / ping" = kitchen_sink.health_ping {}
+  step orders_admin_list_orders as "Orders / Admin / list orders" = kitchen_sink.orders_admin_list_orders {}
+  step orders_create_order as "Orders / create order" = kitchen_sink.orders_create_order {}
+  step orders_amend_order as "Orders / amend order" = kitchen_sink.orders_amend_order {}
+  step orders_search_orders as "Orders / search orders" = kitchen_sink.orders_search_orders {}
+  step legacy_raw_header_form as "Legacy / raw header form" = kitchen_sink.legacy_raw_header_form {}
 }

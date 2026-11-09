@@ -77,7 +77,7 @@ func Source(config Config, comments Comments) (string, error) {
 	w := &writer{}
 	w.comment(comments.File)
 	w.comment(rb.note())
-	w.line("scenario " + quote(config.Name) + " {")
+	w.line("scenario " + w.named(config.Name, false) + " {")
 	w.indent++
 
 	for _, v := range config.Variables {
@@ -132,7 +132,7 @@ func step(w *writer, s Step, i int, comment string, renamed map[string]string) e
 	where := fmt.Sprintf("step %d %q", i+1, s.Name)
 
 	w.comment(comment)
-	w.line("step " + quote(s.Name) + " {")
+	w.line("step " + w.named(s.Name, true) + " {")
 	w.indent++
 
 	if err := action(w, s); err != nil {

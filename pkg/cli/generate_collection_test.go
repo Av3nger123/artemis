@@ -26,16 +26,16 @@ func TestGenerateWritesThreeFiles(t *testing.T) {
 	}
 
 	coll := readFile(t, filepath.Join(dir, "ping.collection.art"))
-	if !strings.Contains(coll, `collection "ping" {`) || !strings.Contains(coll, "  request health_ping {\n    get ") {
+	if !strings.Contains(coll, `collection ping {`) || !strings.Contains(coll, "  request health_ping {\n    get ") {
 		t.Errorf("the collection file holds\n%s", coll)
 	}
 	flow := readFile(t, filepath.Join(dir, "ping.flow.art"))
 	if !strings.Contains(flow, `import "ping.collection.art"`) || !strings.Contains(flow, "flow ping {") ||
-		!strings.Contains(flow, `step "Health / ping" = ping.health_ping {}`) {
+		!strings.Contains(flow, `step health_ping as "Health / ping" = ping.health_ping {}`) {
 		t.Errorf("the flow file holds\n%s", flow)
 	}
 	scen := readFile(t, out)
-	if !strings.Contains(scen, "flow \"ping.flow.art\"\n\nscenario \"ping\" {}\n") {
+	if !strings.Contains(scen, "flow \"ping.flow.art\"\n\nscenario ping {}\n") {
 		t.Errorf("the scenario file holds\n%s", scen)
 	}
 }

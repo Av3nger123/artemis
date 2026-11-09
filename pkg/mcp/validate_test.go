@@ -48,7 +48,7 @@ func validate(t *testing.T, cs *mcp.ClientSession, args map[string]any) map[stri
 func TestValidateAcceptsCleanSource(t *testing.T) {
 	cs := connect(t, t.TempDir())
 	got := validate(t, cs, map[string]any{
-		"source": "flow ok {\n  step \"s\" {\n    get \"http://example.test\"\n    expect status == 200\n  }\n}\n",
+		"source": "flow ok {\n  step s {\n    get \"http://example.test\"\n    expect status == 200\n  }\n}\n",
 	})
 	if got["ok"] != true {
 		t.Fatalf("ok = %v, want true; diagnostics: %v", got["ok"], got["diagnostics"])
@@ -72,7 +72,7 @@ func TestValidateRejectsSourceWithAnError(t *testing.T) {
 func TestValidateChecksAFlowFileOnItsOwn(t *testing.T) {
 	cs := connect(t, t.TempDir())
 	res := call(t, cs, "artemis_validate", map[string]any{
-		"source": "flow broken {\n  var url\n  step \"s\" {\n    get \"${url}/${nope}\"\n  }\n}\n",
+		"source": "flow broken {\n  var url\n  step s {\n    get \"${url}/${nope}\"\n  }\n}\n",
 	})
 	var doc struct {
 		Diagnostics []struct {

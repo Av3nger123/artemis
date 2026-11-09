@@ -15,6 +15,8 @@ func TestSnakeFrom(t *testing.T) {
 		"!!!":               "unnamed",
 		"already_snake":     "already_snake",
 		"HTTPServer up":     "httpserver_up",
+		"true":              "s_true",
+		"Null":              "s_null",
 	} {
 		if got := SnakeFrom(in); got != want {
 			t.Errorf("SnakeFrom(%q) = %q, want %q", in, got, want)
@@ -33,7 +35,7 @@ func TestIsSnakeID(t *testing.T) {
 			t.Errorf("IsSnakeID(%q) = false", s)
 		}
 	}
-	for _, s := range []string{"", "Sign_in", "sign__in", "_x", "x_", "2x", "sign-in", "signIn"} {
+	for _, s := range []string{"", "Sign_in", "sign__in", "_x", "x_", "2x", "sign-in", "signIn", "true", "false", "null"} {
 		if IsSnakeID(s) {
 			t.Errorf("IsSnakeID(%q) = true", s)
 		}

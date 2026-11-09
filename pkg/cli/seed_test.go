@@ -42,7 +42,7 @@ func randomArt(url string) string {
 	return fmt.Sprintf(`flow made_up {
   var id = uuid()
 
-  step "send it" {
+  step send_it as "send it" {
     get %q {
       query "id" = "${id}-${random_int(1, 1000000)}-${random_string(8)}"
     }
@@ -50,7 +50,7 @@ func randomArt(url string) string {
   }
 }
 
-scenario "made up" {}
+scenario made_up as "made up" {}
 `, url)
 }
 

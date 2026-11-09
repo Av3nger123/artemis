@@ -110,8 +110,8 @@ func TestListNamesEachScenarioFilesFlow(t *testing.T) {
 	root := t.TempDir()
 	for rel, src := range map[string]string{
 		filepath.Join("flows", "checkout.art"):     "import \"../collections/auth.art\"\n\nflow checkout {\n}\n",
-		filepath.Join("scenarios", "checkout.art"): "flow \"../flows/checkout.art\"\n\nscenario \"full price\" {}\n\nscenario \"coupon\" {}\n",
-		"plain.art": "scenario \"x\" {}\n",
+		filepath.Join("scenarios", "checkout.art"): "flow \"../flows/checkout.art\"\n\nscenario full_price as \"full price\" {}\n\nscenario coupon {}\n",
+		"plain.art": "scenario x {}\n",
 	} {
 		full := filepath.Join(root, rel)
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -139,7 +139,7 @@ func TestListNamesEachScenarioFilesFlow(t *testing.T) {
 	}
 	sf := files[filepath.Join("scenarios", "checkout.art")]
 	if sf.FlowFile != filepath.Join("flows", "checkout.art") || sf.Flow != "checkout" ||
-		len(sf.Scenarios) != 2 || sf.Scenarios[0] != "full price" || sf.Scenarios[1] != "coupon" {
+		len(sf.Scenarios) != 2 || sf.Scenarios[0] != "full_price" || sf.Scenarios[1] != "coupon" {
 		t.Errorf("scenarios/checkout.art = %+v", sf)
 	}
 }

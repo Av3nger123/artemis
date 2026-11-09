@@ -14,18 +14,18 @@ flow order_saved_as_paid {
   private var orders_db = env("ORDERS_DB")
 
   setup {
-    step "seed" {
+    step seed {
       db orders_db { sql = file("fixtures/seed.sql") }
     }
   }
 
-  step "pay" {
+  step pay {
     post "${url}/orders" { body = {"sku": sku, "pay": true} }
     expect status == 201
     var order_id = body.id
   }
 
-  step "the row says paid" {
+  step the_row_says_paid as "the row says paid" {
     db orders_db {
       sql  = "SELECT status, total FROM orders WHERE id = $1"
       args = [order_id]
@@ -36,7 +36,7 @@ flow order_saved_as_paid {
   }
 
   teardown {
-    step "remove it" {
+    step remove_it as "remove it" {
       db orders_db {
         sql  = "DELETE FROM orders WHERE id = $1"
         args = [order_id]
@@ -75,13 +75,13 @@ flow session_cached {
   private var mongo = env("MONGO_URL")
   private var cache = env("REDIS_URL")
 
-  step "the user" {
+  step the_user as "the user" {
     db mongo { command = {"find": "users", "filter": {"email": email}} }
     expect len(rows) == 1
     var user_id = rows[0]._id
   }
 
-  step "their session" {
+  step their_session as "their session" {
     db cache { command = ["GET", "session:${user_id}"] }
     expect result == "active"
   }

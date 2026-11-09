@@ -11,7 +11,7 @@ import (
 // action, and what it writes is a var after it. orders takes no user, so a
 // run of the whole collection passes user to login alone, and orders reads
 // the token login wrote from the context.
-const newAuth = `collection "auth" {
+const newAuth = `collection auth {
   request login {
     var user
     var password = "s3cret"

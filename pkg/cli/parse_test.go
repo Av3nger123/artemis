@@ -12,7 +12,7 @@ import (
 // click: a misspelled field name, close enough to a real one that the checker
 // can name the replacement.
 const suggestionArt = `flow checkout {
-  step "login" {
+  step login {
     post "https://example.test/token" {
       quer "limit" = 10
     }
@@ -20,7 +20,7 @@ const suggestionArt = `flow checkout {
   }
 }
 
-scenario "checkout" {}
+scenario checkout {}
 `
 
 // jsonDiag is the document as a client reads it -- declared here rather than

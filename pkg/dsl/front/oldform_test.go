@@ -29,7 +29,7 @@ func TestOldFormsAreErrors(t *testing.T) {
 			diag.OldCapture, 4, 5, "var id = ... after the step's action"},
 		{"use", "f.art",
 			"import \"c.art\"\n\nflow f {\n  use c.r { }\n}\n",
-			diag.OldUse, 4, 3, `step "<name>" = c.r { ... }`},
+			diag.OldUse, 4, 3, `step <id> = c.r { ... }`},
 		{"params", "c.art",
 			"collection \"c\" {\n  request r(user, password = \"pw\") {\n    get \"/\"\n  }\n}\n",
 			diag.OldParams, 2, 12, "var user"},
@@ -99,9 +99,9 @@ func TestAnOldFileIsReportedAsOneAndGoesNoFurther(t *testing.T) {
 func TestAnOldFormInAFileReadIsReported(t *testing.T) {
 	files := expand.MapLoader{
 		"c.art": "collection \"c\" {\n  request r(u) {\n    get u\n    capture id = body.id\n  }\n}\n",
-		"f.art": "import \"c.art\"\n\nflow f {\n  step \"call\" = c.r { u = \"/\" }\n}\n",
+		"f.art": "import \"c.art\"\n\nflow f {\n  step call = c.r { u = \"/\" }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { }\n", files)
 	codes := map[diag.Code]string{}
 	for _, d := range u.Bag.All() {
 		codes[d.Code] = d.Span.File
@@ -120,11 +120,11 @@ func TestAnOldFormInAFileReadIsReported(t *testing.T) {
 // inputs and a step that calls it compile clean.
 func TestTheNewFormsAreNotOld(t *testing.T) {
 	files := expand.MapLoader{
-		"c.art": "collection \"c\" {\n  request r {\n    var u\n    get u\n    var id = body.id\n  }\n}\n",
-		"f.art": "import \"c.art\"\n\nflow f {\n  var path = \"/\"\n  step \"call\" = c.r { u = path }\n" +
-			"  step \"next\" {\n    get \"/${id}\"\n    var other = body.x\n  }\n}\n",
+		"c.art": "collection c {\n  request r {\n    var u\n    get u\n    var id = body.id\n  }\n}\n",
+		"f.art": "import \"c.art\"\n\nflow f {\n  var path = \"/\"\n  step call = c.r { u = path }\n" +
+			"  step next {\n    get \"/${id}\"\n    var other = body.x\n  }\n}\n",
 	}
-	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario \"s\" { path = \"/x\" }\n", files)
+	u := front.CompileWith("main.art", "flow \"f.art\"\n\nscenario s { path = \"/x\" }\n", files)
 	if len(u.Bag.All()) != 0 {
 		t.Fatalf("want no diagnostics, got %v", u.Bag.All())
 	}

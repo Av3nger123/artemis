@@ -38,7 +38,7 @@ func TestRunWritesATraceOfEveryStep(t *testing.T) {
 		"checkout.art": `flow checkout {
   var pw = env("ART_TRACE_PW")
 
-  step "get a token" {
+  step get_a_token as "get a token" {
     post "` + srv.URL + `" {
       header "Content-Type" = "application/json"
       body = {"username": "alice", "password": pw}
@@ -47,7 +47,7 @@ func TestRunWritesATraceOfEveryStep(t *testing.T) {
     var token = body.data.access_token
   }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "` + srv.URL + `" {
       header "Authorization" = "Bearer ${token}"
     }
@@ -55,7 +55,7 @@ func TestRunWritesATraceOfEveryStep(t *testing.T) {
   }
 }
 
-scenario "checkout" {}
+scenario checkout {}
 `,
 	})
 

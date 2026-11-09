@@ -53,20 +53,20 @@ func TestArtRunCapturesReachTheNextStep(t *testing.T) {
 	run, _ := runArt(t, fmt.Sprintf(`flow two_steps {
   var base = %q
 
-  step "sign in" {
+  step sign_in as "sign in" {
     post "${base}/login"
     expect status == 200
     var token = body.token
   }
 
-  step "use it" {
+  step use_it as "use it" {
     get "${base}/items/${token}"
     expect status == 200
     expect body.ok == true
   }
 }
 
-scenario "two steps" {}
+scenario two_steps as "two steps" {}
 `, srv.URL))
 
 	if !run.Passed() {
@@ -82,13 +82,13 @@ scenario "two steps" {}
 // written out, caret and hint included.
 func TestArtRunCompileErrorIsAnErroredScenario(t *testing.T) {
 	run, diags := runArt(t, `flow typo {
-  step "ping" {
+  step ping {
     get "/ping"
     expect statu == 200
   }
 }
 
-scenario "typo" {}
+scenario typo {}
 `)
 
 	if run.Passed() {
@@ -123,14 +123,14 @@ scenario "typo" {}
 // and every one of them is rendered.
 func TestArtRunCompileErrorNamesTheFirstAndCountsTheRest(t *testing.T) {
 	run, diags := runArt(t, `flow typos {
-  step "ping" {
+  step ping {
     get "/ping"
     timeot = "5s"
     expect statu == 200
   }
 }
 
-scenario "typos" {}
+scenario typos {}
 `)
 
 	sc := run.Scenarios[0]
@@ -155,15 +155,15 @@ func TestArtRunBrokenFileDoesNotStopTheRest(t *testing.T) {
 	defer srv.Close()
 
 	dir := writeTree(t, t.TempDir(), map[string]string{
-		"01_broken.art": "flow broken {\n  step \"ping\" {\n    get \"/x\"\n    expect statu == 200\n  }\n}\n\nscenario \"broken\" {}\n",
+		"01_broken.art": "flow broken {\n  step ping {\n    get \"/x\"\n    expect statu == 200\n  }\n}\n\nscenario broken {}\n",
 		"02_fine.art": fmt.Sprintf(`flow fine {
-  step "ping" {
+  step ping {
     get %q
     expect status == 200
   }
 }
 
-scenario "fine" {}
+scenario fine {}
 `, srv.URL),
 	})
 	files, err := discover(dir)
@@ -189,13 +189,13 @@ func TestArtRunUnbindableVarErrorsTheScenario(t *testing.T) {
 	run, _ := runArt(t, `flow bad_var {
   var n = match("no digits here", /([0-9]+)/)
 
-  step "ping" {
+  step ping {
     get "/ping"
     expect status == 200
   }
 }
 
-scenario "bad var" {}
+scenario bad_var as "bad var" {}
 `)
 
 	if len(run.Scenarios) != 1 {
@@ -222,7 +222,7 @@ func TestArtRunFailedCaptureIsOneErroredAssertion(t *testing.T) {
 	defer srv.Close()
 
 	run, _ := runArt(t, fmt.Sprintf(`flow captures {
-  step "login" {
+  step login {
     get %q
     expect status == 200
     var missing = body.nope.deeper
@@ -230,7 +230,7 @@ func TestArtRunFailedCaptureIsOneErroredAssertion(t *testing.T) {
   }
 }
 
-scenario "captures" {}
+scenario captures {}
 `, srv.URL))
 
 	step := run.Scenarios[0].Steps[0]
@@ -272,7 +272,7 @@ func TestArtRunRetriesOnAFailedCapture(t *testing.T) {
 	defer func() { sleep = orig }()
 
 	run, _ := runArt(t, fmt.Sprintf(`flow wait_for_the_token {
-  step "login" {
+  step login {
     get %q
     retry { times = 4, delay = "10ms" }
     expect status == 200
@@ -280,7 +280,7 @@ func TestArtRunRetriesOnAFailedCapture(t *testing.T) {
   }
 }
 
-scenario "wait for the token" {}
+scenario wait_for_the_token as "wait for the token" {}
 `, srv.URL))
 
 	step := run.Scenarios[0].Steps[0]
@@ -313,14 +313,14 @@ func TestArtRunBadPolicyFromAnExpressionStopsTheStep(t *testing.T) {
 	run, _ := runArt(t, fmt.Sprintf(`flow bad_delay {
   var d = "soon"
 
-  step "ping" {
+  step ping {
     get %q
     retry { times = 2, delay = d }
     expect status == 200
   }
 }
 
-scenario "bad delay" {}
+scenario bad_delay as "bad delay" {}
 `, srv.URL))
 
 	step := run.Scenarios[0].Steps[0]
@@ -349,7 +349,7 @@ func TestArtRunABrowserConfigThatWillNotResolveFailsTheScenario(t *testing.T) {
   var size = 1280
   config browser { viewport = size, headless = "yes" }
 
-  step "open it" {
+  step open_it as "open it" {
     browser {
       goto "http://127.0.0.1:1/settings"
     }
@@ -357,7 +357,7 @@ func TestArtRunABrowserConfigThatWillNotResolveFailsTheScenario(t *testing.T) {
   }
 }
 
-scenario "the app" {}
+scenario the_app as "the app" {}
 `)
 
 	if run.Passed() {
@@ -382,7 +382,7 @@ func TestArtRunAnActThatWillNotResolveFailsBeforeTheBrowserOpens(t *testing.T) {
 	run, _ := runArt(t, `flow the_app {
   var sel = ".x"
 
-  step "open it" {
+  step open_it as "open it" {
     browser {
       goto "http://127.0.0.1:1/"
       click "text=${text(sel)}"
@@ -391,7 +391,7 @@ func TestArtRunAnActThatWillNotResolveFailsBeforeTheBrowserOpens(t *testing.T) {
   }
 }
 
-scenario "the app" {}
+scenario the_app as "the app" {}
 `)
 
 	if run.Passed() {
@@ -414,15 +414,15 @@ scenario "the app" {}
 // a scenario file may hold any number.
 func TestArtRunEveryScenarioInTheFile(t *testing.T) {
 	run, _ := runArt(t, `flow nothing {
-  step "nothing" {
+  step nothing {
     run "true"
     expect exit_code == 0
   }
 }
 
-scenario "first" {}
+scenario first {}
 
-scenario "second" {}
+scenario second {}
 `)
 
 	if len(run.Scenarios) != 2 {
@@ -460,14 +460,14 @@ func TestTestCommandRunsAnArtFile(t *testing.T) {
 	defer srv.Close()
 
 	path := writeArt(t, "ok.art", fmt.Sprintf(`flow ok {
-  step "ping" {
+  step ping {
     get %q
     expect status == 200
     expect body.ok == true
   }
 }
 
-scenario "ok" {}
+scenario ok {}
 `, srv.URL))
 
 	var out strings.Builder
@@ -492,13 +492,13 @@ func TestArtRunHonoursTheContext(t *testing.T) {
 	defer srv.Close()
 
 	path := writeArt(t, "slow.art", fmt.Sprintf(`flow slow {
-  step "ping" {
+  step ping {
     get %q
     expect status == 200
   }
 }
 
-scenario "slow" {}
+scenario slow {}
 `, srv.URL))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -551,18 +551,18 @@ func eventNames(events []map[string]any) []string {
 func TestEventsTickEveryStep(t *testing.T) {
 	srv := okServer(t, 200, `{"status":"ok"}`)
 	path := writeArt(t, "two.art", fmt.Sprintf(`flow two_steps {
-  step "first" {
+  step first {
     get %q
     expect status == 200
   }
 
-  step "second" {
+  step second {
     get %q
     expect body.status == "ok"
   }
 }
 
-scenario "two steps" {}
+scenario two_steps as "two steps" {}
 `, srv.URL, srv.URL))
 
 	events := runArtEvents(t, path)
@@ -598,13 +598,13 @@ func TestEventsEndAScenarioWhoseVarsWillNotBind(t *testing.T) {
 	path := writeArt(t, "bad_var.art", `flow bad_var {
   var n = match("no digits here", /([0-9]+)/)
 
-  step "ping" {
+  step ping {
     get "/ping"
     expect status == 200
   }
 }
 
-scenario "bad var" {}
+scenario bad_var as "bad var" {}
 `)
 
 	events := runArtEvents(t, path)
@@ -628,7 +628,7 @@ func TestEventsEndAScenarioWhoseBrowserConfigWillNotResolve(t *testing.T) {
   var size = 1280
   config browser { viewport = size, headless = "yes" }
 
-  step "open it" {
+  step open_it as "open it" {
     browser {
       goto "http://127.0.0.1:1/settings"
     }
@@ -636,7 +636,7 @@ func TestEventsEndAScenarioWhoseBrowserConfigWillNotResolve(t *testing.T) {
   }
 }
 
-scenario "the app" {}
+scenario the_app as "the app" {}
 `)
 
 	events := runArtEvents(t, path)
@@ -654,14 +654,14 @@ scenario "the app" {}
 // not null -- and an errored end carrying the first diagnostic.
 func TestEventsGiveAFileThatWillNotCompileAStartAndAnEnd(t *testing.T) {
 	path := writeArt(t, "broken.art", `flow broken {
-  step "typo" {
+  step typo {
     get "http://127.0.0.1:1/health"
     timeot = "5s"
     expect status == 200
   }
 }
 
-scenario "broken" {}
+scenario broken {}
 `)
 
 	events := runArtEvents(t, path)
@@ -709,13 +709,13 @@ func TestEventsGiveAFileThatIsNotAScenarioAStartAndAnEnd(t *testing.T) {
 func TestEventsOfAGatedRunStartNoScenario(t *testing.T) {
 	path := writeArt(t, "gated.art", `flow reports {
   var url = env("ARTEMIS_TEST_EVENTS_GATE_URL")
-  step "report" {
+  step report {
     get "${url}"
     expect status == 200
   }
 }
 
-scenario "reports" {}
+scenario reports {}
 `)
 
 	events := runArtEvents(t, path)
@@ -815,25 +815,25 @@ func TestFailedWriteUnsetsTheName(t *testing.T) {
   var url = %q
 
   repeat max 3 {
-    step "pay" {
+    step pay {
       get "${url}/pay"
       var n = body.n
       var code = body.code
     }
   } until n >= 2
 
-  step "after" {
+  step after {
     get "${url}/x?c=${code}"
   }
 
   teardown {
-    step "undo" {
+    step undo {
       get "${url}/x?undo=${code}"
     }
   }
 }
 
-scenario "failed write" {}
+scenario failed_write as "failed write" {}
 `, srv.URL))
 	wantUnsetRead(t, run, diags, asked())
 	// In cleanup, a step that reads an unset name is skipped, as it always
@@ -852,19 +852,19 @@ func TestFailedWriteOnTheLastAttemptUnsetsTheName(t *testing.T) {
 	run, diags := runArt(t, fmt.Sprintf(`flow failed_write {
   var url = %q
 
-  step "pay" {
+  step pay {
     get "${url}/pay"
     retry { times = 2 }
     expect status == 200
     var code = body.code
   }
 
-  step "after" {
+  step after {
     get "${url}/x?c=${code}"
   }
 }
 
-scenario "failed write" {}
+scenario failed_write as "failed write" {}
 `, srv.URL))
 	if pay := steps(run)["pay"]; pay == nil || pay.Attempts != 2 {
 		t.Fatalf("pay = %+v, want two attempts", pay)
@@ -881,19 +881,19 @@ func TestAStepThatErroredUnsetsWhatItWrites(t *testing.T) {
   var url = %q
 
   repeat max 3 {
-    step "pay" {
+    step pay {
       get "${url}/pay"
       var n = body.n
       var code = body.code
     }
   } until n >= 2
 
-  step "after" {
+  step after {
     get "${url}/x?c=${code}"
   }
 }
 
-scenario "errored write" {}
+scenario errored_write as "errored write" {}
 `, srv.URL))
 	if pay := steps(run)["pay"]; pay == nil || pay.Status != result.StatusError || pay.Round != 2 {
 		t.Fatalf("pay = %+v, want round 2 to have errored", pay)
@@ -911,24 +911,24 @@ func TestFailedWriteInAParallelBranchUnsetsTheName(t *testing.T) {
 
   repeat max 3 {
     parallel {
-      step "pay" {
+      step pay {
         get "${url}/pay"
         var n = body.n
         var code = body.code
       }
-      step "other" {
+      step other {
         get "${url}/other"
         var o = body.o
       }
     }
   } until n >= 2
 
-  step "after" {
+  step after {
     get "${url}/x?c=${code}"
   }
 }
 
-scenario "failed write" {}
+scenario failed_write as "failed write" {}
 `, srv.URL))
 	wantUnsetRead(t, run, diags, asked())
 }
@@ -942,17 +942,17 @@ func TestFailedWriteUnsetsTheNameOfAFlowVar(t *testing.T) {
   var url = %q
   var code = 200
 
-  step "pay" {
+  step pay {
     get "${url}/no-code"
     var code = body.code
   }
 
-  step "after" {
+  step after {
     get "${url}/x?c=${code}"
   }
 }
 
-scenario "failed write" {}
+scenario failed_write as "failed write" {}
 `, srv.URL))
 	wantUnsetRead(t, run, diags, asked())
 }
@@ -986,7 +986,7 @@ func TestOverwrittenNameReachesALaterItem(t *testing.T) {
 		writeSplit(t, path, src)
 		return path
 	}
-	write("api.art", `collection "api" {
+	write("api.art", `collection api {
   request greet {
     var user
     var url
@@ -1001,17 +1001,17 @@ flow greeting {
   var user = "a"
   private var url = %q
 
-  step "who" {
+  step who {
     get "${url}/who"
     var user = body.name
   }
 
-  step "greet" = api.greet { }
+  step greet = api.greet { }
 }
 `, srv.URL))
 	scenarios := write("greetings.art", `flow "greeting.art"
 
-scenario "greets whoever answered" { }
+scenario greets_whoever_answered as "greets whoever answered" { }
 `)
 	out, stderr, err := runCLI(t, "run", scenarios)
 	if err != nil {

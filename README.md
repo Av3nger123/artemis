@@ -36,7 +36,7 @@ flow checkout {
   var min_orders = 1
   private var url = env("API_URL")
 
-  step "get a token" {
+  step get_a_token as "get a token" {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": user, "password": env("API_PASSWORD")}
@@ -45,7 +45,7 @@ flow checkout {
     var token = body.data.access_token
   }
 
-  step "list the orders" {
+  step list_the_orders as "list the orders" {
     get "${url}/orders" {
       header "Authorization" = "Bearer ${token}"
       query "limit" = 10
@@ -65,9 +65,9 @@ flow checkout {
 # scenarios/checkout.art
 flow "../flows/checkout.art"
 
-scenario "alice has orders" {}
+scenario alice_has_orders as "alice has orders" {}
 
-scenario "a new user has none" {
+scenario a_new_user_has_none as "a new user has none" {
   tags       = ["smoke"]
   user       = "newbie"
   min_orders = 0

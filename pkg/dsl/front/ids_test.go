@@ -81,3 +81,40 @@ func TestDuplicateIDScopes(t *testing.T) {
 		t.Errorf("a step id in a flow file: %d duplicate-id, want 0", len(got))
 	}
 }
+
+func TestQuotedNameIsOldForm(t *testing.T) {
+	files := expand.MapLoader{
+		"c.art": "collection c {\n  request r {\n    get \"/\"\n  }\n}\n",
+		"f.art": "flow f {\n  step a {\n    get \"/\"\n  }\n}\n",
+	}
+	for _, tc := range []struct {
+		name, file, src, msg string
+		line, col            int
+	}{
+		{"step", "f.art", "flow f {\n  step \"log in\" {\n    get \"/\"\n  }\n}\n", `a step's name is a snake_case id now: step log_in as "log in"`, 2, 8},
+		{"item call", "f.art", "import \"c.art\"\n\nflow f {\n  step \"log in\" = c.r {}\n}\n", `a step's name is a snake_case id now: step log_in as "log in"`, 4, 8},
+		{"scenario", "s.art", "flow \"f.art\"\n\nscenario \"full price\" {}\n", `a scenario's name is a snake_case id now: scenario full_price as "full price"`, 3, 10},
+		{"collection", "c.art", "collection \"Orders API\" {\n  request r {\n    get \"/\"\n  }\n}\n", `a collection's name is a snake_case id now: collection c as "Orders API"`, 1, 12},
+	} {
+		u := front.CompileWith(tc.file, tc.src, files)
+		got := withCode(u, diag.QuotedName)
+		if len(got) != 1 {
+			t.Errorf("%s: %d quoted-name, want 1: %v", tc.name, len(got), u.Bag.All())
+			continue
+		}
+		d := got[0]
+		if d.Message != tc.msg || d.Span.Line != tc.line || d.Span.Col != tc.col ||
+			!strings.Contains(d.Hint, "artemis migrate -f "+tc.file+" -o <dir> rewrites it") {
+			t.Errorf("%s: %d:%d %q hint %q", tc.name, d.Span.Line, d.Span.Col, d.Message, d.Hint)
+		}
+	}
+}
+
+// A quoted name that already is an id needs no label.
+func TestQuotedIDNeedsNoLabel(t *testing.T) {
+	u := front.CompileWith("f.art", "flow f {\n  step \"pay\" {\n    get \"/\"\n  }\n}\n", expand.MapLoader{})
+	got := withCode(u, diag.QuotedName)
+	if len(got) != 1 || got[0].Message != "a step's name is a snake_case id now: step pay" {
+		t.Errorf("got %v", got)
+	}
+}

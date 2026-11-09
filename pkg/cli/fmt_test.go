@@ -13,7 +13,7 @@ import (
 // uglyArt is cleanArt's flow with the layout wrecked: tabs, runs of
 // spaces, inline blocks that should break, a missing trailing newline. It
 // parses clean, so it is a file `fmt` is allowed to touch.
-const uglyArt = "flow checkout   {\n\tvar url=env(\"API_URL\")\n\n\n  step \"login\"  {\n        post \"${url}/token\" { header \"Content-Type\" = \"application/json\"\n   body = {\"username\":\"alice\"} }\n\texpect status==200\n  }\n}"
+const uglyArt = "flow checkout   {\n\tvar url=env(\"API_URL\")\n\n\n  step login  {\n        post \"${url}/token\" { header \"Content-Type\" = \"application/json\"\n   body = {\"username\":\"alice\"} }\n\texpect status==200\n  }\n}"
 
 // canonical is what the printer makes of src, by the same route the command
 // takes. The expectation is derived rather than written out, because pinning
