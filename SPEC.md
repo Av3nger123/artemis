@@ -2592,8 +2592,11 @@ so a reader can tell "nothing failed" from "nothing ran":
 | `total`, `passed`, `failed`, `errored`, `skipped` | each tally | How many of that level ended that way |
 | `scenarios` | run | One entry per scenario the run reached, in run order |
 | `tags` | scenario | The scenario's [tags](#tags). **Omitted** when it has none |
-| `flow` | scenario | The name of the flow the scenario ran: `"checkout"`. **Omitted** when it ran none, as for a file that would not compile |
-| `name` | scenario, step | As written: a scenario's title, a step's name. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
+| `flow` | scenario | The id of the flow the scenario ran: `"checkout"`. **Omitted** when it ran none, as for a file that would not compile |
+| `flow_label` | scenario | That flow's label: `"Checkout"`. **Omitted** when it has none |
+| `name` | scenario, step | What a person reads: the label, or the id when there is none. A scenario whose file would not compile has no name, so it is `""` and `file` identifies it |
+| `id` | scenario, step | The snake_case id as written: `"with_coupon"`, `"pay"` |
+| `label` | scenario, step | The label after `as`, and `""` when there is none |
 | `file` | scenario, failure, step, assertion | On a scenario, the scenario file it was read from. On a failure, the file its `line` was written in: the flow's, or the [collection's](#collections) an item call brought the step in from. On a step or an assertion, the same, and **omitted** when it is the scenario's own file |
 | `error` | scenario, step, assertion, failure | Why it could not run, or `""`. A scenario's error is a file that would not compile, and such a scenario has no steps |
 | `steps` | scenario | One entry per step the scenario reached |
