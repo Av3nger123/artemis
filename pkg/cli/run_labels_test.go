@@ -43,3 +43,21 @@ func TestStandaloneItemTakesTheItemLabel(t *testing.T) {
 		t.Errorf("the step does not carry the item's label:\n%s", out)
 	}
 }
+
+// artemis list --json names each scenario by its label, and carries the id
+// and the label apart, with the flow's label.
+func TestListJSONCarriesIDsAndLabels(t *testing.T) {
+	dir := writeTree(t, t.TempDir(), map[string]string{
+		"flows/checkout.art":     "flow checkout as \"Checkout\" {\n  step a {\n    get \"http://x\"\n  }\n}\n",
+		"scenarios/checkout.art": "flow \"../flows/checkout.art\"\n\nscenario with_coupon as \"With a coupon\" {}\n",
+	})
+	out, stderr, err := runCLI(t, "list", filepath.Join(dir, "scenarios"), "--json")
+	if err != nil {
+		t.Fatalf("list: %v\n%s", err, stderr)
+	}
+	for _, want := range []string{`"id":"with_coupon"`, `"label":"With a coupon"`, `"name":"With a coupon"`, `"flow_label":"Checkout"`} {
+		if !strings.Contains(strings.ReplaceAll(out, " ", ""), strings.ReplaceAll(want, " ", "")) {
+			t.Errorf("list --json has no %s:\n%s", want, out)
+		}
+	}
+}

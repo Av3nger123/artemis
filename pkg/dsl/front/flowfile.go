@@ -24,6 +24,18 @@ func FlowDecl(file, src string) (keyword token.Token, name string, ok bool) {
 	return token.Token{}, "", false
 }
 
+// Flow is the flow src declares, as parsed; ok is false for a file that
+// declares none.
+func Flow(file, src string) (*ast.Flow, bool) {
+	tree, _ := parser.Parse(file, src)
+	for _, d := range tree.Scenarios {
+		if f, isFlow := d.(*ast.Flow); isFlow {
+			return f, true
+		}
+	}
+	return nil, false
+}
+
 // FlowHeader reports the path a scenario file's header names, `flow
 // "../flows/checkout.art"`, as written: relative to the scenario file. ok is
 // false for a file with no header.

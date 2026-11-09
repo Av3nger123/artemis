@@ -12,6 +12,7 @@ import (
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/front"
 	"artemis/pkg/dsl/parser"
+	"artemis/pkg/dsl/token"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,11 +26,12 @@ func addList(s *mcp.Server, srv *server) {
 		Name: "artemis_list",
 		Description: "List the .art scenario files in the workspace, in path order, " +
 			"as workspace-relative paths, and under `collections` the " +
-			"`name.item` refs each collection file's requests are used by: name is the file's name, which " +
-			"`import \"<file>\"` gives it, or, for a file whose name cannot be one, the name to give it " +
-			"with `import \"<file>\" as name`. Under `scenario_files`, each scenario file -- one whose " +
+			"`name.item` refs each collection file's requests are used by: name is the collection's id, which " +
+			"`import \"<file>\"` gives it, and under `collection_labels` the label of each item that has " +
+			"one, by its ref. Under `scenario_files`, each scenario file -- one whose " +
 			"first line is `flow \"<path>\"` -- with the flow file its header names (workspace-relative), " +
-			"the flow's name, and the titles of its scenarios. Call this first to find out what " +
+			"the flow's id and `flow_label`, the ids of its scenarios, and under `scenario_labels` the " +
+			"label of each that has one. Show a label where there is one, and the id otherwise. Call this first to find out what " +
 			"scenarios exist before reading or changing one.",
 		Annotations:  readOnly(),
 		OutputSchema: objectSchema(),
@@ -51,6 +53,7 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 
 	files := []string{}
 	collections := map[string][]string{}
+	collectionLabels := map[string]map[string]string{}
 	scenarioFiles := map[string]scenarioFile{}
 	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -75,8 +78,11 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 			return relErr
 		}
 		files = append(files, rel)
-		if items := srv.collectionItems(rel); len(items) > 0 {
+		if items, labels := srv.collectionItems(rel); len(items) > 0 {
 			collections[rel] = items
+			if len(labels) > 0 {
+				collectionLabels[rel] = labels
+			}
 		}
 		if sf, ok := srv.scenarioFile(rel); ok {
 			scenarioFiles[rel] = sf
@@ -91,6 +97,9 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 	if len(collections) > 0 {
 		out["collections"] = collections
 	}
+	if len(collectionLabels) > 0 {
+		out["collection_labels"] = collectionLabels
+	}
 	if len(scenarioFiles) > 0 {
 		out["scenario_files"] = scenarioFiles
 	}
@@ -102,40 +111,50 @@ func (srv *server) listTool(ctx context.Context, req *mcp.CallToolRequest, in li
 }
 
 // collectionItems is every `name.item` the file at abs declares, in source
-// order: name is what importing the file gives its collection, or what an
-// `as` should when the file's name cannot be one. The file is parsed and not expanded: what a file declares is
+// order, and the label of each that has one, by the same key: name is the
+// collection's id, which is what importing the file with no as gives it. An
+// old collection, titled in quotes, is named by its file, or by what an `as`
+// should be when the file's name cannot be one. The file is parsed and not expanded: what a file declares is
 // read off what it says, and a file that does not compile still lists what
 // did parse. A file that cannot be read lists nothing; artemis_validate is
 // where its problems are reported.
-func (srv *server) collectionItems(rel string) []string {
+func (srv *server) collectionItems(rel string) ([]string, map[string]string) {
 	// Through resolveArt, not the walked path: a symlink to a file outside the
 	// workspace is listed as a file but never read.
 	abs, err := srv.ws.resolveArt(rel)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	b, err := os.ReadFile(abs) //nolint:gosec // resolveArt kept it inside the workspace
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	tree, _ := parser.Parse(rel, string(b))
-	name, ok := parser.ImportName(rel)
-	if !ok {
-		name = parser.IdentLike(name)
-	}
 	var out []string
+	labels := map[string]string{}
 	for _, d := range tree.Scenarios {
 		c, ok := d.(*ast.Collection)
 		if !ok {
 			continue
 		}
+		name := c.Name.Value
+		if c.Name.Kind != token.Ident {
+			var ok bool
+			if name, ok = parser.ImportName(rel); !ok {
+				name = parser.IdentLike(name)
+			}
+		}
 		for _, it := range c.Items {
 			if r, ok := it.(*ast.RequestDecl); ok {
-				out = append(out, name+"."+r.Name.Text)
+				ref := name + "." + r.Name.Text
+				out = append(out, ref)
+				if r.Label.Text != "" {
+					labels[ref] = r.Label.Value
+				}
 			}
 		}
 	}
-	return out
+	return out, labels
 }
 
 // scenarioFile is what the list says about a scenario file: the flow its
@@ -144,10 +163,14 @@ type scenarioFile struct {
 	// FlowFile is the header's path made workspace-relative, as every other
 	// path the tools take is.
 	FlowFile string `json:"flow_file"`
-	// Flow is the flow's name, or "" when the flow file cannot be read or
-	// declares no flow.
-	Flow      string   `json:"flow"`
-	Scenarios []string `json:"scenarios"`
+	// Flow is the flow's id, or "" when the flow file cannot be read or
+	// declares no flow, and FlowLabel its label, omitted when it has none.
+	Flow      string `json:"flow"`
+	FlowLabel string `json:"flow_label,omitempty"`
+	// Scenarios are the scenarios' ids, in order, and ScenarioLabels the
+	// label of each that has one, by its id.
+	Scenarios      []string          `json:"scenarios"`
+	ScenarioLabels map[string]string `json:"scenario_labels,omitempty"`
 }
 
 // scenarioFile reads the file at rel as a scenario file. ok is false for a
@@ -174,14 +197,20 @@ func (srv *server) scenarioFile(rel string) (scenarioFile, bool) {
 	for _, d := range tree.Scenarios {
 		if sc, isScenario := d.(*ast.Scenario); isScenario {
 			out.Scenarios = append(out.Scenarios, sc.Name.Value)
+			if sc.Label.Text != "" {
+				if out.ScenarioLabels == nil {
+					out.ScenarioLabels = map[string]string{}
+				}
+				out.ScenarioLabels[sc.Name.Value] = sc.Label.Value
+			}
 		}
 	}
 	// Through resolveArt, so a header that climbs out of the workspace names
 	// a file that is never read.
 	if flowAbs, err := srv.ws.resolveArt(out.FlowFile); err == nil {
 		if src, err := os.ReadFile(flowAbs); err == nil { //nolint:gosec // as above
-			if _, name, isFlow := front.FlowDecl(out.FlowFile, string(src)); isFlow {
-				out.Flow = name
+			if f, isFlow := front.Flow(out.FlowFile, string(src)); isFlow {
+				out.Flow, out.FlowLabel = f.Name.Value, f.Label.Value
 			}
 		}
 	}
