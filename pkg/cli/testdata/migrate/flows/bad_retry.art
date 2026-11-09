@@ -1,6 +1,6 @@
 # A retry delay that is not a duration.
 flow bad_retry {
-  step "ping" {
+  step ping {
     get "%SERVER%/ping"
     retry { times = 3, delay = "soon" }
     expect status == 200

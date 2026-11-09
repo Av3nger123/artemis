@@ -7,7 +7,7 @@
 # design moves it to compile time". So the step never runs and no attempt is
 # wasted finding out.
 flow bad_retry {
-  step "ping" {
+  step ping {
     get "%SERVER%/ping"
     retry { times = 3, delay = "soon" }
     expect status == 200

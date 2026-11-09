@@ -1,7 +1,7 @@
 # Runs of blank lines, tabs, and aligned `=`. Canonical mode keeps one blank
 # line where the author left one or more, drops the ones at the top and bottom
 # of a block, replaces tabs with two spaces, and collapses the alignment.
-scenario "blanks" {
+scenario blanks {
 
 
 	var short	= 1
@@ -9,7 +9,7 @@ scenario "blanks" {
 
 
 
-	step "one" {
+	step one {
 
 
 		get "/a"

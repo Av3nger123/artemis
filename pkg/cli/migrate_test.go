@@ -66,7 +66,7 @@ func TestMigrateWritesAFlowAndAScenarioFile(t *testing.T) {
 	wantFlow := `# what this file is for
 flow ping {
   # what this step does
-  step "ping" {
+  step ping {
     get "%SERVER%/ping"
     expect status == 200
   }
@@ -75,7 +75,7 @@ flow ping {
 	if got := readFile(t, flow); got != wantFlow {
 		t.Errorf("%s =\n%s\nwant\n%s", flow, got, wantFlow)
 	}
-	wantScenario := "flow \"../flows/ping.art\"\n\nscenario \"ping\" {}\n"
+	wantScenario := "flow \"../flows/ping.art\"\n\nscenario ping {}\n"
 	if got := readFile(t, scenario); got != wantScenario {
 		t.Errorf("%s =\n%s\nwant\n%s", scenario, got, wantScenario)
 	}

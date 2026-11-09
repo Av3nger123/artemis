@@ -1,5 +1,5 @@
 flow "../flows/checkout.art"
 
-scenario "checkout" {
+scenario checkout {
   tags = ["smoke"]
 }

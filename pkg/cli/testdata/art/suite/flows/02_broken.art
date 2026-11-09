@@ -6,7 +6,7 @@
 # did-you-mean -- the same class of mistake, caught by the stage that owns the
 # field names rather than by a decoder.
 flow s_02_broken {
-  step "ping" {
+  step ping {
     get "%SERVER%"
     timeot = "5s"
     expect status == 200

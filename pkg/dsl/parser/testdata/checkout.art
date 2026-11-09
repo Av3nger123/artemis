@@ -1,11 +1,11 @@
-scenario "checkout" {
+scenario checkout {
   config browser { headless = true, viewport = "1280x720" }
 
   var url = env("API_URL")
   var app = env("APP_URL")
   var pw  = env("API_PASSWORD")
 
-  step "seed the database" {
+  step seed_the_database as "seed the database" {
     run "psql" {
       args  = ["-f", "seed.sql"]
       cwd   = "db"
@@ -15,7 +15,7 @@ scenario "checkout" {
     expect stdout contains "COPY 42"
   }
 
-  step "login" {
+  step login {
     post "${url}/token" {
       header "Content-Type" = "application/json"
       body = {"username": "alice", "password": pw}
@@ -24,7 +24,7 @@ scenario "checkout" {
     capture token = body.data.access_token
   }
 
-  step "orders" {
+  step orders {
     get "${url}/orders" {
       header "Authorization" = "Bearer ${token}"
       query "limit" = 10
@@ -40,7 +40,7 @@ scenario "checkout" {
     expect body.data.count is number
   }
 
-  step "upgrade in the app" {
+  step upgrade_in_the_app as "upgrade in the app" {
     browser {
       goto "${app}/settings/billing"
       fill "#email" = "alice@example.com"

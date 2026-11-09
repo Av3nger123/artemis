@@ -2,16 +2,16 @@
 # does one job: items go in a collection file that the flow imports, and data
 # goes in a scenario file that names the flow. Both are reported, wherever they
 # stand, and each hint says where the thing belongs.
-collection "auth" {
+collection flow_file_holds as "auth" {
   request login() {
     post "/login"
   }
 }
 
 flow checkout {
-  step "pay" {
+  step pay {
     post "/cart/pay"
   }
 }
 
-scenario "full price" {}
+scenario full_price as "full price" {}

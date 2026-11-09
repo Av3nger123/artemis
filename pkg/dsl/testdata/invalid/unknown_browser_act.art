@@ -11,8 +11,8 @@
 # Levenshtein and also lands on the list; widening that threshold is a change to
 # pkg/dsl/diag and not to this stage.
 
-scenario "actions" {
-  step "upgrade" {
+scenario actions {
+  step upgrade {
     browser {
       goto "/settings/billing"
       clik "text=Upgrade"

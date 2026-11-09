@@ -1,5 +1,5 @@
 flow s_01_health {
-  step "ping" {
+  step ping {
     get "%SERVER%/health"
     expect status == 200
     expect body.status == "ok"

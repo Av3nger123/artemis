@@ -3,9 +3,9 @@
 # whole, braces and all, and the sets around them still parse.
 flow "../flows/checkout.art"
 
-scenario "bad coupon" {
+scenario bad_coupon as "bad coupon" {
   coupon = "NOPE"
-  step "read the error" {
+  step read_the_error as "read the error" {
     get "/errors/last"
   }
   expect status == 422

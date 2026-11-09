@@ -3,7 +3,7 @@
 # Canonical mode breaks the structural blocks -- scenario, step, browser -- so
 # this file and spread.art reach the same shape from opposite starting points,
 # differing only in the blank lines spread.art asks for.
-scenario "compact" {
+scenario compact {
   var url = env("API_URL")
 
   step "one" {

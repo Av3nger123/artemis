@@ -5,8 +5,8 @@
 # missing, so a did-you-mean against the step's roots would be the wrong
 # advice, and the hint shows the call instead.
 
-scenario "functions" {
-  step "upgrade" {
+scenario functions {
+  step upgrade {
     browser {
       goto "/settings/billing"
     }

@@ -113,7 +113,7 @@ func TestFmtDoesNotExpand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, stderr)
 	}
-	if !strings.Contains(out, `step "auth.login" = auth.login`) || strings.Contains(out, `/token"`) {
+	if !strings.Contains(out, `step auth_login as "auth.login" = auth.login`) || strings.Contains(out, `/token"`) {
 		t.Fatalf("fmt must print the file as written:\n%s", out)
 	}
 }

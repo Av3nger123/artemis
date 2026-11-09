@@ -7,7 +7,7 @@
 # that will not compile -- is a load error instead, and never gets this far; see
 # models.Capture's tests.
 flow bad_capture {
-  step "login" {
+  step login {
     post "%SERVER%/login" { body = {"user": "ada"} }
     expect status == 200
     expect body.token exists

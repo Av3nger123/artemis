@@ -8,7 +8,7 @@
 flow pass {
   var base = "%SERVER%"
 
-  step "create item" {
+  step create_item as "create item" {
     post "${base}/items" {
       header "Content-Type" = "application/json"
       body = {"name": "widget"}
@@ -19,7 +19,7 @@ flow pass {
     var itemId = body.id
   }
 
-  step "read it back" {
+  step read_it_back as "read it back" {
     get "${base}/items/${itemId}"
     expect status == 200
     expect body.name contains "widg"

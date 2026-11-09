@@ -3,9 +3,9 @@ import "../auth.art"
 flow checkout {
   var url = env("API_URL")
 
-  step "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
+  step auth_login as "auth.login" = auth.login { user = "alice", password = "s3cret", base = url }
 
-  step "bad" = auth.login as bad {
+  step bad = auth.login as bad {
     user = "alice"
     password = "wrong"
     base = url
@@ -14,7 +14,7 @@ flow checkout {
     expect status == 401
   }
 
-  step "orders" {
+  step orders {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == 200
   }

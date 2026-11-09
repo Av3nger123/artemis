@@ -10,8 +10,8 @@
 # syntax error about an unexpected `=`. The hint shows the shape, because the
 # shape is what the author has to write.
 
-scenario "arity" {
-  step "upgrade" {
+scenario arity {
+  step upgrade {
     browser {
       goto "/settings/billing"
       click "text=Sign in" = "now"

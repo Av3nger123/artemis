@@ -12,7 +12,7 @@
 # costs one line each and tells the reader whether the service is broken or
 # only slow.
 flow status_and_body {
-  step "ping" {
+  step ping {
     get "%SERVER%/ping"
     expect status == 200
     expect body.status == "ok"

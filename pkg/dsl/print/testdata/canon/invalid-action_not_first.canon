@@ -2,8 +2,8 @@
 # precise diagnostic beats a cascade of unexpected tokens -- and the diagnostic
 # says what to move.
 
-scenario "orders" {
-  step "asserts before it acts" {
+scenario orders {
+  step asserts_before_it_acts as "asserts before it acts" {
     expect status == 200
     get "/orders"
   }

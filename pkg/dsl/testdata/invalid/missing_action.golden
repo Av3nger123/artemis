@@ -1,8 +1,8 @@
 === terminal
-missing_action.art:6:8: step "asserts nothing in particular" has no action block
-   6 |   step "asserts nothing in particular" {
-     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+missing_action.art:6:8: step asserts_nothing_in_particular has no action block
+   6 |   step asserts_nothing_in_particular as "asserts nothing in particular" {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    hint: a step does one of: an HTTP verb (get, post, ...), run "<command>", browser { ... }, or db <url> { ... }
 
 === codes
-missing-action	error	6:8-6:39
+missing-action	error	6:8-6:37

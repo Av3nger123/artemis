@@ -25,8 +25,8 @@ flow_blocks.art:59:14: max is how many rounds a repeat may run, a whole number a
    hint: max 30
 
 flow_blocks.art:72:5: a second branch of this parallel block drives the browser, and a scenario has one page
-   72 |     step "two" {
-      |     ^^^^^^^^^^^^
+   72 |     step two {
+      |     ^^^^^^^^^^
    73 |       browser { goto "https://example.com/b" }
       |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    74 |     }

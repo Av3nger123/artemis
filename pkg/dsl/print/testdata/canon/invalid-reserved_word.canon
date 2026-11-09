@@ -14,10 +14,10 @@
 # that would pin the parser's recovery rather than the reserved-word
 # diagnostic, so it is left out of this fixture on purpose.
 
-scenario "reserved" {
+scenario reserved {
   var let = 1
 
-  step "orders" {
+  step orders {
     get "/orders"
     capture import = body.data.token
     expect status == 200

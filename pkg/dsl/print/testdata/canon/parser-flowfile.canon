@@ -13,18 +13,18 @@ flow checkout {
   }
 
   # pay is written in place
-  step "pay" {
+  step pay {
     post "/cart/pay" { body = {"sku": sku, "quantity": quantity, "coupon": coupon} }
     expect status == code
     capture pay_status = status
   }
 
   if pay_status == 400 {
-    step "read the error" {
+    step read_the_error as "read the error" {
       get "/errors/last"
     }
   } else {
-    step "check the order" {
+    step check_the_order as "check the order" {
       get "/orders/latest"
       expect body.sku == sku
     }

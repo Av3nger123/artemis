@@ -11,8 +11,8 @@
 # tool entirely -- it is what this project's own YAML called it -- and is near
 # nothing, so the diagnostic lists what the block actually holds.
 
-scenario "fields" {
-  step "orders" {
+scenario fields {
+  step orders {
     get "/orders" {
       heade "Content-Type" = "application/json"
     }

@@ -1,10 +1,10 @@
 ﻿# A file that opens with a byte-order mark and ends without a newline, which
 # is what some editors write. The mark is whitespace to the lexer, so the round
 # trip keeps it and canonical mode drops it.
-scenario "bom" {
+scenario bom {
   var a = 1
 
-  step "one" {
+  step one {
     get "/a"
     expect status == 200
   }

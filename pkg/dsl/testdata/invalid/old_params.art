@@ -4,7 +4,7 @@
 # are the vars above its action, so a step that calls it sets them by name
 # and a missing one can come from the flow's context.
 
-collection "auth" {
+collection old_params as "auth" {
   request login(user, password = env("API_PASSWORD")) {
     post "/login" {
       body = {"user": user, "password": password}

@@ -1,4 +1,4 @@
-collection "ops" {
+collection ops {
   request login {
     var user
     var password

@@ -1,12 +1,12 @@
 === terminal
-unclosed_interp_cascade.art:9:35: unclosed scenario
-   9 | scenario "unclosed interpolation" {
-     |                                   ^
+unclosed_interp_cascade.art:9:61: unclosed scenario
+   9 | scenario unclosed_interpolation as "unclosed interpolation" {
+     |                                                             ^
    hint: this "{" is never closed
 
-unclosed_interp_cascade.art:12:17: unclosed step
-   12 |   step "orders" {
-      |                 ^
+unclosed_interp_cascade.art:12:15: unclosed step
+   12 |   step orders {
+      |               ^
    hint: this "{" is never closed
 
 unclosed_interp_cascade.art:13:16: unterminated regex: a "/" literal cannot span lines
@@ -60,8 +60,8 @@ unclosed_interp_cascade.art:17:1: expected "}" to close the interpolation, found
    hint: an interpolated string is "...${ expr }..."
 
 === codes
-unclosed-block	error	9:35-9:36
-unclosed-block	error	12:17-12:18
+unclosed-block	error	9:61-9:62
+unclosed-block	error	12:15-12:16
 unterminated-regex	error	13:16-13:24
 unclosed-interpolation-expr	error	13:16-13:24
 unexpected-token	error	13:16-13:24

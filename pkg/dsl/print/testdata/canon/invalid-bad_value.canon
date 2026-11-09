@@ -6,18 +6,18 @@
 # `times = n` where n is a var could be anything, and a false "must be a whole
 # number" on a correct file would be worse than letting the run say it.
 
-scenario "values" {
+scenario values {
   config browser { headless = "yes" }
 
   var region = env(42)
 
-  step "orders" {
+  step orders {
     get "/orders" { header = "application/json" }
     retry { times = "3" }
     expect status == 200
   }
 
-  step "seed" {
+  step seed {
     run "psql" { args = "seed.sql" }
     expect exit_code == 0
   }

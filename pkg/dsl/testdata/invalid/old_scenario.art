@@ -8,12 +8,12 @@
 
 import "collections/auth.art"
 
-scenario "checkout" {
+scenario checkout {
   var sku = "SKU-1"
 
   use auth.login { user = "alice" }
 
-  step "pay" {
+  step pay {
     post "/cart/pay" {
       body = {"sku": sku}
     }

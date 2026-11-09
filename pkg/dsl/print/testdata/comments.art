@@ -1,14 +1,14 @@
 # A comment at the very top of the file, before anything else.
 
 # A second paragraph of comment, separated by a blank line, above the scenario.
-scenario "comments everywhere" { # trailing the opening brace
+scenario comments_everywhere as "comments everywhere" { # trailing the opening brace
   # above the config
   config browser { headless = true } # trailing the config
 
   var url = env("API_URL") # trailing a var
 
   # above the step
-  step "one" { # trailing the step's brace
+  step one { # trailing the step's brace
     # above the action
     get "${url}/a" { # trailing the request's brace
       # above a field

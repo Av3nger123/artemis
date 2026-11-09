@@ -6,7 +6,7 @@
 flow terminal_1 {
   var base = "%SERVER%"
 
-  step "work out the path" {
+  step work_out_the_path as "work out the path" {
     run "sh" { args = ["-c", "printf items; printf 'nothing is wrong' >&2"] }
     expect exit_code == 0
     expect stdout == "items"
@@ -14,7 +14,7 @@ flow terminal_1 {
     var path = stdout
   }
 
-  step "read the collection" {
+  step read_the_collection as "read the collection" {
     get "${base}/${path}"
     expect status == 200
     expect body.items exists

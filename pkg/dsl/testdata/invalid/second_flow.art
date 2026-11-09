@@ -4,14 +4,14 @@
 flow checkout {
   var code = 200
 
-  step "pay" {
+  step pay {
     post "/cart/pay"
     expect status == code
   }
 }
 
 flow refund {
-  step "refund" {
+  step refund {
     post "/cart/refund"
   }
 }

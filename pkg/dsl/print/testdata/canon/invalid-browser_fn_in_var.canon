@@ -7,11 +7,11 @@
 # step to name. "a var's value" is that position; printing the step type would
 # read "in a unknown step", which is nowhere an author can look.
 
-scenario "vars" {
+scenario vars {
   var label = text(".plan-badge")
   var here = page.url
 
-  step "upgrade" {
+  step upgrade {
     browser {
       goto "/settings/billing"
     }

@@ -8,7 +8,7 @@ import "../collections/auth.art"
 flow checkout {
   use auth.login { user = "alice" }
 
-  step "pay" {
+  step pay {
     post "/cart/pay"
   }
 }

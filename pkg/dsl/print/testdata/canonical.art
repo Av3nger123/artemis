@@ -3,12 +3,12 @@
 # not identical to the file itself, canonical mode has a rule that does not
 # agree with its own output.
 
-scenario "already canonical" {
+scenario already_canonical as "already canonical" {
   config browser { headless = true, viewport = "1280x720" }
 
   var url = env("API_URL")
 
-  step "fetch the orders" {
+  step fetch_the_orders as "fetch the orders" {
     get "${url}/orders" { header "Accept" = "application/json", query "limit" = 10 }
     timeout = "5s"
     retry { times = 3, delay = "2s" }
@@ -18,12 +18,12 @@ scenario "already canonical" {
     capture first = body.data.items[0].id
   }
 
-  step "seed" {
+  step seed {
     run "psql" { args = ["-f", "seed.sql"], cwd = "db", env { PGPASSWORD = "x" } }
     expect exit_code == 0
   }
 
-  step "the app" {
+  step the_app as "the app" {
     browser {
       goto "${url}/settings"
       fill "#email" = "alice@example.com"

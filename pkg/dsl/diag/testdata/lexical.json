@@ -9,7 +9,7 @@
         "col": 10,
         "endLine": 6,
         "endCol": 12,
-        "offset": 278
+        "offset": 274
       },
       "message": "unclosed \"${\": the interpolation is missing its \"}\""
     },
@@ -22,7 +22,7 @@
         "col": 31,
         "endLine": 6,
         "endCol": 33,
-        "offset": 270
+        "offset": 266
       },
       "message": "unknown escape \"\\\\q\"; the escapes are \\\" \\\\ \\/ \\$ \\n \\r \\t and \\uXXXX"
     },
@@ -35,7 +35,7 @@
         "col": 18,
         "endLine": 7,
         "endCol": 37,
-        "offset": 291
+        "offset": 287
       },
       "message": "unterminated regex: a \"/\" literal cannot span lines"
     },
@@ -48,7 +48,7 @@
         "col": 20,
         "endLine": 8,
         "endCol": 21,
-        "offset": 330
+        "offset": 326
       },
       "message": "unexpected character \"!\" in a scenario file"
     },
@@ -61,7 +61,7 @@
         "col": 18,
         "endLine": 12,
         "endCol": 1,
-        "offset": 351
+        "offset": 347
       },
       "message": "unterminated string: missing the closing '\"'"
     }

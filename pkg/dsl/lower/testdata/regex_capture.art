@@ -9,16 +9,16 @@
 # is an ordinary expression, so the pattern is a regex literal the checker
 # compiles and whose capturing groups it counts.
 
-scenario "regex capture" {
+scenario regex_capture as "regex capture" {
   var base = env("SERVER")
 
-  step "read the redirect" {
+  step read_the_redirect as "read the redirect" {
     get "${base}/redirect"
     expect status == 200
     capture itemId = match(raw, /\/items\/([0-9]+)/)
   }
 
-  step "read the item back" {
+  step read_the_item_back as "read the item back" {
     get "${base}/items/${itemId}"
     expect status == 200
     expect body.id == 42

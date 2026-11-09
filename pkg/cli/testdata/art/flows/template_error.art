@@ -6,7 +6,7 @@
 # file never runs, nothing is sent, and the diagnostic points at the name
 # inside the interpolation rather than at an offset in a rendered string.
 flow template_error {
-  step "ping" {
+  step ping {
     post "%SERVER%/ping" { body = {"token": "${tokn}"} }
     expect status == 200
   }

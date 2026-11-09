@@ -128,8 +128,8 @@ FAIL in <dur>
       "steps": [
         {
           "name": "list items",
-          "id": "list items",
-          "label": "",
+          "id": "list_items",
+          "label": "list items",
           "status": "fail",
           "duration_ms": 0,
           "attempts": 1,
@@ -165,8 +165,8 @@ FAIL in <dur>
         },
         {
           "name": "missing route",
-          "id": "missing route",
-          "label": "",
+          "id": "missing_route",
+          "label": "missing route",
           "status": "fail",
           "duration_ms": 0,
           "attempts": 1,

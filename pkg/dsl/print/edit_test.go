@@ -42,14 +42,14 @@ func TestAnEditTouchesOnlyItsOwnLines(t *testing.T) {
 	}, {
 		name: "a step's name",
 		mutate: func(t *testing.T, f *ast.File) {
-			step(t, f, `"login"`).Name = Synthetic(token.String, `"sign in"`)
+			step(t, f, `login`).Name = Synthetic(token.Ident, `sign_in`)
 		},
-		removed: []string{`  step "login" {`},
-		added:   []string{`  step "sign in" {`},
+		removed: []string{`  step login {`},
+		added:   []string{`  step sign_in {`},
 	}, {
 		name: "an expect's expression",
 		mutate: func(t *testing.T, f *ast.File) {
-			s := step(t, f, `"login"`)
+			s := step(t, f, `login`)
 			for _, st := range s.Body {
 				e, ok := st.(*ast.Expect)
 				if !ok {
@@ -81,7 +81,7 @@ func TestAnEditTouchesOnlyItsOwnLines(t *testing.T) {
 	}, {
 		name: "a new statement appended to a step",
 		mutate: func(t *testing.T, f *ast.File) {
-			s := step(t, f, `"login"`)
+			s := step(t, f, `login`)
 			s.Body = append(s.Body, &ast.Capture{
 				Keyword: Synthetic(token.Ident, "capture"),
 				Name:    Synthetic(token.Ident, "refresh"),

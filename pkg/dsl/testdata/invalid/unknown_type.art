@@ -5,8 +5,8 @@
 # one edit from `number`; `int` is a name from another language and is near
 # none of them, so it gets the list.
 
-scenario "types" {
-  step "orders" {
+scenario types {
+  step orders {
     get "/orders"
     expect body.data.count is numbr
     expect body.data.total is int

@@ -13,10 +13,10 @@
 # so an unknown name in a URL is the same diagnostic as an unknown name in an
 # expect, at its own span inside the string.
 
-scenario "names" {
+scenario names {
   var base = env("API_URL")
 
-  step "orders" {
+  step orders {
     get "${bse}/orders"
     expect bdy.data.count > 0
   }

@@ -2,14 +2,14 @@ suite {
   var url = "https://example.test"
 
   setup {
-    step "log in" {
+    step log_in as "log in" {
       post "${url}/login"
       capture token = body.token
     }
   }
 
   teardown {
-    step "log out" {
+    step log_out as "log out" {
       post "${url}/logout"
     }
   }

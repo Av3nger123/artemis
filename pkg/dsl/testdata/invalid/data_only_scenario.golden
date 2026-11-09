@@ -1,6 +1,6 @@
 === terminal
 data_only_scenario.art:8:3: a scenario holds data only: name = value lines and tags
-   8 |   step "read the error" {
+   8 |   step read_the_error as "read the error" {
      |   ^^^^
    hint: put steps in the flow, ../flows/checkout.art
 

@@ -12,8 +12,8 @@
 # reaching for a field of the response. See unknown_ident.art for the other side
 # of that split.
 
-scenario "checkout" {
-  step "orders" {
+scenario checkout {
+  step orders {
     get "/orders"
     expect statu == 200
   }

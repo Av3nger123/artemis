@@ -4,7 +4,7 @@
 # assertions under it rather than erroring. Each `expect` is one assertion,
 # which is what keeps the reported line a line of this file.
 flow fail {
-  step "ping" {
+  step ping {
     get "%SERVER%/ping"
     expect status == 200
     expect body.status == "ok"

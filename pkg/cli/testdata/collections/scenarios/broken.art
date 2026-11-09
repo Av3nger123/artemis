@@ -1,5 +1,5 @@
 flow "../flows/broken.art"
 
-scenario "one" {}
+scenario one {}
 
-scenario "two" {}
+scenario two {}

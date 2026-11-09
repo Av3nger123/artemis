@@ -5,11 +5,11 @@ flow checkout {
   var code = 200
   private var url = env("API_URL")
 
-  step "log in" = auth.login {}
+  step log_in as "log in" = auth.login {}
 
-  step "orders" = auth.orders {}
+  step orders = auth.orders {}
 
-  step "orders again" {
+  step orders_again as "orders again" {
     get "${url}/orders" { header "Authorization" = "Bearer ${token}" }
     expect status == code
   }

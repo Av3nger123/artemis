@@ -1,7 +1,7 @@
-scenario "interpolation" {
+scenario interpolation {
   var base = env("API_URL")
 
-  step "nested and adjacent" {
+  step nested_and_adjacent as "nested and adjacent" {
     get "${base}/users/${body.id}"
     header "X-Literal" = "costs \$5 and \"quotes\""
     header "X-Nested" = "${attr("${base}", "href")}"

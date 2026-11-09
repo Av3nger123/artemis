@@ -1,8 +1,8 @@
 flow "../flows/checkout.art"
 
-scenario "admin smoke" {
+scenario admin_smoke as "admin smoke" {
   tags = ["smoke"]
   password = "s3cret"
 }
 
-scenario "admin full" {}
+scenario admin_full as "admin full" {}

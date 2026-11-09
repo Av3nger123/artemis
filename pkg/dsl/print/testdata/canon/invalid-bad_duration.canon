@@ -5,8 +5,8 @@
 # Both are well-formed syntax -- a string on the right of an `=` -- so the
 # parser has nothing to say, and the checker knows which fields are durations.
 
-scenario "timeouts" {
-  step "orders" {
+scenario timeouts {
+  step orders {
     get "/orders"
     timeout = "5 secs"
     retry { times = 3, delay = "soon" }

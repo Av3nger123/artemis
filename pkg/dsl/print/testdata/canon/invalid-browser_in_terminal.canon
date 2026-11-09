@@ -7,8 +7,8 @@
 # different list from an api step's. Both names exist in the language, which is
 # what makes this not-in-scope rather than unknown.
 
-scenario "wrong step" {
-  step "deploy" {
+scenario wrong_step as "wrong step" {
+  step deploy {
     run "./deploy.sh"
     expect page.title contains "Deployed"
     expect value("#build") == "ok"

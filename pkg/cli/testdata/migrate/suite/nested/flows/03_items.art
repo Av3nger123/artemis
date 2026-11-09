@@ -2,7 +2,7 @@
 flow s_03_items {
   var base = "%SERVER%"
 
-  step "list items" {
+  step list_items as "list items" {
     get "${base}/items"
     expect status == 200
     expect body.items exists

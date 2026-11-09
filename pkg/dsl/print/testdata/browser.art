@@ -9,13 +9,13 @@
 # comments, which are inside the browser block on purpose: an act's trailing
 # comment and a comment above the closing brace are the two places a block's
 # trivia can be lost.
-scenario "the browser step" {
+scenario the_browser_step as "the browser step" {
   config browser { headless = true, viewport = "1280x720" }
 
   var url = env("APP_URL")
 
   # above the step
-  step "upgrade to pro" {
+  step upgrade_to_pro as "upgrade to pro" {
     browser { # trailing the browser block's brace
       goto "${url}/settings/billing"
       fill "#email" = "alice@example.com"
@@ -38,7 +38,7 @@ scenario "the browser step" {
     capture plan = match(text(".plan-badge"), /plan: (\w+)/)
   }
 
-  step "the receipt is there" {
+  step the_receipt_is_there as "the receipt is there" {
     get "${url}/invoices?plan=${plan}"
     expect status == 200
     expect body.items[0].plan == "pro"

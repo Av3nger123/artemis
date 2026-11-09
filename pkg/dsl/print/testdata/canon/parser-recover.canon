@@ -2,13 +2,13 @@
 # well-formed here must survive the ones that are not: recovery at statement
 # boundaries is what keeps one mistake from costing a file.
 
-scenario "good one" {
+scenario good_one as "good one" {
   var url = env("API_URL")
   nonsense here
 
   var kept = 1
 
-  step "survives a bad statement" {
+  step survives_a_bad_statement as "survives a bad statement" {
     get "${url}/orders"
     expect status == 200
     expect ==
@@ -16,7 +16,7 @@ scenario "good one" {
     capture token = body.data.token
   }
 
-  step "survives a bad field" {
+  step survives_a_bad_field as "survives a bad field" {
     post "/x" {
       header "A" = "b"
       query
@@ -28,8 +28,8 @@ scenario "good one" {
 
 not a scenario at all
 
-scenario "also good" {
-  step "still parsed" {
+scenario also_good as "also good" {
+  step still_parsed as "still parsed" {
     run "echo hi"
     expect exit_code == 0
   }

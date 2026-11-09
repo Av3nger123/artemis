@@ -4,13 +4,13 @@
 # flow is the new form, so each old line in it is reported on its own.
 
 flow checkout {
-  step "pay" {
+  step pay {
     post "/cart/pay"
     expect status == 200
     capture order_id = body.id
   }
 
-  step "read it" {
+  step read_it as "read it" {
     get "/orders/${order_id}"
   }
 }

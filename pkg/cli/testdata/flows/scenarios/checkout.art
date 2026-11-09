@@ -1,9 +1,9 @@
 flow "../flows/checkout.art"
 
-scenario "full price" {}
+scenario full_price as "full price" {}
 
-scenario "smoke" {
+scenario smoke {
   tags = ["smoke"]
 }
 
-scenario "explicit code" { code = 200 }
+scenario explicit_code as "explicit code" { code = 200 }

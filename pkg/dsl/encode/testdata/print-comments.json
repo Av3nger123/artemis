@@ -5,6 +5,10 @@
     {
       "kind": "scenario",
       "name": {
+        "text": "comments_everywhere",
+        "value": "comments_everywhere"
+      },
+      "label": {
         "text": "\"comments everywhere\"",
         "value": "comments everywhere"
       },
@@ -29,7 +33,7 @@
                     "col": 31,
                     "endLine": 6,
                     "endCol": 35,
-                    "offset": 257
+                    "offset": 280
                   }
                 },
                 "span": {
@@ -38,7 +42,7 @@
                   "col": 20,
                   "endLine": 6,
                   "endCol": 35,
-                  "offset": 246
+                  "offset": 269
                 }
               }
             ],
@@ -48,7 +52,7 @@
               "col": 18,
               "endLine": 6,
               "endCol": 37,
-              "offset": 244
+              "offset": 267
             },
             "comments": {
               "afterClose": [
@@ -62,7 +66,7 @@
             "col": 3,
             "endLine": 6,
             "endCol": 37,
-            "offset": 229
+            "offset": 252
           },
           "comments": {
             "above": [
@@ -90,7 +94,7 @@
                   "col": 17,
                   "endLine": 8,
                   "endCol": 26,
-                  "offset": 303
+                  "offset": 326
                 }
               }
             ],
@@ -100,7 +104,7 @@
               "col": 13,
               "endLine": 8,
               "endCol": 27,
-              "offset": 299
+              "offset": 322
             }
           },
           "span": {
@@ -109,7 +113,7 @@
             "col": 3,
             "endLine": 8,
             "endCol": 27,
-            "offset": 289
+            "offset": 312
           },
           "comments": {
             "blankAbove": true,
@@ -121,7 +125,7 @@
         {
           "kind": "step",
           "name": {
-            "text": "\"one\"",
+            "text": "one",
             "value": "one"
           },
           "action": {
@@ -141,7 +145,7 @@
                       "col": 12,
                       "endLine": 13,
                       "endCol": 15,
-                      "offset": 428
+                      "offset": 449
                     }
                   }
                 }
@@ -153,7 +157,7 @@
                 "col": 9,
                 "endLine": 13,
                 "endCol": 19,
-                "offset": 425
+                "offset": 446
               }
             },
             "block": {
@@ -173,7 +177,7 @@
                       "col": 13,
                       "endLine": 15,
                       "endCol": 16,
-                      "offset": 503
+                      "offset": 524
                     }
                   },
                   "value": {
@@ -187,7 +191,7 @@
                       "col": 19,
                       "endLine": 15,
                       "endCol": 20,
-                      "offset": 509
+                      "offset": 530
                     }
                   },
                   "span": {
@@ -196,7 +200,7 @@
                     "col": 7,
                     "endLine": 15,
                     "endCol": 20,
-                    "offset": 497
+                    "offset": 518
                   },
                   "comments": {
                     "above": [
@@ -223,7 +227,7 @@
                       "col": 14,
                       "endLine": 16,
                       "endCol": 22,
-                      "offset": 543
+                      "offset": 564
                     }
                   },
                   "value": {
@@ -237,7 +241,7 @@
                       "col": 25,
                       "endLine": 16,
                       "endCol": 37,
-                      "offset": 554
+                      "offset": 575
                     }
                   },
                   "span": {
@@ -246,7 +250,7 @@
                     "col": 7,
                     "endLine": 16,
                     "endCol": 37,
-                    "offset": 536
+                    "offset": 557
                   }
                 }
               ],
@@ -256,7 +260,7 @@
                 "col": 20,
                 "endLine": 18,
                 "endCol": 6,
-                "offset": 436
+                "offset": 457
               },
               "comments": {
                 "open": [
@@ -278,7 +282,7 @@
               "col": 5,
               "endLine": 18,
               "endCol": 6,
-              "offset": 421
+              "offset": 442
             },
             "comments": {
               "above": [
@@ -303,7 +307,7 @@
                     "col": 12,
                     "endLine": 21,
                     "endCol": 18,
-                    "offset": 690
+                    "offset": 711
                   }
                 },
                 "y": {
@@ -317,7 +321,7 @@
                     "col": 22,
                     "endLine": 21,
                     "endCol": 25,
-                    "offset": 700
+                    "offset": 721
                   }
                 },
                 "span": {
@@ -326,7 +330,7 @@
                   "col": 12,
                   "endLine": 21,
                   "endCol": 25,
-                  "offset": 690
+                  "offset": 711
                 }
               },
               "span": {
@@ -335,7 +339,7 @@
                 "col": 5,
                 "endLine": 21,
                 "endCol": 25,
-                "offset": 683
+                "offset": 704
               },
               "class": "simple",
               "comments": {
@@ -370,7 +374,7 @@
                           "col": 12,
                           "endLine": 22,
                           "endCol": 16,
-                          "offset": 737
+                          "offset": 758
                         }
                       },
                       "name": "items",
@@ -380,7 +384,7 @@
                         "col": 12,
                         "endLine": 22,
                         "endCol": 22,
-                        "offset": 737
+                        "offset": 758
                       }
                     },
                     "index": {
@@ -394,7 +398,7 @@
                         "col": 23,
                         "endLine": 22,
                         "endCol": 24,
-                        "offset": 748
+                        "offset": 769
                       }
                     },
                     "span": {
@@ -403,7 +407,7 @@
                       "col": 12,
                       "endLine": 22,
                       "endCol": 25,
-                      "offset": 737
+                      "offset": 758
                     }
                   },
                   "name": "id",
@@ -413,7 +417,7 @@
                     "col": 12,
                     "endLine": 22,
                     "endCol": 28,
-                    "offset": 737
+                    "offset": 758
                   }
                 },
                 "y": {
@@ -427,7 +431,7 @@
                     "col": 32,
                     "endLine": 22,
                     "endCol": 33,
-                    "offset": 757
+                    "offset": 778
                   }
                 },
                 "span": {
@@ -436,7 +440,7 @@
                   "col": 12,
                   "endLine": 22,
                   "endCol": 33,
-                  "offset": 737
+                  "offset": 758
                 }
               },
               "span": {
@@ -445,7 +449,7 @@
                 "col": 5,
                 "endLine": 22,
                 "endCol": 33,
-                "offset": 730
+                "offset": 751
               },
               "class": "simple",
               "comments": {
@@ -461,7 +465,7 @@
             "col": 3,
             "endLine": 24,
             "endCol": 4,
-            "offset": 353
+            "offset": 376
           },
           "stepType": "api",
           "scope": [

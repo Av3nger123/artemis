@@ -1,11 +1,11 @@
 import   "auth.art"
-collection "orders" {
+collection collections as "orders" {
   request create(sku,qty=1) { post "x" { body = {"sku": sku} }
     expect status == 201 }
   request pay(id) { post "y/${id}"
       expect status == 200 }
 }
-scenario "rush" {
+scenario rush {
   use orders.create as rush { sku = "A-1", body.qty = 5, drop expects, drop captures, expect status == 202 }
   use orders.pay { id = rush_id, header "X" = "1" }
 }

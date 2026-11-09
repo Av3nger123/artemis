@@ -126,11 +126,11 @@ func TestMigrateCommandWritesTheNewForms(t *testing.T) {
 		t.Fatalf("migrate = %v\nstderr:\n%s", err, stderr)
 	}
 	for path, want := range map[string]string{
-		"scenarios/checkout.art": "flow \"../flows/checkout.art\"\n\nscenario \"checkout\" {}\n",
+		"scenarios/checkout.art": "flow \"../flows/checkout.art\"\n\nscenario checkout {}\n",
 		"flows/checkout.art": "import \"../collections/auth.art\"\n\nflow checkout {\n  var url = \"http://x\"\n\n" +
-			"  step \"auth.login\" = auth.login { user = \"a\" }\n\n" +
-			"  step \"pay\" {\n    post \"${url}/pay\"\n    expect status == 200\n  }\n}\n",
-		"collections/auth.art": "collection \"auth\" {\n  request login {\n    var user\n\n" +
+			"  step auth_login as \"auth.login\" = auth.login { user = \"a\" }\n\n" +
+			"  step pay {\n    post \"${url}/pay\"\n    expect status == 200\n  }\n}\n",
+		"collections/auth.art": "collection auth {\n  request login {\n    var user\n\n" +
 			"    post \"/l\" { body = {\"user\": user} }\n    var token = body.token\n  }\n}\n",
 	} {
 		b, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(path)))

@@ -38,6 +38,10 @@
             {
               "kind": "step",
               "name": {
+                "text": "log_in",
+                "value": "log_in"
+              },
+              "label": {
                 "text": "\"log in\"",
                 "value": "log in"
               },
@@ -58,7 +62,7 @@
                           "col": 15,
                           "endLine": 6,
                           "endCol": 18,
-                          "offset": 88
+                          "offset": 98
                         }
                       }
                     }
@@ -70,7 +74,7 @@
                     "col": 12,
                     "endLine": 6,
                     "endCol": 26,
-                    "offset": 85
+                    "offset": 95
                   }
                 },
                 "span": {
@@ -79,7 +83,7 @@
                   "col": 7,
                   "endLine": 6,
                   "endCol": 26,
-                  "offset": 80
+                  "offset": 90
                 }
               },
               "body": [
@@ -97,7 +101,7 @@
                         "col": 23,
                         "endLine": 7,
                         "endCol": 27,
-                        "offset": 122
+                        "offset": 132
                       }
                     },
                     "name": "token",
@@ -107,7 +111,7 @@
                       "col": 23,
                       "endLine": 7,
                       "endCol": 33,
-                      "offset": 122
+                      "offset": 132
                     }
                   },
                   "span": {
@@ -116,7 +120,7 @@
                     "col": 7,
                     "endLine": 7,
                     "endCol": 33,
-                    "offset": 106
+                    "offset": 116
                   }
                 }
               ],
@@ -159,6 +163,10 @@
             {
               "kind": "step",
               "name": {
+                "text": "log_out",
+                "value": "log_out"
+              },
+              "label": {
                 "text": "\"log out\"",
                 "value": "log out"
               },
@@ -179,7 +187,7 @@
                           "col": 15,
                           "endLine": 13,
                           "endCol": 18,
-                          "offset": 192
+                          "offset": 213
                         }
                       }
                     }
@@ -191,7 +199,7 @@
                     "col": 12,
                     "endLine": 13,
                     "endCol": 27,
-                    "offset": 189
+                    "offset": 210
                   }
                 },
                 "span": {
@@ -200,7 +208,7 @@
                   "col": 7,
                   "endLine": 13,
                   "endCol": 27,
-                  "offset": 184
+                  "offset": 205
                 }
               },
               "span": {
@@ -209,7 +217,7 @@
                 "col": 5,
                 "endLine": 14,
                 "endCol": 6,
-                "offset": 161
+                "offset": 171
               },
               "stepType": "api",
               "scope": [
@@ -230,7 +238,7 @@
             "col": 3,
             "endLine": 15,
             "endCol": 4,
-            "offset": 146
+            "offset": 156
           },
           "comments": {
             "blankAbove": true

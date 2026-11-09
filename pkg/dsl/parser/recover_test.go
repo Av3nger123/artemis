@@ -30,7 +30,7 @@ func TestRecoveryKeepsEverythingThatParses(t *testing.T) {
 	var scenarios []string
 	ast.Inspect(f, func(n ast.Node) {
 		if s, ok := n.(*ast.Scenario); ok {
-			scenarios = append(scenarios, s.Name.Value)
+			scenarios = append(scenarios, ast.Display(s.Name, s.Label))
 		}
 	})
 	if len(scenarios) != 2 || scenarios[0] != "good one" || scenarios[1] != "also good" {
@@ -41,7 +41,7 @@ func TestRecoveryKeepsEverythingThatParses(t *testing.T) {
 	var steps []string
 	ast.Inspect(f, func(n ast.Node) {
 		if s, ok := n.(*ast.StepDecl); ok {
-			steps = append(steps, s.Name.Value)
+			steps = append(steps, ast.Display(s.Name, s.Label))
 		}
 	})
 	want := []string{"survives a bad statement", "survives a bad field", "still parsed"}
@@ -349,7 +349,7 @@ func stepNamed(t *testing.T, f *ast.File, name string) *ast.StepDecl {
 	t.Helper()
 	var found *ast.StepDecl
 	ast.Inspect(f, func(n ast.Node) {
-		if s, ok := n.(*ast.StepDecl); ok && s.Name.Value == name {
+		if s, ok := n.(*ast.StepDecl); ok && ast.Display(s.Name, s.Label) == name {
 			found = s
 		}
 	})

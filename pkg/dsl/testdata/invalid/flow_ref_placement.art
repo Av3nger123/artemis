@@ -2,8 +2,8 @@
 # flow every scenario in the file runs, so it comes first; the scenarios below
 # it are still read as data, so the one mistake is one diagnostic. The parser
 # reports it, because it is where the header stands, not what it names.
-scenario "full price" {}
+scenario full_price as "full price" {}
 
 flow "../flows/checkout.art"
 
-scenario "with a coupon" { coupon = "TEN" }
+scenario with_a_coupon as "with a coupon" { coupon = "TEN" }
