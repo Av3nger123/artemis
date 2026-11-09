@@ -176,6 +176,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.Scenario:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
+		p.tok(v.LabelAs)
+		p.tok(v.Label)
 		if v.For != nil {
 			p.node(v.For, c)
 		}
@@ -230,6 +232,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.StepDecl:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
+		p.tok(v.LabelAs)
+		p.tok(v.Label)
 		p.tok(v.LBrace)
 		p.list(stepItems(v), c)
 		p.tok(v.RBrace)
@@ -288,6 +292,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.Collection:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
+		p.tok(v.LabelAs)
+		p.tok(v.Label)
 		p.tok(v.LBrace)
 		p.list(decls(v.Items), c)
 		p.tok(v.RBrace)
@@ -306,6 +312,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.RequestDecl:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
+		p.tok(v.LabelAs)
+		p.tok(v.Label)
 		p.node(v.Params, c)
 		p.tok(v.LBrace)
 		items := make([]ast.Node, 0, len(v.Inputs)+len(v.Body)+1)
@@ -317,6 +325,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.UseDecl:
 		p.tok(v.Step)
 		p.tok(v.Name)
+		p.tok(v.LabelAs)
+		p.tok(v.Label)
 		p.tok(v.Assign)
 		p.tok(v.Keyword)
 		p.tok(v.Collection)
@@ -330,6 +340,8 @@ func (p *pres) descend(n ast.Node, c ctx) {
 	case *ast.Flow:
 		p.tok(v.Keyword)
 		p.tok(v.Name)
+		p.tok(v.LabelAs)
+		p.tok(v.Label)
 		p.tok(v.LBrace)
 		p.list(decls(v.Body), c)
 		p.tok(v.RBrace)

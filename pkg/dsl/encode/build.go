@@ -2,6 +2,7 @@ package encode
 
 import (
 	"fmt"
+	"strings"
 
 	"artemis/pkg/dsl/ast"
 	"artemis/pkg/dsl/print"
@@ -113,6 +114,9 @@ func scenario(f fields) (*ast.Scenario, error) {
 	}
 	var err error
 	if s.Name, err = nameTok(f, "name"); err != nil {
+		return nil, err
+	}
+	if s.LabelAs, s.Label, err = labelOf(f); err != nil {
 		return nil, err
 	}
 	if s.For, err = forClause(f); err != nil {
@@ -331,6 +335,9 @@ func step(f fields) (*ast.StepDecl, error) {
 	}
 	var err error
 	if s.Name, err = nameTok(f, "name"); err != nil {
+		return nil, err
+	}
+	if s.LabelAs, s.Label, err = labelOf(f); err != nil {
 		return nil, err
 	}
 	if s.Action, err = action(f); err != nil {
@@ -629,7 +636,23 @@ func nameTok(f fields, key string) (token.Token, error) {
 	if err != nil {
 		return token.Token{}, err
 	}
+	if !strings.HasPrefix(text, `"`) {
+		// An id: `step pay`, not the old `step "pay"`.
+		return syn(token.Ident, text), nil
+	}
 	return syn(token.String, text), nil
+}
+
+// labelOf is the `as "<label>"` a named node may have: zero tokens when the
+// node has no label key.
+func labelOf(f fields) (as, label token.Token, err error) {
+	if !f.has("label") {
+		return token.Token{}, token.Token{}, nil
+	}
+	if label, err = nameTok(f, "label"); err != nil {
+		return token.Token{}, token.Token{}, err
+	}
+	return syn(token.Ident, "as"), label, nil
 }
 
 // badKind is the error for a kind that is not one this position accepts. It

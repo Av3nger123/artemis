@@ -187,10 +187,11 @@ func (e *enc) scenario(s *ast.Scenario) *obj {
 	}
 	return start(kindScenario, s).
 		set("name", nameObj(s.Name)).
+		set("label", nameObj(s.Label)).
 		set("for", forObj).
 		set("body", e.list(toNodes(s.Body))).
 		span().
-		comments(toks(s.Keyword, s.Name), s.LBrace, s.RBrace).done()
+		comments(toks(s.Keyword, s.Name, s.LabelAs, s.Label), s.LBrace, s.RBrace).done()
 }
 
 // forClause is a data-driven scenario's `for [secret] <var> in <source>`.
@@ -270,12 +271,13 @@ func (e *enc) varDecl(d *ast.VarDecl) *obj {
 func (e *enc) step(s *ast.StepDecl) *obj {
 	return start(kindStep, s).
 		set("name", nameObj(s.Name)).
+		set("label", nameObj(s.Label)).
 		set("action", e.node(s.Action)).
 		set("body", e.list(toNodes(s.Body))).
 		span().
 		set("stepType", e.info.StepType(s).String()).
 		set("scope", e.info.Scope(s)).
-		comments(toks(s.Keyword, s.Name), s.LBrace, s.RBrace).done()
+		comments(toks(s.Keyword, s.Name, s.LabelAs, s.Label), s.LBrace, s.RBrace).done()
 }
 
 // request carries its method's spelling, which is the whole of the step-type

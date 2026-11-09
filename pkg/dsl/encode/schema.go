@@ -209,6 +209,11 @@ var (
 	recoveredName = fieldSchema{Name: "name", Type: "name", Optional: true, InputRequired: true,
 		Doc: "absent only in a file the parser recovered past; Decode requires it"}
 
+	// labelField is the `as "<label>"` every named node may have: the text
+	// people read in place of its id.
+	labelField = fieldSchema{Name: "label", Type: "name", Optional: true,
+		Doc: "the as \"...\" label: what reports and a UI show in place of the id; absent when the node has none"}
+
 	// child is a node-valued field that is absent in a recovered parse and
 	// required on the way in.
 	child = func(name, accepts string) fieldSchema {
@@ -228,8 +233,9 @@ var (
 )
 
 var nodeSchemas = []nodeSchema{
-	{Kind: kindScenario, Doc: "`scenario \"name\" { ... }`", Fields: []fieldSchema{
+	{Kind: kindScenario, Doc: "`scenario full_price as \"Full price\" { ... }`", Fields: []fieldSchema{
 		recoveredName,
+		labelField,
 		optChild("for", "forClause"),
 		list("body", "scenarioBody"),
 		spanField, commentsField,
@@ -286,8 +292,9 @@ var nodeSchemas = []nodeSchema{
 		optChild("value", "expression"),
 		spanField, commentsField,
 	}},
-	{Kind: kindStep, Doc: "`step \"login\" { <action> <statement>... }`", Fields: []fieldSchema{
+	{Kind: kindStep, Doc: "`step log_in as \"Log in\" { <action> <statement>... }`", Fields: []fieldSchema{
 		recoveredName,
+		labelField,
 		child("action", "action"),
 		list("body", "stepStatement"),
 		spanField,
@@ -363,8 +370,9 @@ var nodeSchemas = []nodeSchema{
 		{Name: "as", Type: "string", Optional: true, Doc: "the name after `as`, which a use reads the collection by; absent, it is the file's name"},
 		spanField, commentsField,
 	}},
-	{Kind: kindCollection, Doc: "`collection \"Orders API\" { request ... }`: one per file; its name is a title", Fields: []fieldSchema{
+	{Kind: kindCollection, Doc: "`collection orders as \"Orders API\" { request ... }`: one per file; its id is the name an import with no as gives it", Fields: []fieldSchema{
 		recoveredName,
+		labelField,
 		list("items", "collectionItem"),
 		spanField, commentsField,
 	}},
@@ -379,6 +387,7 @@ var nodeSchemas = []nodeSchema{
 		{Name: "keyword", Type: "string", Optional: true,
 			Doc: "command or query: the item's type, which its action must match (run for a command, db for a query). Absent means request, an api action"},
 		word("name", "the identifier a use names it by"),
+		labelField,
 		{Name: "params", Type: "node[]", Accepts: "param", Optional: true,
 			Doc: "the parenthesised parameter list of the older form, `request create(sku)`. Present, even empty, exactly when the item has the parentheses"},
 		{Name: "inputs", Type: "node[]", Accepts: "itemInput", Optional: true,
@@ -389,7 +398,8 @@ var nodeSchemas = []nodeSchema{
 	}},
 	{Kind: kindUse, Doc: "`use auth.login as admin { user = \"alice\" ... }`, or the step form `step \"log in\" = auth.login as admin { ... }`", Fields: []fieldSchema{
 		{Name: "name", Type: "name", Optional: true,
-			Doc: "the step form's quoted name, which the expanded step is called; absent for a use"},
+			Doc: "the step form's id, which the expanded step is called; absent for a use"},
+		labelField,
 		{Name: "collection", Type: "string", Optional: true,
 			Doc: "the collection before the dot"},
 		word("item", "the request used"),
@@ -408,6 +418,7 @@ var nodeSchemas = []nodeSchema{
 	}},
 	{Kind: kindFlowDecl, Doc: "`flow checkout { ... }`: a flow file's one flow, the steps of a test in order and the vars its scenarios set", Fields: []fieldSchema{
 		word("name", "the identifier naming the flow in reports"),
+		labelField,
 		list("body", "scenarioBody"),
 		spanField, commentsField,
 	}},

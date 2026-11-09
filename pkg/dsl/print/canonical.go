@@ -120,8 +120,8 @@ func (c *canon) scenario(s *ast.Scenario) {
 		c.dataScenario(s)
 		return
 	}
-	head := join(" ", s.Keyword.Text, s.Name.Text)
-	headToks := toks(s.Keyword, s.Name)
+	head := join(" ", s.Keyword.Text, s.Name.Text, s.LabelAs.Text, s.Label.Text)
+	headToks := toks(s.Keyword, s.Name, s.LabelAs, s.Label)
 	if f := s.For; f != nil {
 		head = join(" ", head, f.Keyword.Text, f.Secret.Text, f.Var.Text, f.In.Text, c.expr(f.Source))
 		headToks = f.Tokens(headToks)
@@ -203,12 +203,12 @@ func (c *canon) varDecl(d *ast.VarDecl) {
 // statements in source order.
 func (c *canon) step(s *ast.StepDecl) {
 	items := stepItems(s)
-	head := join(" ", s.Keyword.Text, s.Name.Text)
+	head := join(" ", s.Keyword.Text, s.Name.Text, s.LabelAs.Text, s.Label.Text)
 	if len(items) == 0 && !hasComment(s) {
-		c.line(toks(s.Keyword, s.Name, s.LBrace, s.RBrace), join(" ", head, braces(s.LBrace, s.RBrace)))
+		c.line(toks(s.Keyword, s.Name, s.LabelAs, s.Label, s.LBrace, s.RBrace), join(" ", head, braces(s.LBrace, s.RBrace)))
 		return
 	}
-	c.line(toks(s.Keyword, s.Name, s.LBrace), join(" ", head, s.LBrace.Text))
+	c.line(toks(s.Keyword, s.Name, s.LabelAs, s.Label, s.LBrace), join(" ", head, s.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
 	for _, it := range items {

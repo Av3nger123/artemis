@@ -9,12 +9,12 @@ import (
 
 // collection always breaks, like a scenario, with a blank line between items.
 func (c *canon) collection(k *ast.Collection) {
-	head := join(" ", k.Keyword.Text, k.Name.Text)
+	head := join(" ", k.Keyword.Text, k.Name.Text, k.LabelAs.Text, k.Label.Text)
 	if len(k.Items) == 0 && !hasComment(k) {
-		c.line(toks(k.Keyword, k.Name, k.LBrace, k.RBrace), join(" ", head, braces(k.LBrace, k.RBrace)))
+		c.line(toks(k.Keyword, k.Name, k.LabelAs, k.Label, k.LBrace, k.RBrace), join(" ", head, braces(k.LBrace, k.RBrace)))
 		return
 	}
-	c.line(toks(k.Keyword, k.Name, k.LBrace), join(" ", head, k.LBrace.Text))
+	c.line(toks(k.Keyword, k.Name, k.LabelAs, k.Label, k.LBrace), join(" ", head, k.LBrace.Text))
 	c.w.in()
 	c.w.suppress()
 	for i, d := range k.Items {
@@ -52,7 +52,9 @@ func (c *canon) requestDecl(r *ast.RequestDecl) {
 	if r.Params != nil {
 		head += c.params(r.Params)
 	}
+	head = join(" ", head, r.LabelAs.Text, r.Label.Text)
 	lead := append(toks(r.Keyword, r.Name), nodeToks(r.Params)...)
+	lead = append(lead, toks(r.LabelAs, r.Label)...)
 	items := stepItems(&ast.StepDecl{Action: r.Action, Body: r.Body})
 	if len(items) == 0 && len(r.Inputs) == 0 && !hasComment(r) {
 		c.line(append(lead, toks(r.LBrace, r.RBrace)...), join(" ", head, braces(r.LBrace, r.RBrace)))
@@ -82,9 +84,9 @@ func (c *canon) requestDecl(r *ast.RequestDecl) {
 // useDecl is `use a.b as x`, or `step "name" = a.b as x`, and, when there is
 // a block, its lines.
 func (c *canon) useDecl(u *ast.UseDecl) {
-	head := join(" ", u.Step.Text, u.Name.Text, u.Assign.Text, u.Keyword.Text,
+	head := join(" ", u.Step.Text, u.Name.Text, u.LabelAs.Text, u.Label.Text, u.Assign.Text, u.Keyword.Text,
 		u.Collection.Text+u.Dot.Text+u.Item.Text, u.As.Text, u.Alias.Text)
-	lead := toks(u.Step, u.Name, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias)
+	lead := toks(u.Step, u.Name, u.LabelAs, u.Label, u.Assign, u.Keyword, u.Collection, u.Dot, u.Item, u.As, u.Alias)
 	if u.LBrace.Text == "" {
 		c.line(lead, head)
 		return
