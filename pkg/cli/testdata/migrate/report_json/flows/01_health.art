@@ -1,4 +1,4 @@
-flow _01_health {
+flow s_01_health {
   step "ping" {
     get "%SERVER%/health"
     expect status == 200

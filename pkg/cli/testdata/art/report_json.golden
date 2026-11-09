@@ -70,7 +70,7 @@ FAIL in <dur>
     {
       "name": "health",
       "file": "testdata/art/report_json/scenarios/01_health.art",
-      "flow": "_01_health",
+      "flow": "s_01_health",
       "status": "pass",
       "duration_ms": 0,
       "error": "",
@@ -115,7 +115,7 @@ FAIL in <dur>
     {
       "name": "items",
       "file": "testdata/art/report_json/scenarios/02_items.art",
-      "flow": "_02_items",
+      "flow": "s_02_items",
       "status": "fail",
       "duration_ms": 0,
       "error": "",

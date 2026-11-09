@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"artemis/pkg/dsl/ast"
-	"artemis/pkg/dsl/parser"
 	"artemis/pkg/dsl/token"
 )
 
@@ -269,7 +268,7 @@ func (m *migration) split(key string, orig *ast.Scenario, name string, imports [
 
 	m.pin(key, body, colls)
 
-	nameTok := word(token.Ident, parser.IdentLike(name))
+	nameTok := word(token.Ident, token.SnakeFrom(name))
 	nameTok.Trailing = s.Name.Trailing
 	flow := &ast.Flow{
 		Keyword: carry(s.Keyword, word(token.Ident, "flow")),

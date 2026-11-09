@@ -1,5 +1,5 @@
 # Found by the recursive walk, and run after the files above it.
-flow _03_items {
+flow s_03_items {
   var base = "%SERVER%"
 
   step "list items" {

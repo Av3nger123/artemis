@@ -81,6 +81,7 @@ type Unit struct {
 // parameters -- is reported beside the rest.
 func CompileWith(file, src string, l expand.Loader) *Unit {
 	tree, bag := parser.Parse(file, src)
+	checkIDs(tree, bag)
 	if oldForms(file, tree, bag) {
 		info, _ := check.Check(nil)
 		return &Unit{Tree: tree, Expanded: tree, Info: info, Sources: map[string]string{file: src}, Bag: bag, FlowFile: isFlowFile(tree)}
@@ -102,6 +103,7 @@ func CompileWith(file, src string, l expand.Loader) *Unit {
 		sources[name] = res.Sources[name]
 		if name != file {
 			read, _ := parser.Parse(name, res.Sources[name])
+			checkIDs(read, bag)
 			oldForms(name, read, bag)
 		}
 	}
