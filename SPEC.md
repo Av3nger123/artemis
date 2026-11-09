@@ -132,7 +132,7 @@ scenarios. Everything in this document is a rule those three files follow.
 
 | | Collection file | Flow file | Scenario file |
 | --- | --- | --- | --- |
-| Holds | One `collection title as "<title>" { ... }` of items | `import` lines, then one `flow <name> { ... }` | A `flow "<path>"` header on its first line, then `scenario title as "<title>" { ... }` blocks |
+| Holds | One `collection <id> [as "<label>"] { ... }` of items | `import` lines, then one `flow <id> [as "<label>"] { ... }` | A `flow "<path>"` header on its first line, then `scenario <id> [as "<label>"] { ... }` blocks |
 | Its job | Units of work, written once: see [Collections](#collections) | Steps in order: see [Inside a flow](#inside-a-flow) | Data: see [Scenario files](#scenario-files) |
 | Runs | One item at a time, with [`--item`](#running-one-item) | Never alone: through a scenario file that names it | Yes: each scenario is one run of the flow |
 
@@ -161,6 +161,44 @@ flow imports and what a scenario file names.
 
 ---
 
+## Ids and labels
+
+Every collection, item, flow, step and scenario has an **id**, and may have a
+**label** after it:
+
+```art
+# collections/admin.art
+collection admin as "Admin" {
+
+  request legacy_readiness as "Legacy readiness" {
+    get "https://api.test/legacy-readiness"
+    expect status == 200
+  }
+}
+```
+
+| | |
+| --- | --- |
+| Form | `<keyword> <id> [as "<label>"]`, for `collection`, `request`, `command`, `query`, `flow`, `step` and `scenario` |
+| Id | snake_case: `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`. What code, the CLI, `report.json` and trace files use |
+| Label | Any text in quotes, with no interpolation. What people read: the console report, the `name` in `report.json`, and a UI's lists |
+| No label | Everything that would show one shows the id. A step that calls an item takes the item's label first |
+
+An id is the only one of its kind in its scope: a collection's items, a flow's
+steps -- setup, teardown and every block included -- and a scenario file's
+scenarios. Each of these is a compile error at the id:
+
+| Error | Code | Hint |
+| --- | --- | --- |
+| an id that is not snake_case, like `SignIn` | `id-not-snake-case` | write it sign_in, and put the text people read in a label |
+| a second step, item or scenario with an id its scope has | `duplicate-id` | give one of them another id; the label may still say the same |
+| an `as` with no label in quotes after it | `expected-label` | step sign_in as "Sign in" { ... } |
+
+A name in quotes, `step "log in"`, is the [old form](#the-old-forms)
+`quoted-name`, and `artemis migrate` rewrites it to `step log_in as "log in"`.
+
+---
+
 ## Inside a flow
 
 A flow holds these declarations:
@@ -184,8 +222,8 @@ flow list_orders {
 | `config` | `config <ident> { <key> = <expr>, ... }` | Settings for one step type, named by the ident |
 | `var` | `var <ident> = <expr>`, `var <ident>` | A parameter of the flow: a value every step can name, and a scenario can set |
 | `private var` | `private var <ident> = <expr>` | A value every step can name, and no scenario can set |
-| `step` | `step name as "<name>" { ... }` | One action and what to expect of it |
-| an item call | `step name as "<name>" = <collection>.<item> { ... }` | A step written once in a collection -- see [Collections](#collections) |
+| `step` | `step <id> [as "<label>"] { ... }` | One action and what to expect of it |
+| an item call | `step <id> [as "<label>"] = <collection>.<item> { ... }` | A step written once in a collection -- see [Collections](#collections) |
 | `setup`, `teardown` | `setup { ... }`, `teardown { ... }` | Steps that run first, and steps that run last whatever happened -- see [setup and teardown](#setup-and-teardown) |
 | a block | `parallel { ... }`, `if`, `switch`, `try`, `repeat` | Steps that run at the same time, on a condition, under try, or in a loop -- see [Blocks](#blocks) |
 
@@ -420,7 +458,7 @@ one word of a `--tags` expression. A tag that is not, or is listed twice, is
 
 `--tags` takes an expression of tags joined by `and`, `or` and `not`, with
 parentheses; `not` binds tightest and `or` loosest. `--grep` takes a regular
-expression over the scenario's title. A scenario a run does not select is in
+expression over the scenario's label, or its id when it has none. A scenario a run does not select is in
 the [JSON report](#the-json-report) with `"status": "skip"` and why in `error`,
 and is not on the console. A selection of nothing is an error, and a tag the
 expression names that no scenario has is a warning naming the nearest one.
@@ -877,11 +915,12 @@ before it saturates the machine.
 ### Tracing a step
 
 A report says what failed. A **trace** says what went over the wire, and
-`--trace` asks for one file per step:
+`--trace` asks for one file per step, named for the scenario's id and the
+step's, `<scenario_id>-<step_id>.json`:
 
 ```sh
-artemis run checkout.art --trace traces      # traces/checkout-get-a-token.json
-artemis run checkout.art                     # no traces: off unless asked
+artemis run scenarios/checkout.art --trace traces   # traces/with_a_coupon-pay.json
+artemis run scenarios/checkout.art                  # no traces: off unless asked
 ```
 
 Every step gets one, whether it passed or not, because comparing a passing step
@@ -1365,10 +1404,10 @@ points there.
 
 | Form | What it is |
 | --- | --- |
-| `collection title as "<title>" { ... }` | A set of items. The title is any text, for people: a flow reaches the collection by the name its file is [imported](#importing) as |
-| `request <name> { ... }` | An item whose action is an HTTP verb: an `api` step |
-| `command <name> { ... }` | An item whose action is `run`: a `terminal` step |
-| `query <name> { ... }` | An item whose action is `db`: a `db` step |
+| `collection <id> [as "<label>"] { ... }` | A set of items. The id is the name an [import](#importing) with no `as` puts it in scope by; the label is for people |
+| `request <id> [as "<label>"] { ... }` | An item whose action is an HTTP verb: an `api` step |
+| `command <id> [as "<label>"] { ... }` | An item whose action is `run`: a `terminal` step |
+| `query <id> [as "<label>"] { ... }` | An item whose action is `db`: a `db` step |
 | `var <ident>` above the action | A required **input** |
 | `var <ident> = <expr>` above the action | An input with a default. The default may name an earlier input, as a flow's var may name an earlier var |
 | `private var <ident> = <expr>` above the action | An input no step can pass: it takes only its own default |
@@ -1408,7 +1447,7 @@ collections/orders.art:3:9: an input cannot be named body: a step that calls the
 | Form | `import "<path>" [as <ident>]` |
 | Where | At the top of a flow file, before the flow |
 | Path | Relative to the importing file. Local files only: no URL, no package, no version |
-| Effect | The file's collection is in scope by the name after `as`, or else by the file's name less `.art` -- and less a `.collection` before it, so `orders.art` and `orders.collection.art` are both `orders` |
+| Effect | The file's collection is in scope by the name after `as`, or else by its id: `collection orders { ... }` is `orders`, whatever its file is called |
 | Not transitive | A flow reaches only the collections it imports itself |
 
 ```art
@@ -1424,15 +1463,16 @@ flow buy {
 }
 ```
 
-A file named `Backend APIs.art` is imported the same way, `as` a name a step
-can read.
+A file named `Backend APIs.art` that holds `collection backend_apis as
+"Backend APIs"` is imported with no `as`, and a step reads it as
+`backend_apis`. A step that names it by its file's name instead gets an
+`unknown-collection` whose hint gives the id.
 
-The collection's title plays no part: the import line alone says what a step
-reads. Each of these is a compile error at the import:
+The collection's label plays no part: the import line and the id alone say
+what a step reads. Each of these is a compile error at the import:
 
 | Error | Code | Hint |
 | --- | --- | --- |
-| no `as`, and a file name that cannot be one, like `Backend APIs.art` | `import-needs-name` | name it: import "collections/Backend APIs.art" as Backend_APIs |
 | a file with no collection | `import-no-collection` | import a collection file: a flow or a scenario file is never imported |
 | two imports under one name | `duplicate-import-name` | name one of them another way with as |
 
@@ -1449,13 +1489,16 @@ step rush_order as "rush order" = orders.create as rush {
 
 | | |
 | --- | --- |
-| Form | `step name as "<name>" = <collection>.<item> [as <ident>] { <line> ... }` |
+| Form | `step <id> [as "<label>"] = <collection>.<item> [as <ident>] { <line> ... }` |
 | Where | In a flow, wherever a `step` may be: setup, teardown and blocks included |
-| Effect | Replaced, in place, by the item's step, named `<name>`. It runs where it is written |
+| Effect | Replaced, in place, by the item's step, with the call's id. It runs where it is written |
 
-The name in quotes is required, and it is the step's name in every report.
-Two steps may share a name, as they may anywhere else. The braces are required
-too, and may be empty: `step pay = orders.pay {}`.
+The id is required, and is unique in the flow like any step's. With no label
+of its own the step takes the item's label, and with neither it reads as its
+id: `step sign_in = settings.client_login {}` reads "Client login" when the
+item is `request client_login as "Client login"`. The first `as`, before the
+`=`, is the label; the one after the item is the [output prefix](#as). The
+braces are required too, and may be empty: `step pay = orders.pay {}`.
 
 ### How an item gets its values
 
@@ -2316,13 +2359,14 @@ parsing.
 ```ebnf
 File          = CollectionFile | FlowFile | ScenarioFile ;
 Import        = "import" String [ "as" Ident ] ;
+Label         = "as" String ;
 
-CollectionFile = "collection" String "{" { ItemDecl } "}" ;
-ItemDecl      = ( "request" | "command" | "query" ) Ident
+CollectionFile = "collection" Ident [ Label ] "{" { ItemDecl } "}" ;
+ItemDecl      = ( "request" | "command" | "query" ) Ident [ Label ]
                 "{" { VarDecl } Action { StepStmt } "}" ;
 
 FlowFile      = { Import } FlowDecl ;
-FlowDecl      = "flow" Ident "{" { ConfigDecl | VarDecl | StepDecl | ItemCall | PhaseDecl | Block } "}" ;
+FlowDecl      = "flow" Ident [ Label ] "{" { ConfigDecl | VarDecl | StepDecl | ItemCall | PhaseDecl | Block } "}" ;
 PhaseDecl     = ( "setup" | "teardown" ) BlockBody ;
 Block         = "parallel" BlockBody
               | "if" Expr BlockBody { "else" "if" Expr BlockBody } [ "else" BlockBody ]
@@ -2331,7 +2375,7 @@ Block         = "parallel" BlockBody
               | "repeat" { RepeatOption } BlockBody "until" Expr ;
 RepeatOption  = ( "every" | "within" | "max" ) Expr ;
 BlockBody     = "{" { StepDecl | ItemCall | Block } "}" ;
-ItemCall      = "step" String "=" ItemRef [ "as" Ident ] "{" { CallLine } "}" ;
+ItemCall      = "step" Ident [ Label ] "=" ItemRef [ "as" Ident ] "{" { CallLine } "}" ;
 ItemRef       = Ident "." Ident ;
 CallLine      = Ident "=" Expr
               | ReqField
@@ -2341,14 +2385,14 @@ CallLine      = Ident "=" Expr
 
 ScenarioFile  = FlowRef { DataScenario } ;
 FlowRef       = "flow" String ;
-DataScenario  = "scenario" String "{" { TagsDecl | Set } "}" ;
+DataScenario  = "scenario" Ident [ Label ] "{" { TagsDecl | Set } "}" ;
 TagsDecl      = "tags" "=" "[" [ String { "," String } ] "]" ;
 Set           = Ident "=" ( Expr | "skip" ) ;
 
 ConfigDecl    = "config" Ident "{" [ Setting { Sep Setting } ] "}" ;
 Setting       = Ident "=" Expr ;
 VarDecl       = [ "private" ] "var" Ident [ "=" Expr ] ;
-StepDecl      = "step" String "{" Action { StepStmt } "}" ;
+StepDecl      = "step" Ident [ Label ] "{" Action { StepStmt } "}" ;
 
 Action        = Request | Run | Browser | DB ;
 Request       = Method String [ "{" { ReqField } "}" ] ;
@@ -2517,6 +2561,8 @@ so a reader can tell "nothing failed" from "nothing ran":
   "scenarios": [
     {
       "name": "items",
+      "id": "items",
+      "label": "",
       "file": "scenarios/items.art",
       "flow": "items",
       "status": "fail",
@@ -2525,6 +2571,8 @@ so a reader can tell "nothing failed" from "nothing ran":
       "steps": [
         {
           "name": "get item",
+          "id": "get_item",
+          "label": "get item",
           "status": "fail",
           "duration_ms": 12.5,
           "attempts": 1,
@@ -2707,14 +2755,15 @@ file:
 
 | Old form | What replaces it |
 | --- | --- |
-| `scenario x { steps }`, in a file with no `flow "..."` header | A flow file, and a scenario file that names it |
+| `scenario "x" { steps }`, in a file with no `flow "..."` header | A flow file, and a scenario file that names it |
 | `capture x = ...` | `var x = ...` after the step's action: a [step var](#step-vars) |
-| `use a.b { ... }` | `step name as "<name>" = a.b { ... }`: [calling an item](#calling-an-item) |
+| `use a.b { ... }` | `step <id> = a.b { ... }`: [calling an item](#calling-an-item) |
 | `drop captures` | `drop vars` |
 | `request name(params)` | `var`s above the item's action: [its inputs](#a-collection-file) |
 | `suite.art` and `suite { }` | Folders and `--tags`. A suite's setup, which ran once per run, is a `setup` in each flow, which runs once per scenario |
 | `secret var`, `secret capture`, `secret` parameters, `for secret` | Nothing, for now: see **Masking credentials in reports** above |
-| `scenario unnamed as "..." for row in json(...)` | A scenario for each row, written out |
+| `scenario "..." for row in json(...)` | A scenario for each row, written out |
+| `step "log in"`, `scenario "full price"`, `collection "Orders API"`: a name in quotes (`quoted-name`) | A snake_case id and the text as its label: `step log_in as "log in"`. See [Ids and labels](#ids-and-labels) |
 
 [docs/migrating.md](docs/migrating.md#old-art-files) shows what `artemis
 migrate` writes for each.

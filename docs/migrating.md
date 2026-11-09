@@ -262,14 +262,15 @@ suite/orders/create.art        ->  new/orders/flows/create.art
 
 | Old | New |
 | --- | --- |
-| `scenario x { ... }` in `a/b.art` | the flow `b` in `a/flows/b.art`, with the vars at its top, and `a/scenarios/b.art` holding `scenario x {}` with the old tags. A file of several scenarios makes `b_1`, `b_2`, ... |
+| `scenario "x" { ... }` in `a/b.art` | the flow `b` in `a/flows/b.art`, with the vars at its top, and `a/scenarios/b.art` holding `scenario x {}` with the old tags. A file of several scenarios makes `b_1`, `b_2`, ... |
 | `capture x = ...` | `var x = ...` after the action |
-| `use a.b as x { ... }` | `step x = a.b as x { ... }`, named as the old step was: the alias, or `a.b` |
+| `use a.b as x { ... }` | `step x = a.b as x { ... }`, named as the old step was: the alias, or `step a_b as "a.b"` |
 | `drop captures` | `drop vars` |
 | `request r(p, q = 1)` | `request r { var p  var q = 1 ... }`; an item whose action is `run` is a `command`, and one whose action is `db` is a `query` |
-| `scenario unnamed as "..." for row in ...` | one scenario for each row, each setting `row`; the flow declares `var row` with the first row |
+| `scenario "..." for row in ...` | one scenario for each row, each setting `row`; the flow declares `var row` with the first row |
 | `suite.art` | its vars, setup and teardown are copied into each flow under it, `suite.x` reads `x`, and its tags go onto each scenario |
 | `secret` | removed |
+| `step "Get a token"`, `scenario "full price"`, `collection "Orders API"` | `step get_a_token as "Get a token"`: a snake_case id, numbered `_2`, `_3` on a clash, and the text as its label -- left out when the text already is the id, `step "pay"` becoming `step pay`. A collection's id is the name its file was imported by, so every import still resolves |
 | `json()`, `csv()`, `file()` and `import` paths | rewritten for the flow's folder, so they name the same files |
 
 A step fills an item's input from the flow's names before the item's own

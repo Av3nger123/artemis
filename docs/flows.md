@@ -80,7 +80,7 @@ artemis run scenarios/checkout.art
 ```
 
 The first line names the flow, relative to the scenario file. Each scenario is
-one run of the flow, under its own title, with the values it sets and the
+one run of the flow, under its own id and label, with the values it sets and the
 flow's defaults for the rest. A scenario holds `name = value` lines and `tags`,
 and nothing else: a step or an `expect` in one is a compile error, because a
 scenario changes the data and never the steps. A name the flow has no var for,
@@ -181,9 +181,15 @@ write -- and `expect` lines add new ones. `as bad` prefixes the call's outputs,
 second call's `token` replaces the first's.
 
 A collection holds single items; steps in order are a flow. A collection file
-holds one collection, whose name is a title, and nothing else.
-`import "../collections/auth.art"` puts it in scope as `auth`;
+holds one collection and nothing else. `import "../collections/auth.art"` puts
+it in scope by its id, `auth` for `collection auth { ... }`;
 `import "../collections/Backend APIs.art" as api` puts it in scope as `api`.
+
+Every collection, item, flow, step and scenario has a snake_case id, and may
+have a label after `as`: `request legacy_readiness as "Legacy readiness"`.
+Reports and editors show the label, and the id where there is none; the id is
+what a call, `--item`, `report.json` and a trace file name use. A step that
+calls an item with no label of its own shows the item's.
 
 An override applies to an `api` request only. To vary a command or a query,
 make the value an input and pass it.
