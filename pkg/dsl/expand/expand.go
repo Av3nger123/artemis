@@ -500,7 +500,11 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 		if !ok {
 			return nil
 		}
-		s := requestStep(it, prefix(use, it.Name.Value), env, stamp)
+		s := requestStep(it, stepName(use, it.Name.Value), env, stamp)
+		if use.Label.Text != "" {
+			// The call's own label wins over the item's.
+			s.LabelAs, s.Label = use.LabelAs, use.Label
+		}
 		e.writtenLiteral(s, it.Action)
 		e.override(via, s, use.Lines)
 		if use.Alias.Text != "" {
@@ -512,12 +516,17 @@ func (e *expander) expandUse(u *unit, use *ast.UseDecl, sc *scope) []ast.Decl {
 }
 
 // requestStep is r written out as a step called name, with its parameters
-// replaced by their values at this use.
-func requestStep(r *ast.RequestDecl, name string, env map[string]ast.Expr, stamp func(token.Token) token.Token) *ast.StepDecl {
+// replaced by their values at this use. name is a token of no span: its kind
+// says how `artemis expand` prints it. The step takes r's label, and a call
+// with a label of its own puts it in place after.
+func requestStep(r *ast.RequestDecl, name token.Token, env map[string]ast.Expr, stamp func(token.Token) token.Token) *ast.StepDecl {
 	cl := ast.Clone(r, stamp)
+	name.Span = cl.Name.Span
 	s := &ast.StepDecl{
 		Keyword: synth(token.Ident, "step", "step", cl.Keyword.Span),
-		Name:    synth(token.String, quote(name), name, cl.Name.Span),
+		Name:    name,
+		LabelAs: cl.LabelAs,
+		Label:   cl.Label,
 		LBrace:  cl.LBrace,
 		Action:  cl.Action,
 		Body:    cl.Body,
@@ -525,6 +534,17 @@ func requestStep(r *ast.RequestDecl, name string, env map[string]ast.Expr, stamp
 	}
 	substStep(s, env)
 	return s
+}
+
+// stepName is the name of the step use expands to: the call's id as it was
+// written -- an identifier, or a quoted name in the old form -- or, for an
+// old use with no name, its alias or its reference, in quotes.
+func stepName(use *ast.UseDecl, item string) token.Token {
+	name := prefix(use, item)
+	if use.Name.Kind == token.Ident {
+		return synth(token.Ident, name, name, token.Span{})
+	}
+	return synth(token.String, quote(name), name, token.Span{})
 }
 
 // synth is a token that was never written, placed at at so a diagnostic on it

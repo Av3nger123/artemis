@@ -66,7 +66,7 @@ func (e *expander) checkItem(u *unit, c *ast.Collection, item ast.Decl) bool {
 	defer func() { e.res.Uses = uses }()
 
 	vars := paramVars(inputs(it))
-	steps := []ast.Decl{requestStep(it, it.Name.Value, nil, identity)}
+	steps := []ast.Decl{requestStep(it, synth(token.Ident, it.Name.Value, it.Name.Value, token.Span{}), nil, identity)}
 
 	e.rootCaptures(item)
 	ok := !e.bag.HasErrors() && e.silent == silent

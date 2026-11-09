@@ -49,6 +49,9 @@ type Scenario struct {
 	// sets it on each scenario it makes out of a scenario file; it is "" for
 	// any other scenario and has no tokens.
 	Flow string
+	// FlowLabel is that flow's label, "" when it has none. Like Flow, it is
+	// set by expansion and has no tokens.
+	FlowLabel string
 }
 
 // ForClause is `for user in json("data/users.json")`, or `for secret user in
